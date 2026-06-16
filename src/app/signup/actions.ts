@@ -43,7 +43,7 @@ export async function signup(
       id: data.user.id,
       full_name: fullName,
     });
-    redirect("/dashboard");
+    redirect("/dashboard/home");
   }
 
   redirect("/login?message=Check your email to confirm your account.");
