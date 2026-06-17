@@ -19,6 +19,7 @@ export type Quiz = {
   id: string;
   course_id: string;
   level_number: number;
+  lesson_id: string | null;
   title: string;
   courses: { name: string } | null;
 };
@@ -37,6 +38,7 @@ export type QuizQuestion = {
 
 export type Flashcard = {
   id: string;
+  lesson_id: string | null;
   deck_name: string;
   front_text: string;
   back_text: string;
@@ -59,4 +61,12 @@ export type AdminData = {
   questions: QuizQuestion[];
   flashcards: Flashcard[];
   teachers: Teacher[];
+  errors?: {
+    courses?: string;
+    lessons?: string;
+    quizzes?: string;
+    questions?: string;
+    flashcards?: string;
+    teachers?: string;
+  };
 };

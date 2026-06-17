@@ -1,5 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "@/app/dashboard/logout-button";
+import { isAdmin } from "@/lib/auth/admin";
+import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -59,6 +61,23 @@ export default async function ProfilePage() {
             Manage your settings and preferences here soon.
           </p>
         </div>
+
+        {isAdmin(user) && (
+          <div className="rounded-2xl bg-violet-50 p-5 shadow-sm ring-1 ring-violet-200/80">
+            <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+              Admin
+            </p>
+            <p className="mt-2 text-sm text-zinc-600">
+              Manage courses, lessons, quizzes, and teachers.
+            </p>
+            <Link
+              href="/admin/content"
+              className="mt-3 inline-block rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500"
+            >
+              Open admin panel
+            </Link>
+          </div>
+        )}
       </div>
 
       <div className="mt-auto pt-10">

@@ -1,19 +1,19 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { AdminContent } from "./admin-content";
 import type { AdminData } from "./types";
 
 export default async function AdminContentPage() {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
   const [
-    { data: courses },
-    { data: lessons },
-    { data: quizzes },
-    { data: questions },
-    { data: flashcards },
-    { data: teachers },
+    { data: courses, error: coursesError },
+    { data: lessons, error: lessonsError },
+    { data: quizzes, error: quizzesError },
+    { data: questions, error: questionsError },
+    { data: flashcards, error: flashcardsError },
+    { data: teachers, error: teachersError },
   ] = await Promise.all([
-    supabase.from("courses").select("*").order("display_order"),
+    supabase.from("courses").select("id, name, description, display_order").order("display_order"),
     supabase
       .from("lessons")
       .select("*, courses(name)")
@@ -40,6 +40,14 @@ export default async function AdminContentPage() {
     questions: questions ?? [],
     flashcards: flashcards ?? [],
     teachers: teachers ?? [],
+    errors: {
+      courses: coursesError?.message,
+      lessons: lessonsError?.message,
+      quizzes: quizzesError?.message,
+      questions: questionsError?.message,
+      flashcards: flashcardsError?.message,
+      teachers: teachersError?.message,
+    },
   };
 
   return <AdminContent data={data} />;

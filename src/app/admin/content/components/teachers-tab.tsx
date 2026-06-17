@@ -1,5 +1,6 @@
 "use client";
 
+import { appendUploadedFileUrl } from "@/lib/supabase/upload";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -26,12 +27,38 @@ export function TeachersTab({ data }: { data: AdminData }) {
     createTeacher,
     initialState
   );
+  const [createUploading, setCreateUploading] = useState(false);
+  const [createUploadError, setCreateUploadError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  async function handleCreateSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreateUploadError("");
+    setCreateUploading(true);
+
+    const formData = new FormData(event.currentTarget);
+
+    try {
+      await appendUploadedFileUrl(
+        formData,
+        "photo",
+        "profile-photos",
+        "photo_url"
+      );
+      createAction(formData);
+    } catch (error) {
+      setCreateUploadError(
+        error instanceof Error ? error.message : "Photo upload failed."
+      );
+    } finally {
+      setCreateUploading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
       <SectionCard title="Add teacher">
-        <form action={createAction} className="space-y-4">
+        <form onSubmit={handleCreateSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>Name</label>
             <input name="name" required className={inputClass} />
@@ -75,8 +102,21 @@ export function TeachersTab({ data }: { data: AdminData }) {
             />
           </div>
           <FormMessage state={createState} />
-          <button type="submit" disabled={createPending} className={buttonClass}>
-            {createPending ? "Saving…" : "Add teacher"}
+          {createUploadError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              {createUploadError}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={createPending || createUploading}
+            className={buttonClass}
+          >
+            {createUploading
+              ? "Uploading photo…"
+              : createPending
+                ? "Saving…"
+                : "Add teacher"}
           </button>
         </form>
       </SectionCard>
@@ -164,14 +204,40 @@ function TeacherEditRow({
   onSaved: () => void;
 }) {
   const [state, action, pending] = useActionState(updateTeacher, initialState);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     if (state.success) onSaved();
   }, [state.success, onSaved]);
 
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setUploadError("");
+    setUploading(true);
+
+    const formData = new FormData(event.currentTarget);
+
+    try {
+      await appendUploadedFileUrl(
+        formData,
+        "photo",
+        "profile-photos",
+        "photo_url"
+      );
+      action(formData);
+    } catch (error) {
+      setUploadError(
+        error instanceof Error ? error.message : "Photo upload failed."
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <li className="py-4">
-      <form action={action} className="space-y-3 rounded-lg bg-zinc-50 p-4">
+      <form onSubmit={handleSubmit} className="space-y-3 rounded-lg bg-zinc-50 p-4">
         <input type="hidden" name="id" value={teacher.id} />
         <input name="name" defaultValue={teacher.name} className={inputClass} />
         <textarea
@@ -198,9 +264,14 @@ function TeacherEditRow({
         />
         <input name="photo" type="file" accept="image/*" className={inputClass} />
         <FormMessage state={state} />
+        {uploadError && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            {uploadError}
+          </p>
+        )}
         <div className="flex gap-2">
-          <button type="submit" disabled={pending} className={buttonClass}>
-            Save
+          <button type="submit" disabled={pending || uploading} className={buttonClass}>
+            {uploading ? "Uploading…" : pending ? "Saving…" : "Save"}
           </button>
           <button type="button" onClick={onCancel} className={secondaryButtonClass}>
             Cancel

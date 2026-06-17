@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Kidda — Supabase Storage buckets & policies
--- Run in the Supabase SQL Editor after creating tables.
+-- Run this entire script in the Supabase SQL Editor.
 -- =============================================================================
 
 INSERT INTO storage.buckets (id, name, public)
@@ -8,6 +8,16 @@ VALUES
   ('audio-files', 'audio-files', true),
   ('profile-photos', 'profile-photos', true)
 ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
+
+-- Drop existing policies so this script can be re-run safely
+DROP POLICY IF EXISTS "Anyone can view audio files" ON storage.objects;
+DROP POLICY IF EXISTS "Anyone can view profile photos" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can upload audio files" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can update audio files" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can delete audio files" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can upload profile photos" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can update profile photos" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can delete profile photos" ON storage.objects;
 
 -- Public read access for everyone
 CREATE POLICY "Anyone can view audio files"

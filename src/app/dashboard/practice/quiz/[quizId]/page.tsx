@@ -1,0 +1,62 @@
+import { QuizPlayer } from "@/components/quiz-player";
+import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+type QuizPageProps = {
+  params: Promise<{ quizId: string }>;
+};
+
+export default async function QuizPracticePage({ params }: QuizPageProps) {
+  const { quizId } = await params;
+  const supabase = await createClient();
+
+  const { data: quiz } = await supabase
+    .from("quizzes")
+    .select("id, title, course_id, level_number, courses(name)")
+    .eq("id", quizId)
+    .single();
+
+  if (!quiz) notFound();
+
+  const { data: questions } = await supabase
+    .from("quiz_questions")
+    .select("*")
+    .eq("quiz_id", quizId)
+    .order("question_order");
+
+  if (!questions?.length) {
+    return (
+      <div className="flex flex-1 flex-col px-4 py-6">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          This quiz has no questions yet.
+        </p>
+        <Link
+          href="/dashboard/practice"
+          className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
+          ← Back to Practice
+        </Link>
+      </div>
+    );
+  }
+
+  const course = Array.isArray(quiz.courses) ? quiz.courses[0] : quiz.courses;
+
+  return (
+    <div className="flex flex-1 flex-col px-4 py-6">
+      <Link
+        href="/dashboard/practice"
+        className="mb-4 text-sm font-medium text-violet-600 hover:text-violet-500"
+      >
+        ← Back to Practice
+      </Link>
+      <QuizPlayer
+        quizTitle={quiz.title}
+        courseName={course?.name ?? "Course"}
+        lessonNumber={quiz.level_number}
+        questions={questions}
+      />
+    </div>
+  );
+}

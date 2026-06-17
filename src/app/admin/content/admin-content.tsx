@@ -18,9 +18,22 @@ type TabId = (typeof tabs)[number]["id"];
 
 export function AdminContent({ data }: { data: AdminData }) {
   const [activeTab, setActiveTab] = useState<TabId>("lessons");
+  const fetchErrors = Object.entries(data.errors ?? {}).filter(([, value]) => value);
 
   return (
     <div>
+      {fetchErrors.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">Some admin data failed to load:</p>
+          <ul className="mt-1 list-disc pl-5">
+            {fetchErrors.map(([key, value]) => (
+              <li key={key}>
+                {key}: {value}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-1">
         {tabs.map((tab) => (
           <button
