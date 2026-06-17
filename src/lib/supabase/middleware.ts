@@ -1,3 +1,4 @@
+import { isAdmin } from "@/lib/auth/admin";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -37,6 +38,19 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
+  }
+
+  if (request.nextUrl.pathname.startsWith("/admin")) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+    if (!isAdmin(user)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard/home";
+      return NextResponse.redirect(url);
+    }
   }
 
   if (
