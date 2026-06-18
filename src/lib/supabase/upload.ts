@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 
-export type StorageBucket = "audio-files" | "profile-photos";
+export type StorageBucket = "audio-files" | "profile-photos" | "lesson-pdfs";
 
 export async function uploadToStorage(bucket: StorageBucket, file: File) {
   const supabase = createClient();
@@ -12,7 +12,20 @@ export async function uploadToStorage(bucket: StorageBucket, file: File) {
     upsert: false,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    const message = error.message.toLowerCase();
+    if (message.includes("bucket not found")) {
+      throw new Error(
+        'Storage bucket not found. Reload /admin/content (creates buckets automatically), or run supabase/lesson-pdfs-bucket.sql in the Supabase SQL Editor.'
+      );
+    }
+    if (message.includes("row-level security")) {
+      throw new Error(
+        `${error.message} Run supabase/lesson-pdfs-bucket.sql in the Supabase SQL Editor, or use the admin upload flow.`
+      );
+    }
+    throw new Error(error.message);
+  }
 
   const {
     data: { publicUrl },

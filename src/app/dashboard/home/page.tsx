@@ -1,4 +1,9 @@
 import { EventCard } from "@/components/event-card";
+import {
+  HomeStreakBanner,
+  HomeStreakCard,
+  HomeStreakProvider,
+} from "@/components/home-streak-stats";
 import { canAccessEvent } from "@/lib/membership/access";
 import { formatRecurrenceLabel } from "@/lib/events/recurrence";
 import { getHomeDashboardData } from "@/lib/dashboard/home-data";
@@ -29,22 +34,20 @@ export default async function HomePage() {
         </Link>
       </section>
 
-      <section className="mb-6 grid grid-cols-3 gap-3">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Streak
-          </p>
-          <p className="mt-1 text-sm font-bold text-zinc-900">
-            {dashboard.stats.streak > 0 ? (
-              <>
-                <span aria-hidden="true">🔥 </span>
-                {dashboard.stats.streak} day streak
-              </>
-            ) : (
-              "No streak yet"
-            )}
-          </p>
-        </div>
+      <HomeStreakProvider
+        initial={{
+          streak: dashboard.stats.streak,
+          longestStreak: dashboard.stats.longestStreak,
+          redemptionAvailable: dashboard.stats.redemptionAvailable,
+          streakAtRisk: dashboard.stats.streakAtRisk,
+          streakWarning: dashboard.stats.streakWarning,
+          rescueStreak: dashboard.stats.rescueStreak,
+        }}
+      >
+        <HomeStreakBanner />
+
+        <section className="mb-6 grid grid-cols-3 gap-3">
+          <HomeStreakCard />
         <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Lessons
@@ -64,6 +67,7 @@ export default async function HomePage() {
           <p className="text-xs text-zinc-500">reached</p>
         </div>
       </section>
+      </HomeStreakProvider>
 
       {dashboard.continueItem && (
         <section className="mb-6">

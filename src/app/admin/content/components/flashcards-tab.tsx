@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   bulkCreateFlashcards,
   createFlashcard,
+  createFlashcardSet,
   deleteFlashcard,
+  deleteFlashcardSet,
   updateFlashcard,
+  updateFlashcardSet,
   type ActionResult,
 } from "../actions";
-import type { AdminData } from "../types";
+import type { AdminData, FlashcardCategory, FlashcardSet } from "../types";
 import {
   FormMessage,
   SectionCard,
@@ -22,52 +25,226 @@ import {
 
 const initialState: ActionResult = {};
 
+const CATEGORY_OPTIONS: { value: FlashcardCategory | ""; label: string }[] = [
+  { value: "", label: "No category" },
+  { value: "alphabet", label: "Alphabet" },
+  { value: "vocab", label: "Vocab" },
+  { value: "sentences", label: "Sentences" },
+];
+
+type CardMetadataDefaults = {
+  category?: string;
+  difficulty?: string;
+  topic_tags?: string;
+  icon_name?: string;
+};
+
 export function FlashcardsTab({ data }: { data: AdminData }) {
-  const [state, action, pending] = useActionState(createFlashcard, initialState);
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
+  const [createSetState, createSetAction, createSetPending] = useActionState(
+    createFlashcardSet,
+    initialState
+  );
+
+  const cardCountBySet = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const card of data.flashcards) {
+      if (!card.deck_id) continue;
+      counts.set(card.deck_id, (counts.get(card.deck_id) ?? 0) + 1);
+    }
+    return counts;
+  }, [data.flashcards]);
+
+  const editingSet = editingSetId
+    ? data.flashcardSets.find((set) => set.id === editingSetId) ?? null
+    : null;
+
+  if (editingSet) {
+    return (
+      <FlashcardSetEditView
+        data={data}
+        set={editingSet}
+        cards={data.flashcards.filter((card) => card.deck_id === editingSet.id)}
+        onBack={() => setEditingSetId(null)}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Create flashcard set">
+        <form action={createSetAction} className="space-y-4">
+          <div>
+            <label className={labelClass}>Set name</label>
+            <input name="name" required placeholder="e.g. Greetings" className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Description (optional)</label>
+            <textarea name="description" rows={2} className={inputClass} />
+          </div>
+          <FormMessage state={createSetState} />
+          <button type="submit" disabled={createSetPending} className={buttonClass}>
+            {createSetPending ? "Creating…" : "Create set"}
+          </button>
+        </form>
+      </SectionCard>
+
+      <SectionCard title={`Flashcard sets (${data.flashcardSets.length})`}>
+        {data.flashcardSets.length === 0 ? (
+          <p className="text-sm text-zinc-500">No flashcard sets yet.</p>
+        ) : (
+          <ul className="divide-y divide-zinc-100">
+            {data.flashcardSets.map((set) => (
+              <li
+                key={set.id}
+                className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="font-semibold text-zinc-900">{set.name}</p>
+                  {set.description && (
+                    <p className="mt-1 text-sm text-zinc-500">{set.description}</p>
+                  )}
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {cardCountBySet.get(set.id) ?? 0} card
+                    {(cardCountBySet.get(set.id) ?? 0) === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingSetId(set.id)}
+                    className={secondaryButtonClass}
+                  >
+                    Edit
+                  </button>
+                  <DeleteFlashcardSetButton id={set.id} name={set.name} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
+    </div>
+  );
+}
+
+function FlashcardSetEditView({
+  data,
+  set,
+  cards,
+  onBack,
+}: {
+  data: AdminData;
+  set: FlashcardSet;
+  cards: AdminData["flashcards"];
+  onBack: () => void;
+}) {
+  const router = useRouter();
+  const [setState, setAction, setPending] = useActionState(updateFlashcardSet, initialState);
+  const [cardState, cardAction, cardPending] = useActionState(createFlashcard, initialState);
   const [bulkState, bulkAction, bulkPending] = useActionState(
     bulkCreateFlashcards,
     initialState
   );
-  const [bulkDeckName, setBulkDeckName] = useState("");
-  const [bulkLessonId, setBulkLessonId] = useState("");
   const [bulkText, setBulkText] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+
+  const linkedCourseIds = data.setCourseLinks
+    .filter((link) => link.deck_id === set.id && link.course_id)
+    .map((link) => link.course_id as string);
+
+  const linkedLessonIds = data.setCourseLinks
+    .filter((link) => link.deck_id === set.id && link.lesson_id)
+    .map((link) => link.lesson_id as string);
 
   const bulkPreview = useMemo(() => parseBulkFlashcards(bulkText), [bulkText]);
 
-  const decks = data.flashcards.reduce<Record<string, AdminData["flashcards"]>>(
-    (acc, card) => {
-      if (!acc[card.deck_name]) acc[card.deck_name] = [];
-      acc[card.deck_name].push(card);
-      return acc;
-    },
-    {}
-  );
+  useEffect(() => {
+    if (setState.success) router.refresh();
+  }, [setState.success, router]);
+
+  useEffect(() => {
+    if (cardState.success || bulkState.success) router.refresh();
+  }, [cardState.success, bulkState.success, router]);
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Add flashcard">
-        <form action={action} className="space-y-4">
+      <button type="button" onClick={onBack} className="text-sm font-medium text-violet-600">
+        ← Back to sets
+      </button>
+
+      <SectionCard title={`Edit set: ${set.name}`}>
+        <form action={setAction} className="space-y-4">
+          <input type="hidden" name="id" value={set.id} />
           <div>
-            <label className={labelClass}>Link to lesson (recommended)</label>
-            <select name="lesson_id" className={inputClass}>
-              <option value="">No specific lesson</option>
-              {data.lessons.map((lesson) => (
-                <option key={lesson.id} value={lesson.id}>
-                  {lesson.courses?.name} · Lesson {lesson.lesson_number}: {lesson.title}
-                </option>
-              ))}
-            </select>
+            <label className={labelClass}>Set name</label>
+            <input name="name" required defaultValue={set.name} className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>Deck name</label>
-            <input
-              name="deck_name"
-              required
-              placeholder="e.g. Greetings"
+            <label className={labelClass}>Description</label>
+            <textarea
+              name="description"
+              rows={2}
+              defaultValue={set.description ?? ""}
               className={inputClass}
             />
           </div>
+
+          <div>
+            <label className={labelClass}>Relevant courses</label>
+            <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3">
+              {data.courses.map((course) => (
+                <label
+                  key={course.id}
+                  className="flex cursor-pointer items-center gap-2 text-sm text-zinc-900"
+                >
+                  <input
+                    type="checkbox"
+                    name="course_ids"
+                    value={course.id}
+                    defaultChecked={linkedCourseIds.includes(course.id)}
+                    className="h-4 w-4 rounded border-zinc-300 text-violet-600"
+                  />
+                  <span className="font-medium">{course.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Relevant lessons</label>
+            <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3">
+              {data.lessons.map((lesson) => (
+                <label
+                  key={lesson.id}
+                  className="flex cursor-pointer items-center gap-2 text-sm text-zinc-900"
+                >
+                  <input
+                    type="checkbox"
+                    name="lesson_ids"
+                    value={lesson.id}
+                    defaultChecked={linkedLessonIds.includes(lesson.id)}
+                    className="h-4 w-4 rounded border-zinc-300 text-violet-600"
+                  />
+                  <span className="font-medium">
+                    {lesson.courses?.name} · Lesson {lesson.lesson_number}: {lesson.title}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <FormMessage state={setState} />
+          <button type="submit" disabled={setPending} className={buttonClass}>
+            {setPending ? "Saving…" : "Save set"}
+          </button>
+        </form>
+      </SectionCard>
+
+      <SectionCard title="Add card">
+        <form action={cardAction} className="space-y-4">
+          <input type="hidden" name="deck_id" value={set.id} />
+          <CardMetadataFields />
           <div>
             <label className={labelClass}>Front text</label>
             <textarea name="front_text" required rows={2} className={inputClass} />
@@ -76,149 +253,171 @@ export function FlashcardsTab({ data }: { data: AdminData }) {
             <label className={labelClass}>Back text</label>
             <textarea name="back_text" required rows={2} className={inputClass} />
           </div>
-          <FormMessage state={state} />
-          <button type="submit" disabled={pending} className={buttonClass}>
-            {pending ? "Saving…" : "Add flashcard"}
+          <FormMessage state={cardState} />
+          <button type="submit" disabled={cardPending} className={buttonClass}>
+            {cardPending ? "Saving…" : "Add card"}
           </button>
         </form>
       </SectionCard>
 
-      <SectionCard title="Bulk import flashcards">
+      <SectionCard title="Bulk import cards">
         <div className="space-y-4">
-          <div>
-            <label className={labelClass}>Link to lesson (recommended)</label>
-            <select
-              value={bulkLessonId}
-              onChange={(event) => setBulkLessonId(event.target.value)}
-              className={inputClass}
-            >
-              <option value="">No specific lesson</option>
-              {data.lessons.map((lesson) => (
-                <option key={lesson.id} value={lesson.id}>
-                  {lesson.courses?.name} · Lesson {lesson.lesson_number}: {lesson.title}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Deck name</label>
-            <input
-              value={bulkDeckName}
-              onChange={(event) => setBulkDeckName(event.target.value)}
-              className={inputClass}
-              placeholder="e.g. Greetings"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Tab-separated rows</label>
-            <textarea
-              value={bulkText}
-              onChange={(event) => setBulkText(event.target.value)}
-              rows={8}
-              className={inputClass}
-              placeholder={"Sat Sri Akal\tHello\nDhanvaad\tThank you\nPani\tWater"}
-            />
-          </div>
-          {bulkPreview.errors.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              <p className="font-medium">Parse warnings:</p>
-              <ul className="mt-1 list-disc pl-5">
-                {bulkPreview.errors.map((error) => (
-                  <li key={error}>{error}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {bulkPreview.items.length > 0 && (
-            <div className="rounded-lg border border-zinc-200 p-3">
-              <p className="mb-2 text-sm font-semibold text-zinc-700">
-                Preview ({bulkPreview.items.length} flashcard
-                {bulkPreview.items.length === 1 ? "" : "s"})
-              </p>
-              <ul className="space-y-2 text-sm">
-                {bulkPreview.items.map((item, index) => (
-                  <li key={`${item.front_text}-${index}`} className="rounded bg-zinc-50 p-2">
-                    <p className="font-medium text-zinc-900">{item.front_text}</p>
-                    <p className="text-zinc-600">{item.back_text}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <form action={bulkAction}>
-            <input type="hidden" name="deck_name" value={bulkDeckName} />
-            <input type="hidden" name="lesson_id" value={bulkLessonId} />
+          <form action={bulkAction} className="space-y-4">
+            <input type="hidden" name="deck_id" value={set.id} />
             <input type="hidden" name="bulk_items" value={JSON.stringify(bulkPreview.items)} />
+            <CardMetadataFields />
+            <div>
+              <label className={labelClass}>Tab-separated rows</label>
+              <textarea
+                value={bulkText}
+                onChange={(event) => setBulkText(event.target.value)}
+                rows={8}
+                className={inputClass}
+                placeholder={"Sat Sri Akal\tHello\nDhanvaad\tThank you\nPani\tWater"}
+              />
+            </div>
+            {bulkPreview.errors.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <p className="font-medium">Parse warnings:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {bulkPreview.errors.map((error) => (
+                    <li key={error}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {bulkPreview.items.length > 0 && (
+              <p className="text-sm text-zinc-600">
+                {bulkPreview.items.length} card{bulkPreview.items.length === 1 ? "" : "s"} ready
+                to import
+              </p>
+            )}
             <FormMessage state={bulkState} />
             <button
               type="submit"
-              disabled={bulkPending || !bulkDeckName || bulkPreview.items.length === 0}
+              disabled={bulkPending || bulkPreview.items.length === 0}
               className={buttonClass}
             >
-              {bulkPending ? "Importing…" : "Import flashcards"}
+              {bulkPending ? "Importing…" : "Import cards into this set"}
             </button>
           </form>
         </div>
       </SectionCard>
 
-      <SectionCard title={`Flashcards (${data.flashcards.length})`}>
-        {Object.keys(decks).length === 0 ? (
-          <p className="text-sm text-zinc-500">No flashcards yet.</p>
+      <SectionCard title={`Cards in set (${cards.length})`}>
+        {cards.length === 0 ? (
+          <p className="text-sm text-zinc-500">No cards in this set yet.</p>
         ) : (
-          <div className="space-y-6">
-            {Object.entries(decks).map(([deckName, cards]) => (
-              <div key={deckName}>
-                <h4 className="font-semibold text-violet-700">{deckName}</h4>
-                <ul className="mt-3 divide-y divide-zinc-100 rounded-lg border border-zinc-100">
-                  {cards.map((card) =>
-                    editingId === card.id ? (
-                      <FlashcardEditRow
-                        key={card.id}
-                        card={card}
-                        lessons={data.lessons}
-                        onCancel={() => setEditingId(null)}
-                        onSaved={() => setEditingId(null)}
-                      />
-                    ) : (
-                      <li
-                        key={card.id}
-                        className="flex items-start justify-between gap-3 p-3 text-sm"
-                      >
-                        <div>
-                          <p className="font-medium text-zinc-900">{card.front_text}</p>
-                          <p className="mt-1 text-zinc-500">{card.back_text}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEditingId(card.id)}
-                            className={secondaryButtonClass}
-                          >
-                            Edit
-                          </button>
-                          <DeleteFlashcardButton id={card.id} />
-                        </div>
-                      </li>
-                    )
-                  )}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <ul className="divide-y divide-zinc-100">
+            {cards.map((card) =>
+              editingCardId === card.id ? (
+                <FlashcardEditRow
+                  key={card.id}
+                  card={card}
+                  setId={set.id}
+                  onCancel={() => setEditingCardId(null)}
+                  onSaved={() => setEditingCardId(null)}
+                />
+              ) : (
+                <li
+                  key={card.id}
+                  className="flex items-start justify-between gap-3 py-3 text-sm"
+                >
+                  <div>
+                    <p className="font-medium text-zinc-900">{card.front_text}</p>
+                    <p className="mt-1 text-zinc-500">{card.back_text}</p>
+                    <CardMetaSummary card={card} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingCardId(card.id)}
+                      className={secondaryButtonClass}
+                    >
+                      Edit
+                    </button>
+                    <DeleteFlashcardButton id={card.id} />
+                  </div>
+                </li>
+              )
+            )}
+          </ul>
         )}
       </SectionCard>
     </div>
   );
 }
 
+function CardMetadataFields({ defaults }: { defaults?: CardMetadataDefaults }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label className={labelClass}>Category</label>
+        <select
+          name="category"
+          defaultValue={defaults?.category ?? ""}
+          className={inputClass}
+        >
+          {CATEGORY_OPTIONS.map((option) => (
+            <option key={option.value || "none"} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className={labelClass}>Difficulty (1–5)</label>
+        <input
+          name="difficulty"
+          type="number"
+          min={1}
+          max={5}
+          defaultValue={defaults?.difficulty ?? ""}
+          className={inputClass}
+          placeholder="Optional"
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <label className={labelClass}>Topic tags (comma-separated)</label>
+        <input
+          name="topic_tags"
+          defaultValue={defaults?.topic_tags ?? ""}
+          className={inputClass}
+          placeholder="food, greetings"
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <label className={labelClass}>Icon name (Lucide, optional)</label>
+        <input
+          name="icon_name"
+          defaultValue={defaults?.icon_name ?? ""}
+          className={inputClass}
+          placeholder="e.g. apple"
+        />
+      </div>
+    </div>
+  );
+}
+
+function CardMetaSummary({ card }: { card: AdminData["flashcards"][0] }) {
+  const parts: string[] = [];
+  if (card.category) parts.push(card.category);
+  if (card.difficulty) parts.push(`level ${card.difficulty}`);
+  if (card.topic_tags?.length) parts.push(card.topic_tags.join(", "));
+  if (card.icon_name) parts.push(`icon: ${card.icon_name}`);
+  if (parts.length === 0) return null;
+
+  return <p className="mt-1 text-xs text-zinc-400">{parts.join(" · ")}</p>;
+}
+
 function FlashcardEditRow({
   card,
-  lessons,
+  setId,
   onCancel,
   onSaved,
 }: {
   card: AdminData["flashcards"][0];
-  lessons: AdminData["lessons"];
+  setId: string;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -229,26 +428,17 @@ function FlashcardEditRow({
   }, [state.success, onSaved]);
 
   return (
-    <li className="p-3">
-      <form action={action} className="space-y-3 rounded bg-zinc-50 p-3">
+    <li className="py-3">
+      <form action={action} className="space-y-3 rounded-lg bg-zinc-50 p-3">
         <input type="hidden" name="id" value={card.id} />
-        <select
-          name="lesson_id"
-          defaultValue={card.lesson_id ?? ""}
-          className={inputClass}
-        >
-          <option value="">No specific lesson</option>
-          {lessons.map((lesson) => (
-            <option key={lesson.id} value={lesson.id}>
-              {lesson.courses?.name} · Lesson {lesson.lesson_number}: {lesson.title}
-            </option>
-          ))}
-        </select>
-        <input
-          name="deck_name"
-          defaultValue={card.deck_name}
-          className={inputClass}
-          required
+        <input type="hidden" name="deck_id" value={setId} />
+        <CardMetadataFields
+          defaults={{
+            category: card.category ?? "",
+            difficulty: card.difficulty?.toString() ?? "",
+            topic_tags: card.topic_tags?.join(", ") ?? "",
+            icon_name: card.icon_name ?? "",
+          }}
         />
         <textarea
           name="front_text"
@@ -281,6 +471,7 @@ function FlashcardEditRow({
 function DeleteFlashcardButton({ id }: { id: string }) {
   const [pending, setPending] = useState(false);
   const router = useRouter();
+
   return (
     <button
       type="button"
@@ -290,6 +481,28 @@ function DeleteFlashcardButton({ id }: { id: string }) {
         if (!confirm("Delete this flashcard?")) return;
         setPending(true);
         await deleteFlashcard(id);
+        router.refresh();
+        setPending(false);
+      }}
+    >
+      Delete
+    </button>
+  );
+}
+
+function DeleteFlashcardSetButton({ id, name }: { id: string; name: string }) {
+  const [pending, setPending] = useState(false);
+  const router = useRouter();
+
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      className={dangerButtonClass}
+      onClick={async () => {
+        if (!confirm(`Delete "${name}" and all its cards?`)) return;
+        setPending(true);
+        await deleteFlashcardSet(id);
         router.refresh();
         setPending(false);
       }}

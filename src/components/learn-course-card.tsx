@@ -1,15 +1,27 @@
 import Link from "next/link";
 import type { LearnTrack } from "@/lib/learning/learn-catalog";
 import { learnTrackPath } from "@/lib/learning/learn-catalog";
+import { CourseProgressBar } from "@/components/course-progress-bar";
 
 type LearnCourseCardProps = {
   track: LearnTrack;
   locked: boolean;
   lessonCount?: number;
+  courseProgress?: {
+    completed: number;
+    total: number;
+  };
 };
 
-export function LearnCourseCard({ track, locked, lessonCount }: LearnCourseCardProps) {
+export function LearnCourseCard({
+  track,
+  locked,
+  lessonCount,
+  courseProgress,
+}: LearnCourseCardProps) {
   const showLock = !track.alwaysUnlocked && locked;
+  const showProgress =
+    !showLock && courseProgress && courseProgress.total > 0;
 
   return (
     <Link
@@ -27,10 +39,17 @@ export function LearnCourseCard({ track, locked, lessonCount }: LearnCourseCardP
           </p>
           <h2 className="mt-1 text-lg font-semibold text-zinc-900">{track.title}</h2>
           <p className="mt-2 text-sm text-zinc-500">{track.description}</p>
-          {lessonCount !== undefined && lessonCount > 0 && (
+          {lessonCount !== undefined && lessonCount > 0 && !showProgress && (
             <p className="mt-2 text-xs font-medium text-zinc-400">
               {lessonCount} lesson{lessonCount === 1 ? "" : "s"}
             </p>
+          )}
+          {showProgress && (
+            <CourseProgressBar
+              className="mt-3"
+              completed={courseProgress.completed}
+              total={courseProgress.total}
+            />
           )}
         </div>
         {showLock ? (

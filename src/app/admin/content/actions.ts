@@ -2,12 +2,65 @@
 
 import { isAdmin } from "@/lib/auth/admin";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
+import { ensureStorageBuckets } from "@/lib/supabase/ensure-storage-buckets";
+import type { StorageBucket } from "@/lib/supabase/upload";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
 const ADMIN_PATH = "/admin/content";
 const EVENTS_PATH = "/dashboard/events";
+
+export async function ensureStorageBucketsAction(): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdmin();
+    await ensureStorageBuckets(supabase);
+    return {};
+  } catch (e) {
+    return {
+      error:
+        e instanceof Error
+          ? e.message
+          : "Failed to prepare storage buckets. Check SUPABASE_SERVICE_ROLE_KEY.",
+    };
+  }
+}
+
+export type AdminUploadUrlResult = ActionResult & {
+  signedUrl?: string;
+  publicUrl?: string;
+};
+
+export async function createAdminStorageUploadUrl(
+  bucket: StorageBucket,
+  fileName: string
+): Promise<AdminUploadUrlResult> {
+  try {
+    const supabase = await requireAdmin();
+    await ensureStorageBuckets(supabase);
+
+    const ext = fileName.split(".").pop() ?? "bin";
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUploadUrl(path);
+
+    if (error || !data) {
+      return { error: error?.message ?? "Failed to create upload URL." };
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(bucket).getPublicUrl(path);
+
+    return { signedUrl: data.signedUrl, publicUrl };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Failed to prepare upload.",
+    };
+  }
+}
 
 function parseDatetimeLocal(value: string | null): string | null {
   if (!value?.trim()) return null;
@@ -42,6 +95,10 @@ function parseEventForm(formData: FormData) {
   };
 }
 
+export async function requireAdminFromActions() {
+  return requireAdmin();
+}
+
 async function requireAdmin() {
   const authClient = await createClient();
   const {
@@ -58,6 +115,9 @@ async function requireAdmin() {
 export type ActionResult = { error?: string; success?: string };
 
 function withDbHint(message: string): string {
+  if (message.includes("pdf_url") && message.includes("schema cache")) {
+    return `${message} Run supabase/lesson-pdfs.sql in the Supabase SQL Editor, then retry.`;
+  }
   if (message.includes("lesson_id") && message.includes("schema cache")) {
     return `${message} Run supabase/lesson-links.sql in the Supabase SQL Editor, then retry.`;
   }
@@ -89,6 +149,7 @@ export async function createLesson(
     const title = formData.get("title") as string;
     const isFree = formData.get("is_free") === "true";
     const audioUrl = (formData.get("audio_url") as string) || null;
+    const pdfUrl = (formData.get("pdf_url") as string) || null;
 
     if (!courseId || !title || Number.isNaN(lessonNumber)) {
       return { error: "Course, lesson number, and title are required." };
@@ -100,6 +161,7 @@ export async function createLesson(
       title,
       is_free: isFree,
       audio_url: audioUrl,
+      pdf_url: pdfUrl,
     });
 
     if (error) return { error: withDbHint(error.message) };
@@ -123,6 +185,7 @@ export async function updateLesson(
     const title = formData.get("title") as string;
     const isFree = formData.get("is_free") === "true";
     const audioUrl = formData.get("audio_url") as string | null;
+    const pdfUrl = formData.get("pdf_url") as string | null;
 
     const updates: Record<string, unknown> = {
       course_id: courseId,
@@ -133,6 +196,10 @@ export async function updateLesson(
 
     if (audioUrl) {
       updates.audio_url = audioUrl;
+    }
+
+    if (pdfUrl) {
+      updates.pdf_url = pdfUrl;
     }
 
     const { error } = await supabase.from("lessons").update(updates).eq("id", id);
@@ -364,17 +431,111 @@ export async function bulkCreateQuizQuestions(
   }
 }
 
-function flashcardFields(
-  deckName: string,
-  frontText: string,
-  backText: string,
-  lessonId: string | null,
-  quizId: string | null
+// ---- Flashcard sets & cards ----
+
+const FLASHCARD_CATEGORIES = ["alphabet", "vocab", "sentences"] as const;
+
+function parseTopicTags(raw: FormDataEntryValue | null): string[] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  return raw
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function parseOptionalInt(raw: FormDataEntryValue | null): number | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const value = parseInt(raw, 10);
+  return Number.isNaN(value) ? null : value;
+}
+
+function parseCategory(raw: FormDataEntryValue | null) {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  return FLASHCARD_CATEGORIES.includes(raw as (typeof FLASHCARD_CATEGORIES)[number])
+    ? (raw as (typeof FLASHCARD_CATEGORIES)[number])
+    : null;
+}
+
+async function getFlashcardSetName(supabase: SupabaseClient, deckId: string) {
+  const { data } = await supabase
+    .from("flashcard_sets")
+    .select("name")
+    .eq("id", deckId)
+    .single();
+
+  return data?.name ?? "Deck";
+}
+
+async function syncSetCourseLinks(
+  supabase: SupabaseClient,
+  deckId: string,
+  courseIds: string[],
+  lessonIds: string[]
 ) {
+  await supabase.from("set_course_links").delete().eq("deck_id", deckId);
+
+  const rows: Array<{
+    deck_id: string;
+    course_id?: string;
+    lesson_id?: string;
+  }> = [];
+
+  for (const courseId of courseIds) {
+    rows.push({ deck_id: deckId, course_id: courseId });
+  }
+
+  for (const lessonId of lessonIds) {
+    const { data: lesson } = await supabase
+      .from("lessons")
+      .select("course_id")
+      .eq("id", lessonId)
+      .single();
+
+    rows.push({
+      deck_id: deckId,
+      lesson_id: lessonId,
+      course_id: lesson?.course_id ?? undefined,
+    });
+  }
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from("set_course_links").insert(rows);
+    if (error) throw error;
+  }
+}
+
+function flashcardFields({
+  deckId,
+  deckName,
+  frontText,
+  backText,
+  lessonId,
+  quizId,
+  category,
+  difficulty,
+  topicTags,
+  iconName,
+}: {
+  deckId: string;
+  deckName: string;
+  frontText: string;
+  backText: string;
+  lessonId: string | null;
+  quizId: string | null;
+  category: string | null;
+  difficulty: number | null;
+  topicTags: string[];
+  iconName: string | null;
+}) {
   const row: Record<string, unknown> = {
+    deck_id: deckId,
     deck_name: deckName,
     front_text: frontText,
     back_text: backText,
+    category,
+    difficulty,
+    topic_tags: topicTags,
+    icon_name: iconName,
   };
   if (lessonId) row.lesson_id = lessonId;
   if (quizId) row.quiz_id = quizId;
@@ -405,26 +566,110 @@ async function resolveQuizIdForLesson(
   return quiz?.id ?? null;
 }
 
+export async function createFlashcardSet(
+  _prev: ActionResult,
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdmin();
+    const name = (formData.get("name") as string)?.trim();
+    const description = (formData.get("description") as string)?.trim() || null;
+
+    if (!name) return { error: "Set name is required." };
+
+    const { error } = await supabase.from("flashcard_sets").insert({
+      name,
+      description,
+    });
+
+    if (error) return { error: withDbHint(error.message) };
+
+    revalidatePath(ADMIN_PATH);
+    return { success: "Flashcard set created." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to create flashcard set." };
+  }
+}
+
+export async function updateFlashcardSet(
+  _prev: ActionResult,
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdmin();
+    const id = formData.get("id") as string;
+    const name = (formData.get("name") as string)?.trim();
+    const description = (formData.get("description") as string)?.trim() || null;
+    const courseIds = formData.getAll("course_ids").map(String).filter(Boolean);
+    const lessonIds = formData.getAll("lesson_ids").map(String).filter(Boolean);
+
+    if (!id || !name) return { error: "Set id and name are required." };
+
+    const { error } = await supabase
+      .from("flashcard_sets")
+      .update({ name, description })
+      .eq("id", id);
+
+    if (error) return { error: withDbHint(error.message) };
+
+    await supabase
+      .from("flashcards")
+      .update({ deck_name: name })
+      .eq("deck_id", id);
+
+    await syncSetCourseLinks(supabase, id, courseIds, lessonIds);
+
+    revalidatePath(ADMIN_PATH);
+    return { success: "Flashcard set updated." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update flashcard set." };
+  }
+}
+
+export async function deleteFlashcardSet(id: string): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdmin();
+    const { error } = await supabase.from("flashcard_sets").delete().eq("id", id);
+    if (error) return { error: withDbHint(error.message) };
+    revalidatePath(ADMIN_PATH);
+    return { success: "Flashcard set deleted." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to delete flashcard set." };
+  }
+}
+
 export async function createFlashcard(
   _prev: ActionResult,
   formData: FormData
 ): Promise<ActionResult> {
   try {
     const supabase = await requireAdmin();
-    const deckName = formData.get("deck_name") as string;
+    const deckId = formData.get("deck_id") as string;
     const frontText = formData.get("front_text") as string;
     const backText = formData.get("back_text") as string;
     const lessonId = (formData.get("lesson_id") as string) || null;
 
-    if (!deckName || !frontText || !backText) {
-      return { error: "All fields are required." };
+    if (!deckId || !frontText || !backText) {
+      return { error: "Deck, front text, and back text are required." };
     }
 
+    const deckName = await getFlashcardSetName(supabase, deckId);
     const quizId = await resolveQuizIdForLesson(supabase, lessonId);
 
-    const { error } = await supabase
-      .from("flashcards")
-      .insert(flashcardFields(deckName, frontText, backText, lessonId, quizId));
+    const { error } = await supabase.from("flashcards").insert(
+      flashcardFields({
+        deckId,
+        deckName,
+        frontText,
+        backText,
+        lessonId,
+        quizId,
+        category: parseCategory(formData.get("category")),
+        difficulty: parseOptionalInt(formData.get("difficulty")),
+        topicTags: parseTopicTags(formData.get("topic_tags")),
+        iconName: (formData.get("icon_name") as string)?.trim() || null,
+      })
+    );
 
     if (error) return { error: withDbHint(error.message) };
 
@@ -454,20 +699,34 @@ export async function updateFlashcard(
   try {
     const supabase = await requireAdmin();
     const id = formData.get("id") as string;
-    const deckName = formData.get("deck_name") as string;
+    const deckId = formData.get("deck_id") as string;
     const frontText = formData.get("front_text") as string;
     const backText = formData.get("back_text") as string;
     const lessonId = (formData.get("lesson_id") as string) || null;
 
-    if (!id || !deckName || !frontText || !backText) {
+    if (!id || !deckId || !frontText || !backText) {
       return { error: "Deck, front text, and back text are required." };
     }
 
+    const deckName = await getFlashcardSetName(supabase, deckId);
     const quizId = await resolveQuizIdForLesson(supabase, lessonId);
 
     const { error } = await supabase
       .from("flashcards")
-      .update(flashcardFields(deckName, frontText, backText, lessonId, quizId))
+      .update(
+        flashcardFields({
+          deckId,
+          deckName,
+          frontText,
+          backText,
+          lessonId,
+          quizId,
+          category: parseCategory(formData.get("category")),
+          difficulty: parseOptionalInt(formData.get("difficulty")),
+          topicTags: parseTopicTags(formData.get("topic_tags")),
+          iconName: (formData.get("icon_name") as string)?.trim() || null,
+        })
+      )
       .eq("id", id);
 
     if (error) return { error: withDbHint(error.message) };
@@ -485,11 +744,11 @@ export async function bulkCreateFlashcards(
 ): Promise<ActionResult> {
   try {
     const supabase = await requireAdmin();
-    const deckName = formData.get("deck_name") as string;
+    const deckId = formData.get("deck_id") as string;
     const bulkItemsRaw = formData.get("bulk_items") as string;
     const lessonId = (formData.get("lesson_id") as string) || null;
 
-    if (!deckName || !bulkItemsRaw) {
+    if (!deckId || !bulkItemsRaw) {
       return { error: "Deck and parsed flashcards are required." };
     }
 
@@ -502,10 +761,26 @@ export async function bulkCreateFlashcards(
       return { error: "No valid flashcards to import." };
     }
 
+    const deckName = await getFlashcardSetName(supabase, deckId);
     const quizId = await resolveQuizIdForLesson(supabase, lessonId);
+    const category = parseCategory(formData.get("category"));
+    const difficulty = parseOptionalInt(formData.get("difficulty"));
+    const topicTags = parseTopicTags(formData.get("topic_tags"));
+    const iconName = (formData.get("icon_name") as string)?.trim() || null;
 
     const rows = parsed.map((item) =>
-      flashcardFields(deckName, item.front_text, item.back_text, lessonId, quizId)
+      flashcardFields({
+        deckId,
+        deckName,
+        frontText: item.front_text,
+        backText: item.back_text,
+        lessonId,
+        quizId,
+        category,
+        difficulty,
+        topicTags,
+        iconName,
+      })
     );
 
     const { error } = await supabase.from("flashcards").insert(rows);
@@ -666,5 +941,229 @@ export async function deleteEvent(id: string): Promise<ActionResult> {
     return { success: "Event deleted." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to delete event." };
+  }
+}
+
+// ---- Streak debug (admin testing) ----
+
+export type StreakDebugState = {
+  user_id: string;
+  email: string;
+  current_streak: number;
+  longest_streak: number;
+  last_activity_date: string | null;
+  redemption_available: boolean;
+  streak_broken_date: string | null;
+  streak_before_break: number | null;
+  redeemed_today: boolean;
+};
+
+type StreakDebugResult = ActionResult & { data?: StreakDebugState };
+
+async function findUserIdByEmail(
+  supabase: SupabaseClient,
+  email: string
+): Promise<{ userId?: string; error?: string }> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return { error: "Email is required." };
+
+  const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+  if (error) return { error: error.message };
+
+  const user = data.users.find(
+    (item) => item.email?.toLowerCase() === normalized
+  );
+
+  if (!user) return { error: "No user found with that email." };
+  return { userId: user.id };
+}
+
+const STREAK_DEBUG_SELECT =
+  "current_streak, longest_streak, last_activity_date, redemption_available, streak_broken_date, streak_before_break, redeemed_today";
+
+const STREAK_DEBUG_SELECT_BASE =
+  "current_streak, longest_streak, last_activity_date";
+
+async function fetchStreakDebugRow(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ data: Record<string, unknown> | null; error?: string }> {
+  const extended = await supabase
+    .from("user_streaks")
+    .select(STREAK_DEBUG_SELECT)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!extended.error) {
+    return { data: extended.data };
+  }
+
+  if (!extended.error.message.includes("does not exist")) {
+    return { data: null, error: withDbHint(extended.error.message) };
+  }
+
+  const base = await supabase
+    .from("user_streaks")
+    .select(STREAK_DEBUG_SELECT_BASE)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (base.error) return { data: null, error: withDbHint(base.error.message) };
+  return { data: base.data };
+}
+
+function mapStreakDebugRow(
+  userId: string,
+  email: string,
+  row: Record<string, unknown> | null
+): StreakDebugState {
+  return {
+    user_id: userId,
+    email,
+    current_streak: Number(row?.current_streak ?? 0),
+    longest_streak: Number(row?.longest_streak ?? 0),
+    last_activity_date: (row?.last_activity_date as string | null) ?? null,
+    redemption_available: Boolean(row?.redemption_available),
+    streak_broken_date: (row?.streak_broken_date as string | null) ?? null,
+    streak_before_break:
+      row?.streak_before_break == null ? null : Number(row.streak_before_break),
+    redeemed_today: Boolean(row?.redeemed_today),
+  };
+}
+
+export async function debugGetUserStreak(email: string): Promise<StreakDebugResult> {
+  try {
+    const supabase = await requireAdmin();
+    const lookup = await findUserIdByEmail(supabase, email);
+    if (lookup.error || !lookup.userId) return { error: lookup.error };
+
+    const fetched = await fetchStreakDebugRow(supabase, lookup.userId);
+    if (fetched.error) return { error: fetched.error };
+
+    return {
+      success: fetched.data ? "Loaded streak state." : "No streak row yet — save to create one.",
+      data: mapStreakDebugRow(lookup.userId, email.trim(), fetched.data),
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to load streak." };
+  }
+}
+
+export async function debugSetUserStreakDate(input: {
+  email: string;
+  lastActivityDate: string;
+  currentStreak?: number;
+  longestStreak?: number;
+}): Promise<StreakDebugResult> {
+  try {
+    const supabase = await requireAdmin();
+    const lookup = await findUserIdByEmail(supabase, input.email);
+    if (lookup.error || !lookup.userId) return { error: lookup.error };
+
+    if (!input.lastActivityDate?.trim()) {
+      return { error: "last_activity_date is required." };
+    }
+
+    const existing = await fetchStreakDebugRow(supabase, lookup.userId);
+    if (existing.error) return { error: existing.error };
+
+    const current =
+      input.currentStreak != null && !Number.isNaN(input.currentStreak)
+        ? input.currentStreak
+        : Number(existing.data?.current_streak ?? 0);
+    const longest = Math.max(
+      input.longestStreak != null && !Number.isNaN(input.longestStreak)
+        ? input.longestStreak
+        : Number(existing.data?.longest_streak ?? 0),
+      current
+    );
+
+    if (current <= 0) {
+      return {
+        error:
+          "current_streak must be greater than 0 for streak testing. Set current_streak before saving.",
+      };
+    }
+
+    const fullUpdate = {
+      last_activity_date: input.lastActivityDate,
+      current_streak: current,
+      longest_streak: longest,
+      redemption_available: false,
+      streak_broken_date: null,
+      streak_before_break: null,
+      redeemed_today: false,
+    };
+
+    const basePayload = {
+      user_id: lookup.userId,
+      last_activity_date: input.lastActivityDate,
+      current_streak: current,
+      longest_streak: longest,
+    };
+
+    const baseUpdate = {
+      last_activity_date: input.lastActivityDate,
+      current_streak: current,
+      longest_streak: longest,
+    };
+
+    let saved: Record<string, unknown> | null = null;
+    let saveError: string | null = null;
+
+    if (existing.data) {
+      const extended = await supabase
+        .from("user_streaks")
+        .update(fullUpdate)
+        .eq("user_id", lookup.userId)
+        .select(STREAK_DEBUG_SELECT)
+        .single();
+
+      if (!extended.error) {
+        saved = extended.data;
+      } else if (extended.error.message.includes("does not exist")) {
+        const base = await supabase
+          .from("user_streaks")
+          .update(baseUpdate)
+          .eq("user_id", lookup.userId)
+          .select(STREAK_DEBUG_SELECT_BASE)
+          .single();
+        if (base.error) saveError = withDbHint(base.error.message);
+        else saved = base.data;
+      } else {
+        saveError = withDbHint(extended.error.message);
+      }
+    } else {
+      const extended = await supabase
+        .from("user_streaks")
+        .insert({ ...fullUpdate, user_id: lookup.userId })
+        .select(STREAK_DEBUG_SELECT)
+        .single();
+
+      if (!extended.error) {
+        saved = extended.data;
+      } else if (extended.error.message.includes("does not exist")) {
+        const base = await supabase
+          .from("user_streaks")
+          .insert(basePayload)
+          .select(STREAK_DEBUG_SELECT_BASE)
+          .single();
+        if (base.error) saveError = withDbHint(base.error.message);
+        else saved = base.data;
+      } else {
+        saveError = withDbHint(extended.error.message);
+      }
+    }
+
+    if (saveError || !saved) {
+      return { error: saveError ?? "Failed to save streak state." };
+    }
+
+    return {
+      success: `Saved: current ${current}, longest ${longest}, last activity ${input.lastActivityDate}. Open Home to run streak evaluation (3+ day gap resets current to 0).`,
+      data: mapStreakDebugRow(lookup.userId, input.email.trim(), saved),
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update streak." };
   }
 }

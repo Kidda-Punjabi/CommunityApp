@@ -1,7 +1,10 @@
 import { LessonCard } from "@/components/lesson-card";
+import { CourseProgressBar } from "@/components/course-progress-bar";
 import { canAccessLessonInContext } from "@/lib/learning/learn-access";
 import { getCourseAccessContext, tierLabelForCourse } from "@/lib/membership/unlocked";
+import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
+import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import Link from "next/link";
 
@@ -11,6 +14,12 @@ type LearnLessonListProps = {
   lessons: LessonWithCourse[];
   access: Awaited<ReturnType<typeof getCourseAccessContext>>;
   progressMap: Awaited<ReturnType<typeof fetchLessonProgressMap>>;
+  flashcardProgressMap: Awaited<ReturnType<typeof fetchFlashcardProgressMap>>;
+  completionMap: Map<string, LessonCompletionStatus>;
+  courseProgress?: {
+    completed: number;
+    total: number;
+  };
   backHref?: string;
 };
 
@@ -20,8 +29,22 @@ export function LearnLessonList({
   lessons,
   access,
   progressMap,
+  flashcardProgressMap,
+  completionMap,
+  courseProgress,
   backHref = "/dashboard/learn",
 }: LearnLessonListProps) {
+  const accessibleLessons = lessons.filter((lesson) =>
+    canAccessLessonInContext(access, lesson)
+  );
+
+  const progressSummary = courseProgress ?? {
+    completed: accessibleLessons.filter(
+      (lesson) => completionMap.get(lesson.id)?.fullyComplete
+    ).length,
+    total: accessibleLessons.length,
+  };
+
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
       <Link
@@ -34,6 +57,13 @@ export function LearnLessonList({
       <div className="mb-6 mt-4">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
         <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
+        {accessibleLessons.length > 0 && (
+          <CourseProgressBar
+            className="mt-4"
+            completed={progressSummary.completed}
+            total={progressSummary.total}
+          />
+        )}
       </div>
 
       {lessons.length === 0 ? (
@@ -50,17 +80,26 @@ export function LearnLessonList({
         <div className="space-y-3">
           {lessons.map((lesson) => {
             const row = progressMap.get(lesson.id);
+            const canAccess = canAccessLessonInContext(access, lesson);
+
             return (
               <LessonCard
                 key={lesson.id}
                 lesson={lesson}
-                canAccess={canAccessLessonInContext(access, lesson)}
+                canAccess={canAccess}
                 requiredCourseLabel={tierLabelForCourse(access.courses, lesson.course_id)}
                 progress={
                   row
-                    ? { completed: row.completed, lastPosition: row.last_position }
+                    ? {
+                        audioCompleted: row.completed,
+                        lastPosition: row.last_position,
+                        pdfCompleted: row.pdf_completed,
+                        lastPageViewed: row.last_page_viewed,
+                      }
                     : undefined
                 }
+                completion={canAccess ? completionMap.get(lesson.id) : undefined}
+                flashcardProgressMap={flashcardProgressMap}
               />
             );
           })}

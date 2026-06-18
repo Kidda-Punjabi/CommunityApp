@@ -6,6 +6,7 @@ import {
 } from "@/lib/progress/flashcard-progress";
 import type { MatchScoreRow } from "@/lib/progress/match-scores";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
+import { deckPracticeHref, gameDeckHref } from "@/lib/flashcards/utils";
 
 type FlashcardDeckHubProps = {
   deck: FlashcardDeckContext;
@@ -43,15 +44,17 @@ export function FlashcardDeckHub({ deck, progress, matchScore }: FlashcardDeckHu
     deck.cards.map((card) => card.id),
     progressMap
   );
+  const deckId = deck.deckId;
+  const setsHref = `/dashboard/practice/flashcards/${deck.lessonId}`;
 
   return (
     <div className="space-y-6">
       <div>
         <Link
-          href="/dashboard/practice"
+          href={setsHref}
           className="text-sm font-medium text-violet-600 hover:text-violet-500"
         >
-          ← Back to Practice
+          ← Back to flashcard sets
         </Link>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
           {deck.courseName} · Lesson {deck.lessonNumber}
@@ -80,10 +83,18 @@ export function FlashcardDeckHub({ deck, progress, matchScore }: FlashcardDeckHu
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-zinc-900">Study modes</h2>
-        {modeCards.map((mode) => (
+        {modeCards.map((mode) => {
+          const href =
+            mode.key === "match" && deckId
+              ? gameDeckHref("match", deck.lessonId, deckId)
+              : deckId
+                ? deckPracticeHref(deck.lessonId, deckId, mode.href)
+                : setsHref;
+
+          return (
           <Link
             key={mode.key}
-            href={`/dashboard/practice/flashcards/${deck.lessonId}/${mode.href}`}
+            href={href}
             className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-50/40"
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-2xl">
@@ -95,7 +106,8 @@ export function FlashcardDeckHub({ deck, progress, matchScore }: FlashcardDeckHu
             </div>
             <span className="text-sm font-semibold text-violet-600">Start →</span>
           </Link>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

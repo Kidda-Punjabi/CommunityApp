@@ -111,7 +111,7 @@ const navItems: Omit<NavItem, "icon">[] = [
   { href: "/dashboard/home", label: "Home" },
   { href: "/dashboard/learn", label: "Learn" },
   { href: "/dashboard/events", label: "Events" },
-  { href: "/dashboard/practice", label: "Practice" },
+  { href: "/dashboard/games", label: "Games" },
   { href: "/dashboard/profile", label: "Profile" },
 ];
 
@@ -121,7 +121,7 @@ function NavIcon({ href, active }: { href: string; active: boolean }) {
       return <HomeIcon active={active} />;
     case "/dashboard/learn":
       return <LearnIcon active={active} />;
-    case "/dashboard/practice":
+    case "/dashboard/games":
       return <PracticeIcon active={active} />;
     case "/dashboard/events":
       return <EventsIcon active={active} />;
@@ -139,7 +139,10 @@ export function BottomNav() {
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200/80 bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
         {navItems.map((item) => {
-          const active = pathname === item.href;
+          const active =
+            item.href === "/dashboard/games"
+              ? pathname.startsWith("/dashboard/games")
+              : pathname === item.href;
 
           return (
             <Link

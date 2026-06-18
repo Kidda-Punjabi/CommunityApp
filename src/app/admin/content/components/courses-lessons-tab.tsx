@@ -1,11 +1,12 @@
 "use client";
 
-import { appendUploadedFileUrl } from "@/lib/supabase/upload";
+import { appendAdminUploadedFileUrl } from "@/lib/supabase/admin-upload";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createLesson,
   deleteLesson,
+  ensureStorageBucketsAction,
   updateLesson,
   type ActionResult,
 } from "../actions";
@@ -21,6 +22,16 @@ import {
 } from "./ui";
 
 const initialState: ActionResult = {};
+
+function filenameFromStorageUrl(url: string | null | undefined) {
+  if (!url) return null;
+  try {
+    const segment = url.split("/").pop()?.split("?")[0] ?? "";
+    return decodeURIComponent(segment) || null;
+  } catch {
+    return null;
+  }
+}
 
 export function CoursesLessonsTab({ data }: { data: AdminData }) {
   const [createState, createAction, createPending] = useActionState(
@@ -39,11 +50,12 @@ export function CoursesLessonsTab({ data }: { data: AdminData }) {
     const formData = new FormData(event.currentTarget);
 
     try {
-      await appendUploadedFileUrl(formData, "audio", "audio-files", "audio_url");
+      await appendAdminUploadedFileUrl(formData, "pdf", "lesson-pdfs", "pdf_url");
+      await appendAdminUploadedFileUrl(formData, "audio", "audio-files", "audio_url");
       createAction(formData);
     } catch (error) {
       setCreateUploadError(
-        error instanceof Error ? error.message : "Audio upload failed."
+        error instanceof Error ? error.message : "File upload failed."
       );
     } finally {
       setCreateUploading(false);
@@ -95,7 +107,19 @@ export function CoursesLessonsTab({ data }: { data: AdminData }) {
             </select>
           </div>
           <div>
-            <label className={labelClass}>Audio file</label>
+            <label className={labelClass}>Lesson PDF</label>
+            <input
+              name="pdf"
+              type="file"
+              accept="application/pdf"
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Primary lesson content. Uploaded to the lesson-pdfs bucket.
+            </p>
+          </div>
+          <div>
+            <label className={labelClass}>Audio file (optional)</label>
             <input
               name="audio"
               type="file"
@@ -115,7 +139,7 @@ export function CoursesLessonsTab({ data }: { data: AdminData }) {
             className={buttonClass}
           >
             {createUploading
-              ? "Uploading audio…"
+              ? "Uploading files…"
               : createPending
                 ? "Saving…"
                 : "Add lesson"}
@@ -149,6 +173,19 @@ export function CoursesLessonsTab({ data }: { data: AdminData }) {
                     </p>
                     <p className="mt-1 text-sm text-zinc-500">
                       {lesson.is_free ? "Free" : "Paid"}
+                      {lesson.pdf_url && (
+                        <>
+                          {" · "}
+                          <a
+                            href={lesson.pdf_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-violet-600 hover:underline"
+                          >
+                            PDF
+                          </a>
+                        </>
+                      )}
                       {lesson.audio_url && (
                         <>
                           {" · "}
@@ -198,6 +235,7 @@ function LessonEditRow({
   const [state, action, pending] = useActionState(updateLesson, initialState);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const currentPdfName = filenameFromStorageUrl(lesson.pdf_url);
 
   useEffect(() => {
     if (state.success) onSaved();
@@ -211,11 +249,12 @@ function LessonEditRow({
     const formData = new FormData(event.currentTarget);
 
     try {
-      await appendUploadedFileUrl(formData, "audio", "audio-files", "audio_url");
+      await appendAdminUploadedFileUrl(formData, "pdf", "lesson-pdfs", "pdf_url");
+      await appendAdminUploadedFileUrl(formData, "audio", "audio-files", "audio_url");
       action(formData);
     } catch (error) {
       setUploadError(
-        error instanceof Error ? error.message : "Audio upload failed."
+        error instanceof Error ? error.message : "File upload failed."
       );
     } finally {
       setUploading(false);
@@ -260,7 +299,27 @@ function LessonEditRow({
           <option value="true">Free</option>
           <option value="false">Paid</option>
         </select>
-        <input name="audio" type="file" accept="audio/*" className={inputClass} />
+        <div>
+          <label className={labelClass}>Replace PDF</label>
+          {currentPdfName && (
+            <p className="mb-2 text-sm text-zinc-600">
+              Current file:{" "}
+              <a
+                href={lesson.pdf_url ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-violet-600 hover:underline"
+              >
+                {currentPdfName}
+              </a>
+            </p>
+          )}
+          <input name="pdf" type="file" accept="application/pdf" className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Replace audio (optional)</label>
+          <input name="audio" type="file" accept="audio/*" className={inputClass} />
+        </div>
         <FormMessage state={state} />
         {uploadError && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">

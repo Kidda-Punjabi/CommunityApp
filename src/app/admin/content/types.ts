@@ -11,6 +11,7 @@ export type Lesson = {
   lesson_number: number;
   title: string;
   audio_url: string | null;
+  pdf_url: string | null;
   is_free: boolean;
   courses: { name: string } | null;
 };
@@ -36,12 +37,34 @@ export type QuizQuestion = {
   question_order: number;
 };
 
+export type FlashcardCategory = "alphabet" | "vocab" | "sentences";
+
+export type FlashcardSet = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SetCourseLink = {
+  id: string;
+  deck_id: string;
+  course_id: string | null;
+  lesson_id: string | null;
+};
+
 export type Flashcard = {
   id: string;
+  deck_id: string | null;
   lesson_id: string | null;
   deck_name: string;
   front_text: string;
   back_text: string;
+  category: FlashcardCategory | null;
+  difficulty: number | null;
+  topic_tags: string[];
+  icon_name: string | null;
 };
 
 export type Teacher = {
@@ -70,21 +93,63 @@ export type Event = {
   recurrence_until: string | null;
 };
 
+export type GenderedNoun = {
+  id: string;
+  punjabi_word: string;
+  english_meaning: string;
+  gender: "masculine" | "feminine";
+  difficulty: number;
+  topic_tags: string[];
+  course_id: string | null;
+  created_at: string;
+};
+
+export type GrammarSentence = {
+  id: string;
+  punjabi_sentence: string;
+  english_translation: string;
+  word_tiles: string[];
+  difficulty: number;
+  topic_tags: string[];
+  course_id: string | null;
+  created_at: string;
+};
+
+export type VerbConjugationRow = {
+  id: string;
+  verb_root: string;
+  verb_meaning: string;
+  conjugations: Record<string, unknown>;
+  difficulty: number;
+  course_id: string | null;
+  created_at: string;
+};
+
 export type AdminData = {
   courses: Course[];
   lessons: Lesson[];
   quizzes: Quiz[];
   questions: QuizQuestion[];
+  flashcardSets: FlashcardSet[];
+  setCourseLinks: SetCourseLink[];
   flashcards: Flashcard[];
   teachers: Teacher[];
   events: Event[];
+  grammarSentences: GrammarSentence[];
+  verbConjugations: VerbConjugationRow[];
+  genderedNouns: GenderedNoun[];
   errors?: {
     courses?: string;
     lessons?: string;
     quizzes?: string;
     questions?: string;
+    flashcardSets?: string;
+    setCourseLinks?: string;
     flashcards?: string;
     teachers?: string;
     events?: string;
+    grammarSentences?: string;
+    verbConjugations?: string;
+    genderedNouns?: string;
   };
 };

@@ -9,6 +9,12 @@ import {
   type StoredEvent,
 } from "@/lib/events/recurrence";
 import { buildQuizLevelPathway, type QuizProgressRow } from "@/lib/progress/quiz-progress";
+import {
+  computeStreakPresentation,
+  mapStreakRowSnapshot,
+  presentationToHomeStats,
+} from "@/lib/progress/activity-date";
+import { getUserActivityDate } from "@/lib/progress/server-activity-date";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type HomePrimaryCta = {
@@ -31,6 +37,11 @@ export type HomeDashboardData = {
   starterPackHref: string;
   stats: {
     streak: number;
+    longestStreak: number;
+    redemptionAvailable: boolean;
+    streakAtRisk: boolean;
+    streakWarning: boolean;
+    rescueStreak: number;
     lessonsCompleted: number;
     quizLevelLabel: string;
   };
@@ -75,6 +86,7 @@ type FlashcardProgressJoined = {
   flashcards: {
     id: string;
     lesson_id: string | null;
+    deck_id: string | null;
     lessons: {
       id: string;
       title: string;
@@ -146,13 +158,18 @@ function pickContinueItem(
   }
 
   for (const row of flashcardRows) {
-    const lesson = row.flashcards?.lessons;
+    const flashcard = row.flashcards;
+    const lesson = flashcard?.lessons;
     if (!lesson || !row.last_reviewed_at) continue;
+    const href =
+      flashcard.deck_id != null
+        ? `/dashboard/practice/flashcards/${lesson.id}/${flashcard.deck_id}`
+        : `/dashboard/practice/flashcards/${lesson.id}`;
     candidates.push({
       type: "flashcard",
       title: lesson.title,
       subtitle: `Flashcards · Lesson ${lesson.lesson_number}`,
-      href: `/dashboard/practice/flashcards/${lesson.id}`,
+      href,
       activityAt: row.last_reviewed_at,
     });
   }
@@ -182,9 +199,22 @@ export async function getHomeDashboardData(
   const userId = user.id;
   const access = await getCourseAccessContext(supabase, user);
 
+  const activityDate = await getUserActivityDate();
+
+  const { data: streakRow } = await supabase
+    .from("user_streaks")
+    .select(
+      "current_streak, longest_streak, last_activity_date, redemption_available, streak_broken_date, streak_before_break"
+    )
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const rowSnapshot = streakRow ? mapStreakRowSnapshot(streakRow) : null;
+  const presentation = computeStreakPresentation(rowSnapshot, activityDate);
+  const streakStats = presentationToHomeStats(presentation);
+
   const [
     { data: profile },
-    { data: streak },
     { data: lessonProgress },
     { data: quizProgress },
     { data: flashcardProgress },
@@ -193,11 +223,6 @@ export async function getHomeDashboardData(
     { data: events },
   ] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", userId).single(),
-    supabase
-      .from("user_streaks")
-      .select("current_streak")
-      .eq("user_id", userId)
-      .maybeSingle(),
     supabase
       .from("lesson_progress")
       .select(
@@ -213,7 +238,7 @@ export async function getHomeDashboardData(
     supabase
       .from("flashcard_progress")
       .select(
-        "flashcard_id, confidence, last_reviewed_at, flashcards(id, lesson_id, lessons(id, title, lesson_number))"
+        "flashcard_id, confidence, last_reviewed_at, flashcards(id, lesson_id, deck_id, lessons(id, title, lesson_number))"
       )
       .eq("user_id", userId),
     supabase.from("lessons").select("id, is_free").eq("is_free", true),
@@ -258,7 +283,8 @@ export async function getHomeDashboardData(
     lessonRows.length > 0 ||
     quizRows.length > 0 ||
     flashcardRows.length > 0 ||
-    (streak?.current_streak ?? 0) > 0;
+    (streakStats.streak ?? 0) > 0 ||
+    (presentation.longest_streak ?? 0) > 0;
 
   const freeLessonIds = (freeLessons ?? []).map((lesson) => lesson.id);
   const completedFreeLessonIds = new Set(
@@ -317,7 +343,12 @@ export async function getHomeDashboardData(
     primaryCta,
     starterPackHref,
     stats: {
-      streak: streak?.current_streak ?? 0,
+      streak: streakStats.streak,
+      longestStreak: streakStats.longestStreak,
+      redemptionAvailable: streakStats.redemptionAvailable,
+      streakAtRisk: streakStats.streakAtRisk,
+      streakWarning: streakStats.streakWarning,
+      rescueStreak: streakStats.rescueStreak,
       lessonsCompleted,
       quizLevelLabel: highestCompletedQuizLevel(quizRows),
     },

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   saveLessonProgress,
 } from "@/lib/progress/lesson-progress";
-import { updateUserStreak } from "@/lib/progress/streak";
+import { recordStreakActivity } from "@/lib/progress/streak";
 
 const SAVE_INTERVAL_MS = 10_000;
 const COMPLETION_THRESHOLD = 0.9;
@@ -68,7 +68,7 @@ export function LessonAudioPlayer({
 
       if (shouldComplete && !wasCompleted) {
         completedRef.current = true;
-        await updateUserStreak(supabase, userId);
+        await recordStreakActivity(supabase, userId);
       }
     },
     [lessonId]
@@ -117,7 +117,7 @@ export function LessonAudioPlayer({
       ref={audioRef}
       controls
       preload="metadata"
-      className="mt-4 w-full"
+      className="w-full"
       src={audioUrl}
       onTimeUpdate={handleTimeUpdate}
       onPause={handlePause}

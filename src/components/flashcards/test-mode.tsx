@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
-import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
+import { deckPracticeHref, pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 
 type FlashcardTestModeProps = {
   deck: FlashcardDeckContext;
@@ -34,6 +34,11 @@ function buildQuestions(deck: FlashcardDeckContext): Question[] {
 }
 
 export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
+  const deckHubHref =
+    deck.deckId != null
+      ? deckPracticeHref(deck.lessonId, deck.deckId)
+      : `/dashboard/practice/flashcards/${deck.lessonId}`;
+
   const questions = useMemo(() => buildQuestions(deck), [deck]);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -69,7 +74,7 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
           </h2>
         </div>
         <Link
-          href={`/dashboard/practice/flashcards/${deck.lessonId}`}
+          href={deckHubHref}
           className="block rounded-lg bg-violet-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-violet-500"
         >
           Back to deck
@@ -82,7 +87,7 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
     <div className="space-y-4">
       <div>
         <Link
-          href={`/dashboard/practice/flashcards/${deck.lessonId}`}
+          href={deckHubHref}
           className="text-sm font-medium text-violet-600 hover:text-violet-500"
         >
           ← Back to deck

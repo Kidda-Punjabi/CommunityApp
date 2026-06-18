@@ -6,6 +6,7 @@ export type LessonWithCourse = {
   lesson_number: number;
   title: string;
   audio_url: string | null;
+  pdf_url: string | null;
   is_free: boolean;
   courses: { name: string } | null;
   practice: LessonPracticeLinks;

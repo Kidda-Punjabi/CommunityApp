@@ -4,9 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
-import { shuffleArray } from "@/lib/flashcards/utils";
+import { gameDeckHubHref, shuffleArray } from "@/lib/flashcards/utils";
 import { saveMatchScoreIfBest } from "@/lib/progress/match-scores";
-import { updateUserStreak } from "@/lib/progress/streak";
 
 const GAME_SECONDS = 60;
 
@@ -22,6 +21,8 @@ type FlashcardMatchModeProps = {
 };
 
 export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchModeProps) {
+  const deckHubHref = gameDeckHubHref("match");
+
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
   const [secondsLeft, setSecondsLeft] = useState(GAME_SECONDS);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
@@ -35,7 +36,6 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
   } | null>(null);
 
   const userIdRef = useRef<string | null>(null);
-  const streakUpdatedRef = useRef(false);
   const startedAtRef = useRef<number | null>(null);
   const savedRef = useRef(false);
 
@@ -99,11 +99,6 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
         isNewBest: outcome.isNewBest,
         currentBest: outcome.currentBest,
       });
-
-      if (!streakUpdatedRef.current && pairsMatched > 0) {
-        streakUpdatedRef.current = true;
-        await updateUserStreak(supabase, userId);
-      }
     };
 
     void persist();
@@ -117,7 +112,6 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
 
   function startGame() {
     savedRef.current = false;
-    streakUpdatedRef.current = false;
     setTiles(buildTiles());
     setPhase("playing");
     setSecondsLeft(GAME_SECONDS);
@@ -169,7 +163,7 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
       <div className="space-y-6">
         <div>
           <Link
-            href={`/dashboard/practice/flashcards/${deck.lessonId}`}
+            href={deckHubHref}
             className="text-sm font-medium text-violet-600 hover:text-violet-500"
           >
             ← Back to deck
@@ -229,7 +223,7 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
           Play again
         </button>
         <Link
-          href={`/dashboard/practice/flashcards/${deck.lessonId}`}
+          href={deckHubHref}
           className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
         >
           Back to deck
@@ -242,7 +236,7 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <Link
-          href={`/dashboard/practice/flashcards/${deck.lessonId}`}
+          href={deckHubHref}
           className="text-sm font-medium text-violet-600 hover:text-violet-500"
         >
           ← Exit

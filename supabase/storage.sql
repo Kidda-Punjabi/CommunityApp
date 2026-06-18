@@ -6,7 +6,8 @@
 INSERT INTO storage.buckets (id, name, public)
 VALUES
   ('audio-files', 'audio-files', true),
-  ('profile-photos', 'profile-photos', true)
+  ('profile-photos', 'profile-photos', true),
+  ('lesson-pdfs', 'lesson-pdfs', true)
 ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
 
 -- Drop existing policies so this script can be re-run safely
@@ -18,6 +19,10 @@ DROP POLICY IF EXISTS "Admins can delete audio files" ON storage.objects;
 DROP POLICY IF EXISTS "Admins can upload profile photos" ON storage.objects;
 DROP POLICY IF EXISTS "Admins can update profile photos" ON storage.objects;
 DROP POLICY IF EXISTS "Admins can delete profile photos" ON storage.objects;
+DROP POLICY IF EXISTS "Anyone can view lesson PDFs" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can upload lesson PDFs" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can update lesson PDFs" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can delete lesson PDFs" ON storage.objects;
 
 -- Public read access for everyone
 CREATE POLICY "Anyone can view audio files"
@@ -76,5 +81,34 @@ CREATE POLICY "Admins can delete profile photos"
   TO authenticated
   USING (
     bucket_id = 'profile-photos'
+    AND (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+CREATE POLICY "Anyone can view lesson PDFs"
+  ON storage.objects FOR SELECT
+  TO anon, authenticated
+  USING (bucket_id = 'lesson-pdfs');
+
+CREATE POLICY "Admins can upload lesson PDFs"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'lesson-pdfs'
+    AND (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+CREATE POLICY "Admins can update lesson PDFs"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'lesson-pdfs'
+    AND (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+CREATE POLICY "Admins can delete lesson PDFs"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (
+    bucket_id = 'lesson-pdfs'
     AND (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );

@@ -7,13 +7,21 @@ import { QuizzesTab } from "./components/quizzes-tab";
 import { FlashcardsTab } from "./components/flashcards-tab";
 import { EventsTab } from "./components/events-tab";
 import { TeachersTab } from "./components/teachers-tab";
+import { StreakDebugTab } from "./components/streak-debug-tab";
+import { SentenceBuilderTab } from "./components/sentence-builder-tab";
+import { ConjugationTab } from "./components/conjugation-tab";
+import { GenderSortTab } from "./components/gender-sort-tab";
 
 const tabs = [
   { id: "lessons", label: "Courses & Lessons" },
   { id: "quizzes", label: "Quizzes" },
   { id: "flashcards", label: "Flashcards" },
+  { id: "sentence-builder", label: "Sentence builder" },
+  { id: "conjugation", label: "Conjugation" },
+  { id: "gender-sort", label: "Gender sort" },
   { id: "events", label: "Events" },
   { id: "teachers", label: "Teachers" },
+  { id: "streaks", label: "Streak debug" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -57,8 +65,12 @@ export function AdminContent({ data }: { data: AdminData }) {
         {activeTab === "lessons" && <CoursesLessonsTab data={data} />}
         {activeTab === "quizzes" && <QuizzesTab data={data} />}
         {activeTab === "flashcards" && <FlashcardsTab data={data} />}
+        {activeTab === "sentence-builder" && <SentenceBuilderTab data={data} />}
+        {activeTab === "conjugation" && <ConjugationTab data={data} />}
+        {activeTab === "gender-sort" && <GenderSortTab data={data} />}
         {activeTab === "events" && <EventsTab data={data} />}
         {activeTab === "teachers" && <TeachersTab data={data} />}
+        {activeTab === "streaks" && <StreakDebugTab />}
       </div>
     </div>
   );

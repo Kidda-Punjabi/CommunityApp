@@ -4,11 +4,17 @@ import {
   filterFreeLessons,
 } from "@/lib/learning/load-learn-content";
 import {
+  canAccessLessonInContext,
+  filterLessonsForTrack,
   isLearnTrackUnlocked,
   lessonCountForTrack,
 } from "@/lib/learning/learn-access";
 import { LEARN_TRACKS } from "@/lib/learning/learn-catalog";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
+import {
+  fetchLessonCompletionMap,
+  summarizeCourseProgress,
+} from "@/lib/progress/lesson-completion";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,22 +35,51 @@ export default async function LearnPage() {
 
   const access = await getCourseAccessContext(supabase, user!);
   const allLessons = await fetchLearnContent(supabase);
+  const completionMap = await fetchLessonCompletionMap(supabase, user!.id, allLessons);
 
   const tracks = LEARN_TRACKS.map((track) => {
     if (track.alwaysUnlocked) {
+      const trackLessons = filterFreeLessons(allLessons);
+      const accessibleLessons = trackLessons.filter((lesson) =>
+        canAccessLessonInContext(access, lesson)
+      );
+      const progress = summarizeCourseProgress(accessibleLessons, completionMap);
+
       return {
         track,
         locked: false,
-        lessonCount: filterFreeLessons(allLessons).length,
+        lessonCount: trackLessons.length,
+        courseProgress: {
+          completed: progress.completedLessons,
+          total: progress.totalLessons,
+        },
       };
     }
 
+    const locked = !isLearnTrackUnlocked(track, access);
+    const trackLessons = track.tier
+      ? filterLessonsForTrack(allLessons, access.courses, track.tier)
+      : [];
+
+    const accessibleLessons = locked
+      ? []
+      : trackLessons.filter((lesson) => canAccessLessonInContext(access, lesson));
+
     return {
       track,
-      locked: !isLearnTrackUnlocked(track, access),
+      locked,
       lessonCount: track.tier
         ? lessonCountForTrack(allLessons, access.courses, track.tier)
         : 0,
+      courseProgress: locked
+        ? undefined
+        : (() => {
+            const progress = summarizeCourseProgress(accessibleLessons, completionMap);
+            return {
+              completed: progress.completedLessons,
+              total: progress.totalLessons,
+            };
+          })(),
     };
   });
 
@@ -58,12 +93,20 @@ export default async function LearnPage() {
       </div>
 
       <div className="space-y-3">
-        {tracks.map(({ track, locked, lessonCount }) => (
+        {tracks.map(({ track, locked, lessonCount, courseProgress }) => (
           <LearnCourseCard
             key={track.id}
             track={track}
             locked={locked}
             lessonCount={lessonCount}
+            courseProgress={
+              courseProgress
+                ? {
+                    completed: courseProgress.completed,
+                    total: courseProgress.total,
+                  }
+                : undefined
+            }
           />
         ))}
       </div>

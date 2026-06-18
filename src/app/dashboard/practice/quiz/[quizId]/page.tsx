@@ -26,7 +26,7 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
             : `This quiz requires ${access.requiredCourseLabel ?? "a membership upgrade"}.`}
         </p>
         <Link
-          href={access.levelLocked ? "/dashboard/practice" : "/dashboard/membership"}
+          href={access.levelLocked ? "/dashboard/games" : "/dashboard/membership"}
           className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
         >
           {access.levelLocked ? "← Back to Practice pathway" : "View membership plans →"}
@@ -56,7 +56,7 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
           This quiz has no questions yet.
         </p>
         <Link
-          href="/dashboard/practice"
+          href="/dashboard/games"
           className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
         >
           ← Back to Practice
@@ -70,7 +70,7 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
       <Link
-        href="/dashboard/practice"
+        href="/dashboard/games"
         className="mb-4 text-sm font-medium text-violet-600 hover:text-violet-500"
       >
         ← Back to Practice

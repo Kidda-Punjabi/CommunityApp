@@ -1,0 +1,206 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import type { FlashcardDeckContext } from "@/lib/flashcards/types";
+import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
+import { saveGameScoreIfBest } from "@/lib/games/game-scores";
+
+const LIVES = 3;
+const OPTIONS = 4;
+
+type SpeedTranslateModeProps = {
+  deck: FlashcardDeckContext;
+  initialBestScore: number;
+};
+
+export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateModeProps) {
+  const backHref = `/dashboard/games/speed-translate`;
+
+  const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
+  const [queue, setQueue] = useState<typeof deck.cards>([]);
+  const [index, setIndex] = useState(0);
+  const [lives, setLives] = useState(LIVES);
+  const [score, setScore] = useState(0);
+  const [result, setResult] = useState<{ isNewBest: boolean; currentBest: number } | null>(
+    null
+  );
+
+  const userIdRef = useRef<string | null>(null);
+  const savedRef = useRef(false);
+
+  const currentCard = queue[index];
+
+  const options = useMemo(() => {
+    if (!currentCard) return [];
+    const distractors = pickRandomItems(
+      deck.cards.map((c) => c.back_text),
+      OPTIONS - 1,
+      currentCard.back_text
+    );
+    return shuffleArray([currentCard.back_text, ...distractors]);
+  }, [currentCard, deck.cards]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      userIdRef.current = user?.id ?? null;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "finished" || savedRef.current) return;
+    savedRef.current = true;
+
+    const persist = async () => {
+      const userId = userIdRef.current;
+      if (!userId) return;
+
+      const supabase = createClient();
+      const outcome = await saveGameScoreIfBest(
+        supabase,
+        userId,
+        "speed_translate",
+        score,
+        { deck_name: deck.deckName }
+      );
+      setResult({ isNewBest: outcome.isNewBest, currentBest: outcome.currentBest });
+    };
+
+    void persist();
+  }, [phase, score, deck.deckName]);
+
+  function startGame() {
+    savedRef.current = false;
+    setQueue(shuffleArray(deck.cards));
+    setIndex(0);
+    setLives(LIVES);
+    setScore(0);
+    setResult(null);
+    setPhase("playing");
+  }
+
+  function endGame() {
+    setPhase("finished");
+  }
+
+  function handleAnswer(answer: string) {
+    if (phase !== "playing" || !currentCard) return;
+
+    if (answer === currentCard.back_text) {
+      const nextScore = score + 1;
+      setScore(nextScore);
+      if (index + 1 >= queue.length) {
+        setScore(nextScore);
+        endGame();
+        return;
+      }
+      setIndex((i) => i + 1);
+      return;
+    }
+
+    const nextLives = lives - 1;
+    setLives(nextLives);
+    if (nextLives <= 0) {
+      endGame();
+      return;
+    }
+    if (index + 1 >= queue.length) {
+      endGame();
+      return;
+    }
+    setIndex((i) => i + 1);
+  }
+
+  if (phase === "ready") {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
+            ← Back to decks
+          </Link>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
+            Speed Translate · {deck.deckName}
+          </p>
+          <h1 className="mt-1 text-2xl font-bold text-zinc-900">{deck.lessonTitle}</h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            Pick the correct translation. You have {LIVES} lives.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Your best</p>
+          <p className="mt-1 text-lg font-bold text-zinc-900">
+            {initialBestScore > 0 ? `${initialBestScore} correct` : "No score yet"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={startGame}
+          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+        >
+          Start game
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === "finished") {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+          <p className="text-sm font-medium text-violet-600">Game over</p>
+          <h2 className="mt-2 text-2xl font-bold text-zinc-900">{score} correct</h2>
+          {result?.isNewBest && (
+            <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
+          )}
+          {result && !result.isNewBest && result.currentBest > 0 && (
+            <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={startGame}
+          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+        >
+          Play again
+        </button>
+        <Link href={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
+          Back to decks
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
+          ← Exit
+        </Link>
+        <p className="text-sm font-semibold text-zinc-900">
+          {score} pts · {"❤️".repeat(lives)}
+          {"🖤".repeat(LIVES - lives)}
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Translate</p>
+        <p className="mt-3 text-2xl font-bold text-zinc-900">{currentCard?.front_text}</p>
+      </div>
+
+      <div className="grid gap-2">
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => handleAnswer(option)}
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm font-medium text-zinc-900 hover:border-violet-300 hover:bg-violet-50"
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

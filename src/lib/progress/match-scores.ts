@@ -13,13 +13,23 @@ export async function fetchMatchScore(
   deckName: string
 ): Promise<MatchScoreRow | null> {
   const { data } = await supabase
-    .from("match_scores")
-    .select("deck_name, best_score, best_time_seconds, achieved_at")
+    .from("game_scores")
+    .select("score, metadata, achieved_at")
     .eq("user_id", userId)
-    .eq("deck_name", deckName)
+    .eq("game_type", "match")
+    .eq("metadata->>deck_name", deckName)
+    .order("score", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
-  return data;
+  if (!data) return null;
+
+  return {
+    deck_name: deckName,
+    best_score: data.score,
+    best_time_seconds: (data.metadata?.time_seconds as number) ?? 60,
+    achieved_at: data.achieved_at,
+  };
 }
 
 export type SaveMatchScoreResult = {
@@ -37,25 +47,22 @@ export async function saveMatchScoreIfBest(
 ): Promise<SaveMatchScoreResult> {
   const existing = await fetchMatchScore(supabase, userId, deckName);
   const previousBest = existing?.best_score ?? 0;
+  const previousTime = existing?.best_time_seconds ?? 60;
 
   const isNewBest =
-    score > previousBest ||
-    (score === previousBest && timeSeconds < (existing?.best_time_seconds ?? 60));
+    score > previousBest || (score === previousBest && timeSeconds < previousTime);
 
   if (!isNewBest) {
     return { isNewBest: false, previousBest, currentBest: previousBest };
   }
 
-  const { error } = await supabase.from("match_scores").upsert(
-    {
-      user_id: userId,
-      deck_name: deckName,
-      best_score: score,
-      best_time_seconds: timeSeconds,
-      achieved_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,deck_name" }
-  );
+  const { error } = await supabase.from("game_scores").insert({
+    user_id: userId,
+    game_type: "match",
+    score,
+    metadata: { deck_name: deckName, time_seconds: timeSeconds },
+    achieved_at: new Date().toISOString(),
+  });
 
   if (error) throw error;
 

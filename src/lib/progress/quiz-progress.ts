@@ -1,10 +1,31 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export const PASSING_QUIZ_SCORE = 80;
+
 export type QuizProgressRow = {
   quiz_id: string;
   completed: boolean;
   score: number | null;
 };
+
+/** Score in DB may be percentage (new) or raw correct count (legacy). */
+export function isQuizPassing(
+  progress: Pick<QuizProgressRow, "completed" | "score"> | undefined,
+  questionCount: number
+): boolean {
+  if (!progress?.completed) return false;
+
+  const score = progress.score ?? 0;
+  if (score >= PASSING_QUIZ_SCORE) return true;
+  if (questionCount <= 0) return false;
+
+  return Math.round((score / questionCount) * 100) >= PASSING_QUIZ_SCORE;
+}
+
+export function quizScorePercent(correct: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round((correct / total) * 100);
+}
 
 export type QuizLevelStatus = "completed" | "current" | "locked";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { appendUploadedFileUrl } from "@/lib/supabase/upload";
+import { appendAdminUploadedFileUrl } from "@/lib/supabase/admin-upload";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -39,7 +39,7 @@ export function TeachersTab({ data }: { data: AdminData }) {
     const formData = new FormData(event.currentTarget);
 
     try {
-      await appendUploadedFileUrl(
+      await appendAdminUploadedFileUrl(
         formData,
         "photo",
         "profile-photos",
@@ -219,7 +219,7 @@ function TeacherEditRow({
     const formData = new FormData(event.currentTarget);
 
     try {
-      await appendUploadedFileUrl(
+      await appendAdminUploadedFileUrl(
         formData,
         "photo",
         "profile-photos",
