@@ -54,6 +54,22 @@ export type Teacher = {
   display_order: number;
 };
 
+export type Event = {
+  id: string;
+  title: string;
+  description: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  location: string | null;
+  meeting_url: string | null;
+  external_url: string | null;
+  required_tier: string | null;
+  is_free: boolean;
+  display_order: number;
+  recurrence_freq: string | null;
+  recurrence_until: string | null;
+};
+
 export type AdminData = {
   courses: Course[];
   lessons: Lesson[];
@@ -61,6 +77,7 @@ export type AdminData = {
   questions: QuizQuestion[];
   flashcards: Flashcard[];
   teachers: Teacher[];
+  events: Event[];
   errors?: {
     courses?: string;
     lessons?: string;
@@ -68,5 +85,6 @@ export type AdminData = {
     questions?: string;
     flashcards?: string;
     teachers?: string;
+    events?: string;
   };
 };

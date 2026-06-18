@@ -14,5 +14,6 @@ export type LessonWithCourse = {
 export type CourseWithLessons = {
   id: string;
   name: string;
+  required_tier?: string | null;
   lessons: LessonWithCourse[];
 };

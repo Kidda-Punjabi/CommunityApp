@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { saveQuizProgress } from "@/lib/progress/quiz-progress";
+import { updateUserStreak } from "@/lib/progress/streak";
 
 export type QuizQuestion = {
   id: string;
@@ -15,6 +18,7 @@ export type QuizQuestion = {
 };
 
 type QuizPlayerProps = {
+  quizId: string;
   quizTitle: string;
   courseName: string;
   lessonNumber: number | null;
@@ -22,6 +26,7 @@ type QuizPlayerProps = {
 };
 
 export function QuizPlayer({
+  quizId,
   quizTitle,
   courseName,
   lessonNumber,
@@ -31,6 +36,7 @@ export function QuizPlayer({
   const [selected, setSelected] = useState<string | null>(null);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
+  const savedRef = useRef(false);
 
   const question = questions[index];
   const options = [
@@ -39,6 +45,25 @@ export function QuizPlayer({
     { key: "c", label: question.option_c },
     { key: "d", label: question.option_d },
   ];
+
+  useEffect(() => {
+    if (!finished || savedRef.current) return;
+
+    savedRef.current = true;
+
+    const persist = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      await saveQuizProgress(supabase, user.id, quizId, score);
+      await updateUserStreak(supabase, user.id);
+    };
+
+    void persist();
+  }, [finished, quizId, score, questions.length]);
 
   function handleSelect(optionKey: string) {
     if (selected) return;
@@ -66,16 +91,16 @@ export function QuizPlayer({
         </h2>
         <div className="mt-6 flex flex-col gap-2">
           <Link
-            href="/dashboard/learn"
+            href="/dashboard/practice"
             className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500"
           >
-            Back to Learn
+            Back to Practice
           </Link>
           <Link
-            href="/dashboard/practice"
+            href="/dashboard/learn"
             className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
           >
-            Practice hub
+            Back to Learn
           </Link>
         </div>
       </div>
@@ -104,16 +129,17 @@ export function QuizPlayer({
             const showResult = Boolean(selected);
 
             let className =
-              "w-full rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors ";
+              "w-full rounded-xl border px-4 py-3 text-left text-sm font-medium text-zinc-900 transition-colors ";
 
             if (!showResult) {
-              className += "border-zinc-200 hover:border-violet-300 hover:bg-violet-50";
+              className +=
+                "border-zinc-200 bg-white hover:border-violet-300 hover:bg-violet-50";
             } else if (isCorrect) {
-              className += "border-green-300 bg-green-50 text-green-800";
+              className += "border-green-300 bg-green-50 text-green-900";
             } else if (isSelected) {
-              className += "border-red-300 bg-red-50 text-red-800";
+              className += "border-red-300 bg-red-50 text-red-900";
             } else {
-              className += "border-zinc-200 text-zinc-500";
+              className += "border-zinc-200 bg-zinc-50 text-zinc-700";
             }
 
             return (

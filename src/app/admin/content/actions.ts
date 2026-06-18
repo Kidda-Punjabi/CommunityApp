@@ -7,6 +7,40 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
 const ADMIN_PATH = "/admin/content";
+const EVENTS_PATH = "/dashboard/events";
+
+function parseDatetimeLocal(value: string | null): string | null {
+  if (!value?.trim()) return null;
+  return new Date(value).toISOString();
+}
+
+function parseEventForm(formData: FormData) {
+  const requiredTier = (formData.get("required_tier") as string) || null;
+  const recurrenceFreq = (formData.get("recurrence_freq") as string) || null;
+  const recurrenceUntilRaw = formData.get("recurrence_until") as string;
+
+  return {
+    title: formData.get("title") as string,
+    description: (formData.get("description") as string) || null,
+    starts_at: parseDatetimeLocal(formData.get("starts_at") as string),
+    ends_at: parseDatetimeLocal(formData.get("ends_at") as string),
+    location: (formData.get("location") as string) || null,
+    meeting_url: (formData.get("meeting_url") as string) || null,
+    external_url: (formData.get("external_url") as string) || null,
+    required_tier: requiredTier || null,
+    is_free: formData.get("is_free") === "true",
+    display_order: parseInt((formData.get("display_order") as string) || "0", 10),
+    recurrence_freq:
+      recurrenceFreq === "weekly" ||
+      recurrenceFreq === "biweekly" ||
+      recurrenceFreq === "monthly"
+        ? recurrenceFreq
+        : null,
+    recurrence_until: recurrenceUntilRaw
+      ? parseDatetimeLocal(`${recurrenceUntilRaw}T23:59`)
+      : null,
+  };
+}
 
 async function requireAdmin() {
   const authClient = await createClient();
@@ -570,5 +604,67 @@ export async function deleteTeacher(id: string): Promise<ActionResult> {
     return { success: "Teacher deleted." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to delete teacher." };
+  }
+}
+
+// ---- Events ----
+
+export async function createEvent(
+  _prev: ActionResult,
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdmin();
+    const event = parseEventForm(formData);
+
+    if (!event.title || !event.starts_at) {
+      return { error: "Title and start time are required." };
+    }
+
+    const { error } = await supabase.from("events").insert(event);
+    if (error) return { error: withDbHint(error.message) };
+
+    revalidatePath(ADMIN_PATH);
+    revalidatePath(EVENTS_PATH);
+    return { success: "Event created." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to create event." };
+  }
+}
+
+export async function updateEvent(
+  _prev: ActionResult,
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdmin();
+    const id = formData.get("id") as string;
+    const event = parseEventForm(formData);
+
+    if (!id || !event.title || !event.starts_at) {
+      return { error: "Title and start time are required." };
+    }
+
+    const { error } = await supabase.from("events").update(event).eq("id", id);
+    if (error) return { error: withDbHint(error.message) };
+
+    revalidatePath(ADMIN_PATH);
+    revalidatePath(EVENTS_PATH);
+    return { success: "Event updated." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update event." };
+  }
+}
+
+export async function deleteEvent(id: string): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdmin();
+    const { error } = await supabase.from("events").delete().eq("id", id);
+    if (error) return { error: withDbHint(error.message) };
+    revalidatePath(ADMIN_PATH);
+    revalidatePath(EVENTS_PATH);
+    return { success: "Event deleted." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to delete event." };
   }
 }

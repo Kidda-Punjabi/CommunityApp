@@ -1,0 +1,47 @@
+import Link from "next/link";
+import type { LearnTrack } from "@/lib/learning/learn-catalog";
+
+type LearnLockedCourseProps = {
+  track: LearnTrack;
+  lessonCount: number;
+};
+
+export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps) {
+  return (
+    <div className="flex flex-1 flex-col px-4 py-6">
+      <Link
+        href="/dashboard/learn"
+        className="text-sm font-medium text-violet-600 hover:text-violet-500"
+      >
+        ← Back to Learn
+      </Link>
+
+      <div className="mt-8 flex flex-1 flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white px-6 py-12 text-center shadow-sm">
+        <span className="text-5xl" role="img" aria-hidden="true">
+          🔒
+        </span>
+        <h1 className="mt-4 text-2xl font-bold text-zinc-900">{track.title}</h1>
+        <p className="mt-3 max-w-sm text-sm text-zinc-600">
+          Unlock {track.lockProductName ?? track.title} to access all{" "}
+          {lessonCount} lesson{lessonCount === 1 ? "" : "s"}.
+        </p>
+        {track.unlockUrl && (
+          <a
+            href={track.unlockUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+          >
+            Find out more
+          </a>
+        )}
+        <Link
+          href="/dashboard/membership"
+          className="mt-3 text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
+          View your courses
+        </Link>
+      </div>
+    </div>
+  );
+}

@@ -69,6 +69,25 @@ function PracticeIcon({ active }: { active: boolean }) {
   );
 }
 
+function EventsIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill={active ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={2}
+      className="h-6 w-6"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
+      />
+    </svg>
+  );
+}
+
 function ProfileIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -91,6 +110,7 @@ function ProfileIcon({ active }: { active: boolean }) {
 const navItems: Omit<NavItem, "icon">[] = [
   { href: "/dashboard/home", label: "Home" },
   { href: "/dashboard/learn", label: "Learn" },
+  { href: "/dashboard/events", label: "Events" },
   { href: "/dashboard/practice", label: "Practice" },
   { href: "/dashboard/profile", label: "Profile" },
 ];
@@ -103,6 +123,8 @@ function NavIcon({ href, active }: { href: string; active: boolean }) {
       return <LearnIcon active={active} />;
     case "/dashboard/practice":
       return <PracticeIcon active={active} />;
+    case "/dashboard/events":
+      return <EventsIcon active={active} />;
     case "/dashboard/profile":
       return <ProfileIcon active={active} />;
     default:
@@ -123,7 +145,7 @@ export function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-2 py-1.5 transition-colors ${
+              className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors ${
                 active
                   ? "text-violet-600"
                   : "text-zinc-400 hover:text-zinc-600"
@@ -137,7 +159,7 @@ export function BottomNav() {
                 <NavIcon href={item.href} active={active} />
               </span>
               <span
-                className={`text-[11px] font-semibold tracking-wide ${
+                className={`text-[10px] font-semibold tracking-wide ${
                   active ? "text-violet-600" : "text-zinc-500"
                 }`}
               >

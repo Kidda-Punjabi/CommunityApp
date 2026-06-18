@@ -1,25 +1,36 @@
 import Link from "next/link";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
+import { LessonAudioPlayer } from "@/components/lesson-audio-player";
+
+type LessonProgress = {
+  completed: boolean;
+  lastPosition: number;
+};
 
 type LessonCardProps = {
   lesson: LessonWithCourse;
   canAccess: boolean;
+  requiredCourseLabel?: string;
+  progress?: LessonProgress;
 };
 
-export function LessonCard({ lesson, canAccess }: LessonCardProps) {
+export function LessonCard({ lesson, canAccess, requiredCourseLabel, progress }: LessonCardProps) {
   const hasAudio = Boolean(lesson.audio_url);
   const { quizId, quizTitle, flashcardCount } = lesson.practice;
   const hasQuiz = Boolean(quizId);
   const hasFlashcards = flashcardCount > 0;
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <div id={`lesson-${lesson.id}`} className="scroll-mt-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
             Lesson {lesson.lesson_number}
           </p>
           <h3 className="mt-1 font-semibold text-zinc-900">{lesson.title}</h3>
+          {progress?.completed && (
+            <p className="mt-1 text-xs font-medium text-green-600">Completed</p>
+          )}
         </div>
         <span
           className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -33,20 +44,30 @@ export function LessonCard({ lesson, canAccess }: LessonCardProps) {
       </div>
 
       {!canAccess && (
-        <p className="mt-3 text-sm text-zinc-500">
-          Upgrade your membership to access this lesson.
-        </p>
+        <div className="mt-3 space-y-2">
+          <p className="text-sm text-zinc-500">
+            Unlock with{" "}
+            <span className="font-medium text-zinc-700">
+              {requiredCourseLabel ?? "this course"}
+            </span>
+            .
+          </p>
+          <Link
+            href="/dashboard/membership"
+            className="inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
+          >
+            View plans →
+          </Link>
+        </div>
       )}
 
       {canAccess && hasAudio && (
-        <audio
-          controls
-          preload="metadata"
-          className="mt-4 w-full"
-          src={lesson.audio_url!}
-        >
-          Your browser does not support audio playback.
-        </audio>
+        <LessonAudioPlayer
+          lessonId={lesson.id}
+          audioUrl={lesson.audio_url!}
+          initialLastPosition={progress?.lastPosition ?? 0}
+          initialCompleted={progress?.completed ?? false}
+        />
       )}
 
       {canAccess && !hasAudio && (

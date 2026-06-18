@@ -5,12 +5,14 @@ import type { AdminData } from "./types";
 import { CoursesLessonsTab } from "./components/courses-lessons-tab";
 import { QuizzesTab } from "./components/quizzes-tab";
 import { FlashcardsTab } from "./components/flashcards-tab";
+import { EventsTab } from "./components/events-tab";
 import { TeachersTab } from "./components/teachers-tab";
 
 const tabs = [
   { id: "lessons", label: "Courses & Lessons" },
   { id: "quizzes", label: "Quizzes" },
   { id: "flashcards", label: "Flashcards" },
+  { id: "events", label: "Events" },
   { id: "teachers", label: "Teachers" },
 ] as const;
 
@@ -55,6 +57,7 @@ export function AdminContent({ data }: { data: AdminData }) {
         {activeTab === "lessons" && <CoursesLessonsTab data={data} />}
         {activeTab === "quizzes" && <QuizzesTab data={data} />}
         {activeTab === "flashcards" && <FlashcardsTab data={data} />}
+        {activeTab === "events" && <EventsTab data={data} />}
         {activeTab === "teachers" && <TeachersTab data={data} />}
       </div>
     </div>

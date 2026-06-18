@@ -1,58 +1,37 @@
-import { FlashcardPlayer } from "@/components/flashcard-player";
+import { FlashcardDeckHub } from "@/components/flashcards/deck-hub";
+import {
+  FlashcardAccessDenied,
+  FlashcardDeckEmpty,
+} from "@/components/flashcards/deck-states";
+import { loadFlashcardDeck } from "@/lib/flashcards/load-deck";
 import { createClient } from "@/lib/supabase/server";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 type FlashcardsPageProps = {
   params: Promise<{ lessonId: string }>;
 };
 
-export default async function FlashcardsPracticePage({
-  params,
-}: FlashcardsPageProps) {
+export default async function FlashcardsDeckPage({ params }: FlashcardsPageProps) {
   const { lessonId } = await params;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { data: lesson } = await supabase
-    .from("lessons")
-    .select("id, lesson_number, title, courses(name)")
-    .eq("id", lessonId)
-    .single();
+  const result = await loadFlashcardDeck(supabase, user!.id, lessonId);
 
-  if (!lesson) notFound();
-
-  const { data: cards } = await supabase
-    .from("flashcards")
-    .select("id, front_text, back_text")
-    .eq("lesson_id", lessonId)
-    .order("created_at");
-
-  if (!cards?.length) {
-    return (
-      <div className="flex flex-1 flex-col px-4 py-6">
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          No flashcards linked to this lesson yet. In admin, assign flashcards to
-          this lesson when creating them.
-        </p>
-        <Link
-          href="/dashboard/learn"
-          className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to Learn
-        </Link>
-      </div>
-    );
+  if (result.kind === "not_found") notFound();
+  if (result.kind === "forbidden") {
+    return <FlashcardAccessDenied requiredCourseLabel={result.requiredCourseLabel} />;
   }
-
-  const course = Array.isArray(lesson.courses) ? lesson.courses[0] : lesson.courses;
+  if (result.kind === "empty") return <FlashcardDeckEmpty />;
 
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
-      <FlashcardPlayer
-        lessonTitle={lesson.title}
-        courseName={course?.name ?? "Course"}
-        lessonNumber={lesson.lesson_number}
-        cards={cards}
+      <FlashcardDeckHub
+        deck={result.deck}
+        progress={result.progress}
+        matchScore={result.matchScore}
       />
     </div>
   );

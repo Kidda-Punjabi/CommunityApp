@@ -1,6 +1,13 @@
 import { LogoutButton } from "@/app/dashboard/logout-button";
+import { ViewAsPanel } from "@/app/dashboard/profile/view-as-panel";
 import { isAdmin } from "@/lib/auth/admin";
+import {
+  formatUnlockedCourseNames,
+  getCourseAccessContext,
+  tiersFromUnlockedCourses,
+} from "@/lib/membership/unlocked";
 import { createClient } from "@/lib/supabase/server";
+import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 import Link from "next/link";
 
 export default async function ProfilePage() {
@@ -12,12 +19,26 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, membership_tier, avatar_url")
+    .select("full_name, avatar_url")
     .eq("id", user!.id)
     .single();
 
   const displayName =
     profile?.full_name || user?.user_metadata?.full_name || "Member";
+
+  if (user?.email) {
+    try {
+      await syncStripePurchasesForUser(user.id, user.email);
+    } catch {
+      // Best-effort Stripe sync.
+    }
+  }
+
+  const access = await getCourseAccessContext(supabase, user!);
+
+  const membershipLabel = access.viewAs?.active
+    ? `Testing: ${access.viewAs.label}`
+    : formatUnlockedCourseNames(access.courses, access.unlockedCourseIds);
 
   return (
     <div className="flex flex-1 flex-col px-6 py-8">
@@ -48,19 +69,25 @@ export default async function ProfilePage() {
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Membership
           </p>
-          <p className="mt-1 text-lg font-semibold capitalize text-violet-600">
-            {profile?.membership_tier ?? "free"}
-          </p>
+          <p className="mt-1 text-lg font-semibold text-violet-600">{membershipLabel}</p>
+          <Link
+            href="/dashboard/membership"
+            className="mt-3 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
+          >
+            {access.isFreeOnly ? "Browse courses →" : "Buy another course →"}
+          </Link>
         </div>
 
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200/80">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Account
-          </p>
-          <p className="mt-2 text-sm text-zinc-500">
-            Manage your settings and preferences here soon.
-          </p>
-        </div>
+        {isAdmin(user) && (
+          <ViewAsPanel
+            initialTiers={
+              access.viewAs?.active
+                ? access.viewAs.tiers
+                : tiersFromUnlockedCourses(access.courses, access.unlockedCourseIds)
+            }
+            isOverrideActive={Boolean(access.viewAs?.active)}
+          />
+        )}
 
         {isAdmin(user) && (
           <div className="rounded-2xl bg-violet-50 p-5 shadow-sm ring-1 ring-violet-200/80">
@@ -78,6 +105,15 @@ export default async function ProfilePage() {
             </Link>
           </div>
         )}
+
+        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200/80">
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            Account
+          </p>
+          <p className="mt-2 text-sm text-zinc-500">
+            Manage your settings and preferences here soon.
+          </p>
+        </div>
       </div>
 
       <div className="mt-auto pt-10">

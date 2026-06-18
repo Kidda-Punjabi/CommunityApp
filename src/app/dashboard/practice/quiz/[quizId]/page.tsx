@@ -1,4 +1,5 @@
 import { QuizPlayer } from "@/components/quiz-player";
+import { canUserAccessQuiz } from "@/lib/membership/lesson-access";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -10,6 +11,29 @@ type QuizPageProps = {
 export default async function QuizPracticePage({ params }: QuizPageProps) {
   const { quizId } = await params;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const access = await canUserAccessQuiz(supabase, user!.id, quizId);
+
+  if (!access.allowed) {
+    return (
+      <div className="flex flex-1 flex-col px-4 py-6">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {access.levelLocked
+            ? `Complete level ${access.previousLevel} first to unlock this quiz.`
+            : `This quiz requires ${access.requiredCourseLabel ?? "a membership upgrade"}.`}
+        </p>
+        <Link
+          href={access.levelLocked ? "/dashboard/practice" : "/dashboard/membership"}
+          className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
+          {access.levelLocked ? "← Back to Practice pathway" : "View membership plans →"}
+        </Link>
+      </div>
+    );
+  }
 
   const { data: quiz } = await supabase
     .from("quizzes")
@@ -52,6 +76,7 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
         ← Back to Practice
       </Link>
       <QuizPlayer
+        quizId={quiz.id}
         quizTitle={quiz.title}
         courseName={course?.name ?? "Course"}
         lessonNumber={quiz.level_number}
