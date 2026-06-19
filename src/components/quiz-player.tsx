@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { createClient } from "@/lib/supabase/client";
+import { notifyPointsEarned, sumPointsEarned } from "@/lib/points/notify-points-earned";
 import { quizScorePercent, saveQuizProgress } from "@/lib/progress/quiz-progress";
 import { PASSING_QUIZ_SCORE } from "@/lib/progress/quiz-progress";
 import { recordStreakActivity, type StreakResult } from "@/lib/progress/streak";
@@ -23,6 +25,7 @@ type QuizPlayerProps = {
   quizTitle: string;
   courseName: string;
   lessonNumber: number | null;
+  lessonId?: string | null;
   questions: QuizQuestion[];
 };
 
@@ -31,6 +34,7 @@ export function QuizPlayer({
   quizTitle,
   courseName,
   lessonNumber,
+  lessonId,
   questions,
 }: QuizPlayerProps) {
   const [index, setIndex] = useState(0);
@@ -38,6 +42,7 @@ export function QuizPlayer({
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
   const [streakResult, setStreakResult] = useState<StreakResult | null>(null);
+  const [pointsEarned, setPointsEarned] = useState(0);
   const savedRef = useRef(false);
 
   const question = questions[index];
@@ -61,7 +66,10 @@ export function QuizPlayer({
       if (!user) return;
 
       const percentage = quizScorePercent(score, questions.length);
-      await saveQuizProgress(supabase, user.id, quizId, percentage);
+      const result = await saveQuizProgress(supabase, user.id, quizId, percentage, { lessonId });
+      const totalPoints = sumPointsEarned([result.quizPoints, result.lessonBonus]);
+      setPointsEarned(totalPoints);
+      notifyPointsEarned(totalPoints);
 
       if (percentage >= PASSING_QUIZ_SCORE) {
         const result = await recordStreakActivity(supabase, user.id);
@@ -73,7 +81,7 @@ export function QuizPlayer({
       console.error("Failed to save quiz progress:", error);
       savedRef.current = false;
     });
-  }, [finished, quizId, score, questions.length]);
+  }, [finished, quizId, lessonId, score, questions.length]);
 
   function handleSelect(optionKey: string) {
     if (selected) return;
@@ -99,6 +107,7 @@ export function QuizPlayer({
         <h2 className="mt-2 text-2xl font-bold text-zinc-900">
           {score} / {questions.length} correct
         </h2>
+        <PointsEarnedBadge points={pointsEarned} className="mt-3" />
         {streakResult?.streak_rescued && (
           <p className="mt-3 rounded-lg bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">
             Streak rescued! Back to {streakResult.display_streak} day

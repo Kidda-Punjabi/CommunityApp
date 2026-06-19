@@ -2,8 +2,11 @@ import { LogoutButton } from "@/app/dashboard/logout-button";
 import { ViewAsPanel } from "@/app/dashboard/profile/view-as-panel";
 import { TestOnboardingButton } from "@/components/onboarding/test-onboarding-button";
 import { ProgressionCard } from "@/components/profile/progression-card";
+import { WeeklyPointsCard } from "@/components/profile/weekly-points-card";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { isAdmin } from "@/lib/auth/admin";
+import { loadViewerWeeklyPoints } from "@/lib/leaderboard/load-viewer-weekly-points";
+import { getCurrentWeekStart } from "@/lib/leaderboard/week";
 import {
   formatUnlockedCourseNames,
   getCourseAccessContext,
@@ -38,6 +41,8 @@ export default async function ProfilePage() {
 
   const access = await getCourseAccessContext(supabase, user!);
   const progression = await loadUserProgression(supabase, user!.id);
+  const currentWeekStart = getCurrentWeekStart();
+  const weeklyPoints = await loadViewerWeeklyPoints(supabase, user!.id, currentWeekStart);
 
   const membershipLabel = access.viewAs?.active
     ? `Testing: ${access.viewAs.label}`
@@ -69,6 +74,7 @@ export default async function ProfilePage() {
       </div>
 
       <div className={`mt-10 ${ui.stackLoose}`}>
+        <WeeklyPointsCard points={weeklyPoints} weekStart={currentWeekStart} />
         <ProgressionCard progression={progression} />
 
         <div className={ui.card}>

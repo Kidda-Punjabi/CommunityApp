@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   saveLessonProgress,
 } from "@/lib/progress/lesson-progress";
+import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
 import { recordStreakActivity } from "@/lib/progress/streak";
 
 const SAVE_INTERVAL_MS = 10_000;
@@ -59,12 +60,16 @@ export function LessonAudioPlayer({
       const supabase = createClient();
       const wasCompleted = completedRef.current;
 
-      await saveLessonProgress(supabase, userId, {
+      const lessonBonus = await saveLessonProgress(supabase, userId, {
         lessonId,
         lastPosition: position,
         secondsListened: maxPositionRef.current,
         completed: shouldComplete,
       });
+
+      if (lessonBonus > 0) {
+        notifyPointsEarned(lessonBonus);
+      }
 
       if (shouldComplete && !wasCompleted) {
         completedRef.current = true;

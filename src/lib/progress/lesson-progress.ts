@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { tryAwardLessonCompletionPoints } from "@/lib/leaderboard/points";
 
 export type LessonProgressRow = {
   lesson_id: string;
@@ -48,7 +49,7 @@ export async function saveLessonProgress(
   supabase: SupabaseClient,
   userId: string,
   input: SaveLessonProgressInput
-) {
+): Promise<number> {
   const { error } = await supabase.from("lesson_progress").upsert(
     {
       user_id: userId,
@@ -61,6 +62,8 @@ export async function saveLessonProgress(
   );
 
   if (error) throw error;
+
+  return tryAwardLessonCompletionPoints(supabase, input.lessonId);
 }
 
 export type SaveLessonPdfProgressInput = {
@@ -74,7 +77,7 @@ export async function saveLessonPdfProgress(
   supabase: SupabaseClient,
   userId: string,
   input: SaveLessonPdfProgressInput
-) {
+): Promise<number> {
   const { error } = await supabase.from("lesson_progress").upsert(
     {
       user_id: userId,
@@ -87,4 +90,6 @@ export async function saveLessonPdfProgress(
   );
 
   if (error) throw error;
+
+  return tryAwardLessonCompletionPoints(supabase, input.lessonId);
 }

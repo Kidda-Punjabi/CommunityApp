@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  awardQuizAttemptPoints,
+  tryAwardLessonCompletionPoints,
+} from "@/lib/leaderboard/points";
 
 export const PASSING_QUIZ_SCORE = 80;
 
@@ -48,12 +52,18 @@ export async function fetchQuizProgressMap(
   return new Map((data ?? []).map((row) => [row.quiz_id, row]));
 }
 
+export type SaveQuizProgressResult = {
+  quizPoints: number;
+  lessonBonus: number;
+};
+
 export async function saveQuizProgress(
   supabase: SupabaseClient,
   userId: string,
   quizId: string,
-  score: number
-) {
+  score: number,
+  options?: { lessonId?: string | null }
+): Promise<SaveQuizProgressResult> {
   const { error } = await supabase.from("quiz_progress").upsert(
     {
       user_id: userId,
@@ -66,6 +76,14 @@ export async function saveQuizProgress(
   );
 
   if (error) throw error;
+
+  const quizPoints = await awardQuizAttemptPoints(supabase, score);
+  let lessonBonus = 0;
+  if (options?.lessonId) {
+    lessonBonus = await tryAwardLessonCompletionPoints(supabase, options.lessonId);
+  }
+
+  return { quizPoints, lessonBonus };
 }
 
 export function buildQuizLevelPathway(

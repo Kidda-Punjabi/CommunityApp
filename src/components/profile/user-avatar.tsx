@@ -3,11 +3,12 @@ import type { ProfileNameFields } from "@/lib/profile/display-name";
 
 type UserAvatarProps = {
   profile: ProfileNameFields & { avatar_url?: string | null };
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 };
 
 const SIZE_CLASSES = {
+  xs: "h-8 w-8 text-xs",
   sm: "h-10 w-10 text-sm",
   md: "h-16 w-16 text-xl",
   lg: "h-24 w-24 text-3xl",
@@ -49,7 +50,17 @@ export function UserAvatar({ profile, size = "lg", className = "" }: UserAvatarP
       {initial ? (
         <span>{initial}</span>
       ) : (
-        <PersonIcon className={size === "sm" ? "h-5 w-5" : size === "md" ? "h-8 w-8" : "h-10 w-10"} />
+        <PersonIcon
+          className={
+            size === "xs"
+              ? "h-4 w-4"
+              : size === "sm"
+                ? "h-5 w-5"
+                : size === "md"
+                  ? "h-8 w-8"
+                  : "h-10 w-10"
+          }
+        />
       )}
     </div>
   );

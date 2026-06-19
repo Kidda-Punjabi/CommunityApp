@@ -15,6 +15,9 @@ import {
 } from "@/lib/games/types";
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 import { saveGameScore } from "@/lib/games/game-scores";
+import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
+import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
+import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 
 export type StreakSurvivalSourceType = "deck" | "gender" | "verbs";
 
@@ -115,9 +118,11 @@ export function StreakSurvivalMode({
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
   const [streak, setStreak] = useState(0);
   const [question, setQuestion] = useState<Question | null>(null);
-  const [result, setResult] = useState<{ isNewBest: boolean; currentBest: number } | null>(
-    null
-  );
+  const [result, setResult] = useState<{
+    isNewBest: boolean;
+    currentBest: number;
+    pointsEarned: number;
+  } | null>(null);
 
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
@@ -156,11 +161,20 @@ export function StreakSurvivalMode({
       if (!userId) return;
 
       const supabase = createClient();
-      const metadata: Record<string, unknown> = { source: sourceType };
+      const total = streak + 1;
+      const metadata: Record<string, unknown> = {
+        source: sourceType,
+        ...buildGameAccuracyMetadata(streak, total),
+      };
       if (deckName) metadata.deck_name = deckName;
 
       const outcome = await saveGameScore(supabase, userId, "streak_survival", streak, metadata);
-      setResult({ isNewBest: outcome.isNewBest, currentBest: outcome.currentBest });
+      setResult({
+        isNewBest: outcome.isNewBest,
+        currentBest: outcome.currentBest,
+        pointsEarned: outcome.pointsEarned,
+      });
+      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();
@@ -222,6 +236,7 @@ export function StreakSurvivalMode({
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-medium text-red-600">Run ended</p>
           <h2 className="mt-2 text-2xl font-bold text-zinc-900">{streak} streak</h2>
+          <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
           {result?.isNewBest && (
             <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
           )}

@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { shuffleArray } from "@/lib/flashcards/utils";
 import { saveGameScoreIfBest } from "@/lib/games/game-scores";
+import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
+import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
+import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 
 type GridCard = {
   id: string;
@@ -30,9 +33,11 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
   const [wrongId, setWrongId] = useState<string | null>(null);
   const [pairsFound, setPairsFound] = useState(0);
   const [moves, setMoves] = useState(0);
-  const [result, setResult] = useState<{ isNewBest: boolean; currentBest: number } | null>(
-    null
-  );
+  const [result, setResult] = useState<{
+    isNewBest: boolean;
+    currentBest: number;
+    pointsEarned: number;
+  } | null>(null);
 
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
@@ -88,9 +93,18 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
         userId,
         "memory_grid",
         pairsFound,
-        { deck_name: deck.deckName, moves }
+        {
+          deck_name: deck.deckName,
+          moves,
+          ...buildGameAccuracyMetadata(pairsFound, deck.cards.length),
+        }
       );
-      setResult({ isNewBest: outcome.isNewBest, currentBest: outcome.currentBest });
+      setResult({
+        isNewBest: outcome.isNewBest,
+        currentBest: outcome.currentBest,
+        pointsEarned: outcome.pointsEarned,
+      });
+      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();
@@ -189,6 +203,7 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
             {pairsFound} / {deck.cards.length} pairs
           </h2>
           <p className="mt-1 text-sm text-zinc-500">{moves} moves</p>
+          <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
           {result?.isNewBest && (
             <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
           )}

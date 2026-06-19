@@ -15,6 +15,8 @@ import type { TenseGroup, TenseId, Verb } from "@/lib/conjugation/types";
 import { TENSE_CATALOG } from "@/lib/conjugation/types";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
+import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
+import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { ui } from "@/lib/ui/styles";
 
 const FEEDBACK_MS = 1000;
@@ -125,6 +127,7 @@ export function ConjugationChallengeMode({ verbs, tableReady }: ConjugationChall
   const [questionIndex, setQuestionIndex] = useState(0);
   const [results, setResults] = useState<boolean[]>([]);
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
+  const [pointsEarned, setPointsEarned] = useState(0);
 
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
@@ -153,12 +156,14 @@ export function ConjugationChallengeMode({ verbs, tableReady }: ConjugationChall
       if (!userId) return;
 
       const supabase = createClient();
-      await saveGameScore(supabase, userId, "conjugation_challenge", correct, {
+      const outcome = await saveGameScore(supabase, userId, "conjugation_challenge", correct, {
         accuracy,
         correct,
         total,
         rounds: total,
       });
+      setPointsEarned(outcome.pointsEarned);
+      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();
@@ -339,6 +344,7 @@ export function ConjugationChallengeMode({ verbs, tableReady }: ConjugationChall
             {score}/{total}
           </h2>
           <p className="mt-1 text-sm text-zinc-500">{accuracy}% accuracy</p>
+          <PointsEarnedBadge points={pointsEarned} className="mt-3" />
 
           <div className="mt-5 space-y-2 text-left">
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">

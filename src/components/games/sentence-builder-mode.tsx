@@ -20,6 +20,8 @@ import type { TenseGroup, TenseId, Verb } from "@/lib/conjugation/types";
 import { TENSE_CATALOG } from "@/lib/conjugation/types";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
+import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
+import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { ui } from "@/lib/ui/styles";
 
 const FEEDBACK_MS = 1200;
@@ -100,6 +102,7 @@ export function SentenceBuilderMode({
   const [bank, setBank] = useState<SentenceTile[]>([]);
   const [built, setBuilt] = useState<SentenceTile[]>([]);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [pointsEarned, setPointsEarned] = useState(0);
 
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
@@ -130,12 +133,14 @@ export function SentenceBuilderMode({
       if (!userId) return;
 
       const supabase = createClient();
-      await saveGameScore(supabase, userId, "sentence_builder", correct, {
+      const outcome = await saveGameScore(supabase, userId, "sentence_builder", correct, {
         accuracy,
         correct,
         total,
         rounds: total,
       });
+      setPointsEarned(outcome.pointsEarned);
+      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();
@@ -335,6 +340,7 @@ export function SentenceBuilderMode({
             {score}/{total}
           </h2>
           <p className="mt-1 text-sm text-zinc-500">{accuracy}% accuracy</p>
+          <PointsEarnedBadge points={pointsEarned} className="mt-3" />
         </div>
         <button
           type="button"

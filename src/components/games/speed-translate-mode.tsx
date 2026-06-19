@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 import { saveGameScoreIfBest } from "@/lib/games/game-scores";
+import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
+import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
+import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 
 const LIVES = 3;
 const OPTIONS = 4;
@@ -23,12 +26,15 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
   const [index, setIndex] = useState(0);
   const [lives, setLives] = useState(LIVES);
   const [score, setScore] = useState(0);
-  const [result, setResult] = useState<{ isNewBest: boolean; currentBest: number } | null>(
-    null
-  );
+  const [result, setResult] = useState<{
+    isNewBest: boolean;
+    currentBest: number;
+    pointsEarned: number;
+  } | null>(null);
 
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const answeredRef = useRef(0);
 
   const currentCard = queue[index];
 
@@ -63,9 +69,17 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
         userId,
         "speed_translate",
         score,
-        { deck_name: deck.deckName }
+        {
+          deck_name: deck.deckName,
+          ...buildGameAccuracyMetadata(score, answeredRef.current),
+        }
       );
-      setResult({ isNewBest: outcome.isNewBest, currentBest: outcome.currentBest });
+      setResult({
+        isNewBest: outcome.isNewBest,
+        currentBest: outcome.currentBest,
+        pointsEarned: outcome.pointsEarned,
+      });
+      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();
@@ -73,6 +87,7 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
 
   function startGame() {
     savedRef.current = false;
+    answeredRef.current = 0;
     setQueue(shuffleArray(deck.cards));
     setIndex(0);
     setLives(LIVES);
@@ -87,6 +102,8 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
 
   function handleAnswer(answer: string) {
     if (phase !== "playing" || !currentCard) return;
+
+    answeredRef.current += 1;
 
     if (answer === currentCard.back_text) {
       const nextScore = score + 1;
@@ -151,6 +168,7 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-medium text-violet-600">Game over</p>
           <h2 className="mt-2 text-2xl font-bold text-zinc-900">{score} correct</h2>
+          <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
           {result?.isNewBest && (
             <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
           )}

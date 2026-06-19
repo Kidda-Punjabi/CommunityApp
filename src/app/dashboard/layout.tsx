@@ -4,6 +4,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { ActivityDateSync } from "@/components/activity-date-sync";
 import { ViewAsBanner } from "@/components/view-as-banner";
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
+import { PointsToastProvider } from "@/components/points/points-toast-provider";
 import { loadOnboardingProfile } from "@/lib/progression/load-user-progression";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { ui } from "@/lib/ui/styles";
@@ -28,6 +29,7 @@ export default async function DashboardLayout({
 
   return (
     <OnboardingProvider showOnFirstVisit={!onboarding.hasSeenOnboarding}>
+      <PointsToastProvider />
       <div className={`flex min-h-full flex-col ${ui.pageBg}`}>
         <ActivityDateSync />
         {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}

@@ -26,6 +26,11 @@ export function getAvatarInitial(profile: ProfileNameFields | null | undefined):
   return /[A-Z0-9\u0A00-\u0A7F]/i.test(letter) ? letter.toUpperCase() : null;
 }
 
+/** Preferred name if set, otherwise the first name from full_name — for leaderboard rows. */
+export function getLeaderboardName(profile: ProfileNameFields | null | undefined): string {
+  return getDisplayName(profile) ?? "Member";
+}
+
 export function getGreetingHeading(displayName: string | null): string {
   return displayName ? `Hi, ${displayName}` : "Hello";
 }

@@ -37,11 +37,22 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
 
   const { data: quiz } = await supabase
     .from("quizzes")
-    .select("id, title, course_id, level_number, courses(name)")
+    .select("id, title, course_id, level_number, lesson_id, courses(name)")
     .eq("id", quizId)
     .single();
 
   if (!quiz) notFound();
+
+  let lessonId = quiz.lesson_id as string | null;
+  if (!lessonId) {
+    const { data: lesson } = await supabase
+      .from("lessons")
+      .select("id")
+      .eq("course_id", quiz.course_id)
+      .eq("lesson_number", quiz.level_number)
+      .maybeSingle();
+    lessonId = lesson?.id ?? null;
+  }
 
   const { data: questions } = await supabase
     .from("quiz_questions")
@@ -80,6 +91,7 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
         quizTitle={quiz.title}
         courseName={course?.name ?? "Course"}
         lessonNumber={quiz.level_number}
+        lessonId={lessonId}
         questions={questions}
       />
     </div>

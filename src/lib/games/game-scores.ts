@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GameType, UserGameStats } from "./types";
+import { awardGameSessionPoints } from "@/lib/leaderboard/points";
 
 export type GameScoreMetadata = Record<string, unknown>;
 
@@ -50,13 +51,20 @@ export async function fetchPersonalBestsByGame(
   return bests;
 }
 
+export type GameScoreOutcome = {
+  isNewBest: boolean;
+  previousBest: number;
+  currentBest: number;
+  pointsEarned: number;
+};
+
 export async function saveGameScore(
   supabase: SupabaseClient,
   userId: string,
   gameType: GameType,
   score: number,
   metadata: GameScoreMetadata = {}
-): Promise<{ isNewBest: boolean; previousBest: number; currentBest: number }> {
+): Promise<GameScoreOutcome> {
   const previousBest = (await fetchPersonalBest(supabase, userId, gameType)) ?? 0;
   const isNewBest = score > previousBest;
 
@@ -70,12 +78,15 @@ export async function saveGameScore(
 
   if (error) throw error;
 
+  const pointsEarned = await awardGameSessionPoints(supabase, metadata);
+
   await updateUserGameStats(supabase, userId, gameType, score);
 
   return {
     isNewBest,
     previousBest,
     currentBest: isNewBest ? score : previousBest,
+    pointsEarned,
   };
 }
 
@@ -86,7 +97,7 @@ export async function saveGameScoreIfBest(
   score: number,
   metadata: GameScoreMetadata = {},
   compareFn?: (next: number, prev: number, meta: GameScoreMetadata) => boolean
-): Promise<{ isNewBest: boolean; previousBest: number; currentBest: number }> {
+): Promise<GameScoreOutcome> {
   const deckName = metadata.deck_name as string | undefined;
   const previousBest =
     (await fetchPersonalBest(
@@ -101,8 +112,9 @@ export async function saveGameScoreIfBest(
     : score > previousBest;
 
   if (!isNewBest) {
+    const pointsEarned = await awardGameSessionPoints(supabase, metadata);
     await updateUserGameStats(supabase, userId, gameType, score, false);
-    return { isNewBest: false, previousBest, currentBest: previousBest };
+    return { isNewBest: false, previousBest, currentBest: previousBest, pointsEarned };
   }
 
   const { error } = await supabase.from("game_scores").insert({
@@ -115,9 +127,11 @@ export async function saveGameScoreIfBest(
 
   if (error) throw error;
 
+  const pointsEarned = await awardGameSessionPoints(supabase, metadata);
+
   await updateUserGameStats(supabase, userId, gameType, score, true);
 
-  return { isNewBest: true, previousBest, currentBest: score };
+  return { isNewBest: true, previousBest, currentBest: score, pointsEarned };
 }
 
 async function updateUserGameStats(

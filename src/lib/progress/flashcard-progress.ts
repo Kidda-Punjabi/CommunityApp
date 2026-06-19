@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  awardFlashcardConfidentPoints,
+  tryAwardLessonCompletionPoints,
+} from "@/lib/leaderboard/points";
 
 export type FlashcardConfidence = "confident" | "not_confident";
 
@@ -38,12 +42,29 @@ export async function fetchFlashcardProgressMap(
   );
 }
 
+export type SaveFlashcardConfidenceResult = {
+  flashcardPoints: number;
+  lessonBonus: number;
+};
+
 export async function saveFlashcardConfidence(
   supabase: SupabaseClient,
   userId: string,
   flashcardId: string,
   confidence: FlashcardConfidence
-) {
+): Promise<SaveFlashcardConfidenceResult> {
+  const [{ data: existing }, { data: flashcard }] = await Promise.all([
+    supabase
+      .from("flashcard_progress")
+      .select("confidence")
+      .eq("user_id", userId)
+      .eq("flashcard_id", flashcardId)
+      .maybeSingle(),
+    supabase.from("flashcards").select("lesson_id").eq("id", flashcardId).maybeSingle(),
+  ]);
+
+  const wasConfident = existing?.confidence === "confident";
+
   const { error } = await supabase.from("flashcard_progress").upsert(
     {
       user_id: userId,
@@ -55,6 +76,18 @@ export async function saveFlashcardConfidence(
   );
 
   if (error) throw error;
+
+  let flashcardPoints = 0;
+  let lessonBonus = 0;
+
+  if (confidence === "confident" && !wasConfident) {
+    flashcardPoints = await awardFlashcardConfidentPoints(supabase);
+    if (flashcard?.lesson_id) {
+      lessonBonus = await tryAwardLessonCompletionPoints(supabase, flashcard.lesson_id);
+    }
+  }
+
+  return { flashcardPoints, lessonBonus };
 }
 
 export function computeDeckConfidenceStats(

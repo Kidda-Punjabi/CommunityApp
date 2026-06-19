@@ -7,6 +7,8 @@ import type { GenderedNoun } from "@/lib/games/types";
 import { shuffleArray } from "@/lib/flashcards/utils";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
+import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
+import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 
 const WORD_COUNT = 20;
 const BASE_POINTS = 10;
@@ -39,9 +41,11 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
   const [correct, setCorrect] = useState(0);
   const [shownAt, setShownAt] = useState<number>(Date.now());
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
-  const [result, setResult] = useState<{ isNewBest: boolean; currentBest: number } | null>(
-    null
-  );
+  const [result, setResult] = useState<{
+    isNewBest: boolean;
+    currentBest: number;
+    pointsEarned: number;
+  } | null>(null);
 
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
@@ -81,7 +85,12 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
         correct,
         total: queue.length,
       });
-      setResult({ isNewBest: outcome.isNewBest, currentBest: outcome.currentBest });
+      setResult({
+        isNewBest: outcome.isNewBest,
+        currentBest: outcome.currentBest,
+        pointsEarned: outcome.pointsEarned,
+      });
+      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();
@@ -185,6 +194,7 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
           <p className="mt-1 text-sm text-zinc-500">
             {correct} / {queue.length} correct ({accuracy}%)
           </p>
+          <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
           {result?.isNewBest && (
             <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
           )}
