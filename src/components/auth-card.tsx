@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ui } from "@/lib/ui/styles";
 
 type AuthCardProps = {
   title: string;
@@ -28,7 +29,7 @@ export function AuthCard({ title, subtitle, children, footer }: AuthCardProps) {
           <p className="mt-2 text-sm text-zinc-500">{subtitle}</p>
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
+        <div className={`${ui.card} p-8`}>
           {children}
         </div>
 

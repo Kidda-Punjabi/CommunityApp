@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { GenderedNoun } from "@/lib/games/types";
 import { shuffleArray } from "@/lib/flashcards/utils";
+import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
 
 const WORD_COUNT = 20;
@@ -29,7 +30,7 @@ function genderLabel(gender: "masculine" | "feminine") {
 }
 
 export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps) {
-  const backHref = `/dashboard/games/gender-sort`;
+  const gamesHubHref = GAMES_HUB_HREF;
 
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
   const [queue, setQueue] = useState<GenderedNoun[]>([]);
@@ -145,7 +146,7 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
     return (
       <div className="space-y-6">
         <div>
-          <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
+          <Link href={gamesHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
             ← Back to games
           </Link>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
@@ -198,7 +199,7 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
         >
           Play again
         </button>
-        <Link href={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
+        <Link href={gamesHubHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
           Back to games
         </Link>
       </div>
@@ -214,7 +215,7 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
-        <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
+        <Link href={gamesHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
           ← Exit
         </Link>
         <p className="text-sm font-semibold text-zinc-900">

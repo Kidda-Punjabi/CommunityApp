@@ -1,3 +1,5 @@
+import { getDisplayName, getGreetingHeading } from "@/lib/profile/display-name";
+import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
 import { canAccessEvent, hasAccessToCourse } from "@/lib/membership/access";
 import {
   getCourseAccessContext,
@@ -31,7 +33,8 @@ export type HomeContinueItem = {
 };
 
 export type HomeDashboardData = {
-  displayName: string;
+  displayName: string | null;
+  greetingHeading: string;
   isFreeTier: boolean;
   primaryCta: HomePrimaryCta;
   starterPackHref: string;
@@ -214,7 +217,7 @@ export async function getHomeDashboardData(
   const streakStats = presentationToHomeStats(presentation);
 
   const [
-    { data: profile },
+    profile,
     { data: lessonProgress },
     { data: quizProgress },
     { data: flashcardProgress },
@@ -222,7 +225,7 @@ export async function getHomeDashboardData(
     { data: quizzes },
     { data: events },
   ] = await Promise.all([
-    supabase.from("profiles").select("full_name").eq("id", userId).single(),
+    loadEditableProfile(supabase, userId),
     supabase
       .from("lesson_progress")
       .select(
@@ -267,8 +270,8 @@ export async function getHomeDashboardData(
     };
   }) as FlashcardProgressJoined[];
 
-  const displayName =
-    profile?.full_name || user.user_metadata?.full_name || "there";
+  const displayName = getDisplayName(profile);
+  const greetingHeading = getGreetingHeading(displayName);
   const isFreeTier = access.isFreeOnly;
 
   const lessonsCompleted = lessonRows.filter((row) => row.completed).length;
@@ -339,6 +342,7 @@ export async function getHomeDashboardData(
 
   return {
     displayName,
+    greetingHeading,
     isFreeTier,
     primaryCta,
     starterPackHref,

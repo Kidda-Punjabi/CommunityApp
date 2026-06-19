@@ -13,6 +13,7 @@ import {
   getStreakPresentation,
   syncStreakState,
 } from "@/app/dashboard/home/streak-actions";
+import { ui } from "@/lib/ui/styles";
 
 export type HomeStreakInitial = {
   streak: number;
@@ -80,7 +81,7 @@ export function HomeStreakCard() {
   const stats = useHomeStreakStats();
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
+    <div className={ui.statCard}>
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
         Streak
       </p>

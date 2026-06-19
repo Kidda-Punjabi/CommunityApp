@@ -2,7 +2,6 @@ export const GAME_TYPES = [
   "match",
   "memory_grid",
   "speed_translate",
-  "word_scramble",
   "streak_survival",
   "sentence_builder",
   "conjugation_challenge",

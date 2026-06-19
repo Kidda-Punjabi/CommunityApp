@@ -1,6 +1,8 @@
 import { GameCard } from "@/components/games/game-card";
+import { ResourcesSection } from "@/components/resources/resources-section";
 import { GAME_CATALOG } from "@/lib/games/catalog";
 import { fetchPersonalBestsByGame } from "@/lib/games/game-scores";
+import { ui } from "@/lib/ui/styles";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function GamesPage() {
@@ -15,18 +17,18 @@ export default async function GamesPage() {
   const grammarGames = GAME_CATALOG.filter((g) => g.section === "grammar");
 
   return (
-    <div className="flex flex-1 flex-col px-4 py-6">
-      <div className="mb-6">
+    <div className={ui.page}>
+      <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Games</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Play vocabulary and grammar games to reinforce what you&apos;ve learned.
         </p>
       </div>
 
-      <div className="space-y-8">
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-zinc-900">Vocabulary Games</h2>
-          <div className="space-y-3">
+      <div className="space-y-10">
+        <section>
+          <h2 className={ui.sectionTitle}>Vocabulary Games</h2>
+          <div className={ui.stack}>
             {vocabularyGames.map((game) => (
               <GameCard
                 key={game.type}
@@ -37,9 +39,9 @@ export default async function GamesPage() {
           </div>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-zinc-900">Grammar Games</h2>
-          <div className="space-y-3">
+        <section>
+          <h2 className={ui.sectionTitle}>Grammar Games</h2>
+          <div className={ui.stack}>
             {grammarGames.map((game) => (
               <GameCard
                 key={game.type}
@@ -49,6 +51,8 @@ export default async function GamesPage() {
             ))}
           </div>
         </section>
+
+        <ResourcesSection />
       </div>
     </div>
   );

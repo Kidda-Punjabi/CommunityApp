@@ -1,4 +1,8 @@
 import { EventCard } from "@/components/event-card";
+import {
+  UpcomingEventsList,
+  type PreparedEvent,
+} from "@/components/upcoming-events-list";
 import { canAccessEvent } from "@/lib/membership/access";
 import {
   formatRecurrenceLabel,
@@ -7,8 +11,28 @@ import {
 } from "@/lib/events/recurrence";
 import { normalizeTier } from "@/lib/membership/tiers";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
+import { ui } from "@/lib/ui/styles";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+
+function prepareEvents(
+  events: ReturnType<typeof splitExpandedEvents>["upcoming"],
+  access: Awaited<ReturnType<typeof getCourseAccessContext>>
+): PreparedEvent[] {
+  return events.map((event) => {
+    const requiredTier = event.required_tier ? normalizeTier(event.required_tier) : null;
+
+    return {
+      event,
+      canAccess: canAccessEvent(access.unlockedCourseIds, event, access.courses),
+      requiredTier: requiredTier && requiredTier !== "free" ? requiredTier : null,
+      recurrenceLabel: formatRecurrenceLabel(
+        event.recurrence_freq,
+        event.recurrence_until
+      ),
+    };
+  });
+}
 
 export default async function EventsPage() {
   const supabase = await createClient();
@@ -24,10 +48,11 @@ export default async function EventsPage() {
     .order("starts_at", { ascending: true });
 
   const { upcoming, past } = splitExpandedEvents((events ?? []) as StoredEvent[]);
+  const preparedUpcoming = prepareEvents(upcoming, access);
 
   return (
-    <div className="flex flex-1 flex-col px-4 py-6">
-      <div className="mb-6">
+    <div className={ui.page}>
+      <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Events</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Live sessions and community meetups for Kidda members.
@@ -41,7 +66,7 @@ export default async function EventsPage() {
       )}
 
       {upcoming.length === 0 && past.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">
+        <div className={ui.emptyState}>
           <span className="text-5xl" role="img" aria-hidden="true">
             📅
           </span>
@@ -55,32 +80,7 @@ export default async function EventsPage() {
           {upcoming.length > 0 && (
             <section>
               <h2 className="mb-3 text-lg font-semibold text-zinc-900">Upcoming</h2>
-              <div className="space-y-3">
-                {upcoming.map((event) => {
-                  const requiredTier = event.required_tier
-                    ? normalizeTier(event.required_tier)
-                    : null;
-
-                  return (
-                    <EventCard
-                      key={event.occurrenceId}
-                      event={event}
-                      canAccess={canAccessEvent(
-                        access.unlockedCourseIds,
-                        event,
-                        access.courses
-                      )}
-                      requiredTier={
-                        requiredTier && requiredTier !== "free" ? requiredTier : null
-                      }
-                      recurrenceLabel={formatRecurrenceLabel(
-                        event.recurrence_freq,
-                        event.recurrence_until
-                      )}
-                    />
-                  );
-                })}
-              </div>
+              <UpcomingEventsList events={preparedUpcoming} />
             </section>
           )}
 

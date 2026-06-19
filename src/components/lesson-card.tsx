@@ -10,6 +10,7 @@ import {
 import { deckPracticeHref } from "@/lib/flashcards/utils";
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import type { FlashcardProgressRow } from "@/lib/progress/flashcard-progress";
+import { ui } from "@/lib/ui/styles";
 
 type LessonProgress = {
   audioCompleted: boolean;
@@ -53,7 +54,7 @@ export function LessonCard({
   const audioDone = Boolean(completion?.audioRequired && completion.audioComplete);
 
   return (
-    <div id={`lesson-${lesson.id}`} className="scroll-mt-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <div id={`lesson-${lesson.id}`} className={`scroll-mt-6 ${ui.cardBordered}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
@@ -153,7 +154,7 @@ export function LessonCard({
             {hasQuiz && (
               <Link
                 href={`/dashboard/practice/quiz/${quizId}`}
-                className="flex items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
+                className={`flex items-center justify-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100`}
               >
                 <span className="min-w-0 truncate">
                   Go to quiz{quizTitle ? `: ${quizTitle}` : ""}
@@ -170,7 +171,7 @@ export function LessonCard({
                     <Link
                       key={set.deckId}
                       href={deckPracticeHref(lesson.id, set.deckId)}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 sm:min-w-[12rem]"
+                      className="flex flex-1 items-center justify-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 sm:min-w-[12rem]"
                     >
                       <span className="min-w-0 truncate">
                         {set.name} ({set.cardCount})

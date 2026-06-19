@@ -7,6 +7,7 @@ import {
 import type { MatchScoreRow } from "@/lib/progress/match-scores";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { deckPracticeHref, gameDeckHref } from "@/lib/flashcards/utils";
+import { ui } from "@/lib/ui/styles";
 
 type FlashcardDeckHubProps = {
   deck: FlashcardDeckContext;
@@ -71,7 +72,7 @@ export function FlashcardDeckHub({ deck, progress, matchScore }: FlashcardDeckHu
       </div>
 
       {matchScore && (
-        <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
+        <div className="rounded-3xl border border-violet-200/80 bg-violet-50 px-5 py-4 shadow-[0_4px_24px_-6px_rgba(124,58,237,0.08)]">
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
             Match best
           </p>
@@ -81,8 +82,8 @@ export function FlashcardDeckHub({ deck, progress, matchScore }: FlashcardDeckHu
         </div>
       )}
 
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-zinc-900">Study modes</h2>
+      <div className={ui.stack}>
+        <h2 className={ui.sectionTitle}>Study modes</h2>
         {modeCards.map((mode) => {
           const href =
             mode.key === "match" && deckId
@@ -92,20 +93,20 @@ export function FlashcardDeckHub({ deck, progress, matchScore }: FlashcardDeckHu
                 : setsHref;
 
           return (
-          <Link
-            key={mode.key}
-            href={href}
-            className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-50/40"
-          >
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-2xl">
-              {mode.emoji}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-zinc-900">{mode.title}</p>
-              <p className="mt-0.5 text-sm text-zinc-500">{mode.description}</p>
-            </div>
-            <span className="text-sm font-semibold text-violet-600">Start →</span>
-          </Link>
+            <Link key={mode.key} href={href} className={`group ${ui.listRow}`}>
+              <span className={ui.listRowIcon} aria-hidden="true">
+                {mode.emoji}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-zinc-900">{mode.title}</p>
+                <p className="mt-0.5 text-sm text-zinc-500">{mode.description}</p>
+              </div>
+              <span className={ui.btnIcon} aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-4 w-4">
+                  <path d="M8 5.14v14.72a1 1 0 0 0 1.5.86l11.04-7.36a1 1 0 0 0 0-1.72L9.5 4.28A1 1 0 0 0 8 5.14z" />
+                </svg>
+              </span>
+            </Link>
           );
         })}
       </div>

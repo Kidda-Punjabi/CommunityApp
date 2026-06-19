@@ -11,6 +11,7 @@ import {
 } from "@/lib/learning/learn-access";
 import { LEARN_TRACKS } from "@/lib/learning/learn-catalog";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
+import { ui } from "@/lib/ui/styles";
 import {
   fetchLessonCompletionMap,
   summarizeCourseProgress,
@@ -84,15 +85,15 @@ export default async function LearnPage() {
   });
 
   return (
-    <div className="flex flex-1 flex-col px-4 py-6">
-      <div className="mb-6">
+    <div className={ui.page}>
+      <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Choose a course to start learning.
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div className={ui.stack}>
         {tracks.map(({ track, locked, lessonCount, courseProgress }) => (
           <LearnCourseCard
             key={track.id}

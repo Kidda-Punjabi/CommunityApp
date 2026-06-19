@@ -1,13 +1,20 @@
 import { LogoutButton } from "@/app/dashboard/logout-button";
 import { ViewAsPanel } from "@/app/dashboard/profile/view-as-panel";
+import { TestOnboardingButton } from "@/components/onboarding/test-onboarding-button";
+import { ProgressionCard } from "@/components/profile/progression-card";
+import { UserAvatar } from "@/components/profile/user-avatar";
 import { isAdmin } from "@/lib/auth/admin";
 import {
   formatUnlockedCourseNames,
   getCourseAccessContext,
   tiersFromUnlockedCourses,
 } from "@/lib/membership/unlocked";
+import { getDisplayName } from "@/lib/profile/display-name";
+import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
+import { loadUserProgression } from "@/lib/progression/load-user-progression";
 import { createClient } from "@/lib/supabase/server";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
+import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
 export default async function ProfilePage() {
@@ -17,14 +24,9 @@ export default async function ProfilePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, avatar_url")
-    .eq("id", user!.id)
-    .single();
+  const profile = await loadEditableProfile(supabase, user!.id);
 
-  const displayName =
-    profile?.full_name || user?.user_metadata?.full_name || "Member";
+  const displayName = getDisplayName(profile);
 
   if (user?.email) {
     try {
@@ -35,37 +37,41 @@ export default async function ProfilePage() {
   }
 
   const access = await getCourseAccessContext(supabase, user!);
+  const progression = await loadUserProgression(supabase, user!.id);
 
   const membershipLabel = access.viewAs?.active
     ? `Testing: ${access.viewAs.label}`
     : formatUnlockedCourseNames(access.courses, access.unlockedCourseIds);
 
   return (
-    <div className="flex flex-1 flex-col px-6 py-8">
+    <div className={ui.page}>
       <div className="text-center">
-        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-violet-100 text-4xl ring-4 ring-white shadow-sm">
-          {profile?.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={profile.avatar_url}
-              alt=""
-              className="h-full w-full rounded-full object-cover"
-            />
-          ) : (
-            <span role="img" aria-hidden="true">
-              👤
-            </span>
-          )}
+        <div className="mx-auto w-fit shadow-[0_4px_20px_-4px_rgba(24,24,27,0.12)] ring-4 ring-white">
+          <UserAvatar
+            profile={{
+              full_name: profile?.full_name,
+              preferred_name: profile?.preferred_name,
+              avatar_url: profile?.avatar_url,
+            }}
+            size="lg"
+          />
         </div>
         <h1 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900">
           Profile
         </h1>
-        <p className="mt-1 text-lg font-medium text-zinc-700">{displayName}</p>
+        {displayName && (
+          <p className="mt-1 text-lg font-medium text-zinc-700">{displayName}</p>
+        )}
         <p className="mt-1 text-sm text-zinc-500">{user?.email}</p>
+        <Link href="/dashboard/profile/edit" className={`mt-5 ${ui.btnSecondary}`}>
+          Edit profile
+        </Link>
       </div>
 
-      <div className="mt-10 space-y-3">
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200/80">
+      <div className={`mt-10 ${ui.stackLoose}`}>
+        <ProgressionCard progression={progression} />
+
+        <div className={ui.card}>
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Membership
           </p>
@@ -90,30 +96,19 @@ export default async function ProfilePage() {
         )}
 
         {isAdmin(user) && (
-          <div className="rounded-2xl bg-violet-50 p-5 shadow-sm ring-1 ring-violet-200/80">
+          <div className="rounded-3xl bg-violet-50 p-5 shadow-[0_4px_24px_-6px_rgba(124,58,237,0.1)]">
             <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
               Admin
             </p>
             <p className="mt-2 text-sm text-zinc-600">
               Manage courses, lessons, quizzes, and teachers.
             </p>
-            <Link
-              href="/admin/content"
-              className="mt-3 inline-block rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500"
-            >
+            <Link href="/admin/content" className={`mt-4 ${ui.btnPrimary}`}>
               Open admin panel
             </Link>
+            <TestOnboardingButton />
           </div>
         )}
-
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200/80">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Account
-          </p>
-          <p className="mt-2 text-sm text-zinc-500">
-            Manage your settings and preferences here soon.
-          </p>
-        </div>
       </div>
 
       <div className="mt-auto pt-10">

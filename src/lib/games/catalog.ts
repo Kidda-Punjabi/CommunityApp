@@ -1,5 +1,7 @@
 import type { GameType } from "./types";
 
+export const GAMES_HUB_HREF = "/dashboard/games";
+
 export type GameCatalogEntry = {
   type: GameType;
   title: string;
@@ -39,15 +41,6 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     needsDeck: true,
   },
   {
-    type: "word_scramble",
-    title: "Word Scramble",
-    description: "Tap letters in order to rebuild scrambled Punjabi words",
-    emoji: "🔤",
-    section: "vocabulary",
-    href: "/dashboard/games/word-scramble",
-    needsDeck: true,
-  },
-  {
     type: "streak_survival",
     title: "Streak Survival",
     description: "One wrong answer ends the run — how long can you survive?",
@@ -58,7 +51,7 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
   {
     type: "sentence_builder",
     title: "Sentence Builder",
-    description: "Arrange Punjabi word tiles into the correct sentence",
+    description: "Tap word tiles in order to build Punjabi sentences from English prompts",
     emoji: "🧩",
     section: "grammar",
     href: "/dashboard/games/sentence-builder",
@@ -66,7 +59,7 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
   {
     type: "conjugation_challenge",
     title: "Conjugation Challenge",
-    description: "Pick the right verb form for tense, number, and gender",
+    description: "10-question multiple-choice round across 15 tense patterns",
     emoji: "📝",
     section: "grammar",
     href: "/dashboard/games/conjugation-challenge",

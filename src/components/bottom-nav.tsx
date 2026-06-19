@@ -6,22 +6,24 @@ import { usePathname } from "next/navigation";
 type NavItem = {
   href: string;
   label: string;
-  icon: React.ReactNode;
 };
+
+function iconClass(active: boolean) {
+  return `h-6 w-6 transition-colors ${
+    active ? "text-violet-600" : "text-zinc-400 group-hover:text-zinc-600"
+  }`;
+}
 
 function HomeIcon({ active }: { active: boolean }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
-      fill={active ? "currentColor" : "none"}
+      fill="none"
       stroke="currentColor"
-      strokeWidth={active ? 0 : 2}
-      className="h-6 w-6"
+      strokeWidth={active ? 2.25 : 1.75}
+      className={iconClass(active)}
     >
-      {active ? (
-        <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
-      ) : null}
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -36,10 +38,10 @@ function LearnIcon({ active }: { active: boolean }) {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
-      fill={active ? "currentColor" : "none"}
+      fill="none"
       stroke="currentColor"
-      strokeWidth={2}
-      className="h-6 w-6"
+      strokeWidth={active ? 2.25 : 1.75}
+      className={iconClass(active)}
     >
       <path
         strokeLinecap="round"
@@ -55,10 +57,10 @@ function PracticeIcon({ active }: { active: boolean }) {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
-      fill={active ? "currentColor" : "none"}
+      fill="none"
       stroke="currentColor"
-      strokeWidth={2}
-      className="h-6 w-6"
+      strokeWidth={active ? 2.25 : 1.75}
+      className={iconClass(active)}
     >
       <path
         strokeLinecap="round"
@@ -74,10 +76,10 @@ function EventsIcon({ active }: { active: boolean }) {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
-      fill={active ? "currentColor" : "none"}
+      fill="none"
       stroke="currentColor"
-      strokeWidth={2}
-      className="h-6 w-6"
+      strokeWidth={active ? 2.25 : 1.75}
+      className={iconClass(active)}
     >
       <path
         strokeLinecap="round"
@@ -93,10 +95,10 @@ function ProfileIcon({ active }: { active: boolean }) {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
-      fill={active ? "currentColor" : "none"}
+      fill="none"
       stroke="currentColor"
-      strokeWidth={2}
-      className="h-6 w-6"
+      strokeWidth={active ? 2.25 : 1.75}
+      className={iconClass(active)}
     >
       <path
         strokeLinecap="round"
@@ -107,7 +109,7 @@ function ProfileIcon({ active }: { active: boolean }) {
   );
 }
 
-const navItems: Omit<NavItem, "icon">[] = [
+const navItems: NavItem[] = [
   { href: "/dashboard/home", label: "Home" },
   { href: "/dashboard/learn", label: "Learn" },
   { href: "/dashboard/events", label: "Events" },
@@ -136,8 +138,8 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200/80 bg-white/95 backdrop-blur-md">
-      <div className="mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200/60 bg-white/90 shadow-[0_-4px_24px_-8px_rgba(24,24,27,0.08)] backdrop-blur-md">
+      <div className="mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5">
         {navItems.map((item) => {
           const active =
             item.href === "/dashboard/games"
@@ -148,17 +150,11 @@ export function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors ${
-                active
-                  ? "text-violet-600"
-                  : "text-zinc-400 hover:text-zinc-600"
+              className={`group flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 transition-colors ${
+                active ? "text-violet-600" : "text-zinc-500"
               }`}
             >
-              <span
-                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-                  active ? "bg-violet-100" : ""
-                }`}
-              >
+              <span className="flex h-8 w-8 items-center justify-center">
                 <NavIcon href={item.href} active={active} />
               </span>
               <span

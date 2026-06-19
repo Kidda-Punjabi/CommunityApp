@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DeckProgressBar } from "@/components/deck-progress-bar";
 import type { FlashcardSetSummary } from "@/lib/flashcards/load-deck";
+import { ui } from "@/lib/ui/styles";
 
 type FlashcardLessonSetsHubProps = {
   lessonId: string;
@@ -39,25 +40,30 @@ export function FlashcardLessonSetsHub({
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div className={ui.stack}>
         {sets.map((set) => (
           <Link
             key={set.deckId}
             href={`/dashboard/practice/flashcards/${lessonId}/${set.deckId}`}
-            className="block rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-50/40"
+            className={`group block ${ui.cardBordered}`}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+            <div className="flex items-center gap-4">
+              <span className={ui.listRowIcon} aria-hidden="true">
+                🃏
+              </span>
+              <div className="min-w-0 flex-1">
                 <h2 className="font-semibold text-zinc-900">{set.deckName}</h2>
                 <p className="mt-0.5 text-sm text-zinc-500">
                   {set.cards.length} card{set.cards.length === 1 ? "" : "s"}
                 </p>
               </div>
-              <span className="shrink-0 text-sm font-semibold text-violet-600">
-                Practice →
+              <span className={ui.btnIcon} aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-4 w-4">
+                  <path d="M8 5.14v14.72a1 1 0 0 0 1.5.86l11.04-7.36a1 1 0 0 0 0-1.72L9.5 4.28A1 1 0 0 0 8 5.14z" />
+                </svg>
               </span>
             </div>
-            <div className="mt-3">
+            <div className="mt-4">
               <DeckProgressBar
                 confident={set.stats.confident}
                 notConfident={set.stats.notConfident}

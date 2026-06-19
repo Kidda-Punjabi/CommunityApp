@@ -3,89 +3,135 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { VerbConjugation } from "@/lib/games/types";
 import {
-  CONJUGATION_PROMPTS,
-  getConjugationForm,
-} from "@/lib/games/types";
-import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
+  buildChallengeRound,
+  CHALLENGE_ROUND_LENGTH,
+  computeGroupBreakdown,
+  defaultTenseSelectionForFocus,
+  getTensesForFocus,
+  type ChallengeQuestion,
+} from "@/lib/conjugation/challenge";
+import type { TenseGroup, TenseId, Verb } from "@/lib/conjugation/types";
+import { TENSE_CATALOG } from "@/lib/conjugation/types";
+import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
+import { ui } from "@/lib/ui/styles";
 
-const ROUNDS = 10;
+const FEEDBACK_MS = 1000;
 
-type Round = {
-  verb: VerbConjugation;
-  label: string;
-  answer: string;
-  options: string[];
+type FocusArea = TenseGroup | "all";
+type Phase = "setup" | "playing" | "finished";
+
+type AnswerFeedback = {
+  selected: string;
+  isCorrect: boolean;
 };
 
-function buildRound(verbs: VerbConjugation[]): Round | null {
-  const verb = verbs[Math.floor(Math.random() * verbs.length)];
-  const promptDef = CONJUGATION_PROMPTS[Math.floor(Math.random() * CONJUGATION_PROMPTS.length)];
-  const answer = getConjugationForm(
-    verb.conjugations,
-    promptDef.tense,
-    promptDef.number,
-    promptDef.gender
-  );
-  if (!answer) return null;
+const FOCUS_OPTIONS: { id: FocusArea; label: string }[] = [
+  { id: "present", label: "Present" },
+  { id: "past", label: "Past" },
+  { id: "future", label: "Future" },
+  { id: "all", label: "All" },
+];
 
-  const pool: string[] = [];
-  for (const p of CONJUGATION_PROMPTS) {
-    const form = getConjugationForm(
-      verb.conjugations,
-      p.tense,
-      p.number,
-      p.gender
-    );
-    if (form && form !== answer) pool.push(form);
-  }
-  for (const other of verbs) {
-    if (other.id === verb.id) continue;
-    for (const p of CONJUGATION_PROMPTS) {
-      const form = getConjugationForm(
-        other.conjugations,
-        p.tense,
-        p.number,
-        p.gender
-      );
-      if (form && form !== answer) pool.push(form);
-    }
-  }
-
-  const distractors = pickRandomItems(pool, 3, answer);
-  return {
-    verb,
-    label: promptDef.label,
-    answer,
-    options: shuffleArray([answer, ...distractors]),
-  };
-}
+const GROUP_LABELS: Record<TenseGroup, string> = {
+  present: "Present",
+  past: "Past",
+  future: "Future",
+};
 
 type ConjugationChallengeModeProps = {
-  verbs: VerbConjugation[];
-  initialBestScore: number;
+  verbs: Verb[];
+  tableReady: boolean;
 };
 
-export function ConjugationChallengeMode({
-  verbs,
-  initialBestScore,
-}: ConjugationChallengeModeProps) {
-  const backHref = `/dashboard/games/conjugation-challenge`;
+function TenseToggleGroup({
+  group,
+  selectedTenses,
+  onToggle,
+}: {
+  group: TenseGroup;
+  selectedTenses: Set<TenseId>;
+  onToggle: (tenseId: TenseId) => void;
+}) {
+  const tenses = TENSE_CATALOG.filter((tense) => tense.group === group);
 
-  const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
-  const [rounds, setRounds] = useState<Round[]>([]);
-  const [roundIndex, setRoundIndex] = useState(0);
-  const [score, setScore] = useState(0);
-  const [result, setResult] = useState<{ isNewBest: boolean; currentBest: number } | null>(
-    null
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+        {GROUP_LABELS[group]}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {tenses.map((tense) => {
+          const active = selectedTenses.has(tense.id);
+          return (
+            <button
+              key={tense.id}
+              type="button"
+              onClick={() => onToggle(tense.id)}
+              className={active ? ui.pillActive : ui.pillInactive}
+            >
+              {tense.shortLabel}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
+}
 
+function QuestionPrompt({ question }: { question: ChallengeQuestion }) {
+  if (question.format === "A") {
+    return (
+      <div className="space-y-2 text-center">
+        <p className="text-2xl font-semibold text-zinc-900">
+          {question.verbRoot}
+          <span className="text-zinc-400">…</span>
+        </p>
+        <p className="text-sm text-zinc-500">{question.english}</p>
+        <p className="text-sm font-medium text-violet-700">{question.tenseLabel}</p>
+        <p className="text-lg text-zinc-800">{question.pronounDisplay}</p>
+        <p className="text-xs text-zinc-400">Pick the correct verb form</p>
+      </div>
+    );
+  }
+
+  if (question.format === "B") {
+    return (
+      <div className="space-y-2 text-center">
+        <p className="text-2xl font-semibold text-zinc-900">{question.gapSentence}</p>
+        <p className="text-sm text-zinc-500">{question.englishGloss}</p>
+        <p className="text-xs text-zinc-400">Fill the gap</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 text-center">
+      <p className="text-xl font-semibold text-zinc-900">{question.englishGloss}</p>
+      <p className="text-sm font-medium text-violet-700">({question.tenseLabel})</p>
+      <p className="text-xs text-zinc-400">Pick the correct Punjabi sentence</p>
+    </div>
+  );
+}
+
+export function ConjugationChallengeMode({ verbs, tableReady }: ConjugationChallengeModeProps) {
+  const [phase, setPhase] = useState<Phase>("setup");
+  const [focusArea, setFocusArea] = useState<FocusArea>("all");
+  const [selectedTenses, setSelectedTenses] = useState<Set<TenseId>>(
+    () => defaultTenseSelectionForFocus("all")
+  );
+  const [questions, setQuestions] = useState<ChallengeQuestion[]>([]);
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [results, setResults] = useState<boolean[]>([]);
+  const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
+
+  const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
 
-  const current = rounds[roundIndex];
+  const current = questions[questionIndex];
+  const score = results.filter(Boolean).length;
 
   useEffect(() => {
     const supabase = createClient();
@@ -98,111 +144,235 @@ export function ConjugationChallengeMode({
     if (phase !== "finished" || savedRef.current) return;
     savedRef.current = true;
 
+    const total = questions.length;
+    const correct = results.filter(Boolean).length;
+    const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+
     const persist = async () => {
       const userId = userIdRef.current;
       if (!userId) return;
 
       const supabase = createClient();
-      const outcome = await saveGameScore(
-        supabase,
-        userId,
-        "conjugation_challenge",
-        score,
-        { rounds: ROUNDS }
-      );
-      setResult({ isNewBest: outcome.isNewBest, currentBest: outcome.currentBest });
+      await saveGameScore(supabase, userId, "conjugation_challenge", correct, {
+        accuracy,
+        correct,
+        total,
+        rounds: total,
+      });
     };
 
     void persist();
-  }, [phase, score]);
+  }, [phase, questions.length, results]);
 
-  function generateRounds(): Round[] {
-    const list: Round[] = [];
-    for (let i = 0; i < ROUNDS * 3 && list.length < ROUNDS; i++) {
-      const round = buildRound(verbs);
-      if (round) list.push(round);
-    }
-    return list;
+  useEffect(() => {
+    return () => {
+      if (advanceTimerRef.current) {
+        window.clearTimeout(advanceTimerRef.current);
+      }
+    };
+  }, []);
+
+  function handleFocusChange(nextFocus: FocusArea) {
+    setFocusArea(nextFocus);
+    setSelectedTenses(defaultTenseSelectionForFocus(nextFocus));
   }
 
-  function startGame() {
+  function toggleTense(tenseId: TenseId) {
+    setSelectedTenses((prev) => {
+      const next = new Set(prev);
+      if (next.has(tenseId)) {
+        next.delete(tenseId);
+      } else {
+        next.add(tenseId);
+      }
+      return next;
+    });
+  }
+
+  function startRound() {
     savedRef.current = false;
-    setRounds(generateRounds());
-    setRoundIndex(0);
-    setScore(0);
-    setResult(null);
+    const availableTenses = getTensesForFocus(focusArea, selectedTenses);
+    let round: ChallengeQuestion[] = [];
+
+    for (let attempt = 0; attempt < 8 && round.length < CHALLENGE_ROUND_LENGTH; attempt += 1) {
+      round = buildChallengeRound(verbs, availableTenses);
+    }
+
+    if (round.length === 0) return;
+
+    setQuestions(round.slice(0, CHALLENGE_ROUND_LENGTH));
+    setQuestionIndex(0);
+    setResults([]);
+    setFeedback(null);
     setPhase("playing");
   }
 
   function handleAnswer(answer: string) {
-    if (phase !== "playing" || !current) return;
+    if (phase !== "playing" || !current || feedback) return;
 
-    const nextScore = score + (answer === current.answer ? 1 : 0);
+    const isCorrect = answer === current.correctAnswer;
+    setFeedback({ selected: answer, isCorrect });
 
-    if (roundIndex + 1 >= rounds.length) {
-      setScore(nextScore);
-      setPhase("finished");
-      return;
-    }
+    advanceTimerRef.current = window.setTimeout(() => {
+      const nextResults = [...results, isCorrect];
 
-    setScore(nextScore);
-    setRoundIndex((i) => i + 1);
+      if (questionIndex + 1 >= questions.length) {
+        setResults(nextResults);
+        setFeedback(null);
+        setPhase("finished");
+        return;
+      }
+
+      setResults(nextResults);
+      setQuestionIndex((index) => index + 1);
+      setFeedback(null);
+    }, FEEDBACK_MS);
   }
 
-  if (phase === "ready") {
+  const availableTenses = getTensesForFocus(focusArea, selectedTenses);
+  const canStart = tableReady && verbs.length > 0 && availableTenses.length > 0;
+
+  if (phase === "setup") {
     return (
       <div className="space-y-6">
         <div>
-          <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
+          <Link
+            href={GAMES_HUB_HREF}
+            className="text-sm font-medium text-violet-600 hover:text-violet-500"
+          >
             ← Back to games
           </Link>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Conjugation Challenge
           </p>
-          <h1 className="mt-1 text-2xl font-bold text-zinc-900">Pick the right form</h1>
-          <p className="mt-2 text-sm text-zinc-500">{ROUNDS} multiple-choice rounds.</p>
-        </div>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Your best</p>
-          <p className="mt-1 text-lg font-bold text-zinc-900">
-            {initialBestScore > 0 ? `${initialBestScore} / ${ROUNDS}` : "No score yet"}
+          <h1 className="mt-1 text-2xl font-bold text-zinc-900">Test your verb forms</h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            {CHALLENGE_ROUND_LENGTH} multiple-choice questions — no typing required.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={startGame}
-          disabled={verbs.length === 0}
-          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-        >
-          Start challenge
-        </button>
+
+        {!tableReady ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Run <code className="text-xs">supabase/verbs.sql</code> to enable this game.
+          </div>
+        ) : verbs.length === 0 ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            No verbs found in the database yet.
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                Focus area
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {FOCUS_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => handleFocusChange(option.id)}
+                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                      focusArea === option.id
+                        ? "bg-violet-600 text-white"
+                        : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <p className="text-sm font-medium text-zinc-700">
+                Sub-tenses{" "}
+                <span className="font-normal text-zinc-500">(uncheck any to narrow the round)</span>
+              </p>
+              {focusArea === "all" ? (
+                <div className="space-y-4">
+                  {(["present", "past", "future"] as const).map((group) => (
+                    <TenseToggleGroup
+                      key={group}
+                      group={group}
+                      selectedTenses={selectedTenses}
+                      onToggle={toggleTense}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <TenseToggleGroup
+                  group={focusArea}
+                  selectedTenses={selectedTenses}
+                  onToggle={toggleTense}
+                />
+              )}
+            </div>
+
+            {availableTenses.length === 0 && (
+              <p className="text-sm text-amber-700">Select at least one sub-tense to start.</p>
+            )}
+
+            <button
+              type="button"
+              onClick={startRound}
+              disabled={!canStart}
+              className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+            >
+              Start
+            </button>
+          </>
+        )}
       </div>
     );
   }
 
   if (phase === "finished") {
+    const total = questions.length;
+    const accuracy = total > 0 ? Math.round((score / total) * 100) : 0;
+    const breakdown = computeGroupBreakdown(questions, results);
+
     return (
       <div className="space-y-6">
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-medium text-violet-600">Challenge complete</p>
-          <h2 className="mt-2 text-2xl font-bold text-zinc-900">
-            {score} / {rounds.length}
+          <h2 className="mt-2 text-3xl font-bold text-zinc-900">
+            {score}/{total}
           </h2>
-          {result?.isNewBest && (
-            <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
-          )}
-          {result && !result.isNewBest && result.currentBest > 0 && (
-            <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
-          )}
+          <p className="mt-1 text-sm text-zinc-500">{accuracy}% accuracy</p>
+
+          <div className="mt-5 space-y-2 text-left">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              By tense group
+            </p>
+            {(["present", "past", "future"] as const).map((group) => {
+              const stats = breakdown[group];
+              if (stats.total === 0) return null;
+              return (
+                <div
+                  key={group}
+                  className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-sm"
+                >
+                  <span className="font-medium text-zinc-700">{GROUP_LABELS[group]}</span>
+                  <span className="text-zinc-600">
+                    {stats.correct}/{stats.total}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
+
         <button
           type="button"
-          onClick={startGame}
+          onClick={() => setPhase("setup")}
           className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
         >
           Play again
         </button>
-        <Link href={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
+        <Link
+          href={GAMES_HUB_HREF}
+          className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
           Back to games
         </Link>
       </div>
@@ -212,32 +382,65 @@ export function ConjugationChallengeMode({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
-        <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
+        <Link
+          href={GAMES_HUB_HREF}
+          className="text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
           ← Exit
         </Link>
         <p className="text-sm font-semibold text-zinc-900">
-          {roundIndex + 1} / {rounds.length} · {score} correct
+          {questionIndex + 1} / {questions.length} · {score} correct
         </p>
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          {current?.verb.verb_root} · {current?.label}
-        </p>
-        <p className="mt-2 text-sm text-zinc-500">{current?.verb.verb_meaning}</p>
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        {current && <QuestionPrompt question={current} />}
       </div>
 
       <div className="grid gap-2">
-        {current?.options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => handleAnswer(option)}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm font-medium text-zinc-900 hover:border-violet-300 hover:bg-violet-50"
-          >
-            {option}
-          </button>
-        ))}
+        {current?.options.map((option) => {
+          const isSelected = feedback?.selected === option;
+          const isCorrect = option === current.correctAnswer;
+          const showResult = feedback !== null;
+
+          let className =
+            "flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors ";
+
+          if (showResult) {
+            if (isCorrect) {
+              className += "border-green-400 bg-green-50 text-green-900";
+            } else if (isSelected) {
+              className += "border-red-400 bg-red-50 text-red-900";
+            } else {
+              className += "border-zinc-200 bg-white text-zinc-600";
+            }
+          } else {
+            className +=
+              "border-zinc-200 bg-white text-zinc-900 hover:border-violet-300 hover:bg-violet-50";
+          }
+
+          return (
+            <button
+              key={option}
+              type="button"
+              disabled={Boolean(feedback)}
+              onClick={() => handleAnswer(option)}
+              className={className}
+            >
+              <span className={current.format === "C" ? "text-base" : "text-lg"}>{option}</span>
+              {showResult && isCorrect && (
+                <span className="ml-2 text-green-600" aria-hidden="true">
+                  ✓
+                </span>
+              )}
+              {showResult && isSelected && !isCorrect && (
+                <span className="ml-2 text-red-600" aria-hidden="true">
+                  ✗
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

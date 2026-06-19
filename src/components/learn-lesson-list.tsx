@@ -7,6 +7,7 @@ import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
 import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import Link from "next/link";
+import { ui } from "@/lib/ui/styles";
 
 type LearnLessonListProps = {
   title: string;
@@ -46,7 +47,7 @@ export function LearnLessonList({
   };
 
   return (
-    <div className="flex flex-1 flex-col px-4 py-6">
+    <div className={ui.page}>
       <Link
         href={backHref}
         className="text-sm font-medium text-violet-600 hover:text-violet-500"
@@ -54,7 +55,7 @@ export function LearnLessonList({
         ← Back to Learn
       </Link>
 
-      <div className="mb-6 mt-4">
+      <div className="mb-8 mt-4">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
         <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
         {accessibleLessons.length > 0 && (
@@ -67,7 +68,7 @@ export function LearnLessonList({
       </div>
 
       {lessons.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">
+        <div className={ui.emptyState}>
           <span className="text-5xl" role="img" aria-hidden="true">
             📚
           </span>
@@ -77,7 +78,7 @@ export function LearnLessonList({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className={ui.stack}>
           {lessons.map((lesson) => {
             const row = progressMap.get(lesson.id);
             const canAccess = canAccessLessonInContext(access, lesson);
