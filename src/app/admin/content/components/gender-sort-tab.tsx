@@ -69,6 +69,17 @@ function SharedNounFields({ courses }: { courses: AdminData["courses"] }) {
           <input name="english_meaning" required className={inputClass} />
         </div>
       </div>
+      <div>
+        <label className={labelClass}>Romanised (optional)</label>
+        <input
+          name="romanised"
+          className={inputClass}
+          placeholder="kitaab"
+        />
+        <p className="mt-1 text-xs text-zinc-500">
+          Shown under the Gurmukhi word in Gender Sort for learners who can&apos;t read Punjabi script.
+        </p>
+      </div>
       <GenderToggle name="gender" />
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
@@ -150,7 +161,7 @@ export function GenderSortTab({ data }: { data: AdminData }) {
               placeholder={"ਕੁਰਸੀ\tchair\tfeminine\t1\nਮੇਜ਼\ttable\tfeminine\t1"}
             />
             <p className="mt-1 text-xs text-zinc-500">
-              Format: punjabi_word · english_meaning · gender · difficulty (optional)
+              Format: punjabi_word · english_meaning · gender · difficulty · romanised (optional)
             </p>
           </div>
           <FormMessage state={bulkState} />
@@ -185,7 +196,8 @@ export function GenderSortTab({ data }: { data: AdminData }) {
                 >
                   <div>
                     <p className="font-medium text-zinc-900">
-                      {noun.punjabi_word} · {noun.english_meaning}
+                      {noun.punjabi_word}
+                      {noun.romanised ? ` (${noun.romanised})` : ""} · {noun.english_meaning}
                     </p>
                     <p className="mt-1 text-sm text-zinc-500">
                       {noun.gender === "masculine" ? "Masculine" : "Feminine"} · Difficulty{" "}
@@ -253,6 +265,15 @@ function NounEditRow({
               className={inputClass}
             />
           </div>
+        </div>
+        <div>
+          <label className={labelClass}>Romanised (optional)</label>
+          <input
+            name="romanised"
+            defaultValue={noun.romanised ?? ""}
+            className={inputClass}
+            placeholder="kitaab"
+          />
         </div>
         <GenderToggle name="gender" defaultValue={noun.gender} />
         <div className="grid gap-3 sm:grid-cols-2">

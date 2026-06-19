@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS public.gendered_nouns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   punjabi_word TEXT NOT NULL,
   english_meaning TEXT NOT NULL,
+  romanised TEXT,
   gender TEXT NOT NULL CHECK (gender IN ('masculine', 'feminine')),
   difficulty INTEGER NOT NULL DEFAULT 1 CHECK (difficulty BETWEEN 1 AND 5),
   topic_tags TEXT[] NOT NULL DEFAULT '{}',

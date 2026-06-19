@@ -51,6 +51,7 @@ export type GenderedNoun = {
   id: string;
   punjabi_word: string;
   english_meaning: string;
+  romanised: string | null;
   gender: "masculine" | "feminine";
   difficulty: number;
   topic_tags: string[];

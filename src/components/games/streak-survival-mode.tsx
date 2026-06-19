@@ -50,9 +50,10 @@ function buildDeckQuestion(cards: FlashcardDeckCard[]): DeckQuestion {
 
 function buildGenderQuestion(nouns: GenderedNoun[]): GenderQuestion {
   const noun = nouns[Math.floor(Math.random() * nouns.length)];
+  const romanised = noun.romanised ? ` (${noun.romanised})` : "";
   return {
     kind: "gender",
-    prompt: `${noun.punjabi_word} — ${noun.english_meaning}`,
+    prompt: `${noun.punjabi_word}${romanised} — ${noun.english_meaning}`,
     answer: noun.gender,
     options: shuffleArray(["masculine", "feminine"]),
   };

@@ -330,9 +330,12 @@ export async function createGenderedNoun(
     if (!word || !meaning) return { error: "Punjabi word and English meaning are required." };
     if (gender !== "masculine" && gender !== "feminine") return { error: "Select a gender." };
 
+    const romanised = (formData.get("romanised") as string)?.trim() || null;
+
     const { error } = await supabase.from("gendered_nouns").insert({
       punjabi_word: word,
       english_meaning: meaning,
+      romanised,
       gender,
       difficulty: parseDifficulty(formData.get("difficulty")),
       topic_tags: parseTopicTags((formData.get("topic_tags") as string) || ""),
@@ -359,11 +362,14 @@ export async function updateGenderedNoun(
     const gender = formData.get("gender") as string;
     if (!id || !word || !meaning) return { error: "Missing required fields." };
 
+    const romanised = (formData.get("romanised") as string)?.trim() || null;
+
     const { error } = await supabase
       .from("gendered_nouns")
       .update({
         punjabi_word: word,
         english_meaning: meaning,
+        romanised,
         gender: gender === "feminine" ? "feminine" : "masculine",
         difficulty: parseDifficulty(formData.get("difficulty")),
         topic_tags: parseTopicTags((formData.get("topic_tags") as string) || ""),
@@ -410,12 +416,13 @@ export async function bulkCreateGenderedNouns(
       if (!trimmed) continue;
       const parts = trimmed.split("\t");
       if (parts.length < 3) continue;
-      const [word, meaning, genderRaw, diffRaw] = parts;
+      const [word, meaning, genderRaw, diffRaw, romanisedRaw] = parts;
       const gender = genderRaw?.trim().toLowerCase();
       if (gender !== "masculine" && gender !== "feminine") continue;
       rows.push({
         punjabi_word: word.trim(),
         english_meaning: meaning.trim(),
+        romanised: romanisedRaw?.trim() || null,
         gender,
         difficulty: Math.min(5, Math.max(1, parseInt(diffRaw ?? "1", 10) || 1)),
         topic_tags: [],
