@@ -3,22 +3,27 @@ import {
   FlashcardAccessDenied,
   FlashcardDeckEmpty,
 } from "@/components/flashcards/deck-states";
+import { loadChallengeForGamePage } from "@/lib/challenges/load-challenge-for-page";
 import { loadFlashcardDeck } from "@/lib/flashcards/load-deck";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 
 type MatchPlayPageProps = {
   params: Promise<{ lessonId: string; deckId: string }>;
+  searchParams: Promise<{ challenge?: string }>;
 };
 
-export default async function MatchPlayPage({ params }: MatchPlayPageProps) {
+export default async function MatchPlayPage({ params, searchParams }: MatchPlayPageProps) {
   const { lessonId, deckId } = await params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const result = await loadFlashcardDeck(supabase, user!.id, lessonId, deckId);
+  const [result, challenge] = await Promise.all([
+    loadFlashcardDeck(supabase, user!.id, lessonId, deckId),
+    loadChallengeForGamePage(searchParams),
+  ]);
 
   if (result.kind === "not_found") notFound();
   if (result.kind === "forbidden") {
@@ -31,6 +36,7 @@ export default async function MatchPlayPage({ params }: MatchPlayPageProps) {
       <FlashcardMatchMode
         deck={result.deck}
         initialBestScore={result.matchScore?.best_score ?? 0}
+        challenge={challenge}
       />
     </div>
   );

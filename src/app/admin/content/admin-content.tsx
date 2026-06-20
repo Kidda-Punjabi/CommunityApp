@@ -11,6 +11,7 @@ import { StreakDebugTab } from "./components/streak-debug-tab";
 import { SentenceBuilderTab } from "./components/sentence-builder-tab";
 import { ConjugationTab } from "./components/conjugation-tab";
 import { GenderSortTab } from "./components/gender-sort-tab";
+import { AnnouncementsTab } from "./components/announcements-tab";
 
 const tabs = [
   { id: "lessons", label: "Courses & Lessons" },
@@ -21,6 +22,7 @@ const tabs = [
   { id: "gender-sort", label: "Gender sort" },
   { id: "events", label: "Events" },
   { id: "teachers", label: "Teachers" },
+  { id: "announcements", label: "Announcements" },
   { id: "streaks", label: "Streak debug" },
 ] as const;
 
@@ -70,6 +72,7 @@ export function AdminContent({ data }: { data: AdminData }) {
         {activeTab === "gender-sort" && <GenderSortTab data={data} />}
         {activeTab === "events" && <EventsTab data={data} />}
         {activeTab === "teachers" && <TeachersTab data={data} />}
+        {activeTab === "announcements" && <AnnouncementsTab />}
         {activeTab === "streaks" && <StreakDebugTab />}
       </div>
     </div>

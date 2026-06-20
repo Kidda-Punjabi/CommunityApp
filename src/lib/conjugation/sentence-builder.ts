@@ -4,6 +4,7 @@ import {
   lookupGrammarRomanised,
 } from "@/lib/games/grammar-sentence";
 import { pickCycledPool } from "@/lib/games/session-settings";
+import { pickCycledPoolSeeded } from "@/lib/challenges/seeded-random";
 import type { GrammarSentence } from "@/lib/games/types";
 
 export type SentenceBuilderQuestion = {
@@ -125,12 +126,16 @@ export function buildSentenceRound(
   options: {
     questionCount: number;
     tenseFilter: string | string[];
+    seed?: number;
   }
 ): SentenceBuilderRoundResult {
   const validAll = validSentenceRows(allSentences);
   const pool = filterGrammarSentencesByTenseValue(validAll, options.tenseFilter);
   const lexicon = buildGrammarTileLexicon(validAll);
-  const picked = pickCycledPool(pool, options.questionCount);
+  const picked =
+    options.seed != null
+      ? pickCycledPoolSeeded(pool, options.questionCount, options.seed)
+      : pickCycledPool(pool, options.questionCount);
 
   const questions: SentenceBuilderQuestion[] = [];
   picked.forEach((sentence, index) => {

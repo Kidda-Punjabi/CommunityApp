@@ -17,6 +17,10 @@ import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 import { saveGameScore } from "@/lib/games/game-scores";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
+import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
+import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
+import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
+import type { ChallengePlayContext } from "@/lib/challenges/types";
 
 export type StreakSurvivalSourceType = "deck" | "gender" | "verbs";
 
@@ -29,6 +33,7 @@ type StreakSurvivalModeProps = {
   initialBestScore: number;
   backHref: string;
   metadataSource?: string;
+  challenge?: ChallengePlayContext | null;
 };
 
 type DeckQuestion = { kind: "deck"; prompt: string; answer: string; options: string[] };
@@ -115,6 +120,7 @@ export function StreakSurvivalMode({
   initialBestScore,
   backHref,
   metadataSource,
+  challenge = null,
 }: StreakSurvivalModeProps) {
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
   const [streak, setStreak] = useState(0);
@@ -133,6 +139,22 @@ export function StreakSurvivalMode({
     if (sourceType === "gender") return "Gendered nouns";
     return "Verb conjugations";
   }, [sourceType, deckName]);
+
+  const challengeFinish = useChallengeFinish({
+    challengeId: challenge?.id,
+    score: streak,
+    scoreMetadata: {
+      source: metadataSource ?? sourceType,
+      deck_name: deckName,
+      ...buildGameAccuracyMetadata(streak, streak),
+    },
+    enabled: phase === "finished" && Boolean(challenge),
+  });
+
+  useEffect(() => {
+    if (challenge && phase === "ready") startGame();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challenge?.id]);
 
   function nextQuestion(): Question | null {
     if (sourceType === "deck" && cards.length > 0) return buildDeckQuestion(cards);
@@ -200,7 +222,7 @@ export function StreakSurvivalMode({
     setPhase("finished");
   }
 
-  if (phase === "ready") {
+  if (phase === "ready" && !challenge) {
     return (
       <div className="space-y-6">
         <div>
@@ -233,6 +255,14 @@ export function StreakSurvivalMode({
   if (phase === "finished") {
     return (
       <div className="space-y-6">
+        {challenge && (
+          <ChallengePostGameBanner
+            opponentName={challenge.opponentDisplayName}
+            result={challengeFinish.result}
+            error={challengeFinish.error}
+            submitting={challengeFinish.submitting}
+          />
+        )}
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-medium text-red-600">Run ended</p>
           <h2 className="mt-2 text-2xl font-bold text-zinc-900">{streak} streak</h2>
@@ -244,13 +274,15 @@ export function StreakSurvivalMode({
             <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={startGame}
-          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-        >
-          Try again
-        </button>
+        {!challenge && (
+          <button
+            type="button"
+            onClick={startGame}
+            className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+          >
+            Try again
+          </button>
+        )}
         <Link href={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
           Back
         </Link>
@@ -260,6 +292,7 @@ export function StreakSurvivalMode({
 
   return (
     <div className="space-y-6">
+      {challenge && <ChallengeModeBanner challenge={challenge} gameType="streak_survival" />}
       <div className="flex items-center justify-between gap-3">
         <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
           ← Exit

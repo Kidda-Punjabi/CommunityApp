@@ -1,13 +1,19 @@
 import Link from "next/link";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import type { ProfileNameFields } from "@/lib/profile/display-name";
 
 type HomeGreetingHeaderProps = {
   greetingHeading: string;
   profile: ProfileNameFields & { avatar_url?: string | null };
+  unreadNotificationCount: number;
 };
 
-export function HomeGreetingHeader({ greetingHeading, profile }: HomeGreetingHeaderProps) {
+export function HomeGreetingHeader({
+  greetingHeading,
+  profile,
+  unreadNotificationCount,
+}: HomeGreetingHeaderProps) {
   return (
     <header className="mb-8 flex items-center gap-4">
       <Link href="/dashboard/profile/edit" className="shrink-0" aria-label="Edit profile">
@@ -19,6 +25,7 @@ export function HomeGreetingHeader({ greetingHeading, profile }: HomeGreetingHea
           {greetingHeading}
         </h1>
       </div>
+      <NotificationBell unreadCount={unreadNotificationCount} />
     </header>
   );
 }

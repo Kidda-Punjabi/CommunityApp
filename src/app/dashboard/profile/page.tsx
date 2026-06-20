@@ -1,6 +1,7 @@
 import { LogoutButton } from "@/app/dashboard/logout-button";
 import { ViewAsPanel } from "@/app/dashboard/profile/view-as-panel";
 import { TestOnboardingButton } from "@/components/onboarding/test-onboarding-button";
+import { FriendsSection } from "@/components/profile/friends-section";
 import { InviteFriendsCard } from "@/components/profile/invite-friends-card";
 import { ProgressionCard } from "@/components/profile/progression-card";
 import { WeeklyPointsCard } from "@/components/profile/weekly-points-card";
@@ -16,6 +17,7 @@ import {
 import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
 import { loadReferralProfileData } from "@/lib/referrals/load-referrals";
+import { loadFriendsProfileData } from "@/lib/friends/load-friends";
 import { loadUserProgression } from "@/lib/progression/load-user-progression";
 import { createClient } from "@/lib/supabase/server";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
@@ -46,6 +48,7 @@ export default async function ProfilePage() {
   const currentWeekStart = getCurrentWeekStart();
   const weeklyPoints = await loadViewerWeeklyPoints(supabase, user!.id, currentWeekStart);
   const referralData = await loadReferralProfileData(supabase, user!.id);
+  const friendsData = await loadFriendsProfileData(supabase, user!.id);
 
   const membershipLabel = access.viewAs?.active
     ? `Testing: ${access.viewAs.label}`
@@ -74,10 +77,21 @@ export default async function ProfilePage() {
         <Link href="/dashboard/profile/edit" className={`mt-5 ${ui.btnSecondary}`}>
           Edit profile
         </Link>
+        <Link
+          href="/dashboard/profile/notifications"
+          className="mt-2 inline-block text-sm font-medium text-zinc-500 hover:text-violet-600"
+        >
+          Notification settings
+        </Link>
       </div>
 
       <div className={`mt-10 ${ui.stackLoose}`}>
         <WeeklyPointsCard points={weeklyPoints} weekStart={currentWeekStart} />
+        <FriendsSection
+          friends={friendsData.friends}
+          requests={friendsData.requests}
+          unavailable={friendsData.unavailable}
+        />
         <InviteFriendsCard
           shareUrl={referralData.shareUrl}
           referralCode={referralData.referralCode}

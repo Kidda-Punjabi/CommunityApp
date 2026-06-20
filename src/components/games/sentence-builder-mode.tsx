@@ -22,6 +22,10 @@ import { saveGameScore } from "@/lib/games/game-scores";
 import { buildSentenceBuilderLogEntry } from "@/lib/games/session-review-builders";
 import type { RoundResult } from "@/lib/games/session-review";
 import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
+import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
+import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
+import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
+import type { ChallengePlayContext } from "@/lib/challenges/types";
 const FEEDBACK_MS = 1800;
 
 type Phase = "ready" | "playing" | "finished";
@@ -31,12 +35,14 @@ type SentenceBuilderModeProps = {
   sentences: GrammarSentence[];
   tableReady: boolean;
   loadError: string | null;
+  challenge?: ChallengePlayContext | null;
 };
 
 export function SentenceBuilderMode({
   sentences,
   tableReady,
   loadError,
+  challenge = null,
 }: SentenceBuilderModeProps) {
   const [phase, setPhase] = useState<Phase>("ready");
   const [questions, setQuestions] = useState<SentenceBuilderQuestion[]>([]);
@@ -73,6 +79,23 @@ export function SentenceBuilderMode({
   const current = questions[questionIndex];
   const score = results.filter(Boolean).length;
   const canStart = tableReady && playableSentences.length > 0;
+  const totalQuestions = questions.length;
+  const correctCount = results.filter(Boolean).length;
+  const accuracyPct =
+    totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+
+  const challengeFinish = useChallengeFinish({
+    challengeId: challenge?.id,
+    score: correctCount,
+    scoreMetadata: {
+      accuracy: accuracyPct,
+      correct: correctCount,
+      total: totalQuestions,
+      rounds: totalQuestions,
+      sessionLog,
+    },
+    enabled: phase === "finished" && Boolean(challenge),
+  });
 
   useEffect(() => {
     const supabase = createClient();
@@ -129,6 +152,7 @@ export function SentenceBuilderMode({
     const round = buildSentenceRound(sentences, {
       questionCount: choice.questionCount,
       tenseFilter: choice.filterIds,
+      seed: challenge?.config.seed,
     });
     if (round.questions.length === 0) return;
 
@@ -186,7 +210,14 @@ export function SentenceBuilderMode({
     }, FEEDBACK_MS);
   }
 
-  if (phase === "ready") {
+  useEffect(() => {
+    if (challenge?.config.session && phase === "ready" && canStart) {
+      startRound(challenge.config.session);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-start locked challenge session once
+  }, [challenge?.id, canStart]);
+
+  if (phase === "ready" && !challenge) {
     return (
       <GameSessionSettings
         gameTitle="Form the sentence"
@@ -220,14 +251,25 @@ export function SentenceBuilderMode({
     const total = questions.length;
 
     return (
-      <GameSessionReview
-        title="Round complete"
-        correct={score}
-        total={total}
-        sessionLog={sessionLog}
-        pointsEarned={pointsEarned}
-        onPlayAgain={() => setPhase("ready")}
-      />
+      <>
+        {challenge && (
+          <ChallengePostGameBanner
+            opponentName={challenge.opponentDisplayName}
+            result={challengeFinish.result}
+            error={challengeFinish.error}
+            submitting={challengeFinish.submitting}
+          />
+        )}
+        <GameSessionReview
+          title="Round complete"
+          correct={score}
+          total={total}
+          sessionLog={sessionLog}
+          pointsEarned={pointsEarned}
+          onPlayAgain={() => setPhase("ready")}
+          hidePlayAgain={Boolean(challenge)}
+        />
+      </>
     );
   }
 
@@ -235,6 +277,7 @@ export function SentenceBuilderMode({
 
   return (
     <div className="space-y-5">
+      {challenge && <ChallengeModeBanner challenge={challenge} gameType="sentence_builder" />}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <Link

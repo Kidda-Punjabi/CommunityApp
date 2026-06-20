@@ -1,20 +1,29 @@
 import Link from "next/link";
 import { StreakSurvivalMode } from "@/components/games/streak-survival-mode";
+import { loadChallengeForGamePage } from "@/lib/challenges/load-challenge-for-page";
 import { loadFoundationalCourseCards } from "@/lib/games/load-foundational-course-cards";
 import { fetchPersonalBest } from "@/lib/games/game-scores";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function StreakSurvivalFoundationalPage() {
+type StreakSurvivalFoundationalPageProps = {
+  searchParams: Promise<{ challenge?: string }>;
+};
+
+export default async function StreakSurvivalFoundationalPage({
+  searchParams,
+}: StreakSurvivalFoundationalPageProps) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { cards, deckCount } = await loadFoundationalCourseCards(supabase, user!);
-  const initialBestScore =
-    (await fetchPersonalBest(supabase, user!.id, "streak_survival", {
+  const [{ cards, deckCount }, challenge, initialBestScore] = await Promise.all([
+    loadFoundationalCourseCards(supabase, user!),
+    loadChallengeForGamePage(searchParams),
+    fetchPersonalBest(supabase, user!.id, "streak_survival", {
       source: "foundational_course",
-    })) ?? 0;
+    }),
+  ]);
 
   if (cards.length === 0) {
     return (
@@ -39,9 +48,10 @@ export default async function StreakSurvivalFoundationalPage() {
         sourceType="deck"
         deckName={`Foundational Course (${deckCount} decks)`}
         cards={cards}
-        initialBestScore={initialBestScore}
+        initialBestScore={initialBestScore ?? 0}
         backHref="/dashboard/games/streak-survival"
         metadataSource="foundational_course"
+        challenge={challenge}
       />
     </div>
   );

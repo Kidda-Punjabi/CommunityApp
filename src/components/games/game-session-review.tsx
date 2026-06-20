@@ -16,6 +16,7 @@ type GameSessionReviewProps = {
   scoreSubtitle?: string;
   extraSummary?: React.ReactNode;
   onPlayAgain: () => void;
+  hidePlayAgain?: boolean;
   gamesHubHref?: string;
 };
 
@@ -147,6 +148,7 @@ export function GameSessionReview({
   scoreSubtitle,
   extraSummary,
   onPlayAgain,
+  hidePlayAgain = false,
   gamesHubHref = GAMES_HUB_HREF,
 }: GameSessionReviewProps) {
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
@@ -189,6 +191,7 @@ export function GameSessionReview({
       <button
         type="button"
         onClick={onPlayAgain}
+        hidden={hidePlayAgain}
         className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
       >
         Play again

@@ -6,6 +6,7 @@ import {
   tenseGroupFromGrammarTense,
 } from "@/lib/games/grammar-sentence";
 import { pickCycledPool } from "@/lib/games/session-settings";
+import { pickCycledPoolSeeded } from "@/lib/challenges/seeded-random";
 import type { GrammarSentence } from "@/lib/games/types";
 import type { PunjabiOption } from "./distractors";
 import type { TenseGroup, TenseId } from "./types";
@@ -152,11 +153,15 @@ export function buildChallengeRound(
   options: {
     questionCount: number;
     tenseFilter: string | string[];
+    seed?: number;
   }
 ): ChallengeRoundResult {
   const validAll = conjugationReadyRows(allSentences);
   const pool = filterGrammarSentencesByTenseValue(validAll, options.tenseFilter);
-  const picked = pickCycledPool(pool, options.questionCount);
+  const picked =
+    options.seed != null
+      ? pickCycledPoolSeeded(pool, options.questionCount, options.seed)
+      : pickCycledPool(pool, options.questionCount);
 
   const questions: ChallengeQuestion[] = [];
   picked.forEach((sentence, index) => {

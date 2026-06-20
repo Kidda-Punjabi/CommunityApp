@@ -8,6 +8,7 @@ import {
 import { canAccessEvent } from "@/lib/membership/access";
 import { formatRecurrenceLabel } from "@/lib/events/recurrence";
 import { getHomeDashboardData } from "@/lib/dashboard/home-data";
+import { loadUnreadNotificationCount } from "@/lib/notifications/load-notifications";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
 import { ui } from "@/lib/ui/styles";
 import { normalizeTier } from "@/lib/membership/tiers";
@@ -20,9 +21,10 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [dashboard, profile] = await Promise.all([
+  const [dashboard, profile, unreadNotificationCount] = await Promise.all([
     getHomeDashboardData(supabase, user!),
     loadEditableProfile(supabase, user!.id),
+    loadUnreadNotificationCount(supabase, user!.id),
   ]);
 
   return (
@@ -34,6 +36,7 @@ export default async function HomePage() {
           preferred_name: profile?.preferred_name ?? null,
           avatar_url: profile?.avatar_url ?? null,
         }}
+        unreadNotificationCount={unreadNotificationCount}
       />
 
       <section className={ui.section}>

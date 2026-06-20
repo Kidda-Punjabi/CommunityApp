@@ -5,7 +5,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { gameDeckHubHref, shuffleArray } from "@/lib/flashcards/utils";
+import { shuffleSeeded } from "@/lib/challenges/seeded-random";
 import { saveMatchScoreIfBest } from "@/lib/progress/match-scores";
+import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
+import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
+import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
+import type { ChallengePlayContext } from "@/lib/challenges/types";
 
 const GAME_SECONDS = 60;
 
@@ -18,9 +23,14 @@ type Tile = {
 type FlashcardMatchModeProps = {
   deck: FlashcardDeckContext;
   initialBestScore: number;
+  challenge?: ChallengePlayContext | null;
 };
 
-export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchModeProps) {
+export function FlashcardMatchMode({
+  deck,
+  initialBestScore,
+  challenge = null,
+}: FlashcardMatchModeProps) {
   const deckHubHref = gameDeckHubHref("match");
 
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
@@ -41,14 +51,37 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
 
   const [tiles, setTiles] = useState<Tile[]>([]);
 
+  const challengeFinish = useChallengeFinish({
+    challengeId: challenge?.id,
+    score: pairsMatched,
+    scoreMetadata: {
+      deck_name: deck.deckName,
+      time_seconds: elapsedSeconds,
+      correct: pairsMatched,
+      total: deck.cards.length,
+      accuracy:
+        deck.cards.length > 0 ? Math.round((pairsMatched / deck.cards.length) * 100) : 0,
+    },
+    enabled: phase === "finished" && Boolean(challenge),
+  });
+
   function buildTiles() {
     const list: Tile[] = [];
     for (const card of deck.cards) {
       list.push({ id: `${card.id}-front`, cardId: card.id, text: card.front_text });
       list.push({ id: `${card.id}-back`, cardId: card.id, text: card.back_text });
     }
-    return shuffleArray(list);
+    return challenge?.config.seed != null
+      ? shuffleSeeded(list, challenge.config.seed)
+      : shuffleArray(list);
   }
+
+  useEffect(() => {
+    if (challenge && phase === "ready") {
+      startGame();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-start friend challenge
+  }, [challenge?.id]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -159,7 +192,7 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
     }, 500);
   }
 
-  if (phase === "ready") {
+  if (phase === "ready" && !challenge) {
     return (
       <div className="space-y-6">
         <div>
@@ -201,6 +234,14 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
   if (phase === "finished") {
     return (
       <div className="space-y-6">
+        {challenge && (
+          <ChallengePostGameBanner
+            opponentName={challenge.opponentDisplayName}
+            result={challengeFinish.result}
+            error={challengeFinish.error}
+            submitting={challengeFinish.submitting}
+          />
+        )}
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-medium text-violet-600">Time&apos;s up</p>
           <h2 className="mt-2 text-2xl font-bold text-zinc-900">
@@ -216,13 +257,15 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={startGame}
-          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-        >
-          Play again
-        </button>
+        {!challenge && (
+          <button
+            type="button"
+            onClick={startGame}
+            className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+          >
+            Play again
+          </button>
+        )}
         <Link
           href={deckHubHref}
           className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
@@ -235,6 +278,7 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
 
   return (
     <div className="space-y-4">
+      {challenge && <ChallengeModeBanner challenge={challenge} gameType="match" />}
       <div className="flex items-center justify-between gap-3">
         <Link
           href={deckHubHref}

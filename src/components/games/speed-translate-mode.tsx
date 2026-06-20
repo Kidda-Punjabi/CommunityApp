@@ -5,9 +5,14 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
+import { shuffleSeeded } from "@/lib/challenges/seeded-random";
 import { saveGameScoreIfBest } from "@/lib/games/game-scores";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
+import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
+import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
+import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
+import type { ChallengePlayContext } from "@/lib/challenges/types";
 
 const LIVES = 3;
 const OPTIONS = 4;
@@ -24,9 +29,14 @@ function pointsForCorrectAnswer(elapsedMs: number): number {
 type SpeedTranslateModeProps = {
   deck: FlashcardDeckContext;
   initialBestScore: number;
+  challenge?: ChallengePlayContext | null;
 };
 
-export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateModeProps) {
+export function SpeedTranslateMode({
+  deck,
+  initialBestScore,
+  challenge = null,
+}: SpeedTranslateModeProps) {
   const backHref = `/dashboard/games/speed-translate`;
 
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
@@ -48,6 +58,21 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
   const questionShownAtRef = useRef(Date.now());
 
   const currentCard = queue[index];
+
+  const challengeFinish = useChallengeFinish({
+    challengeId: challenge?.id,
+    score,
+    scoreMetadata: {
+      deck_name: deck.deckName,
+      ...buildGameAccuracyMetadata(correctCountRef.current, answeredRef.current),
+    },
+    enabled: phase === "finished" && Boolean(challenge),
+  });
+
+  useEffect(() => {
+    if (challenge && phase === "ready") startGame();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challenge?.id]);
 
   const options = useMemo(() => {
     if (!currentCard) return [];
@@ -105,7 +130,11 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
     savedRef.current = false;
     answeredRef.current = 0;
     correctCountRef.current = 0;
-    setQueue(shuffleArray(deck.cards));
+    setQueue(
+      challenge?.config.seed != null
+        ? shuffleSeeded(deck.cards, challenge.config.seed)
+        : shuffleArray(deck.cards)
+    );
     setIndex(0);
     setLives(LIVES);
     setScore(0);
@@ -152,7 +181,7 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
     setIndex((i) => i + 1);
   }
 
-  if (phase === "ready") {
+  if (phase === "ready" && !challenge) {
     return (
       <div className="space-y-6">
         <div>
@@ -188,6 +217,14 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
   if (phase === "finished") {
     return (
       <div className="space-y-6">
+        {challenge && (
+          <ChallengePostGameBanner
+            opponentName={challenge.opponentDisplayName}
+            result={challengeFinish.result}
+            error={challengeFinish.error}
+            submitting={challengeFinish.submitting}
+          />
+        )}
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-medium text-violet-600">Game over</p>
           <h2 className="mt-2 text-2xl font-bold text-zinc-900">{score} points</h2>
@@ -199,13 +236,15 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
             <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={startGame}
-          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-        >
-          Play again
-        </button>
+        {!challenge && (
+          <button
+            type="button"
+            onClick={startGame}
+            className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+          >
+            Play again
+          </button>
+        )}
         <Link href={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
           Back to decks
         </Link>
@@ -215,6 +254,7 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
 
   return (
     <div className="space-y-6">
+      {challenge && <ChallengeModeBanner challenge={challenge} gameType="speed_translate" />}
       <div className="flex items-center justify-between gap-3">
         <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
           ← Exit

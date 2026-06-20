@@ -21,6 +21,11 @@ import {
   type AdjectiveAgreementQuestion,
 } from "@/lib/games/gender-sort-adjectives";
 import { pickCycledPool, type GameSessionSettingsChoice } from "@/lib/games/session-settings";
+import { pickCycledPoolSeeded } from "@/lib/challenges/seeded-random";
+import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
+import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
+import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
+import type { ChallengePlayContext } from "@/lib/challenges/types";
 import { ui } from "@/lib/ui/styles";
 
 const BASE_POINTS = 10;
@@ -32,6 +37,7 @@ type SortMode = "nouns" | "adjectives";
 type GenderSortModeProps = {
   nouns: GenderedNoun[];
   initialBestScore: number;
+  challenge?: ChallengePlayContext | null;
 };
 
 type AdjectiveFeedback = {
@@ -46,7 +52,11 @@ type AnswerFeedback = {
   points: number;
 };
 
-export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps) {
+export function GenderSortMode({
+  nouns,
+  initialBestScore,
+  challenge = null,
+}: GenderSortModeProps) {
   const gamesHubHref = GAMES_HUB_HREF;
   const filterOptions = useMemo(() => nounCategoryTags(nouns), [nouns]);
 
@@ -74,6 +84,21 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
   const current = queue[index];
   const adjectiveQuestion = adjectiveQueue[index];
   const locked = feedback !== null || adjectiveFeedback !== null;
+  const totalQuestionsCount = sessionLog.length || queue.length || adjectiveQueue.length;
+  const accuracyPct =
+    totalQuestionsCount > 0 ? Math.round((correct / totalQuestionsCount) * 100) : 0;
+
+  const challengeFinish = useChallengeFinish({
+    challengeId: challenge?.id,
+    score,
+    scoreMetadata: {
+      accuracy: accuracyPct,
+      correct,
+      total: totalQuestionsCount,
+      sessionLog,
+    },
+    enabled: phase === "finished" && Boolean(challenge),
+  });
 
   const poolSizeForFilter = useCallback(
     (filterIds: string[]) =>
@@ -139,7 +164,10 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
     setResult(null);
 
     const pool = filterNounsByCategory(nouns, choice.filterIds[0] ?? "all");
-    const selected = pickCycledPool(pool, choice.questionCount);
+    const selected =
+      challenge?.config.seed != null
+        ? pickCycledPoolSeeded(pool, choice.questionCount, challenge.config.seed)
+        : pickCycledPool(pool, choice.questionCount);
 
     if (sortMode === "adjectives") {
       setAdjectiveQueue(
@@ -230,7 +258,14 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
     }, FEEDBACK_MS);
   }
 
-  if (phase === "ready") {
+  useEffect(() => {
+    if (challenge?.config.session && phase === "ready" && nouns.length > 0) {
+      startGame(challenge.config.session);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challenge?.id, nouns.length]);
+
+  if (phase === "ready" && !challenge) {
     return (
       <GameSessionSettings
         gameTitle={sortMode === "nouns" ? "Masculine or feminine?" : "Adjective agreement"}
@@ -285,34 +320,46 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
     const totalQuestions = sessionLog.length || queue.length || adjectiveQueue.length;
 
     return (
-      <GameSessionReview
-        title="Sorting complete"
-        correct={correct}
-        total={totalQuestions}
-        sessionLog={sessionLog}
-        pointsEarned={result?.pointsEarned ?? 0}
-        scoreSubtitle={`${score} points · ${totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0}% accuracy`}
-        extraSummary={
-          <>
-            {result?.isNewBest && (
-              <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
-            )}
-            {result && !result.isNewBest && result.currentBest > 0 && (
-              <p className="mt-3 text-sm text-zinc-500">
-                Personal best: {result.currentBest} pts
-              </p>
-            )}
-          </>
-        }
-        onPlayAgain={() => setPhase("ready")}
-        gamesHubHref={gamesHubHref}
-      />
+      <>
+        {challenge && (
+          <ChallengePostGameBanner
+            opponentName={challenge.opponentDisplayName}
+            result={challengeFinish.result}
+            error={challengeFinish.error}
+            submitting={challengeFinish.submitting}
+          />
+        )}
+        <GameSessionReview
+          title="Sorting complete"
+          correct={correct}
+          total={totalQuestions}
+          sessionLog={sessionLog}
+          pointsEarned={result?.pointsEarned ?? 0}
+          scoreSubtitle={`${score} points · ${totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0}% accuracy`}
+          extraSummary={
+            <>
+              {result?.isNewBest && (
+                <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
+              )}
+              {result && !result.isNewBest && result.currentBest > 0 && (
+                <p className="mt-3 text-sm text-zinc-500">
+                  Personal best: {result.currentBest} pts
+                </p>
+              )}
+            </>
+          }
+          onPlayAgain={() => setPhase("ready")}
+          hidePlayAgain={Boolean(challenge)}
+          gamesHubHref={gamesHubHref}
+        />
+      </>
     );
   }
 
   if (sortMode === "adjectives" && adjectiveQuestion) {
     return (
       <div className="space-y-6">
+        {challenge && <ChallengeModeBanner challenge={challenge} gameType="gender_sort" />}
         <div className="flex items-center justify-between gap-3">
           <Link href={gamesHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
             ← Exit

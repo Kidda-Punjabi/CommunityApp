@@ -21,6 +21,10 @@ import { saveGameScore } from "@/lib/games/game-scores";
 import { buildConjugationChallengeLogEntry } from "@/lib/games/session-review-builders";
 import type { RoundResult } from "@/lib/games/session-review";
 import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
+import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
+import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
+import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
+import type { ChallengePlayContext } from "@/lib/challenges/types";
 const FEEDBACK_MS = 1000;
 
 type Phase = "setup" | "playing" | "finished";
@@ -63,6 +67,7 @@ type ConjugationChallengeModeProps = {
   sentences: GrammarSentence[];
   tableReady: boolean;
   loadError: string | null;
+  challenge?: ChallengePlayContext | null;
 };
 
 const PROMPT_TASK_LABEL = "Pick the correct verb form";
@@ -122,6 +127,7 @@ export function ConjugationChallengeMode({
   sentences,
   tableReady,
   loadError,
+  challenge = null,
 }: ConjugationChallengeModeProps) {
   const [phase, setPhase] = useState<Phase>("setup");
   const [questions, setQuestions] = useState<ChallengeQuestion[]>([]);
@@ -160,6 +166,16 @@ export function ConjugationChallengeMode({
   const current = questions[questionIndex];
   const score = results.filter(Boolean).length;
   const canStart = tableReady && playableSentences.length > 0;
+  const total = questions.length;
+  const correct = results.filter(Boolean).length;
+  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+  const challengeFinish = useChallengeFinish({
+    challengeId: challenge?.id,
+    score: correct,
+    scoreMetadata: { accuracy, correct, total, rounds: total, sessionLog },
+    enabled: phase === "finished" && Boolean(challenge),
+  });
 
   useEffect(() => {
     const supabase = createClient();
@@ -207,6 +223,7 @@ export function ConjugationChallengeMode({
     const round = buildChallengeRound(sentences, {
       questionCount: choice.questionCount,
       tenseFilter: choice.filterIds,
+      seed: challenge?.config.seed,
     });
 
     if (round.questions.length === 0) return;
@@ -245,7 +262,14 @@ export function ConjugationChallengeMode({
     }, FEEDBACK_MS);
   }
 
-  if (phase === "setup") {
+  useEffect(() => {
+    if (challenge?.config.session && phase === "setup" && canStart) {
+      startRound(challenge.config.session);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-start locked challenge session once
+  }, [challenge?.id, canStart]);
+
+  if (phase === "setup" && !challenge) {
     return (
       <GameSessionSettings
         gameTitle="Test your verb forms"
@@ -276,11 +300,19 @@ export function ConjugationChallengeMode({
   }
 
   if (phase === "finished") {
-    const total = questions.length;
     const breakdown = computeGroupBreakdown(questions, results);
 
     return (
-      <GameSessionReview
+      <>
+        {challenge && (
+          <ChallengePostGameBanner
+            opponentName={challenge.opponentDisplayName}
+            result={challengeFinish.result}
+            error={challengeFinish.error}
+            submitting={challengeFinish.submitting}
+          />
+        )}
+        <GameSessionReview
         title="Challenge complete"
         correct={score}
         total={total}
@@ -309,12 +341,15 @@ export function ConjugationChallengeMode({
           </div>
         }
         onPlayAgain={() => setPhase("setup")}
+        hidePlayAgain={Boolean(challenge)}
       />
+      </>
     );
   }
 
   return (
     <div className="space-y-3">
+      {challenge && <ChallengeModeBanner challenge={challenge} gameType="conjugation_challenge" />}
       <div className="flex items-center justify-between gap-3">
         <Link
           href={GAMES_HUB_HREF}

@@ -3,23 +3,30 @@ import {
   FlashcardAccessDenied,
   FlashcardDeckEmpty,
 } from "@/components/flashcards/deck-states";
+import { loadChallengeForGamePage } from "@/lib/challenges/load-challenge-for-page";
 import { loadFlashcardDeck } from "@/lib/flashcards/load-deck";
-import { fetchPersonalBest } from "@/lib/games/game-scores";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 
 type SpeedTranslatePlayPageProps = {
   params: Promise<{ lessonId: string; deckId: string }>;
+  searchParams: Promise<{ challenge?: string }>;
 };
 
-export default async function SpeedTranslatePlayPage({ params }: SpeedTranslatePlayPageProps) {
+export default async function SpeedTranslatePlayPage({
+  params,
+  searchParams,
+}: SpeedTranslatePlayPageProps) {
   const { lessonId, deckId } = await params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const result = await loadFlashcardDeck(supabase, user!.id, lessonId, deckId);
+  const [result, challenge] = await Promise.all([
+    loadFlashcardDeck(supabase, user!.id, lessonId, deckId),
+    loadChallengeForGamePage(searchParams),
+  ]);
 
   if (result.kind === "not_found") notFound();
   if (result.kind === "forbidden") {
@@ -27,16 +34,13 @@ export default async function SpeedTranslatePlayPage({ params }: SpeedTranslateP
   }
   if (result.kind === "empty") return <FlashcardDeckEmpty />;
 
-  const best = await fetchPersonalBest(
-    supabase,
-    user!.id,
-    "speed_translate",
-    { deck_name: result.deck.deckName }
-  );
-
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
-      <SpeedTranslateMode deck={result.deck} initialBestScore={best ?? 0} />
+      <SpeedTranslateMode
+        deck={result.deck}
+        initialBestScore={result.matchScore?.best_score ?? 0}
+        challenge={challenge}
+      />
     </div>
   );
 }
