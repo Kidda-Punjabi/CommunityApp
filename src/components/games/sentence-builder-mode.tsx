@@ -1,117 +1,80 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import {
-  defaultTenseSelectionForFocus,
-  getTensesForFocus,
-} from "@/lib/conjugation/challenge";
 import {
   answersMatch,
   buildSentenceRound,
   buildTileBank,
-  SENTENCE_BUILDER_ROUND_LENGTH,
   type SentenceBuilderQuestion,
-  type SentenceNoun,
   type SentenceTile,
 } from "@/lib/conjugation/sentence-builder";
-import type { TenseGroup, TenseId, Verb } from "@/lib/conjugation/types";
-import { TENSE_CATALOG } from "@/lib/conjugation/types";
+import {
+  buildGrammarTileLexicon,
+  filterGrammarSentencesByTenseValue,
+} from "@/lib/games/grammar-sentence";
+import type { GrammarSentence } from "@/lib/games/types";
+import { GameSessionReview } from "@/components/games/game-session-review";
+import { GameSessionSettings } from "@/components/games/game-session-settings";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
+import { buildSentenceBuilderLogEntry } from "@/lib/games/session-review-builders";
+import type { RoundResult } from "@/lib/games/session-review";
+import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
 import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
-import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
-import { ui } from "@/lib/ui/styles";
 
-const FEEDBACK_MS = 1200;
+const FEEDBACK_MS = 1800;
 
 type Phase = "ready" | "playing" | "finished";
 type Feedback = "correct" | "wrong";
-type FocusArea = TenseGroup | "all";
-
-const FOCUS_OPTIONS: { id: FocusArea; label: string }[] = [
-  { id: "present", label: "Present" },
-  { id: "past", label: "Past" },
-  { id: "future", label: "Future" },
-  { id: "all", label: "All" },
-];
-
-const GROUP_LABELS: Record<TenseGroup, string> = {
-  present: "Present",
-  past: "Past",
-  future: "Future",
-};
 
 type SentenceBuilderModeProps = {
-  verbs: Verb[];
-  nouns: SentenceNoun[];
-  verbsReady: boolean;
-  nounsReady: boolean;
+  sentences: GrammarSentence[];
+  tableReady: boolean;
+  loadError: string | null;
 };
 
-function TenseToggleGroup({
-  group,
-  selectedTenses,
-  onToggle,
-}: {
-  group: TenseGroup;
-  selectedTenses: Set<TenseId>;
-  onToggle: (tenseId: TenseId) => void;
-}) {
-  const tenses = TENSE_CATALOG.filter((tense) => tense.group === group);
-
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-        {GROUP_LABELS[group]}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {tenses.map((tense) => {
-          const active = selectedTenses.has(tense.id);
-          return (
-            <button
-              key={tense.id}
-              type="button"
-              onClick={() => onToggle(tense.id)}
-              className={active ? ui.pillActive : ui.pillInactive}
-            >
-              {tense.shortLabel}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export function SentenceBuilderMode({
-  verbs,
-  nouns,
-  verbsReady,
-  nounsReady,
+  sentences,
+  tableReady,
+  loadError,
 }: SentenceBuilderModeProps) {
   const [phase, setPhase] = useState<Phase>("ready");
-  const [focusArea, setFocusArea] = useState<FocusArea>("all");
-  const [selectedTenses, setSelectedTenses] = useState<Set<TenseId>>(
-    () => defaultTenseSelectionForFocus("all")
-  );
   const [questions, setQuestions] = useState<SentenceBuilderQuestion[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [results, setResults] = useState<boolean[]>([]);
   const [bank, setBank] = useState<SentenceTile[]>([]);
   const [built, setBuilt] = useState<SentenceTile[]>([]);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [sessionLog, setSessionLog] = useState<RoundResult[]>([]);
   const [pointsEarned, setPointsEarned] = useState(0);
+  const lexiconRef = useRef<Map<string, string>>(new Map());
 
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
 
+  const playableSentences = useMemo(
+    () => sentences.filter((sentence) => sentence.word_tiles.length > 0),
+    [sentences]
+  );
+  const availableTenseValues = useMemo(() => {
+    const values = new Set<string>();
+    for (const sentence of playableSentences) {
+      if (sentence.tense?.trim()) values.add(sentence.tense.trim());
+    }
+    return [...values];
+  }, [playableSentences]);
+  const poolSizeForFilter = useCallback(
+    (filterIds: string[]) =>
+      filterGrammarSentencesByTenseValue(playableSentences, filterIds).length,
+    [playableSentences]
+  );
+
   const current = questions[questionIndex];
   const score = results.filter(Boolean).length;
-  const availableTenses = getTensesForFocus(focusArea, selectedTenses);
-  const canStart = verbsReady && verbs.length > 0 && availableTenses.length > 0;
+  const canStart = tableReady && playableSentences.length > 0;
 
   useEffect(() => {
     const supabase = createClient();
@@ -138,13 +101,14 @@ export function SentenceBuilderMode({
         correct,
         total,
         rounds: total,
+        sessionLog,
       });
       setPointsEarned(outcome.pointsEarned);
       notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();
-  }, [phase, questions.length, results]);
+  }, [phase, questions.length, results, sessionLog]);
 
   useEffect(() => {
     return () => {
@@ -154,38 +118,31 @@ export function SentenceBuilderMode({
     };
   }, []);
 
-  function handleFocusChange(nextFocus: FocusArea) {
-    setFocusArea(nextFocus);
-    setSelectedTenses(defaultTenseSelectionForFocus(nextFocus));
-  }
-
-  function toggleTense(tenseId: TenseId) {
-    setSelectedTenses((prev) => {
-      const next = new Set(prev);
-      if (next.has(tenseId)) {
-        next.delete(tenseId);
-      } else {
-        next.add(tenseId);
-      }
-      return next;
-    });
-  }
-
-  function loadQuestion(question: SentenceBuilderQuestion) {
-    setBank(buildTileBank(question, verbs, nouns));
+  function loadQuestion(
+    question: SentenceBuilderQuestion,
+    lexicon: Map<string, string>
+  ) {
+    setBank(buildTileBank(question, sentences, lexicon));
     setBuilt([]);
     setFeedback(null);
   }
 
-  function startRound() {
+  function startRound(choice: GameSessionSettingsChoice) {
     savedRef.current = false;
-    const round = buildSentenceRound(verbs, nouns, availableTenses);
-    if (round.length === 0) return;
+    const round = buildSentenceRound(sentences, {
+      questionCount: choice.questionCount,
+      tenseFilter: choice.filterIds,
+    });
+    if (round.questions.length === 0) return;
 
-    setQuestions(round);
+    const lexicon = buildGrammarTileLexicon(sentences);
+    lexiconRef.current = lexicon;
+
+    setQuestions(round.questions);
     setQuestionIndex(0);
     setResults([]);
-    loadQuestion(round[0]);
+    setSessionLog([]);
+    loadQuestion(round.questions[0], lexicon);
     setPhase("playing");
   }
 
@@ -201,7 +158,7 @@ export function SentenceBuilderMode({
     const nextIndex = questionIndex + 1;
     setResults(nextResults);
     setQuestionIndex(nextIndex);
-    loadQuestion(questions[nextIndex]);
+    loadQuestion(questions[nextIndex], lexiconRef.current);
   }
 
   function moveToBuilt(tile: SentenceTile) {
@@ -221,6 +178,10 @@ export function SentenceBuilderMode({
 
     const attempt = built.map((tile) => tile.word);
     const isCorrect = answersMatch(attempt, current.correctTiles);
+    setSessionLog((prev) => [
+      ...prev,
+      buildSentenceBuilderLogEntry(current, built, isCorrect),
+    ]);
     setFeedback(isCorrect ? "correct" : "wrong");
 
     advanceTimerRef.current = window.setTimeout(() => {
@@ -230,132 +191,46 @@ export function SentenceBuilderMode({
 
   if (phase === "ready") {
     return (
-      <div className="space-y-6">
-        <div>
-          <Link
-            href={GAMES_HUB_HREF}
-            className="text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            ← Back to games
-          </Link>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
-            Sentence Builder
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-zinc-900">Form the sentence</h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            Tap word tiles in order to build {SENTENCE_BUILDER_ROUND_LENGTH} Punjabi sentences.
-          </p>
-        </div>
-
-        {!verbsReady ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Run <code className="text-xs">supabase/verbs.sql</code> to enable this game.
-          </div>
-        ) : verbs.length === 0 ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            No verbs found in the database yet.
-          </div>
-        ) : (
-          <>
-            {!nounsReady && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Object nouns unavailable — rounds will use subject + verb only.
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Focus area
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {FOCUS_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => handleFocusChange(option.id)}
-                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                      focusArea === option.id
-                        ? "bg-violet-600 text-white"
-                        : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+      <GameSessionSettings
+        gameTitle="Form the sentence"
+        gameEyebrow="Sentence Builder"
+        gameDescription="Tap word tiles in order to build Punjabi sentences from the English prompt."
+        filterLabel="Tense"
+        tenseFilterValues={availableTenseValues}
+        poolSizeForFilter={poolSizeForFilter}
+        canStart={canStart}
+        unavailableMessage={
+          !tableReady ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Run <code className="text-xs">supabase/games.sql</code> to enable this game.
             </div>
-
-            <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-              <p className="text-sm font-medium text-zinc-700">
-                Sub-tenses{" "}
-                <span className="font-normal text-zinc-500">(uncheck any to narrow the round)</span>
-              </p>
-              {focusArea === "all" ? (
-                <div className="space-y-4">
-                  {(["present", "past", "future"] as const).map((group) => (
-                    <TenseToggleGroup
-                      key={group}
-                      group={group}
-                      selectedTenses={selectedTenses}
-                      onToggle={toggleTense}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <TenseToggleGroup
-                  group={focusArea}
-                  selectedTenses={selectedTenses}
-                  onToggle={toggleTense}
-                />
-              )}
+          ) : loadError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Could not load grammar sentences: {loadError}
             </div>
-
-            {availableTenses.length === 0 && (
-              <p className="text-sm text-amber-700">Select at least one sub-tense to start.</p>
-            )}
-
-            <button
-              type="button"
-              onClick={startRound}
-              disabled={!canStart}
-              className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-            >
-              Start
-            </button>
-          </>
-        )}
-      </div>
+          ) : playableSentences.length === 0 ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              No grammar sentences found yet. More course content is coming soon.
+            </div>
+          ) : undefined
+        }
+        onStart={startRound}
+      />
     );
   }
 
   if (phase === "finished") {
     const total = questions.length;
-    const accuracy = total > 0 ? Math.round((score / total) * 100) : 0;
 
     return (
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-medium text-violet-600">Round complete</p>
-          <h2 className="mt-2 text-3xl font-bold text-zinc-900">
-            {score}/{total}
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500">{accuracy}% accuracy</p>
-          <PointsEarnedBadge points={pointsEarned} className="mt-3" />
-        </div>
-        <button
-          type="button"
-          onClick={() => setPhase("ready")}
-          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-        >
-          Play again
-        </button>
-        <Link
-          href={GAMES_HUB_HREF}
-          className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          Back to games
-        </Link>
-      </div>
+      <GameSessionReview
+        title="Round complete"
+        correct={score}
+        total={total}
+        sessionLog={sessionLog}
+        pointsEarned={pointsEarned}
+        onPlayAgain={() => setPhase("ready")}
+      />
     );
   }
 
@@ -411,20 +286,30 @@ export function SentenceBuilderMode({
               disabled={Boolean(feedback)}
               className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-80"
             >
-              {tile.word}
+              <span>{tile.word}</span>
+              {tile.romanised && (
+                <span className="mt-0.5 block text-xs font-normal text-violet-200">
+                  {tile.romanised}
+                </span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      {feedback && current?.romanised && (
-        <p className="text-center text-sm text-violet-600">{current.romanised}</p>
+      {feedback && current && (
+        <div className="space-y-2 text-center">
+          <p className="text-sm font-medium text-zinc-900">
+            {current.correctTiles.join(" ")}
+          </p>
+          {current.romanised && (
+            <p className="text-sm text-violet-600">{current.romanised}</p>
+          )}
+        </div>
       )}
 
       {feedback === "wrong" && current && (
-        <p className="text-center text-sm text-zinc-600">
-          Correct: <span className="font-medium text-zinc-900">{current.correctTiles.join(" ")}</span>
-        </p>
+        <p className="text-center text-xs text-zinc-500">Try again on the next question.</p>
       )}
 
       <div className="flex flex-wrap gap-2">
@@ -436,7 +321,12 @@ export function SentenceBuilderMode({
             disabled={Boolean(feedback)}
             className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300 disabled:opacity-70"
           >
-            {tile.word}
+            <span>{tile.word}</span>
+            {tile.romanised && (
+              <span className="mt-0.5 block text-xs font-normal text-violet-600">
+                {tile.romanised}
+              </span>
+            )}
           </button>
         ))}
       </div>

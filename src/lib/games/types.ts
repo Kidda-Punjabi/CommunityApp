@@ -25,14 +25,34 @@ export type VerbConjugations = {
   };
 };
 
+export type DistractorConjugation = {
+  gurmukhi: string;
+  romanised: string;
+};
+
+export type WordTile = {
+  gurmukhi: string;
+  romanised: string;
+};
+
 export type GrammarSentence = {
   id: string;
   punjabi_sentence: string;
   english_translation: string;
-  word_tiles: string[];
+  word_tiles: WordTile[];
   difficulty: number;
   topic_tags: string[];
   course_id: string | null;
+  lesson_id: string | null;
+  tense: string | null;
+  is_question: boolean;
+  question_type: string | null;
+  is_negative: boolean;
+  target_verb_gurmukhi: string | null;
+  target_verb_romanised: string | null;
+  target_verb_root_gurmukhi: string | null;
+  target_verb_root_romanised: string | null;
+  distractor_conjugations: DistractorConjugation[];
   created_at: string;
 };
 

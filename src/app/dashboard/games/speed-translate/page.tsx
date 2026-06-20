@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { DeckSelectList } from "@/components/games/deck-select-list";
+import { GameDeckCoursePicker } from "@/components/games/game-deck-course-picker";
 import { loadAccessibleGameDecks } from "@/lib/games/load-game-decks";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function SpeedTranslateDeckSelectPage() {
+export default async function TranslationSprintDeckSelectPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -19,10 +19,17 @@ export default async function SpeedTranslateDeckSelectPage() {
       >
         ← Back to games
       </Link>
-      <h1 className="mt-4 text-2xl font-bold text-zinc-900">Speed Translate</h1>
-      <p className="mt-1 text-sm text-zinc-500">Choose a flashcard deck to play.</p>
+      <h1 className="mt-4 text-2xl font-bold text-zinc-900">Translation Sprint</h1>
+      <p className="mt-1 text-sm text-zinc-500">
+        Choose a course level, then pick a deck. Pick the correct translation before you run out
+        of lives.
+      </p>
       <div className="mt-6">
-        <DeckSelectList gameSlug="speed-translate" gameTitle="Speed Translate" decks={decks} />
+        <GameDeckCoursePicker
+          gameSlug="speed-translate"
+          gameTitle="Translation Sprint"
+          decks={decks}
+        />
       </div>
     </div>
   );

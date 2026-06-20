@@ -7,24 +7,36 @@ export type PronounSet = {
 
 export const SUBJECT_PRONOUNS: Record<Person, PronounSet> = {
   I: { punjabi: "ਮੈਂ", romanised: "main" },
-  you: { punjabi: "ਤੂੰ", romanised: "tuun" },
+  /** Legacy key — same as you_plural; course uses ਤੁਸੀਂ only (no informal ਤੂੰ). */
+  you: { punjabi: "ਤੁਸੀਂ", romanised: "tusi" },
   he_she: { punjabi: "ਉਹ", romanised: "uh" },
   we: { punjabi: "ਅਸੀਂ", romanised: "aseen" },
-  you_plural: { punjabi: "ਤੁਸੀਂ", romanised: "tuseen" },
+  you_plural: { punjabi: "ਤੁਸੀਂ", romanised: "tusi" },
   they: { punjabi: "ਉਹ", romanised: "uh" },
 };
 
 export const OBLIQUE_PRONOUNS: Record<Person, PronounSet> = {
   I: { punjabi: "ਮੈਨੂੰ", romanised: "mainu" },
-  you: { punjabi: "ਤੈਨੂੰ", romanised: "tainu" },
+  you: { punjabi: "ਤੁਹਾਨੂੰ", romanised: "tuhaanu" },
   he_she: { punjabi: "ਉਸਨੂੰ", romanised: "usnu" },
   we: { punjabi: "ਸਾਨੂੰ", romanised: "sanu" },
   you_plural: { punjabi: "ਤੁਹਾਨੂੰ", romanised: "tuhaanu" },
   they: { punjabi: "ਉਹਨਾਂਨੂੰ", romanised: "uhanaanu" },
 };
 
+/** Second-person uses plural verb agreement (ਤੁਸੀਂ + plural endings + ਹੋ/ਹਨ). */
+export function isSecondPerson(person: Person): boolean {
+  return person === "you" || person === "you_plural";
+}
+
+/** You and we always use masculine plural verb endings in this curriculum. */
+export function personLocksMasculineGender(person: Person): boolean {
+  return person === "we" || person === "you_plural" || person === "you";
+}
+
 export function getAgreementSlot(person: Person, gender: Gender): AgreementSlot {
-  const isPlural = person === "we" || person === "you_plural" || person === "they";
+  const isPlural =
+    person === "we" || person === "you_plural" || person === "they" || person === "you";
   if (isPlural) {
     return gender === "masculine" ? "masc_pl" : "fem_pl";
   }
@@ -32,12 +44,12 @@ export function getAgreementSlot(person: Person, gender: Gender): AgreementSlot 
 }
 
 export function isPluralPerson(person: Person): boolean {
-  return person === "we" || person === "you_plural" || person === "they";
+  return person === "we" || person === "you_plural" || person === "they" || person === "you";
 }
 
 export const PRESENT_AUX: Record<Person, PronounSet> = {
   I: { punjabi: "ਹਾਂ", romanised: "haan" },
-  you: { punjabi: "ਹੈ", romanised: "hai" },
+  you: { punjabi: "ਹੋ", romanised: "ho" },
   he_she: { punjabi: "ਹੈ", romanised: "hai" },
   we: { punjabi: "ਹਾਂ", romanised: "haan" },
   you_plural: { punjabi: "ਹੋ", romanised: "ho" },
@@ -46,7 +58,7 @@ export const PRESENT_AUX: Record<Person, PronounSet> = {
 
 export const PAST_AUX: Record<Person, PronounSet> = {
   I: { punjabi: "ਸੀ", romanised: "see" },
-  you: { punjabi: "ਸੀ", romanised: "see" },
+  you: { punjabi: "ਸਨ", romanised: "san" },
   he_she: { punjabi: "ਸੀ", romanised: "see" },
   we: { punjabi: "ਸੀ", romanised: "see" },
   you_plural: { punjabi: "ਸਨ", romanised: "san" },
@@ -55,7 +67,7 @@ export const PAST_AUX: Record<Person, PronounSet> = {
 
 export const NECESSITY_PRESENT_AUX: Record<Person, PronounSet> = {
   I: { punjabi: "ਹੈ", romanised: "hai" },
-  you: { punjabi: "ਹੈ", romanised: "hai" },
+  you: { punjabi: "ਹਨ", romanised: "han" },
   he_she: { punjabi: "ਹੈ", romanised: "hai" },
   we: { punjabi: "ਹਨ", romanised: "han" },
   you_plural: { punjabi: "ਹਨ", romanised: "han" },
@@ -113,12 +125,32 @@ export const NECESSITY_PRESENT_ENDINGS: EndingForms = {
   fem_pl: { punjabi: "ਪੈਂਦੀਆਂ", romanised: "paindiaan" },
 };
 
-export const PAST_SIMPLE_REGULAR: EndingForms = {
+/** Simple past — consonant roots (Table 1a): sihari+aa / bihari fused to final consonant. */
+export const PAST_SIMPLE_CONSONANT: EndingForms = {
+  masc_sg: { punjabi: "ਿਆ", romanised: "iaa" },
+  fem_sg: { punjabi: "ੀ", romanised: "ee" },
+  masc_pl: { punjabi: "ੇ", romanised: "e" },
+  fem_pl: { punjabi: "ੀਆਂ", romanised: "eeaan" },
+};
+
+/** Simple past — kanaa roots (Table 1b): root ends in aa, add aa/ee/ae/eeaan. */
+export const PAST_SIMPLE_KANAA: EndingForms = {
   masc_sg: { punjabi: "ਆ", romanised: "aa" },
   fem_sg: { punjabi: "ਈ", romanised: "ee" },
   masc_pl: { punjabi: "ਏ", romanised: "e" },
   fem_pl: { punjabi: "ਈਆਂ", romanised: "eeaan" },
 };
+
+/** Simple past — vowel roots (Table 1c): same fused pattern as consonant. */
+export const PAST_SIMPLE_VOWEL: EndingForms = {
+  masc_sg: { punjabi: "ਆ", romanised: "aa" },
+  fem_sg: { punjabi: "ਈ", romanised: "ee" },
+  masc_pl: { punjabi: "ਏ", romanised: "e" },
+  fem_pl: { punjabi: "ਈਆਂ", romanised: "eeaan" },
+};
+
+/** @deprecated Use root-class tables above. Kept as alias for kanaa. */
+export const PAST_SIMPLE_REGULAR = PAST_SIMPLE_KANAA;
 
 export const PERFECT_PARTICIPLE: EndingForms = {
   masc_sg: { punjabi: "ਚੁੱਕਾ", romanised: "chukkaa" },
@@ -141,6 +173,14 @@ export const FUTURE_SIMPLE_FUSED: EndingForms = {
   fem_pl: { punjabi: "ਾਂਗੀਆਂ", romanised: "aangiaan" },
 };
 
+/** Simple future — you (ਤੁਸੀਂ): consonant root + oge (e.g. ਪੜ੍ਹੋਗੇ). */
+export const FUTURE_SIMPLE_CONSONANT_YOU: EndingForms = {
+  masc_sg: { punjabi: "ੋਗੇ", romanised: "oge" },
+  fem_sg: { punjabi: "ੋਗੀ", romanised: "ogee" },
+  masc_pl: { punjabi: "ੋਗੇ", romanised: "oge" },
+  fem_pl: { punjabi: "ੋਗੀਆਂ", romanised: "ogeaan" },
+};
+
 export const FUTURE_SIMPLE_HE_SHE: EndingForms = {
   masc_sg: { punjabi: "ਏਗਾ", romanised: "egaa" },
   fem_sg: { punjabi: "ਏਗੀ", romanised: "egee" },
@@ -160,6 +200,14 @@ export const FUTURE_ABILITY_FUSED: EndingForms = {
   fem_sg: { punjabi: "ਸਕਾਂਗੀ", romanised: "sakaangee" },
   masc_pl: { punjabi: "ਸਕਾਂਗੇ", romanised: "sakaange" },
   fem_pl: { punjabi: "ਸਕਾਂਗੀਆਂ", romanised: "sakaangiaan" },
+};
+
+/** Future ability — you (ਤੁਸੀਂ): root + sakoge (e.g. ਪੜ੍ਹਸਕੋਗੇ). */
+export const FUTURE_ABILITY_CONSONANT_YOU: EndingForms = {
+  masc_sg: { punjabi: "ਸਕੋਗੇ", romanised: "sakoge" },
+  fem_sg: { punjabi: "ਸਕੋਗੀ", romanised: "sakogee" },
+  masc_pl: { punjabi: "ਸਕੋਗੇ", romanised: "sakoge" },
+  fem_pl: { punjabi: "ਸਕੋਗੀਆਂ", romanised: "sakogeaan" },
 };
 
 export const FUTURE_ABILITY_HE_SHE: EndingForms = {

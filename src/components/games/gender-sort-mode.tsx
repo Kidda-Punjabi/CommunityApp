@@ -1,23 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { GenderedNoun } from "@/lib/games/types";
-import { shuffleArray } from "@/lib/flashcards/utils";
+import { GameSessionReview } from "@/components/games/game-session-review";
+import { GameSessionSettings } from "@/components/games/game-session-settings";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
+import {
+  buildGenderSortAdjectiveLogEntry,
+  buildGenderSortNounLogEntry,
+  genderLabel,
+} from "@/lib/games/session-review-builders";
+import type { RoundResult } from "@/lib/games/session-review";
+import {
+  buildAdjectiveAgreementQuestion,
+  filterNounsByCategory,
+  nounCategoryTags,
+  type AdjectiveAgreementQuestion,
+} from "@/lib/games/gender-sort-adjectives";
+import { pickCycledPool, type GameSessionSettingsChoice } from "@/lib/games/session-settings";
 import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
-import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
+import { ui } from "@/lib/ui/styles";
 
-const WORD_COUNT = 20;
 const BASE_POINTS = 10;
 const SPEED_BONUS_MS = 3000;
 const FEEDBACK_MS = 1100;
 
+type SortMode = "nouns" | "adjectives";
+
 type GenderSortModeProps = {
   nouns: GenderedNoun[];
   initialBestScore: number;
+};
+
+type AdjectiveFeedback = {
+  correct: boolean;
+  selected: string;
 };
 
 type AnswerFeedback = {
@@ -27,20 +47,21 @@ type AnswerFeedback = {
   points: number;
 };
 
-function genderLabel(gender: "masculine" | "feminine") {
-  return gender === "masculine" ? "Masculine" : "Feminine";
-}
-
 export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps) {
   const gamesHubHref = GAMES_HUB_HREF;
+  const filterOptions = useMemo(() => nounCategoryTags(nouns), [nouns]);
 
+  const [sortMode, setSortMode] = useState<SortMode>("nouns");
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
   const [queue, setQueue] = useState<GenderedNoun[]>([]);
+  const [adjectiveQueue, setAdjectiveQueue] = useState<AdjectiveAgreementQuestion[]>([]);
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [shownAt, setShownAt] = useState<number>(Date.now());
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
+  const [adjectiveFeedback, setAdjectiveFeedback] = useState<AdjectiveFeedback | null>(null);
+  const [sessionLog, setSessionLog] = useState<RoundResult[]>([]);
   const [result, setResult] = useState<{
     isNewBest: boolean;
     currentBest: number;
@@ -52,7 +73,14 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
   const advanceTimerRef = useRef<number | null>(null);
 
   const current = queue[index];
-  const locked = feedback !== null;
+  const adjectiveQuestion = adjectiveQueue[index];
+  const locked = feedback !== null || adjectiveFeedback !== null;
+
+  const poolSizeForFilter = useCallback(
+    (filterIds: string[]) =>
+      filterNounsByCategory(nouns, filterIds[0] ?? "all").length,
+    [nouns]
+  );
 
   useEffect(() => {
     const supabase = createClient();
@@ -73,7 +101,8 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
     if (phase !== "finished" || savedRef.current) return;
     savedRef.current = true;
 
-    const accuracy = queue.length > 0 ? Math.round((correct / queue.length) * 100) : 0;
+    const totalQuestions = sessionLog.length || queue.length || adjectiveQueue.length;
+    const accuracy = totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0;
 
     const persist = async () => {
       const userId = userIdRef.current;
@@ -83,7 +112,8 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
       const outcome = await saveGameScore(supabase, userId, "gender_sort", score, {
         accuracy,
         correct,
-        total: queue.length,
+        total: totalQuestions,
+        sessionLog,
       });
       setResult({
         isNewBest: outcome.isNewBest,
@@ -94,23 +124,69 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
     };
 
     void persist();
-  }, [phase, score, correct, queue.length]);
+  }, [phase, score, correct, sessionLog, queue.length, adjectiveQueue.length]);
 
-  function startGame() {
+  function startGame(choice: GameSessionSettingsChoice) {
     if (advanceTimerRef.current != null) {
       window.clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = null;
     }
     savedRef.current = false;
-    const selected = shuffleArray(nouns).slice(0, Math.min(WORD_COUNT, nouns.length));
-    setQueue(selected);
+    setFeedback(null);
+    setAdjectiveFeedback(null);
     setIndex(0);
     setScore(0);
     setCorrect(0);
-    setShownAt(Date.now());
-    setFeedback(null);
+    setSessionLog([]);
     setResult(null);
+
+    const pool = filterNounsByCategory(nouns, choice.filterIds[0] ?? "all");
+    const selected = pickCycledPool(pool, choice.questionCount);
+
+    if (sortMode === "adjectives") {
+      setAdjectiveQueue(
+        selected.map((noun) =>
+          buildAdjectiveAgreementQuestion(
+            noun.gender,
+            noun.topic_tags.some((tag) => tag.toLowerCase() === "plural") ? "plural" : "singular",
+            noun.english_meaning
+          )
+        )
+      );
+      setQueue([]);
+    } else {
+      setQueue(selected);
+      setAdjectiveQueue([]);
+    }
+
+    setShownAt(Date.now());
     setPhase("playing");
+  }
+
+  function handleAdjectiveAnswer(option: string) {
+    if (phase !== "playing" || !adjectiveQuestion || adjectiveFeedback) return;
+
+    const isCorrect = option === adjectiveQuestion.correctAnswer;
+    const points = isCorrect ? BASE_POINTS : 0;
+    setSessionLog((prev) => [
+      ...prev,
+      buildGenderSortAdjectiveLogEntry(adjectiveQuestion, option, isCorrect),
+    ]);
+    setAdjectiveFeedback({ correct: isCorrect, selected: option });
+
+    const nextScore = score + points;
+    const nextCorrect = correct + (isCorrect ? 1 : 0);
+
+    advanceTimerRef.current = window.setTimeout(() => {
+      setAdjectiveFeedback(null);
+      if (index + 1 >= adjectiveQueue.length) {
+        finishGame(nextScore, nextCorrect);
+        return;
+      }
+      setScore(nextScore);
+      setCorrect(nextCorrect);
+      setIndex((i) => i + 1);
+    }, FEEDBACK_MS);
   }
 
   function finishGame(finalScore: number, finalCorrect: number) {
@@ -128,6 +204,11 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
     const points = isCorrect ? BASE_POINTS + speedBonus : 0;
     const nextScore = score + points;
     const nextCorrect = correct + (isCorrect ? 1 : 0);
+
+    setSessionLog((prev) => [
+      ...prev,
+      buildGenderSortNounLogEntry(current, guess, isCorrect),
+    ]);
 
     setFeedback({
       correct: isCorrect,
@@ -153,65 +234,138 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
 
   if (phase === "ready") {
     return (
-      <div className="space-y-6">
-        <div>
-          <Link href={gamesHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-            ← Back to games
-          </Link>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
-            Gender Sort
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-zinc-900">Masculine or feminine?</h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            Sort {Math.min(WORD_COUNT, nouns.length)} nouns. Answer quickly for bonus points.
-          </p>
-        </div>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Your best</p>
-          <p className="mt-1 text-lg font-bold text-zinc-900">
-            {initialBestScore > 0 ? `${initialBestScore} pts` : "No score yet"}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={startGame}
-          disabled={nouns.length === 0}
-          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-        >
-          Start sorting
-        </button>
-      </div>
+      <GameSessionSettings
+        gameTitle={sortMode === "nouns" ? "Masculine or feminine?" : "Adjective agreement"}
+        gameEyebrow="Gender Sort"
+        gameDescription={
+          sortMode === "nouns"
+            ? "Sort nouns by gender. Answer quickly for bonus points."
+            : "Pick the adjective form that agrees with the noun."
+        }
+        filterLabel="Category"
+        filterOptions={filterOptions}
+        poolSizeForFilter={poolSizeForFilter}
+        repeatUnit="noun"
+        canStart={nouns.length > 0}
+        extraSettings={
+          <>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Mode</p>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { id: "nouns", label: "Noun gender" },
+                    { id: "adjectives", label: "Adjective agreement" },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setSortMode(option.id)}
+                    className={sortMode === option.id ? ui.pillActive : ui.pillInactive}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Your best</p>
+              <p className="mt-1 text-lg font-bold text-zinc-900">
+                {initialBestScore > 0 ? `${initialBestScore} pts` : "No score yet"}
+              </p>
+            </div>
+          </>
+        }
+        onStart={startGame}
+        gamesHubHref={gamesHubHref}
+      />
     );
   }
 
   if (phase === "finished") {
-    const accuracy = queue.length > 0 ? Math.round((correct / queue.length) * 100) : 0;
+    const totalQuestions = sessionLog.length || queue.length || adjectiveQueue.length;
+
+    return (
+      <GameSessionReview
+        title="Sorting complete"
+        correct={correct}
+        total={totalQuestions}
+        sessionLog={sessionLog}
+        pointsEarned={result?.pointsEarned ?? 0}
+        scoreSubtitle={`${score} points · ${totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0}% accuracy`}
+        extraSummary={
+          <>
+            {result?.isNewBest && (
+              <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
+            )}
+            {result && !result.isNewBest && result.currentBest > 0 && (
+              <p className="mt-3 text-sm text-zinc-500">
+                Personal best: {result.currentBest} pts
+              </p>
+            )}
+          </>
+        }
+        onPlayAgain={() => setPhase("ready")}
+        gamesHubHref={gamesHubHref}
+      />
+    );
+  }
+
+  if (sortMode === "adjectives" && adjectiveQuestion) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-medium text-violet-600">Sorting complete</p>
-          <h2 className="mt-2 text-2xl font-bold text-zinc-900">{score} points</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            {correct} / {queue.length} correct ({accuracy}%)
+        <div className="flex items-center justify-between gap-3">
+          <Link href={gamesHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
+            ← Exit
+          </Link>
+          <p className="text-sm font-semibold text-zinc-900">
+            {index + 1} / {adjectiveQueue.length} · {score} pts
           </p>
-          <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
-          {result?.isNewBest && (
-            <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
-          )}
-          {result && !result.isNewBest && result.currentBest > 0 && (
-            <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
-          )}
         </div>
-        <button
-          type="button"
-          onClick={startGame}
-          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-        >
-          Play again
-        </button>
-        <Link href={gamesHubHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
-          Back to games
-        </Link>
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Noun</p>
+          <p className="mt-2 text-xl font-bold text-zinc-900">{adjectiveQuestion.nounEnglish}</p>
+          <p className="mt-3 text-sm text-zinc-600">
+            Pick the {adjectiveQuestion.adjectiveEnglish} form for this{" "}
+            {adjectiveQuestion.nounGender} {adjectiveQuestion.nounNumber} noun
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          {adjectiveQuestion.options.map((option) => {
+            const isSelected = adjectiveFeedback?.selected === option.punjabi;
+            const isCorrect = option.punjabi === adjectiveQuestion.correctAnswer;
+            const showResult = adjectiveFeedback !== null;
+
+            return (
+              <button
+                key={option.punjabi}
+                type="button"
+                disabled={locked}
+                onClick={() => handleAdjectiveAnswer(option.punjabi)}
+                className={`rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+                  showResult && isCorrect
+                    ? "border-green-400 bg-green-50"
+                    : showResult && isSelected
+                      ? "border-red-400 bg-red-50"
+                      : "border-zinc-200 bg-white hover:border-violet-300 hover:bg-violet-50"
+                }`}
+              >
+                <span className="font-semibold text-zinc-900">{option.punjabi}</span>
+                <span className="mt-0.5 block text-xs text-violet-600">{option.romanised}</span>
+                <span className="mt-0.5 block text-xs text-zinc-400">{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {adjectiveFeedback && (
+          <p className="text-center text-sm text-violet-600">
+            {adjectiveQuestion.correctAnswer} · {adjectiveQuestion.correctRomanised}
+          </p>
+        )}
       </div>
     );
   }

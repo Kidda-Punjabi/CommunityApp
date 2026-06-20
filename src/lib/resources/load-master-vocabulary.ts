@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  dedupeDictionaryEntries,
   isMasterVocabularyDeck,
   mapFlashcardToDictionaryEntry,
   MASTER_VOCABULARY_DECK_NAME,
@@ -45,7 +46,7 @@ export async function loadMasterVocabularyDictionary(
   }
 
   return {
-    entries: (cardRows ?? []).map(mapFlashcardToDictionaryEntry),
+    entries: dedupeDictionaryEntries((cardRows ?? []).map(mapFlashcardToDictionaryEntry)),
     deckFound: true,
   };
 }

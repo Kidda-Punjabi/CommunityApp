@@ -52,12 +52,46 @@ export function mapFlashcardToDictionaryEntry(row: FlashcardRow): DictionaryEntr
 
   return {
     id: row.id,
-    english: row.front_text,
-    punjabi: row.back_text,
+    english: row.front_text.trim(),
+    punjabi: row.back_text.trim(),
     romanised: row.romanised?.trim() || null,
     gender,
     isPlural,
   };
+}
+
+function isMalformedEnglishGloss(english: string): boolean {
+  const text = english.trim();
+  if (!text) return true;
+  if (/^[A-Z][a-z]+(?:karna|karnaa)$/i.test(text)) return true;
+  if (/^[a-z]+(?:karna|karnaa)$/i.test(text) && !text.includes(" ")) return true;
+  return false;
+}
+
+/** Keep one entry per Punjabi word; drop obvious import artifacts. */
+export function dedupeDictionaryEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
+  const byPunjabi = new Map<string, DictionaryEntry>();
+
+  for (const entry of entries) {
+    if (isMalformedEnglishGloss(entry.english)) continue;
+
+    const key = entry.punjabi.trim();
+    if (!key) continue;
+
+    const existing = byPunjabi.get(key);
+    if (!existing) {
+      byPunjabi.set(key, entry);
+      continue;
+    }
+
+    const entryIsVerb = entry.english.toLowerCase().startsWith("to ");
+    const existingIsVerb = existing.english.toLowerCase().startsWith("to ");
+    if (entryIsVerb && !existingIsVerb) {
+      byPunjabi.set(key, entry);
+    }
+  }
+
+  return [...byPunjabi.values()].sort((a, b) => a.english.localeCompare(b.english));
 }
 
 export function searchDictionaryEntries(

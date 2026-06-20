@@ -39,7 +39,7 @@ export const ui = {
 
   pillActive: "rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white",
   pillInactive:
-    "rounded-full px-4 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800",
+    "rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50",
 
   listRow:
     "flex items-center gap-4 rounded-3xl bg-white p-4 shadow-[0_2px_16px_-4px_rgba(24,24,27,0.07)] transition-all hover:shadow-[0_4px_22px_-4px_rgba(24,24,27,0.1)]",

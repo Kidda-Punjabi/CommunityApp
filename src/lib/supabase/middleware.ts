@@ -1,4 +1,9 @@
 import { isAdmin } from "@/lib/auth/admin";
+import {
+  normalizeReferralCode,
+  REFERRAL_COOKIE_MAX_AGE_SECONDS,
+  REFERRAL_COOKIE_NAME,
+} from "@/lib/referrals/constants";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -33,6 +38,16 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const referralCode = normalizeReferralCode(request.nextUrl.searchParams.get("ref"));
+  if (referralCode && request.nextUrl.pathname === "/signup") {
+    supabaseResponse.cookies.set(REFERRAL_COOKIE_NAME, referralCode, {
+      maxAge: REFERRAL_COOKIE_MAX_AGE_SECONDS,
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+    });
+  }
 
   if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
     const url = request.nextUrl.clone();

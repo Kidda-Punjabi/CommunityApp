@@ -33,8 +33,8 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
   },
   {
     type: "speed_translate",
-    title: "Speed Translate",
-    description: "Pick the correct translation before you run out of lives",
+    title: "Translation Sprint",
+    description: "Pick the correct translation before you run out of lives — faster answers score more",
     emoji: "💨",
     section: "vocabulary",
     href: "/dashboard/games/speed-translate",

@@ -1,40 +1,52 @@
-import { conjugate } from "./conjugate";
 import {
-  buildGapSentence,
-  formatTenseLabel,
-  generateSentenceDistractors,
-  generateVerbWordDistractors,
-  getVerbWord,
-} from "./distractors";
-import { PERSON_OPTIONS } from "./types";
-import type { Gender, Person, TenseGroup, TenseId, Verb } from "./types";
+  buildGapSentenceRomanised,
+  filterGrammarSentencesByTenseValue,
+  formatGrammarTenseLabel,
+  parseDistractorConjugations,
+  tenseGroupFromGrammarTense,
+} from "@/lib/games/grammar-sentence";
+import { pickCycledPool } from "@/lib/games/session-settings";
+import type { GrammarSentence } from "@/lib/games/types";
+import type { PunjabiOption } from "./distractors";
+import type { TenseGroup, TenseId } from "./types";
 import { TENSE_CATALOG } from "./types";
+
+export {
+  filterGrammarSentencesByTenseValue,
+  grammarTenseFilterOptions,
+} from "@/lib/games/grammar-sentence";
+
+export type { PunjabiOption as ChallengeOption } from "./distractors";
 
 export const CHALLENGE_ROUND_LENGTH = 10;
 
-export type ChallengeFormat = "A" | "B" | "C";
+export type ChallengeFormat = "A" | "B";
 
 export type ChallengeQuestion = {
+  id: string;
+  sentenceId: string;
   format: ChallengeFormat;
-  verb: Verb;
-  tenseId: TenseId;
-  tenseGroup: TenseGroup;
-  person: Person;
-  gender: Gender;
   correctAnswer: string;
-  options: string[];
+  correctAnswerRomanised: string;
+  options: PunjabiOption[];
   englishGloss: string;
   tenseLabel: string;
-  pronounDisplay: string;
+  tenseGroup: TenseGroup;
   verbRoot: string;
+  verbRootRomanised: string;
   english: string;
   gapSentence?: string;
+  gapSentenceRomanised?: string;
 };
 
-const FORMAT_POOL: ChallengeFormat[] = ["A", "A", "A", "B", "B", "B", "B", "C", "C", "C"];
+export type ChallengeRoundResult = {
+  questions: ChallengeQuestion[];
+  contentLimited: boolean;
+  usedBroaderPool: boolean;
+  poolSize: number;
+};
 
-const ALL_PERSONS: Person[] = ["I", "you", "he_she", "we", "you_plural", "they"];
-const ALL_GENDERS: Gender[] = ["masculine", "feminine"];
+export type GroupBreakdown = Record<TenseGroup, { correct: number; total: number }>;
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -43,10 +55,6 @@ function shuffle<T>(items: T[]): T[] {
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
-}
-
-function pickRandom<T>(items: T[]): T {
-  return items[Math.floor(Math.random() * items.length)];
 }
 
 export function getTensesForFocus(
@@ -76,138 +84,103 @@ export function defaultTenseSelectionForFocus(focus: TenseGroup | "all"): Set<Te
   );
 }
 
-function buildFormatSequence(canUseFormatC: boolean): ChallengeFormat[] {
-  const formats = shuffle(FORMAT_POOL);
-  if (canUseFormatC) return formats;
-
-  return formats.map((format) => (format === "C" ? (Math.random() > 0.5 ? "A" : "B") : format));
+function conjugationReadyRows(sentences: GrammarSentence[]): GrammarSentence[] {
+  return sentences.filter((sentence) => {
+    if (!sentence.target_verb_gurmukhi?.trim()) return false;
+    const distractors = parseDistractorConjugations(sentence.distractor_conjugations);
+    return distractors.length >= 2;
+  });
 }
 
-function pronounDisplay(resultPronoun: string, person: Person): string {
-  const label = PERSON_OPTIONS.find((option) => option.person === person)?.label ?? person;
-  return `${resultPronoun} / ${label}`;
+function buildGapSentence(sentence: GrammarSentence): string | undefined {
+  const verb = sentence.target_verb_gurmukhi?.trim();
+  if (!verb) return undefined;
+
+  const index = sentence.punjabi_sentence.indexOf(verb);
+  if (index === -1) return undefined;
+
+  return (
+    sentence.punjabi_sentence.slice(0, index) +
+    "___" +
+    sentence.punjabi_sentence.slice(index + verb.length)
+  );
 }
 
-function sampleQuestionParams(
-  verbs: Verb[],
-  availableTenses: TenseId[]
-): { verb: Verb; tenseId: TenseId; person: Person; gender: Gender } {
-  return {
-    verb: pickRandom(verbs),
-    tenseId: pickRandom(availableTenses),
-    person: pickRandom(ALL_PERSONS),
-    gender: pickRandom(ALL_GENDERS),
-  };
-}
-
-function buildQuestion(
-  format: ChallengeFormat,
-  verb: Verb,
-  tenseId: TenseId,
-  person: Person,
-  gender: Gender,
-  availableTenses: TenseId[]
+function buildChallengeQuestion(
+  sentence: GrammarSentence,
+  format: ChallengeFormat
 ): ChallengeQuestion | null {
-  const correct = conjugate(verb, tenseId, person, gender);
-  const tenseMeta = TENSE_CATALOG.find((tense) => tense.id === tenseId);
-  const tenseLabel = formatTenseLabel(tenseId);
-  const pronoun = pronounDisplay(correct.pronoun, person);
+  const correctVerb = sentence.target_verb_gurmukhi?.trim();
+  if (!correctVerb) return null;
 
-  if (format === "C") {
-    const distractors = generateSentenceDistractors(
-      verb,
-      tenseId,
-      person,
-      gender,
-      availableTenses,
-      3
-    );
-    if (distractors.length < 3) return null;
+  const distractors = parseDistractorConjugations(sentence.distractor_conjugations);
+  if (distractors.length < 2) return null;
 
-    return {
-      format,
-      verb,
-      tenseId,
-      tenseGroup: tenseMeta!.group,
-      person,
-      gender,
-      correctAnswer: correct.fullPunjabi,
-      options: shuffle([correct.fullPunjabi, ...distractors]),
-      englishGloss: correct.englishGloss,
-      tenseLabel,
-      pronounDisplay: pronoun,
-      verbRoot: verb.root,
-      english: verb.english,
-    };
-  }
+  const correctOption: PunjabiOption = {
+    punjabi: correctVerb,
+    romanised: sentence.target_verb_romanised?.trim() ?? "",
+  };
 
-  const correctVerbWord = getVerbWord(correct);
-  const distractors = generateVerbWordDistractors(verb, tenseId, person, gender, correct, 3);
-  if (distractors.length < 3) return null;
-
-  const options = shuffle([correctVerbWord, ...distractors]);
+  const options = shuffle([
+    correctOption,
+    ...distractors.map((distractor) => ({
+      punjabi: distractor.gurmukhi,
+      romanised: distractor.romanised,
+    })),
+  ]);
 
   return {
+    id: sentence.id,
+    sentenceId: sentence.id,
     format,
-    verb,
-    tenseId,
-    tenseGroup: tenseMeta!.group,
-    person,
-    gender,
-    correctAnswer: correctVerbWord,
+    correctAnswer: correctOption.punjabi,
+    correctAnswerRomanised: correctOption.romanised,
     options,
-    englishGloss: correct.englishGloss,
-    tenseLabel,
-    pronounDisplay: pronoun,
-    verbRoot: verb.root,
-    english: verb.english,
-    gapSentence: format === "B" ? buildGapSentence(correct) : undefined,
+    englishGloss: sentence.english_translation,
+    tenseLabel: formatGrammarTenseLabel(sentence.tense),
+    tenseGroup: tenseGroupFromGrammarTense(sentence.tense),
+    verbRoot: sentence.target_verb_root_gurmukhi?.trim() ?? correctVerb,
+    verbRootRomanised: sentence.target_verb_root_romanised?.trim() ?? "",
+    english: sentence.english_translation,
+    gapSentence: format === "B" ? buildGapSentence(sentence) : undefined,
+    gapSentenceRomanised: format === "B" ? buildGapSentenceRomanised(sentence) : undefined,
   };
 }
 
 export function buildChallengeRound(
-  verbs: Verb[],
-  availableTenses: TenseId[]
-): ChallengeQuestion[] {
-  if (!verbs.length || !availableTenses.length) return [];
-
-  const canUseFormatC = availableTenses.length >= 2;
-  const formatSequence = buildFormatSequence(canUseFormatC);
-  const questions: ChallengeQuestion[] = [];
-
-  for (let attempt = 0; attempt < CHALLENGE_ROUND_LENGTH * 20 && questions.length < CHALLENGE_ROUND_LENGTH; attempt += 1) {
-    let format = formatSequence[questions.length];
-    const params = sampleQuestionParams(verbs, availableTenses);
-    let question = buildQuestion(
-      format,
-      params.verb,
-      params.tenseId,
-      params.person,
-      params.gender,
-      availableTenses
-    );
-
-    if (!question && format === "C") {
-      format = Math.random() > 0.5 ? "A" : "B";
-      question = buildQuestion(
-        format,
-        params.verb,
-        params.tenseId,
-        params.person,
-        params.gender,
-        availableTenses
-      );
-    }
-
-    if (question) {
-      questions.push(question);
-    }
+  allSentences: GrammarSentence[],
+  options: {
+    questionCount: number;
+    tenseFilter: string | string[];
   }
+): ChallengeRoundResult {
+  const validAll = conjugationReadyRows(allSentences);
+  const pool = filterGrammarSentencesByTenseValue(validAll, options.tenseFilter);
+  const picked = pickCycledPool(pool, options.questionCount);
 
-  return questions;
+  const questions: ChallengeQuestion[] = [];
+  picked.forEach((sentence, index) => {
+    const format: ChallengeFormat = index % 3 === 1 ? "B" : "A";
+    const question = buildChallengeQuestion(sentence, format);
+    if (question) {
+      const resolved =
+        question.format === "B" && !question.gapSentence
+          ? { ...question, format: "A" as const, gapSentence: undefined, gapSentenceRomanised: undefined }
+          : question;
+      questions.push({
+        ...resolved,
+        id: `${resolved.sentenceId}-${index}`,
+      });
+    }
+  });
+
+  return {
+    questions,
+    contentLimited: pool.length < options.questionCount,
+    usedBroaderPool: false,
+    poolSize: pool.length,
+  };
 }
-
-export type GroupBreakdown = Record<TenseGroup, { correct: number; total: number }>;
 
 export function computeGroupBreakdown(
   questions: ChallengeQuestion[],

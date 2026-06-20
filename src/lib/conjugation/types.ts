@@ -21,6 +21,13 @@ export type TenseId =
 
 export type AgreementSlot = "masc_sg" | "fem_sg" | "masc_pl" | "fem_pl";
 
+/**
+ * How verb stem and ending combine in the verb phrase.
+ * - fused: root+ending → one word (habitual, simple past/future, participles)
+ * - separate_words: stem + space + helper/modal word (continuous, ability, infinitive+modal)
+ */
+export type VerbWordLayout = "fused" | "separate_words";
+
 export type Verb = {
   id: string;
   infinitive: string;
@@ -42,8 +49,10 @@ export type ConjugationResult = {
   pronoun: string;
   pronounRomanised: string;
   root: string;
+  stemRomanised: string;
   ending: string;
   endingRomanised: string;
+  verbWordLayout: VerbWordLayout;
   auxiliary: string | null;
   auxiliaryRomanised: string | null;
   fullPunjabi: string;
@@ -81,9 +90,11 @@ export const TENSE_CATALOG: TenseMeta[] = [
 
 export const PERSON_OPTIONS: { person: Person; label: string }[] = [
   { person: "I", label: "I" },
-  { person: "you", label: "You (singular)" },
+  { person: "you_plural", label: "You" },
   { person: "he_she", label: "He / She" },
   { person: "we", label: "We" },
-  { person: "you_plural", label: "You (plural)" },
   { person: "they", label: "They" },
 ];
+
+/** Persons sampled in games — one second-person form only (ਤੁਸੀਂ). */
+export const GAME_PERSON_POOL: Person[] = ["I", "you_plural", "he_she", "we", "they"];

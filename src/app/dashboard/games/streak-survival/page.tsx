@@ -24,7 +24,20 @@ export default async function StreakSurvivalPage() {
 
       <div className="mt-6 space-y-6">
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-zinc-900">Flashcard deck</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">Flashcard decks</h2>
+          <Link
+            href="/dashboard/games/streak-survival/foundational"
+            className="block rounded-2xl border border-violet-200 bg-violet-50 p-4 shadow-sm transition-colors hover:border-violet-300"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+              Full course
+            </p>
+            <h3 className="mt-1 font-semibold text-zinc-900">Foundational Course — all decks</h3>
+            <p className="mt-1 text-sm text-zinc-500">
+              Questions from anywhere across the Foundational Course
+            </p>
+          </Link>
+          <p className="text-sm font-medium text-zinc-600">Or pick a single lesson deck:</p>
           <DeckSelectList
             gameSlug="streak-survival/deck"
             gameTitle="Streak Survival"

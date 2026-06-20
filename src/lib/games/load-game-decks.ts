@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { PaidCourseTier } from "@/lib/membership/access";
 import { canAccessLesson } from "@/lib/membership/access";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import {
@@ -11,6 +12,7 @@ export type GameDeckSummary = {
   deckId: string;
   setName: string;
   courseName: string;
+  courseTier: PaidCourseTier | null;
   lessonTitle: string;
   cardCount: number;
 };
@@ -27,7 +29,7 @@ export async function loadAccessibleGameDecks(
   ] = await Promise.all([
     supabase
       .from("lessons")
-      .select("id, course_id, lesson_number, title, is_free, courses(name)")
+      .select("id, course_id, lesson_number, title, is_free, courses(name, required_tier)")
       .order("lesson_number"),
     supabase
       .from("flashcards")
@@ -48,6 +50,7 @@ export async function loadAccessibleGameDecks(
     const course = Array.isArray(lesson.courses)
       ? lesson.courses[0]
       : lesson.courses;
+    const courseTier = (course?.required_tier as PaidCourseTier | null) ?? null;
 
     const sets = getLessonFlashcardSets(
       lesson.id,
@@ -63,6 +66,7 @@ export async function loadAccessibleGameDecks(
         deckId: set.deckId,
         setName: set.name,
         courseName: course?.name ?? "Course",
+        courseTier,
         lessonTitle: lesson.title ?? "Lesson",
         cardCount: set.cardCount,
       }));

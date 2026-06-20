@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DeckSelectList } from "@/components/games/deck-select-list";
+import { GameDeckCoursePicker } from "@/components/games/game-deck-course-picker";
 import { loadAccessibleGameDecks } from "@/lib/games/load-game-decks";
 import { createClient } from "@/lib/supabase/server";
 
@@ -20,9 +20,11 @@ export default async function MatchDeckSelectPage() {
         ← Back to games
       </Link>
       <h1 className="mt-4 text-2xl font-bold text-zinc-900">Match</h1>
-      <p className="mt-1 text-sm text-zinc-500">Choose a flashcard deck to play.</p>
+      <p className="mt-1 text-sm text-zinc-500">
+        Choose a course level, then pick a flashcard deck.
+      </p>
       <div className="mt-6">
-        <DeckSelectList gameSlug="match" gameTitle="Match" decks={decks} />
+        <GameDeckCoursePicker gameSlug="match" gameTitle="Match" decks={decks} />
       </div>
     </div>
   );

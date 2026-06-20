@@ -12,6 +12,15 @@ import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 
 const LIVES = 3;
 const OPTIONS = 4;
+const FAST_MS = 2500;
+const MEDIUM_MS = 5000;
+
+function pointsForCorrectAnswer(elapsedMs: number): number {
+  if (elapsedMs <= FAST_MS) return 15;
+  if (elapsedMs <= MEDIUM_MS) return 12;
+  if (elapsedMs <= 8000) return 10;
+  return 8;
+}
 
 type SpeedTranslateModeProps = {
   deck: FlashcardDeckContext;
@@ -26,6 +35,7 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
   const [index, setIndex] = useState(0);
   const [lives, setLives] = useState(LIVES);
   const [score, setScore] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
   const [result, setResult] = useState<{
     isNewBest: boolean;
     currentBest: number;
@@ -35,6 +45,8 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
   const answeredRef = useRef(0);
+  const correctCountRef = useRef(0);
+  const questionShownAtRef = useRef(Date.now());
 
   const currentCard = queue[index];
 
@@ -56,6 +68,12 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
   }, []);
 
   useEffect(() => {
+    if (phase === "playing") {
+      questionShownAtRef.current = Date.now();
+    }
+  }, [phase, index]);
+
+  useEffect(() => {
     if (phase !== "finished" || savedRef.current) return;
     savedRef.current = true;
 
@@ -71,7 +89,7 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
         score,
         {
           deck_name: deck.deckName,
-          ...buildGameAccuracyMetadata(score, answeredRef.current),
+          ...buildGameAccuracyMetadata(correctCountRef.current, answeredRef.current),
         }
       );
       setResult({
@@ -88,10 +106,12 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
   function startGame() {
     savedRef.current = false;
     answeredRef.current = 0;
+    correctCountRef.current = 0;
     setQueue(shuffleArray(deck.cards));
     setIndex(0);
     setLives(LIVES);
     setScore(0);
+    setCorrectCount(0);
     setResult(null);
     setPhase("playing");
   }
@@ -106,7 +126,11 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
     answeredRef.current += 1;
 
     if (answer === currentCard.back_text) {
-      const nextScore = score + 1;
+      const elapsed = Date.now() - questionShownAtRef.current;
+      const points = pointsForCorrectAnswer(elapsed);
+      const nextScore = score + points;
+      setCorrectCount((count) => count + 1);
+      correctCountRef.current += 1;
       setScore(nextScore);
       if (index + 1 >= queue.length) {
         setScore(nextScore);
@@ -138,11 +162,12 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
             ← Back to decks
           </Link>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
-            Speed Translate · {deck.deckName}
+            Translation Sprint · {deck.deckName}
           </p>
           <h1 className="mt-1 text-2xl font-bold text-zinc-900">{deck.lessonTitle}</h1>
           <p className="mt-2 text-sm text-zinc-500">
-            Pick the correct translation. You have {LIVES} lives.
+            Pick the correct translation. Faster correct answers score more points. You have{" "}
+            {LIVES} lives.
           </p>
         </div>
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -167,7 +192,7 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
       <div className="space-y-6">
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-medium text-violet-600">Game over</p>
-          <h2 className="mt-2 text-2xl font-bold text-zinc-900">{score} correct</h2>
+          <h2 className="mt-2 text-2xl font-bold text-zinc-900">{score} points</h2>
           <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
           {result?.isNewBest && (
             <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>

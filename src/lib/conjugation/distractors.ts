@@ -1,14 +1,19 @@
 import { conjugate } from "./conjugate";
 import type { ConjugationResult, Gender, Person, RootClass, TenseId, Verb } from "./types";
 import { TENSE_CATALOG } from "./types";
+import { getVerbWordRomanised, verbWordDisplay } from "./format";
+
+export type PunjabiOption = {
+  punjabi: string;
+  romanised: string;
+};
 
 const ROOT_CLASSES: RootClass[] = ["consonant", "kanaa", "vowel"];
-
-const SINGULAR_PERSONS: Person[] = ["I", "you", "he_she"];
+const SINGULAR_PERSONS: Person[] = ["I", "he_she"];
 const PLURAL_PERSONS: Person[] = ["we", "you_plural", "they"];
 
 export function getVerbWord(result: ConjugationResult): string {
-  return result.root + result.ending;
+  return verbWordDisplay(result.root, result.ending, result.verbWordLayout);
 }
 
 export function formatTenseLabel(tenseId: TenseId): string {
@@ -24,10 +29,10 @@ function otherRootClasses(rootClass: RootClass): RootClass[] {
 
 export function swapNumberPerson(person: Person): Person {
   if (person === "I") return "we";
-  if (person === "you") return "you_plural";
+  if (person === "you_plural") return "I";
   if (person === "he_she") return "they";
   if (person === "we") return "I";
-  if (person === "you_plural") return "you";
+  if (person === "you") return "I";
   return "he_she";
 }
 
@@ -51,8 +56,12 @@ type DistractorParams = {
   gender: Gender;
 };
 
-function verbWordFromParams({ verb, tenseId, person, gender }: DistractorParams): string {
-  return getVerbWord(conjugate(verb, tenseId, person, gender));
+function verbWordOptionFromParams(params: DistractorParams): PunjabiOption {
+  const result = conjugate(params.verb, params.tenseId, params.person, params.gender);
+  return {
+    punjabi: getVerbWord(result),
+    romanised: getVerbWordRomanised(result),
+  };
 }
 
 /**
@@ -66,14 +75,14 @@ export function generateVerbWordDistractors(
   gender: Gender,
   correct: ConjugationResult,
   count = 3
-): string[] {
+): PunjabiOption[] {
   const correctWord = getVerbWord(correct);
-  const found = new Set<string>();
+  const found = new Map<string, string>();
 
-  const candidates: string[] = [];
+  const candidates: PunjabiOption[] = [];
 
   const addCandidate = (params: DistractorParams) => {
-    candidates.push(verbWordFromParams(params));
+    candidates.push(verbWordOptionFromParams(params));
   };
 
   addCandidate({ verb, tenseId, person, gender: flipGender(gender) });
@@ -101,13 +110,13 @@ export function generateVerbWordDistractors(
   }
 
   for (const candidate of shuffle(candidates)) {
-    if (candidate && candidate !== correctWord && !found.has(candidate)) {
-      found.add(candidate);
+    if (candidate.punjabi && candidate.punjabi !== correctWord && !found.has(candidate.punjabi)) {
+      found.set(candidate.punjabi, candidate.romanised);
       if (found.size >= count) break;
     }
   }
 
-  return [...found].slice(0, count);
+  return [...found.entries()].map(([punjabi, romanised]) => ({ punjabi, romanised }));
 }
 
 /**
@@ -120,36 +129,45 @@ export function generateSentenceDistractors(
   gender: Gender,
   availableTenses: TenseId[],
   count = 3
-): string[] {
-  const correct = conjugate(verb, correctTenseId, person, gender).fullPunjabi;
-  const found = new Set<string>();
+): PunjabiOption[] {
+  const correctResult = conjugate(verb, correctTenseId, person, gender);
+  const correct = correctResult.fullPunjabi;
+  const found = new Map<string, string>();
+
+  const addSentence = (result: ConjugationResult) => {
+    if (result.fullPunjabi !== correct && !found.has(result.fullPunjabi)) {
+      found.set(result.fullPunjabi, result.fullRomanised);
+    }
+  };
 
   for (const tenseId of shuffle(availableTenses)) {
     if (tenseId === correctTenseId) continue;
-    const sentence = conjugate(verb, tenseId, person, gender).fullPunjabi;
-    if (sentence !== correct) {
-      found.add(sentence);
-    }
+    addSentence(conjugate(verb, tenseId, person, gender));
     if (found.size >= count) break;
   }
 
   if (found.size < count) {
     for (const tenseId of shuffle(availableTenses)) {
-      const sentence = conjugate(verb, tenseId, person, flipGender(gender)).fullPunjabi;
-      if (sentence !== correct && !found.has(sentence)) {
-        found.add(sentence);
-      }
+      addSentence(conjugate(verb, tenseId, person, flipGender(gender)));
       if (found.size >= count) break;
     }
   }
 
-  return [...found].slice(0, count);
+  return [...found.entries()].map(([punjabi, romanised]) => ({ punjabi, romanised }));
 }
 
 export function buildGapSentence(result: ConjugationResult): string {
   const parts = [result.pronoun, "___"];
   if (result.auxiliary) {
     parts.push(result.auxiliary);
+  }
+  return parts.join(" ");
+}
+
+export function buildGapSentenceRomanised(result: ConjugationResult): string {
+  const parts = [result.pronounRomanised, "___"];
+  if (result.auxiliaryRomanised) {
+    parts.push(result.auxiliaryRomanised);
   }
   return parts.join(" ");
 }

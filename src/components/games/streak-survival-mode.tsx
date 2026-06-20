@@ -29,6 +29,7 @@ type StreakSurvivalModeProps = {
   verbs?: VerbConjugation[];
   initialBestScore: number;
   backHref: string;
+  metadataSource?: string;
 };
 
 type DeckQuestion = { kind: "deck"; prompt: string; answer: string; options: string[] };
@@ -114,6 +115,7 @@ export function StreakSurvivalMode({
   verbs = [],
   initialBestScore,
   backHref,
+  metadataSource,
 }: StreakSurvivalModeProps) {
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
   const [streak, setStreak] = useState(0);
@@ -163,7 +165,7 @@ export function StreakSurvivalMode({
       const supabase = createClient();
       const total = streak + 1;
       const metadata: Record<string, unknown> = {
-        source: sourceType,
+        source: metadataSource ?? sourceType,
         ...buildGameAccuracyMetadata(streak, total),
       };
       if (deckName) metadata.deck_name = deckName;

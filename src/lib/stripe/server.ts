@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { getPublicAppUrl } from "@/lib/app-url";
 
 let stripeClient: Stripe | null = null;
 
@@ -16,5 +17,5 @@ export function getStripe(): Stripe {
 }
 
 export function getAppUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  return getPublicAppUrl();
 }

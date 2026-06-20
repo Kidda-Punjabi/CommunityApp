@@ -3,9 +3,13 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { conjugate } from "@/lib/conjugation/conjugate";
+import { verbPhraseDisplayParts } from "@/lib/conjugation/format";
+import { latinRomanised } from "@/lib/conjugation/romanised";
+import { personLocksMasculineGender } from "@/lib/conjugation/pronouns";
 import {
   PERSON_OPTIONS,
   TENSE_CATALOG,
+  type ConjugationResult,
   type Gender,
   type Person,
   type TenseGroup,
@@ -26,11 +30,56 @@ function infinitiveEnding(infinitive: string, root: string): string {
   return "ਣਾ";
 }
 
+function VerbPhraseLine({
+  pronoun,
+  stem,
+  ending,
+  layout,
+  auxiliary,
+  endingClassName,
+  auxiliaryClassName,
+}: {
+  pronoun: string;
+  stem: string;
+  ending: string;
+  layout: ConjugationResult["verbWordLayout"];
+  auxiliary: string | null;
+  endingClassName: string;
+  auxiliaryClassName: string;
+}) {
+  const { prefix, suffix } = verbPhraseDisplayParts(stem, ending, layout);
+  const spacedSuffix = suffix && layout === "separate_words";
+
+  return (
+    <>
+      <span>{pronoun} </span>
+      <span>
+        {prefix}
+        {suffix && (
+          <>
+            {spacedSuffix ? " " : null}
+            <span className={endingClassName}>{suffix}</span>
+          </>
+        )}
+      </span>
+      {auxiliary && (
+        <>
+          {" "}
+          <span className={auxiliaryClassName}>{auxiliary}</span>
+        </>
+      )}
+    </>
+  );
+}
+
 function ConjugationResultCard({
   result,
 }: {
   result: ReturnType<typeof conjugate>;
 }) {
+  const stemRomanised = latinRomanised(result.stemRomanised) ?? "";
+  const endingRomanised = latinRomanised(result.endingRomanised) ?? "";
+
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
       <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
@@ -38,31 +87,27 @@ function ConjugationResultCard({
       </p>
 
       <div className="mt-4 text-2xl leading-relaxed text-zinc-900">
-        <span>{result.pronoun} </span>
-        <span>
-          {result.root}
-          <span className="text-violet-600">{result.ending}</span>
-        </span>
-        {result.auxiliary && (
-          <>
-            {" "}
-            <span className="text-amber-600">{result.auxiliary}</span>
-          </>
-        )}
+        <VerbPhraseLine
+          pronoun={result.pronoun}
+          stem={result.root}
+          ending={result.ending}
+          layout={result.verbWordLayout}
+          auxiliary={result.auxiliary}
+          endingClassName="text-violet-600"
+          auxiliaryClassName="text-amber-600"
+        />
       </div>
 
       <div className="mt-2 text-base text-zinc-500">
-        <span>{result.pronounRomanised} </span>
-        <span>
-          {result.root}
-          <span className="text-violet-500">{result.endingRomanised}</span>
-        </span>
-        {result.auxiliaryRomanised && (
-          <>
-            {" "}
-            <span className="text-amber-500">{result.auxiliaryRomanised}</span>
-          </>
-        )}
+        <VerbPhraseLine
+          pronoun={result.pronounRomanised}
+          stem={stemRomanised}
+          ending={endingRomanised}
+          layout={result.verbWordLayout}
+          auxiliary={result.auxiliaryRomanised}
+          endingClassName="text-violet-500"
+          auxiliaryClassName="text-amber-500"
+        />
       </div>
 
       <p className="mt-4 text-sm text-zinc-500">{result.explanation}</p>
@@ -80,12 +125,22 @@ export function VerbConjugatorExplorer({ verb }: VerbConjugatorExplorerProps) {
   const [person, setPerson] = useState<Person>("I");
   const [gender, setGender] = useState<Gender>("masculine");
 
+  const genderLocked = personLocksMasculineGender(person);
+  const effectiveGender: Gender = genderLocked ? "masculine" : gender;
+
   const tensesInGroup = TENSE_CATALOG.filter((t) => t.group === tenseGroup);
 
   const result = useMemo(
-    () => conjugate(verb, tenseId, person, gender),
-    [verb, tenseId, person, gender]
+    () => conjugate(verb, tenseId, person, effectiveGender),
+    [verb, tenseId, person, effectiveGender]
   );
+
+  function handlePersonChange(next: Person) {
+    setPerson(next);
+    if (personLocksMasculineGender(next)) {
+      setGender("masculine");
+    }
+  }
 
   const ending = infinitiveEnding(verb.infinitive, verb.root);
 
@@ -161,7 +216,7 @@ export function VerbConjugatorExplorer({ verb }: VerbConjugatorExplorerProps) {
               <button
                 key={option.person}
                 type="button"
-                onClick={() => setPerson(option.person)}
+                onClick={() => handlePersonChange(option.person)}
                 className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
                   person === option.person
                     ? "bg-zinc-900 text-white"
@@ -177,22 +232,33 @@ export function VerbConjugatorExplorer({ verb }: VerbConjugatorExplorerProps) {
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-400">
             Gender
+            {genderLocked && (
+              <span className="ml-1 normal-case tracking-normal text-zinc-500">
+                (masculine only for {person === "we" ? "we" : "you"})
+              </span>
+            )}
           </p>
           <div className="flex gap-2">
-            {(["masculine", "feminine"] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setGender(value)}
-                className={`rounded-lg px-3 py-1.5 text-sm capitalize transition-colors ${
-                  gender === value
-                    ? "bg-zinc-900 text-white"
-                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
-                }`}
-              >
-                {value}
-              </button>
-            ))}
+            {(["masculine", "feminine"] as const).map((value) => {
+              const disabled = genderLocked && value === "feminine";
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setGender(value)}
+                  className={`rounded-lg px-3 py-1.5 text-sm capitalize transition-colors ${
+                    effectiveGender === value
+                      ? "bg-zinc-900 text-white"
+                      : disabled
+                        ? "cursor-not-allowed bg-zinc-50 text-zinc-300"
+                        : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                  }`}
+                >
+                  {value}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

@@ -4,18 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
-import { shuffleArray } from "@/lib/flashcards/utils";
 import { saveGameScoreIfBest } from "@/lib/games/game-scores";
+import {
+  buildGridTilesFromPairs,
+  createMemoryGridBatches,
+  type MemoryGridTile,
+} from "@/lib/games/memory-grid-batches";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
 import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
-
-type GridCard = {
-  id: string;
-  cardId: string;
-  text: string;
-  side: "front" | "back";
-};
 
 type MemoryGridModeProps = {
   deck: FlashcardDeckContext;
@@ -26,7 +23,9 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
   const backHref = `/dashboard/games/memory-grid`;
 
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
-  const [cards, setCards] = useState<GridCard[]>([]);
+  const [cards, setCards] = useState<MemoryGridTile[]>([]);
+  const [batchIndex, setBatchIndex] = useState(0);
+  const [batchPairsFound, setBatchPairsFound] = useState(0);
   const [flippedIds, setFlippedIds] = useState<Set<string>>(new Set());
   const [matchedCardIds, setMatchedCardIds] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -41,25 +40,10 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
 
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const batchesRef = useRef<ReturnType<typeof createMemoryGridBatches>>([]);
 
-  function buildCards() {
-    const list: GridCard[] = [];
-    for (const card of deck.cards) {
-      list.push({
-        id: `${card.id}-front`,
-        cardId: card.id,
-        text: card.front_text,
-        side: "front",
-      });
-      list.push({
-        id: `${card.id}-back`,
-        cardId: card.id,
-        text: card.back_text,
-        side: "back",
-      });
-    }
-    return shuffleArray(list);
-  }
+  const totalBatches = batchesRef.current.length;
+  const currentBatchSize = batchesRef.current[batchIndex]?.length ?? 0;
 
   useEffect(() => {
     const supabase = createClient();
@@ -68,16 +52,33 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
     });
   }, []);
 
+  function loadBatch(index: number) {
+    const batch = batchesRef.current[index];
+    if (!batch) return;
+
+    setCards(buildGridTilesFromPairs(batch));
+    setBatchIndex(index);
+    setBatchPairsFound(0);
+    setFlippedIds(new Set());
+    setMatchedCardIds(new Set());
+    setSelectedId(null);
+    setWrongId(null);
+  }
+
   useEffect(() => {
-    if (
-      phase !== "playing" ||
-      pairsFound !== deck.cards.length ||
-      deck.cards.length === 0
-    ) {
+    if (phase !== "playing" || currentBatchSize === 0) return;
+    if (batchPairsFound < currentBatchSize) return;
+
+    const nextIndex = batchIndex + 1;
+    if (nextIndex < batchesRef.current.length) {
+      loadBatch(nextIndex);
       return;
     }
-    setPhase("finished");
-  }, [pairsFound, deck.cards.length, phase]);
+
+    if (pairsFound >= deck.cards.length) {
+      setPhase("finished");
+    }
+  }, [batchPairsFound, batchIndex, currentBatchSize, phase, pairsFound, deck.cards.length]);
 
   useEffect(() => {
     if (phase !== "finished" || savedRef.current) return;
@@ -112,18 +113,15 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
 
   function startGame() {
     savedRef.current = false;
-    setCards(buildCards());
-    setFlippedIds(new Set());
-    setMatchedCardIds(new Set());
-    setSelectedId(null);
-    setWrongId(null);
+    batchesRef.current = createMemoryGridBatches(deck.cards);
     setPairsFound(0);
     setMoves(0);
     setResult(null);
+    loadBatch(0);
     setPhase("playing");
   }
 
-  function handleCardClick(card: GridCard) {
+  function handleCardClick(card: MemoryGridTile) {
     if (phase !== "playing") return;
     if (matchedCardIds.has(card.cardId)) return;
     if (flippedIds.has(card.id)) return;
@@ -150,6 +148,7 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
     if (first.cardId === card.cardId && first.side !== card.side) {
       setMatchedCardIds((prev) => new Set(prev).add(card.cardId));
       setPairsFound((p) => p + 1);
+      setBatchPairsFound((p) => p + 1);
       setSelectedId(null);
       return;
     }
@@ -163,6 +162,8 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
   }
 
   if (phase === "ready") {
+    const usesBatching = deck.cards.length > 6;
+
     return (
       <div className="space-y-6">
         <div>
@@ -175,6 +176,7 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
           <h1 className="mt-1 text-2xl font-bold text-zinc-900">{deck.lessonTitle}</h1>
           <p className="mt-2 text-sm text-zinc-500">
             Flip cards and match front/back pairs from memory.
+            {usesBatching && " Larger sets play in batches of 6 pairs at a time."}
           </p>
         </div>
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -208,7 +210,7 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
             <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
           )}
           {result && !result.isNewBest && result.currentBest > 0 && (
-            <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest} pairs</p>
+            <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
           )}
         </div>
         <button
@@ -233,6 +235,12 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
         </Link>
         <p className="text-sm font-semibold text-zinc-900">
           {pairsFound} / {deck.cards.length} pairs · {moves} moves
+          {totalBatches > 1 && (
+            <span className="font-normal text-zinc-500">
+              {" "}
+              · batch {batchIndex + 1}/{totalBatches}
+            </span>
+          )}
         </p>
       </div>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">

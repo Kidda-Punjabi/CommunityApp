@@ -6,6 +6,7 @@ import {
   searchDictionaryEntries,
   type DictionaryEntry,
 } from "@/lib/resources/dictionary";
+import { formatPunjabiForDisplay } from "@/lib/conjugation/format";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 
 const DEBOUNCE_MS = 200;
@@ -33,7 +34,7 @@ function DictionaryResultRow({ entry }: { entry: DictionaryEntry }) {
           )}
         </div>
       </div>
-      <p className="mt-1.5 text-xl text-zinc-900">{entry.punjabi}</p>
+      <p className="mt-1.5 text-xl text-zinc-900">{formatPunjabiForDisplay(entry.punjabi)}</p>
       {entry.romanised && (
         <p className="mt-1 text-sm font-medium text-violet-600">{entry.romanised}</p>
       )}

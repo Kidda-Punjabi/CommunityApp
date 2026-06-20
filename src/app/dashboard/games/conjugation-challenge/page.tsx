@@ -1,14 +1,18 @@
 import { ConjugationChallengeMode } from "@/components/games/conjugation-challenge-mode";
-import { loadVerbs } from "@/lib/conjugation/load-verbs";
+import { loadGrammarSentencesForGames } from "@/lib/games/load-grammar-sentences";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function ConjugationChallengePage() {
   const supabase = await createClient();
-  const { verbs, tableReady } = await loadVerbs(supabase);
+  const { sentences, tableReady, loadError } = await loadGrammarSentencesForGames(supabase);
 
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
-      <ConjugationChallengeMode verbs={verbs} tableReady={tableReady} />
+      <ConjugationChallengeMode
+        sentences={sentences}
+        tableReady={tableReady}
+        loadError={loadError}
+      />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { splitPunjabiTiles } from "@/lib/games/types";
+import { wordTileLabel } from "@/lib/games/grammar-sentence";
+import type { WordTile } from "@/lib/games/types";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -23,8 +25,8 @@ import {
 
 const initialState: GrammarActionResult = {};
 
-function tilesToText(tiles: string[]) {
-  return tiles.join(", ");
+function tilesToText(tiles: Array<WordTile | string>) {
+  return tiles.map((tile) => wordTileLabel(tile)).join(", ");
 }
 
 function textToTiles(text: string) {
@@ -220,10 +222,10 @@ export function SentenceBuilderTab({ data }: { data: AdminData }) {
                     <p className="mt-2 flex flex-wrap gap-1">
                       {sentence.word_tiles.map((tile, index) => (
                         <span
-                          key={`${tile}-${index}`}
+                          key={`${wordTileLabel(tile)}-${index}`}
                           className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700"
                         >
-                          {tile}
+                          {wordTileLabel(tile)}
                         </span>
                       ))}
                     </p>
