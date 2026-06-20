@@ -7,7 +7,6 @@ import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 import { saveGameScoreIfBest } from "@/lib/games/game-scores";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
-import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 
 const LIVES = 3;
@@ -97,7 +96,6 @@ export function SpeedTranslateMode({ deck, initialBestScore }: SpeedTranslateMod
         currentBest: outcome.currentBest,
         pointsEarned: outcome.pointsEarned,
       });
-      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();

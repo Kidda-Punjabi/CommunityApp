@@ -42,7 +42,7 @@ const INFO_SCREENS: ScreenContent[] = [
     title: "Games for practice",
     body: [
       `Under the Games tab you'll find Vocabulary Games and Grammar Games — ${GAME_CATALOG.length} ways to practice, including Match, Speed Translate, Conjugation Challenge, and Sentence Builder.`,
-      "Games count toward your level alongside lessons and quizzes.",
+      "Games earn XP toward your next level-up test alongside lessons and quizzes.",
     ],
     visual: "games",
   },
@@ -158,11 +158,17 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
     setSaving(true);
     await completeOnboarding({
       isTestMode,
-      selfAssessedStartingTier: selfTier ?? undefined,
-      statedGoalMotivation: motivation ?? undefined,
-      targetTier: targetTier ?? undefined,
+      selfAssessedStartingTier: dismissed ? undefined : (selfTier ?? undefined),
+      statedGoalMotivation: dismissed ? undefined : (motivation ?? undefined),
+      targetTier: dismissed ? undefined : (targetTier ?? undefined),
     });
     setSaving(false);
+
+    if (!isTestMode && !dismissed && selfTier != null) {
+      window.location.href = "/dashboard/placement";
+      return;
+    }
+
     onClose();
   }
 
@@ -239,8 +245,8 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
                   ))}
                 </div>
                 <p className="text-xs text-zinc-500">
-                  This is just a starting point — your real level will update automatically as
-                  you complete lessons, quizzes, and games.
+                  We&apos;ll confirm this with a short placement test next — your level only
+                  changes when you pass a level-up test.
                 </p>
               </div>
             )}
@@ -296,16 +302,14 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
                 <VisualPanel kind="tiers-list" />
                 {selfTierMeta && (
                   <p className="text-sm leading-relaxed text-zinc-700">
-                    You told us you&apos;re starting around{" "}
-                    <span className="font-semibold">{selfTierMeta.name}</span>. As you complete
-                    lessons, quizzes, and games, we&apos;ll track your real progress and update
-                    this automatically.
+                    {selfTierMeta.tier === 1
+                      ? "Next up: the Level 1 → 2 check. Pass with 95%+ and you'll start at Level 2 — otherwise we'll confirm Level 1."
+                      : `Next up: a short placement test to confirm Level ${selfTierMeta.tier} (${selfTierMeta.name}) is the right starting point.`}
                   </p>
                 )}
                 <p className="text-sm leading-relaxed text-zinc-600">
-                  Your level reflects what you can actually do — it goes up as you complete
-                  lessons, pass quizzes, and practice in games. Self-marking a flashcard as
-                  &ldquo;confident&rdquo; helps a little, but quizzes and games matter more.
+                  Earn XP from lessons, quizzes, games, and flashcards to unlock level-up tests.
+                  Your level only goes up when you pass a test — it never drops.
                 </p>
               </div>
             )}
@@ -319,7 +323,7 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
             disabled={!canAdvance || saving}
             className="w-full rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
           >
-            {step >= TOTAL_SCREENS - 1 ? "Get started" : "Next"}
+            {step >= TOTAL_SCREENS - 1 ? "Start placement" : "Next"}
           </button>
         </div>
       </div>

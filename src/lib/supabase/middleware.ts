@@ -40,13 +40,27 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const referralCode = normalizeReferralCode(request.nextUrl.searchParams.get("ref"));
-  if (referralCode && request.nextUrl.pathname === "/signup") {
-    supabaseResponse.cookies.set(REFERRAL_COOKIE_NAME, referralCode, {
+
+  function withReferralCookie(response: NextResponse) {
+    if (!referralCode) return response;
+    response.cookies.set(REFERRAL_COOKIE_NAME, referralCode, {
       maxAge: REFERRAL_COOKIE_MAX_AGE_SECONDS,
       httpOnly: true,
       sameSite: "lax",
       path: "/",
     });
+    return response;
+  }
+
+  if (referralCode && request.nextUrl.pathname !== "/signup") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/signup";
+    url.searchParams.set("ref", referralCode);
+    return withReferralCookie(NextResponse.redirect(url));
+  }
+
+  if (referralCode && request.nextUrl.pathname === "/signup") {
+    supabaseResponse = withReferralCookie(supabaseResponse);
   }
 
   if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { createClient } from "@/lib/supabase/client";
-import { notifyPointsEarned, sumPointsEarned } from "@/lib/points/notify-points-earned";
+import { sumPointsEarned } from "@/lib/points/notify-points-earned";
 import { quizScorePercent, saveQuizProgress } from "@/lib/progress/quiz-progress";
 import { PASSING_QUIZ_SCORE } from "@/lib/progress/quiz-progress";
 import { recordStreakActivity, type StreakResult } from "@/lib/progress/streak";
@@ -69,7 +69,6 @@ export function QuizPlayer({
       const result = await saveQuizProgress(supabase, user.id, quizId, percentage, { lessonId });
       const totalPoints = sumPointsEarned([result.quizPoints, result.lessonBonus]);
       setPointsEarned(totalPoints);
-      notifyPointsEarned(totalPoints);
 
       if (percentage >= PASSING_QUIZ_SCORE) {
         const result = await recordStreakActivity(supabase, user.id);

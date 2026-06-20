@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import {
   saveLessonProgress,
 } from "@/lib/progress/lesson-progress";
-import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
 import { recordStreakActivity } from "@/lib/progress/streak";
 
 const SAVE_INTERVAL_MS = 10_000;
@@ -68,7 +67,6 @@ export function LessonAudioPlayer({
       });
 
       if (lessonBonus > 0) {
-        notifyPointsEarned(lessonBonus);
       }
 
       if (shouldComplete && !wasCompleted) {

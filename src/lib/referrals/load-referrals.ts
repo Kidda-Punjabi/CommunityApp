@@ -1,7 +1,8 @@
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getShareAppUrl } from "@/lib/app-url-server";
+import { getReferralShareUrl } from "@/lib/app-url";
 import {
-  getReferralShareUrl,
   type ReferralStatus,
 } from "@/lib/referrals/constants";
 
@@ -126,14 +127,15 @@ export async function loadReferralProfileData(
   supabase: SupabaseClient,
   userId: string
 ): Promise<ReferralProfileData> {
-  const [{ code, unavailableReason }, referrals] = await Promise.all([
+  const [appUrl, { code, unavailableReason }, referrals] = await Promise.all([
+    getShareAppUrl(),
     loadReferralCode(supabase, userId),
     loadReferralsMade(supabase, userId),
   ]);
 
   return {
     referralCode: code,
-    shareUrl: code ? getReferralShareUrl(code) : null,
+    shareUrl: code ? getReferralShareUrl(code, appUrl) : null,
     referrals,
     unavailableReason,
   };

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { saveLessonPdfProgress } from "@/lib/progress/lesson-progress";
-import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
 import { recordStreakActivity } from "@/lib/progress/streak";
 
 type PdfJsModule = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -65,7 +64,6 @@ export function LessonPdfViewer({
       });
 
       if (lessonBonus > 0) {
-        notifyPointsEarned(lessonBonus);
       }
 
       if (shouldComplete && !wasCompleted) {

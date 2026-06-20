@@ -93,7 +93,8 @@ export function FlashcardMatchMode({ deck, initialBestScore }: FlashcardMatchMod
         userId,
         deck.deckName,
         pairsMatched,
-        timeUsed
+        timeUsed,
+        deck.cards.length
       );
       setResult({
         isNewBest: outcome.isNewBest,

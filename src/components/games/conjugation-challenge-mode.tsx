@@ -21,8 +21,6 @@ import { saveGameScore } from "@/lib/games/game-scores";
 import { buildConjugationChallengeLogEntry } from "@/lib/games/session-review-builders";
 import type { RoundResult } from "@/lib/games/session-review";
 import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
-import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
-
 const FEEDBACK_MS = 1000;
 
 type Phase = "setup" | "playing" | "finished";
@@ -191,7 +189,6 @@ export function ConjugationChallengeMode({
         sessionLog,
       });
       setPointsEarned(outcome.pointsEarned);
-      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();

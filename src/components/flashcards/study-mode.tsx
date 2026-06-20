@@ -13,7 +13,7 @@ import {
   type FlashcardConfidence,
   type FlashcardProgressRow,
 } from "@/lib/progress/flashcard-progress";
-import { notifyPointsEarned, sumPointsEarned } from "@/lib/points/notify-points-earned";
+import { sumPointsEarned } from "@/lib/points/notify-points-earned";
 import { recordStreakActivity, type StreakResult } from "@/lib/progress/streak";
 
 type FlashcardStudyModeProps = {
@@ -130,8 +130,6 @@ export function FlashcardStudyMode({ deck, initialProgress }: FlashcardStudyMode
     const supabase = createClient();
     const result = await saveFlashcardConfidence(supabase, userId, card.id, confidence);
     const totalPoints = sumPointsEarned([result.flashcardPoints, result.lessonBonus]);
-    notifyPointsEarned(totalPoints);
-
     setProgressMap((prev) => {
       const next = new Map(prev);
       next.set(card.id, { flashcard_id: card.id, confidence });

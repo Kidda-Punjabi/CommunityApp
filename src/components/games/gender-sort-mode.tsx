@@ -21,7 +21,6 @@ import {
   type AdjectiveAgreementQuestion,
 } from "@/lib/games/gender-sort-adjectives";
 import { pickCycledPool, type GameSessionSettingsChoice } from "@/lib/games/session-settings";
-import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
 import { ui } from "@/lib/ui/styles";
 
 const BASE_POINTS = 10;
@@ -120,7 +119,6 @@ export function GenderSortMode({ nouns, initialBestScore }: GenderSortModeProps)
         currentBest: outcome.currentBest,
         pointsEarned: outcome.pointsEarned,
       });
-      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();

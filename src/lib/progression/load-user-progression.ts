@@ -1,25 +1,33 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeUserCompetency } from "./competency";
-import { getMotivationLabel } from "./motivations";
 import {
-  getNextTier,
-  getTierByNumber,
-  getTierForScore,
-  scoreForSelfAssessedTier,
-  type ProgressionTier,
-} from "./tiers";
+  isTestUnlocked,
+  xpProgressToNextTest,
+  xpRequiredForTest,
+} from "@/lib/progression/xp-thresholds";
+import {
+  loadLatestTestAttempt,
+  whatsNextGuidance,
+  type LevelTestAttemptSummary,
+} from "@/lib/progression/level-test-service";
+import { getMotivationLabel } from "./motivations";
+import { getNextTier, getTierByNumber, type ProgressionTier } from "./tiers";
 
 export type UserProgression = {
-  score: number;
-  tier: ProgressionTier;
+  learnerLevel: number | null;
+  tier: ProgressionTier | null;
   nextTier: ProgressionTier | null;
-  isEstimated: boolean;
+  totalXp: number;
+  placementCompleted: boolean;
+  xpProgress: ReturnType<typeof xpProgressToNextTest>;
+  testUnlocked: boolean;
+  xpRequiredForNextTest: number | null;
+  latestTestAttempt: LevelTestAttemptSummary | null;
+  whatsNext: ReturnType<typeof whatsNextGuidance>;
   selfAssessedTier: number | null;
   targetTier: number | null;
   targetTierMeta: ProgressionTier | null;
   goalMotivation: string | null;
   goalMotivationLabel: string | null;
-  breakdown: Awaited<ReturnType<typeof computeUserCompetency>>["breakdown"];
 };
 
 export type OnboardingProfile = {
@@ -27,6 +35,8 @@ export type OnboardingProfile = {
   selfAssessedStartingTier: number | null;
   statedGoalMotivation: string | null;
   targetTier: number | null;
+  placementCompleted: boolean;
+  learnerLevel: number | null;
 };
 
 export async function loadOnboardingProfile(
@@ -36,7 +46,7 @@ export async function loadOnboardingProfile(
   const { data } = await supabase
     .from("profiles")
     .select(
-      "has_seen_onboarding, self_assessed_starting_tier, stated_goal_motivation, target_tier"
+      "has_seen_onboarding, self_assessed_starting_tier, stated_goal_motivation, target_tier, placement_completed_at, learner_level"
     )
     .eq("id", userId)
     .single();
@@ -46,6 +56,8 @@ export async function loadOnboardingProfile(
     selfAssessedStartingTier: data?.self_assessed_starting_tier ?? null,
     statedGoalMotivation: data?.stated_goal_motivation ?? null,
     targetTier: data?.target_tier ?? null,
+    placementCompleted: Boolean(data?.placement_completed_at),
+    learnerLevel: data?.learner_level ?? null,
   };
 }
 
@@ -53,52 +65,61 @@ export async function loadUserProgression(
   supabase: SupabaseClient,
   userId: string
 ): Promise<UserProgression> {
-  const [{ data: profile }, { data: lessons }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "self_assessed_starting_tier, stated_goal_motivation, target_tier, peak_competency_score"
-      )
-      .eq("id", userId)
-      .single(),
-    supabase
-      .from("lessons")
-      .select("id, course_id, lesson_number, pdf_url, audio_url, is_free"),
-  ]);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select(
+      "self_assessed_starting_tier, stated_goal_motivation, target_tier, learner_level, total_xp, xp_at_level_start, placement_completed_at"
+    )
+    .eq("id", userId)
+    .single();
 
-  const computed = await computeUserCompetency(supabase, userId, lessons ?? []);
-  const peakStored = profile?.peak_competency_score ?? 0;
+  const learnerLevel = profile?.learner_level ?? null;
+  const totalXp = profile?.total_xp ?? 0;
+  const xpAtLevelStart = profile?.xp_at_level_start ?? 0;
+  const placementCompleted = Boolean(profile?.placement_completed_at);
+  const tier = learnerLevel != null ? getTierByNumber(learnerLevel) : null;
+  const nextTier = learnerLevel != null ? getNextTier(learnerLevel) : null;
 
-  let score = peakStored;
-  let isEstimated = false;
+  const latestTestAttempt =
+    learnerLevel != null && learnerLevel < 8
+      ? await loadLatestTestAttempt(supabase, userId, learnerLevel)
+      : null;
 
-  if (computed.breakdown.hasRealEvidence) {
-    score = Math.max(peakStored, computed.rawScore);
-    if (score > peakStored) {
-      await supabase
-        .from("profiles")
-        .update({ peak_competency_score: score })
-        .eq("id", userId);
-    }
-  } else if (profile?.self_assessed_starting_tier) {
-    score = scoreForSelfAssessedTier(profile.self_assessed_starting_tier);
-    isEstimated = true;
-  }
+  const testUnlocked =
+    learnerLevel != null
+      ? isTestUnlocked(learnerLevel, totalXp, xpAtLevelStart)
+      : false;
 
-  const tier = getTierForScore(score);
-  const nextTier = getNextTier(tier.tier);
+  const xpProgress =
+    learnerLevel != null
+      ? xpProgressToNextTest(learnerLevel, totalXp, xpAtLevelStart)
+      : null;
+
   const targetTier = profile?.target_tier ?? null;
 
   return {
-    score,
+    learnerLevel,
     tier,
     nextTier,
-    isEstimated,
+    totalXp,
+    placementCompleted,
+    xpProgress,
+    testUnlocked,
+    xpRequiredForNextTest:
+      learnerLevel != null ? xpRequiredForTest(learnerLevel) : null,
+    latestTestAttempt,
+    whatsNext: whatsNextGuidance({
+      learnerLevel,
+      placementCompleted,
+      totalXp,
+      xpAtLevelStart,
+      testUnlocked,
+      latestAttempt: latestTestAttempt,
+    }),
     selfAssessedTier: profile?.self_assessed_starting_tier ?? null,
     targetTier,
     targetTierMeta: targetTier ? getTierByNumber(targetTier) : null,
     goalMotivation: profile?.stated_goal_motivation ?? null,
     goalMotivationLabel: getMotivationLabel(profile?.stated_goal_motivation),
-    breakdown: computed.breakdown,
   };
 }

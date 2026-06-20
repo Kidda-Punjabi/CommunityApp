@@ -16,7 +16,6 @@ import {
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 import { saveGameScore } from "@/lib/games/game-scores";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
-import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 
 export type StreakSurvivalSourceType = "deck" | "gender" | "verbs";
@@ -176,7 +175,6 @@ export function StreakSurvivalMode({
         currentBest: outcome.currentBest,
         pointsEarned: outcome.pointsEarned,
       });
-      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();

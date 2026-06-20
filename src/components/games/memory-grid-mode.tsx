@@ -11,7 +11,6 @@ import {
   type MemoryGridTile,
 } from "@/lib/games/memory-grid-batches";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
-import { notifyPointsEarned } from "@/lib/points/notify-points-earned";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 
 type MemoryGridModeProps = {
@@ -105,7 +104,6 @@ export function MemoryGridMode({ deck, initialBestScore }: MemoryGridModeProps) 
         currentBest: outcome.currentBest,
         pointsEarned: outcome.pointsEarned,
       });
-      notifyPointsEarned(outcome.pointsEarned);
     };
 
     void persist();

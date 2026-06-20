@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
+import { notifyActivityRewards } from "@/lib/points/notify-points-earned";
 import { getCurrentWeekStart } from "./week";
 
 export function quizAttemptPoints(scorePercent: number): number {
@@ -67,6 +68,36 @@ export async function awardWeeklyPoints(
   return points;
 }
 
+/** Best-effort lifetime XP award — never throws. Returns XP granted. */
+export async function awardXp(
+  supabase: SupabaseClient,
+  xp: number
+): Promise<number> {
+  if (xp <= 0) return 0;
+
+  const { error } = await supabase.rpc("award_xp", { p_xp: xp });
+
+  if (error) {
+    console.error("Failed to award XP:", error.message);
+    return 0;
+  }
+
+  return xp;
+}
+
+async function awardBoth(
+  supabase: SupabaseClient,
+  points: number,
+  activityDate?: string
+): Promise<{ weekly: number; xp: number }> {
+  const [weekly, xp] = await Promise.all([
+    awardWeeklyPoints(supabase, points, activityDate),
+    awardXp(supabase, points),
+  ]);
+  notifyActivityRewards(weekly, xp);
+  return { weekly, xp };
+}
+
 export async function tryAwardLessonCompletionPoints(
   supabase: SupabaseClient,
   lessonId: string,
@@ -83,7 +114,14 @@ export async function tryAwardLessonCompletionPoints(
     return 0;
   }
 
-  return data ? lessonCompletedPoints() : 0;
+  if (data) {
+    const pts = lessonCompletedPoints();
+    const xp = await awardXp(supabase, pts);
+    notifyActivityRewards(pts, xp);
+    return pts;
+  }
+
+  return 0;
 }
 
 export async function awardQuizAttemptPoints(
@@ -91,7 +129,12 @@ export async function awardQuizAttemptPoints(
   scorePercent: number,
   activityDate?: string
 ): Promise<number> {
-  return awardWeeklyPoints(supabase, quizAttemptPoints(scorePercent), activityDate);
+  const { weekly } = await awardBoth(
+    supabase,
+    quizAttemptPoints(scorePercent),
+    activityDate
+  );
+  return weekly;
 }
 
 export async function awardGameSessionPoints(
@@ -101,14 +144,24 @@ export async function awardGameSessionPoints(
 ): Promise<number> {
   const accuracy = accuracyFromGameMetadata(metadata);
   if (accuracy == null) return 0;
-  return awardWeeklyPoints(supabase, gameSessionPoints(accuracy), activityDate);
+  const { weekly } = await awardBoth(
+    supabase,
+    gameSessionPoints(accuracy),
+    activityDate
+  );
+  return weekly;
 }
 
 export async function awardFlashcardConfidentPoints(
   supabase: SupabaseClient,
   activityDate?: string
 ): Promise<number> {
-  return awardWeeklyPoints(supabase, flashcardConfidentPoints(), activityDate);
+  const { weekly } = await awardBoth(
+    supabase,
+    flashcardConfidentPoints(),
+    activityDate
+  );
+  return weekly;
 }
 
 export { getCurrentWeekStart };
