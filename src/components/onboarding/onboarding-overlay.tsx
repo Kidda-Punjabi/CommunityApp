@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { completeOnboarding } from "@/app/dashboard/onboarding/actions";
 import { TabBarPreview } from "@/components/onboarding/tab-bar-preview";
 import { GAME_CATALOG } from "@/lib/games/catalog";
-import { GOAL_MOTIVATIONS } from "@/lib/progression/motivations";
+import { GOAL_MOTIVATIONS, serializeMotivationIds } from "@/lib/progression/motivations";
 import { PROGRESSION_TIERS, getTierByNumber } from "@/lib/progression/tiers";
 
 const TOTAL_SCREENS = 8;
@@ -134,32 +134,94 @@ function VisualPanel({ kind }: { kind: ScreenContent["visual"] }) {
   return null;
 }
 
+type TierQuestPhase = "current" | "target";
+
+function tierRowClass(tier: number, selfTier: number | null, targetTier: number | null): string {
+  const isCurrent = selfTier === tier;
+  const isTarget = targetTier === tier;
+
+  if (isCurrent && isTarget) {
+    return "border-violet-400 bg-gradient-to-r from-violet-50 to-emerald-50 ring-1 ring-violet-200";
+  }
+  if (isCurrent) {
+    return "border-violet-500 bg-violet-50 ring-1 ring-violet-200";
+  }
+  if (isTarget) {
+    return "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200";
+  }
+  return "border-zinc-200 bg-white hover:border-zinc-300";
+}
+
 export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProps) {
   const [step, setStep] = useState(0);
   const [selfTier, setSelfTier] = useState<number | null>(null);
-  const [motivation, setMotivation] = useState<string | null>(null);
   const [targetTier, setTargetTier] = useState<number | null>(null);
+  const [tierQuestPhase, setTierQuestPhase] = useState<TierQuestPhase>("current");
+  const [motivations, setMotivations] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const screen = useMemo(() => {
     if (step < INFO_SCREENS.length) return INFO_SCREENS[step];
-    if (step === 5) return { title: "Where are you starting from?" };
-    if (step === 6) return { title: "What's your goal with Punjabi?" };
+    if (step === 5) {
+      return {
+        title:
+          tierQuestPhase === "current"
+            ? "Where are you starting from?"
+            : "Now select where you'd like to be",
+      };
+    }
+    if (step === 6) return { title: "Why do you want to level up?" };
     return { title: "Your level" };
-  }, [step]);
+  }, [step, tierQuestPhase]);
 
   const canAdvance = useMemo(() => {
-    if (step === 5) return selfTier != null;
-    if (step === 6) return motivation != null && targetTier != null;
+    if (step === 5) {
+      return (
+        selfTier != null &&
+        targetTier != null &&
+        targetTier >= selfTier
+      );
+    }
+    if (step === 6) return motivations.length > 0;
     return true;
-  }, [step, selfTier, motivation, targetTier]);
+  }, [step, selfTier, targetTier, motivations.length]);
+
+  function handleTierSelect(tier: number) {
+    if (tierQuestPhase === "current") {
+      setSelfTier(tier);
+      setTargetTier((prev) => (prev != null && prev < tier ? null : prev));
+      setTierQuestPhase("target");
+      return;
+    }
+
+    if (selfTier == null) {
+      setSelfTier(tier);
+      setTierQuestPhase("target");
+      return;
+    }
+
+    if (tier < selfTier) {
+      setSelfTier(tier);
+      setTargetTier(null);
+      setTierQuestPhase("target");
+      return;
+    }
+
+    setTargetTier(tier);
+  }
+
+  function toggleMotivation(id: string) {
+    setMotivations((prev) =>
+      prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id]
+    );
+  }
 
   async function finish(dismissed: boolean) {
     setSaving(true);
     await completeOnboarding({
       isTestMode,
       selfAssessedStartingTier: dismissed ? undefined : (selfTier ?? undefined),
-      statedGoalMotivation: dismissed ? undefined : (motivation ?? undefined),
+      statedGoalMotivation: dismissed ? undefined : serializeMotivationIds(motivations),
       targetTier: dismissed ? undefined : (targetTier ?? undefined),
     });
     setSaving(false);
@@ -177,11 +239,14 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
       await finish(false);
       return;
     }
+    if (step === 5 && tierQuestPhase === "current") {
+      return;
+    }
     setStep((current) => current + 1);
   }
 
-  const targetTierMeta = targetTier ? getTierByNumber(targetTier) : null;
   const selfTierMeta = selfTier ? getTierByNumber(selfTier) : null;
+  const targetTierMeta = targetTier ? getTierByNumber(targetTier) : null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-zinc-900/60 p-0 sm:items-center sm:p-4">
@@ -225,81 +290,116 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
 
             {step === 5 && (
               <div className="space-y-3">
+                {selfTier != null && tierQuestPhase === "target" && (
+                  <p className="text-sm text-zinc-600">
+                    <span className="font-medium text-violet-700">Purple</span> is where you
+                    are now. Pick a{" "}
+                    <span className="font-medium text-emerald-700">green</span> goal at or
+                    above that level.
+                  </p>
+                )}
+
                 <div className="space-y-2">
-                  {PROGRESSION_TIERS.map((tier) => (
-                    <button
-                      key={tier.tier}
-                      type="button"
-                      onClick={() => setSelfTier(tier.tier)}
-                      className={`w-full rounded-xl border px-4 py-3 text-left transition-colors ${
-                        selfTier === tier.tier
-                          ? "border-violet-400 bg-violet-50"
-                          : "border-zinc-200 bg-white hover:border-zinc-300"
-                      }`}
-                    >
-                      <p className="font-semibold text-zinc-900">
-                        {tier.tier}. {tier.name}
-                      </p>
-                      <p className="mt-0.5 text-sm text-zinc-600">{tier.description}</p>
-                    </button>
-                  ))}
+                  {PROGRESSION_TIERS.map((tier) => {
+                    const isCurrent = selfTier === tier.tier;
+                    const isTarget = targetTier === tier.tier;
+                    const disabled =
+                      tierQuestPhase === "target" &&
+                      selfTier != null &&
+                      tier.tier < selfTier &&
+                      !isCurrent;
+
+                    return (
+                      <button
+                        key={tier.tier}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => handleTierSelect(tier.tier)}
+                        className={`w-full rounded-xl border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${tierRowClass(
+                          tier.tier,
+                          selfTier,
+                          targetTier
+                        )}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-zinc-900">
+                              {tier.tier}. {tier.name}
+                            </p>
+                            <p className="mt-0.5 text-sm text-zinc-600">{tier.description}</p>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            {isCurrent && (
+                              <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                You
+                              </span>
+                            )}
+                            {isTarget && (
+                              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                Goal
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
+
                 <p className="text-xs text-zinc-500">
-                  We&apos;ll confirm this with a short placement test next — your level only
-                  changes when you pass a level-up test.
+                  We&apos;ll confirm your starting level with a short placement test next — your
+                  level only changes when you pass a level-up test.
                 </p>
               </div>
             )}
 
             {step === 6 && (
-              <div className="space-y-5">
+              <div className="space-y-3">
+                <p className="text-sm text-zinc-600">Select all that apply.</p>
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-zinc-700">What brings you here?</p>
-                  {GOAL_MOTIVATIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => setMotivation(option.id)}
-                      className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
-                        motivation === option.id
-                          ? "border-violet-400 bg-violet-50 font-medium text-violet-900"
-                          : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+                  {GOAL_MOTIVATIONS.map((option) => {
+                    const selected = motivations.includes(option.id);
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => toggleMotivation(option.id)}
+                        className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+                          selected
+                            ? "border-violet-400 bg-violet-50 font-medium text-violet-900"
+                            : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"
+                        }`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <span
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs ${
+                              selected
+                                ? "border-violet-600 bg-violet-600 text-white"
+                                : "border-zinc-300 bg-white"
+                            }`}
+                            aria-hidden="true"
+                          >
+                            {selected ? "✓" : ""}
+                          </span>
+                          {option.label}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-zinc-700">Where would you like to get to?</p>
-                  {PROGRESSION_TIERS.map((tier) => (
-                    <button
-                      key={tier.tier}
-                      type="button"
-                      onClick={() => setTargetTier(tier.tier)}
-                      className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
-                        targetTier === tier.tier
-                          ? "border-violet-400 bg-violet-50 font-medium text-violet-900"
-                          : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"
-                      }`}
-                    >
-                      {tier.tier}. {tier.name}
-                    </button>
-                  ))}
-                </div>
-
-                {targetTierMeta && (
-                  <p className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800">
-                    Got it — we&apos;ll help you work toward {targetTierMeta.name}.
-                  </p>
-                )}
               </div>
             )}
 
             {step === 7 && (
               <div className="space-y-4">
                 <VisualPanel kind="tiers-list" />
+                {selfTierMeta && targetTierMeta && (
+                  <p className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-900">
+                    From <span className="font-semibold">{selfTierMeta.name}</span> to{" "}
+                    <span className="font-semibold text-emerald-800">{targetTierMeta.name}</span>
+                    {motivations.length > 0 ? " — we've got your goals." : "."}
+                  </p>
+                )}
                 {selfTierMeta && (
                   <p className="text-sm leading-relaxed text-zinc-700">
                     {selfTierMeta.tier === 1

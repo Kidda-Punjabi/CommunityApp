@@ -45,18 +45,10 @@ export function FriendsPageClient({ friends, requests }: FriendsPageClientProps)
   return (
     <div className={`${ui.page} ${ui.stackLoose}`}>
       <div>
-        <Link href="/dashboard/friends" className="text-sm font-medium text-violet-600">
+        <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600">
           ← Profile
         </Link>
-        <div className="mt-3 flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-bold text-zinc-900">Friends</h1>
-          <Link
-            href="/dashboard/challenges/new"
-            className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500"
-          >
-            Challenge a friend
-          </Link>
-        </div>
+        <h1 className="mt-3 text-2xl font-bold text-zinc-900">Friends</h1>
       </div>
 
       {(incoming.length > 0 || outgoing.length > 0) && (

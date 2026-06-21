@@ -9,7 +9,7 @@ import {
   whatsNextGuidance,
   type LevelTestAttemptSummary,
 } from "@/lib/progression/level-test-service";
-import { getMotivationLabel } from "./motivations";
+import { formatMotivationLabels } from "./motivations";
 import { getNextTier, getTierByNumber, type ProgressionTier } from "./tiers";
 
 export type UserProgression = {
@@ -120,6 +120,6 @@ export async function loadUserProgression(
     targetTier,
     targetTierMeta: targetTier ? getTierByNumber(targetTier) : null,
     goalMotivation: profile?.stated_goal_motivation ?? null,
-    goalMotivationLabel: getMotivationLabel(profile?.stated_goal_motivation),
+    goalMotivationLabel: formatMotivationLabels(profile?.stated_goal_motivation),
   };
 }

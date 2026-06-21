@@ -1,4 +1,5 @@
 import { getDisplayName } from "@/lib/profile/display-name";
+import type { FriendRequestStatus } from "@/lib/friends/constants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NotificationType } from "@/lib/friends/constants";
 
@@ -12,6 +13,8 @@ export type NotificationItem = {
   actorAvatarUrl: string | null;
   payload: Record<string, unknown>;
   kudosSent: boolean;
+  /** Set for friend_request notifications — controls whether action buttons show. */
+  friendRequestStatus?: FriendRequestStatus | null;
 };
 
 export type NotificationSettings = {
@@ -91,8 +94,30 @@ export async function loadNotifications(
     kudosSent = new Set((kudosRows ?? []).map((row) => row.notification_id as string));
   }
 
+  const friendRequestIds = rows
+    .filter((row) => row.type === "friend_request")
+    .map((row) => row.payload?.request_id)
+    .filter((id): id is string => typeof id === "string");
+
+  const friendRequestStatusById = new Map<string, FriendRequestStatus>();
+  if (friendRequestIds.length > 0) {
+    const { data: requestRows } = await supabase
+      .from("friend_requests")
+      .select("id, status")
+      .in("id", friendRequestIds);
+
+    for (const row of requestRows ?? []) {
+      friendRequestStatusById.set(row.id as string, row.status as FriendRequestStatus);
+    }
+  }
+
   return rows.map((row) => {
     const actor = unwrapActor(row);
+    const requestId =
+      row.type === "friend_request" && typeof row.payload?.request_id === "string"
+        ? row.payload.request_id
+        : null;
+
     return {
       id: row.id,
       type: row.type,
@@ -103,6 +128,9 @@ export async function loadNotifications(
       actorAvatarUrl: actor?.avatar_url ?? null,
       payload: row.payload ?? {},
       kudosSent: kudosSent.has(row.id),
+      friendRequestStatus: requestId
+        ? (friendRequestStatusById.get(requestId) ?? null)
+        : undefined,
     };
   });
 }

@@ -183,6 +183,11 @@ export function FriendsSection({ friends, requests, unavailable }: FriendsSectio
             View all {friends.length} friends →
           </Link>
         )}
+        {friends.length > 0 && (
+          <Link href="/dashboard/challenges/new" className={`mt-4 ${ui.btnPrimaryBlock}`}>
+            Challenge a friend
+          </Link>
+        )}
       </div>
     </div>
   );

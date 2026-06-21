@@ -31,9 +31,30 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
+  const [handledRequests, setHandledRequests] = useState<
+    Record<string, "accepted" | "declined">
+  >({});
 
   function refresh() {
     router.refresh();
+  }
+
+  function friendRequestOutcome(
+    item: NotificationItem
+  ): "pending" | "accepted" | "declined" | null {
+    const requestId =
+      typeof item.payload.request_id === "string" ? item.payload.request_id : null;
+    if (!requestId) return null;
+
+    const local = handledRequests[requestId];
+    if (local) return local;
+
+    if (item.friendRequestStatus === "accepted") return "accepted";
+    if (item.friendRequestStatus === "declined") return "declined";
+    if (item.friendRequestStatus === "pending") return "pending";
+
+    return null;
   }
 
   async function handleMarkAll() {
@@ -52,11 +73,27 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
     });
   }
 
-  async function handleFriendRequest(requestId: string, accept: boolean) {
+  async function handleFriendRequest(
+    notificationId: string,
+    requestId: string,
+    accept: boolean
+  ) {
     setActionError(null);
+    setPendingRequestId(requestId);
     startTransition(async () => {
       const result = await respondFriendRequest(requestId, accept);
-      if (result.error) setActionError(result.error);
+      setPendingRequestId(null);
+
+      if (result.error) {
+        setActionError(result.error);
+        return;
+      }
+
+      setHandledRequests((prev) => ({
+        ...prev,
+        [requestId]: accept ? "accepted" : "declined",
+      }));
+      await markNotificationRead(notificationId);
       refresh();
     });
   }
@@ -162,30 +199,51 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
               )}
 
               {item.type === "friend_request" &&
-                typeof item.payload.request_id === "string" && (
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() =>
-                      void handleFriendRequest(item.payload.request_id as string, true)
-                    }
-                    className="flex-1 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() =>
-                      void handleFriendRequest(item.payload.request_id as string, false)
-                    }
-                    className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
-                  >
-                    Decline
-                  </button>
-                </div>
-              )}
+                typeof item.payload.request_id === "string" && (() => {
+                  const requestId = item.payload.request_id as string;
+                  const outcome = friendRequestOutcome(item);
+
+                  if (outcome === "accepted") {
+                    return (
+                      <p className="mt-2 text-xs font-medium text-emerald-700">
+                        Friend request accepted — you&apos;re now friends!
+                      </p>
+                    );
+                  }
+
+                  if (outcome === "declined") {
+                    return (
+                      <p className="mt-2 text-xs font-medium text-zinc-500">Request declined.</p>
+                    );
+                  }
+
+                  if (outcome !== "pending") return null;
+
+                  return (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={pending || pendingRequestId === requestId}
+                        onClick={() =>
+                          void handleFriendRequest(item.id, requestId, true)
+                        }
+                        className="flex-1 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pending || pendingRequestId === requestId}
+                        onClick={() =>
+                          void handleFriendRequest(item.id, requestId, false)
+                        }
+                        className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  );
+                })()}
               {item.type === "friend_game_challenge" &&
                 typeof item.payload.challenge_id === "string" && (
                 <Link
