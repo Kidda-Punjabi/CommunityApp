@@ -3,6 +3,7 @@ import {
   LEVEL_TEST_PASS_PCT,
   type LevelTestQuestion,
 } from "@/lib/progression/level-tests";
+import { parseLevelTestQuestion } from "@/lib/progression/parse-level-test-question";
 import { xpRemainingForTest } from "@/lib/progression/xp-thresholds";
 import { getTierByNumber } from "@/lib/progression/tiers";
 
@@ -22,28 +23,16 @@ export async function loadLevelTestQuestions(
   const { data, error } = await supabase
     .from("level_test_questions")
     .select(
-      "id, from_level, question_text, option_a, option_b, option_c, option_d, correct_answer, question_order"
+      "id, from_level, question_type, content, question_text, option_a, option_b, option_c, option_d, correct_answer, question_order"
     )
     .eq("from_level", fromLevel)
     .eq("active", true)
     .order("question_order", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []).map((row) => normalizeLevelTestQuestion(row));
-}
-
-function normalizeLevelTestQuestion(row: Record<string, unknown>): LevelTestQuestion {
-  return {
-    id: String(row.id ?? ""),
-    from_level: Number(row.from_level ?? 0),
-    question_text: String(row.question_text ?? ""),
-    option_a: String(row.option_a ?? ""),
-    option_b: String(row.option_b ?? ""),
-    option_c: String(row.option_c ?? ""),
-    option_d: String(row.option_d ?? ""),
-    correct_answer: String(row.correct_answer ?? "a"),
-    question_order: Number(row.question_order ?? 0),
-  };
+  return (data ?? [])
+    .map((row) => parseLevelTestQuestion(row as Record<string, unknown>))
+    .filter((question): question is LevelTestQuestion => question !== null);
 }
 
 export async function loadLatestTestAttempt(

@@ -7,17 +7,62 @@ export const PLACEMENT_CLOSE_MIN_PCT = 70;
 /** Placement: below this on confirmation test triggers one follow-up test. */
 export const PLACEMENT_LOW_MAX_PCT = 69;
 
-export type LevelTestQuestion = {
+export type LevelTestMcqOption = {
+  id: string;
+  textGurmukhi?: string;
+  textRomanised?: string;
+  textEnglish?: string;
+};
+
+export type LevelTestMcqQuestion = {
+  kind: "mcq";
   id: string;
   from_level: number;
-  question_text: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
-  correct_answer: string;
   question_order: number;
+  questionGurmukhi?: string;
+  questionRomanised?: string;
+  questionEnglish: string;
+  options: LevelTestMcqOption[];
+  correctOptionId: string;
 };
+
+export type LevelTestConjugationOption = {
+  id: string;
+  gurmukhi: string;
+  romanised?: string;
+};
+
+export type LevelTestConjugationQuestion = {
+  kind: "conjugation_fill_blank";
+  id: string;
+  from_level: number;
+  question_order: number;
+  punjabiSentenceWithBlank: string;
+  englishTranslation: string;
+  options: LevelTestConjugationOption[];
+  correctOptionId: string;
+};
+
+export type LevelTestSentenceTile = {
+  id: string;
+  gurmukhi: string;
+  romanised: string;
+};
+
+export type LevelTestSentenceBuilderQuestion = {
+  kind: "sentence_builder";
+  id: string;
+  from_level: number;
+  question_order: number;
+  englishPrompt: string;
+  correctTiles: string[];
+  tiles: LevelTestSentenceTile[];
+};
+
+export type LevelTestQuestion =
+  | LevelTestMcqQuestion
+  | LevelTestConjugationQuestion
+  | LevelTestSentenceBuilderQuestion;
 
 /** Which transition test confirms a self-assessed level (boundary below claim). */
 export function confirmationTestFromLevel(claimedLevel: number): number {

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { LevelTestQuestionBody } from "@/components/progression/level-test-question-body";
 import { pickCycledPool } from "@/lib/games/session-settings";
 import {
   LEVEL_TEST_PASS_PCT,
@@ -24,6 +25,7 @@ type LevelTestPlayerProps = {
 };
 
 const LIGHT_SURFACE = "bg-white text-zinc-900 [color-scheme:light]";
+const ADVANCE_MS = 450;
 
 export function LevelTestPlayer({
   fromLevel,
@@ -38,7 +40,7 @@ export function LevelTestPlayer({
   );
 
   const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [finished, setFinished] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -50,21 +52,12 @@ export function LevelTestPlayer({
   } | null>(null);
 
   const question = sessionQuestions[index];
-  const options = question
-    ? [
-        { key: "a", label: question.option_a },
-        { key: "b", label: question.option_b },
-        { key: "c", label: question.option_c },
-        { key: "d", label: question.option_d },
-      ]
-    : [];
-  const locked = selected !== null;
+  const locked = selectedOptionId !== null;
 
-  async function handleAnswer(optionKey: string) {
+  function advanceAfterAnswer(isCorrect: boolean, optionId: string | null) {
     if (!question || locked || finished) return;
 
-    setSelected(optionKey);
-    const isCorrect = optionKey === question.correct_answer;
+    setSelectedOptionId(optionId ?? "__answered__");
     const nextCorrect = correctCount + (isCorrect ? 1 : 0);
 
     window.setTimeout(async () => {
@@ -91,8 +84,16 @@ export function LevelTestPlayer({
 
       setCorrectCount(nextCorrect);
       setIndex((current) => current + 1);
-      setSelected(null);
-    }, 450);
+      setSelectedOptionId(null);
+    }, ADVANCE_MS);
+  }
+
+  function handleSelectOption(optionId: string, isCorrect: boolean) {
+    advanceAfterAnswer(isCorrect, optionId);
+  }
+
+  function handleSentenceBuilderAnswer(isCorrect: boolean) {
+    advanceAfterAnswer(isCorrect, "__answered__");
   }
 
   if (questions.length === 0) {
@@ -143,49 +144,20 @@ export function LevelTestPlayer({
         </p>
       </div>
 
-      <div className={`${ui.card} ${LIGHT_SURFACE}`}>
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-          {levelTestLabel(fromLevel)}
-        </p>
-        <p className="mt-3 text-lg font-semibold leading-snug text-zinc-900">
-          {question?.question_text}
-        </p>
-      </div>
+      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        {levelTestLabel(fromLevel)}
+      </p>
 
-      <div className="grid gap-2">
-        {options.map((option) => {
-          const isSelected = selected === option.key;
-          const isCorrect = option.key === question?.correct_answer;
-          const showResult = locked;
-
-          let className =
-            "w-full rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors ";
-
-          if (!showResult) {
-            className +=
-              "border-zinc-300 bg-white text-zinc-900 shadow-sm hover:border-violet-400 hover:bg-violet-50";
-          } else if (isCorrect) {
-            className += "border-green-500 bg-green-50 text-green-900";
-          } else if (isSelected) {
-            className += "border-red-500 bg-red-50 text-red-900";
-          } else {
-            className += "border-zinc-200 bg-zinc-100 text-zinc-800";
-          }
-
-          return (
-            <button
-              key={option.key}
-              type="button"
-              aria-disabled={locked}
-              onClick={() => void handleAnswer(option.key)}
-              className={`${className}${locked ? " pointer-events-none" : ""}`}
-            >
-              <span className="font-semibold uppercase text-zinc-600">{option.key}.</span>{" "}
-              <span className="text-zinc-900">{option.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {question ? (
+        <LevelTestQuestionBody
+          key={question.id}
+          question={question}
+          locked={locked}
+          selectedOptionId={selectedOptionId}
+          onSelectOption={handleSelectOption}
+          onSentenceBuilderAnswer={handleSentenceBuilderAnswer}
+        />
+      ) : null}
     </div>
   );
 }
