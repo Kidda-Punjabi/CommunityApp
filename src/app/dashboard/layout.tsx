@@ -30,10 +30,12 @@ export default async function DashboardLayout({
   return (
     <OnboardingProvider showOnFirstVisit={!onboarding.hasSeenOnboarding}>
       <PointsToastProvider />
-      <div className={`flex min-h-full flex-col ${ui.pageBg}`}>
+      <div className={`flex min-h-dvh flex-1 flex-col ${ui.pageBg}`}>
         <ActivityDateSync />
         {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
-        <div className="mx-auto flex min-h-full w-full max-w-lg flex-1 flex-col pb-24">
+        <div
+          className={`mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance}`}
+        >
           {children}
         </div>
         <BottomNav />

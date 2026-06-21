@@ -1,7 +1,9 @@
 /** Shared Kidda UI class tokens — update here to restyle the whole app. */
 export const ui = {
   pageBg: "bg-zinc-50",
-  page: "flex flex-1 flex-col px-5 py-7",
+  /** Space for fixed bottom nav + home-indicator safe area */
+  navClearance: "pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]",
+  page: "flex min-h-0 flex-1 flex-col px-5 py-7",
   section: "mb-8",
   sectionTitle: "mb-4 font-heading text-lg font-semibold text-zinc-900",
   stack: "space-y-4",

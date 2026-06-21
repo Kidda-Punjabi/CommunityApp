@@ -1,6 +1,7 @@
 "use server";
 
 import type { AuthState } from "@/app/login/actions";
+import { getPublicAppUrl } from "@/lib/app-url";
 import { normalizeReferralCode, REFERRAL_COOKIE_NAME } from "@/lib/referrals/constants";
 import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -35,6 +36,7 @@ export async function signup(
         full_name: fullName,
         ...(referralCode ? { referral_code: referralCode } : {}),
       },
+      emailRedirectTo: `${getPublicAppUrl()}/auth/callback?next=/dashboard/home`,
     },
   });
 

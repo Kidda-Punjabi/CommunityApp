@@ -31,6 +31,7 @@ export default async function EditProfilePage() {
             preferred_name: profile?.preferred_name ?? null,
             avatar_url: profile?.avatar_url ?? null,
           }}
+          learnerLevel={profile?.learner_level ?? null}
         />
       </div>
     </div>

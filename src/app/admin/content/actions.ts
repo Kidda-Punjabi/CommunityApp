@@ -1,6 +1,7 @@
 "use server";
 
 import { isAdmin } from "@/lib/auth/admin";
+import { getDisplayName } from "@/lib/profile/display-name";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ensureStorageBuckets } from "@/lib/supabase/ensure-storage-buckets";
 import type { StorageBucket } from "@/lib/supabase/upload";
@@ -1165,5 +1166,86 @@ export async function debugSetUserStreakDate(input: {
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update streak." };
+  }
+}
+
+export type AdminMemberOption = {
+  userId: string;
+  email: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+export async function searchAdminMembers(
+  query: string
+): Promise<{ results?: AdminMemberOption[]; error?: string }> {
+  try {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return { results: [] };
+
+    const supabase = await requireAdmin();
+    const sanitized = q.replace(/[%_]/g, "");
+    if (!sanitized) return { results: [] };
+
+    const byId = new Map<string, AdminMemberOption>();
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, full_name, preferred_name, avatar_url")
+      .or(`full_name.ilike.%${sanitized}%,preferred_name.ilike.%${sanitized}%`)
+      .limit(25);
+
+    if (profilesError) return { error: profilesError.message };
+
+    for (const profile of profiles ?? []) {
+      byId.set(profile.id, {
+        userId: profile.id,
+        email: null,
+        displayName: getDisplayName(profile) ?? "Member",
+        avatarUrl: profile.avatar_url,
+      });
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (authError) return { error: authError.message };
+
+    const emailMatches = authData.users
+      .filter((user) => user.email?.toLowerCase().includes(sanitized))
+      .slice(0, 25);
+
+    const emailOnlyIds = emailMatches
+      .map((user) => user.id)
+      .filter((id) => !byId.has(id));
+
+    if (emailOnlyIds.length > 0) {
+      const { data: extraProfiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, preferred_name, avatar_url")
+        .in("id", emailOnlyIds);
+
+      for (const user of emailMatches) {
+        const profile = extraProfiles?.find((row) => row.id === user.id);
+        byId.set(user.id, {
+          userId: user.id,
+          email: user.email ?? null,
+          displayName: getDisplayName(profile ?? null) ?? user.email ?? "Member",
+          avatarUrl: profile?.avatar_url ?? null,
+        });
+      }
+    }
+
+    for (const user of authData.users) {
+      const existing = byId.get(user.id);
+      if (existing && user.email) {
+        existing.email = user.email;
+      }
+    }
+
+    return { results: [...byId.values()].slice(0, 25) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Search failed." };
   }
 }

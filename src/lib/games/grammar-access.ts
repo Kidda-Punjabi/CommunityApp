@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasAccessToCourse } from "@/lib/membership/access";
+import type { GenderedNoun } from "@/lib/games/types";
+import { enrichGenderedNounsRomanisation } from "@/lib/games/enrich-gendered-nouns";
 
 export function canAccessGrammarDifficulty(
   unlockedCourseIds: Set<string>,
@@ -66,14 +68,19 @@ export async function fetchAccessibleGenderedNouns(
   supabase: SupabaseClient,
   unlockedCourseIds: Set<string>,
   difficulty?: number
-) {
+): Promise<GenderedNoun[]> {
   let query = supabase.from("gendered_nouns").select("*").order("punjabi_word");
   if (difficulty) query = query.eq("difficulty", difficulty);
 
   const { data, error } = await query;
   if (error) throw error;
 
-  return filterAccessibleGrammarRows(data ?? [], unlockedCourseIds);
+  const rows = filterAccessibleGrammarRows(
+    (data ?? []) as GenderedNoun[],
+    unlockedCourseIds
+  );
+
+  return enrichGenderedNounsRomanisation(supabase, rows);
 }
 
 export async function fetchGrammarTopicTags(

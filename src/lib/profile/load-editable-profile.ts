@@ -4,6 +4,7 @@ export type EditableProfile = {
   full_name: string | null;
   preferred_name: string | null;
   avatar_url: string | null;
+  learner_level: number | null;
 };
 
 /** Loads profile fields for edit/display, tolerating a missing preferred_name column. */
@@ -13,12 +14,15 @@ export async function loadEditableProfile(
 ): Promise<EditableProfile | null> {
   const withPreferred = await supabase
     .from("profiles")
-    .select("full_name, preferred_name, avatar_url")
+    .select("full_name, preferred_name, avatar_url, learner_level")
     .eq("id", userId)
     .single();
 
   if (!withPreferred.error) {
-    return withPreferred.data;
+    return {
+      ...withPreferred.data,
+      learner_level: withPreferred.data.learner_level ?? null,
+    };
   }
 
   const message = withPreferred.error.message.toLowerCase();
@@ -28,7 +32,7 @@ export async function loadEditableProfile(
 
   const basic = await supabase
     .from("profiles")
-    .select("full_name, avatar_url")
+    .select("full_name, avatar_url, learner_level")
     .eq("id", userId)
     .single();
 
@@ -40,5 +44,6 @@ export async function loadEditableProfile(
     full_name: basic.data.full_name,
     preferred_name: null,
     avatar_url: basic.data.avatar_url,
+    learner_level: basic.data.learner_level ?? null,
   };
 }

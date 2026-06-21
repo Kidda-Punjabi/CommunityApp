@@ -64,6 +64,7 @@ export default async function ProfilePage() {
               preferred_name: profile?.preferred_name,
               avatar_url: profile?.avatar_url,
             }}
+            level={progression.learnerLevel}
             size="lg"
           />
         </div>

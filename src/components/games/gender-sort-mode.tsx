@@ -52,6 +52,54 @@ type AnswerFeedback = {
   points: number;
 };
 
+function NounPromptDisplay({
+  punjabi,
+  romanised,
+  english,
+}: {
+  punjabi: string;
+  romanised: string | null;
+  english: string;
+}) {
+  const latin = romanised?.trim();
+
+  return (
+    <div className="space-y-1.5 text-center">
+      <p className="text-3xl font-bold leading-tight text-zinc-900">{punjabi}</p>
+      {latin ? (
+        <p className="text-2xl font-semibold leading-tight text-violet-600">{latin}</p>
+      ) : null}
+      <p className={`text-sm text-zinc-500 ${latin ? "pt-1" : "pt-2"}`}>{english}</p>
+    </div>
+  );
+}
+
+function PunjabiOptionLabel({
+  punjabi,
+  romanised,
+  label,
+  centered = false,
+}: {
+  punjabi: string;
+  romanised: string;
+  label?: string;
+  centered?: boolean;
+}) {
+  const latin = romanised.trim();
+
+  return (
+    <span className={centered ? "flex w-full flex-col items-center text-center" : "block"}>
+      <span className="text-lg font-semibold text-zinc-900">{punjabi}</span>
+      {latin ? (
+        <span className="mt-0.5 block text-lg font-medium text-violet-600">{latin}</span>
+      ) : null}
+      {label ? (
+        <span className="mt-0.5 block text-xs text-zinc-400">{label}</span>
+      ) : null}
+    </span>
+  );
+}
+
 export function GenderSortMode({
   nouns,
   initialBestScore,
@@ -189,6 +237,29 @@ export function GenderSortMode({
     setPhase("playing");
   }
 
+  function advanceAfterNoun(nextScore: number, nextCorrect: number) {
+    setFeedback(null);
+    if (index + 1 >= queue.length) {
+      finishGame(nextScore, nextCorrect);
+      return;
+    }
+    setScore(nextScore);
+    setCorrect(nextCorrect);
+    setIndex((i) => i + 1);
+    setShownAt(Date.now());
+  }
+
+  function advanceAfterAdjective(nextScore: number, nextCorrect: number) {
+    setAdjectiveFeedback(null);
+    if (index + 1 >= adjectiveQueue.length) {
+      finishGame(nextScore, nextCorrect);
+      return;
+    }
+    setScore(nextScore);
+    setCorrect(nextCorrect);
+    setIndex((i) => i + 1);
+  }
+
   function handleAdjectiveAnswer(option: string) {
     if (phase !== "playing" || !adjectiveQuestion || adjectiveFeedback) return;
 
@@ -203,16 +274,19 @@ export function GenderSortMode({
     const nextScore = score + points;
     const nextCorrect = correct + (isCorrect ? 1 : 0);
 
-    advanceTimerRef.current = window.setTimeout(() => {
-      setAdjectiveFeedback(null);
-      if (index + 1 >= adjectiveQueue.length) {
-        finishGame(nextScore, nextCorrect);
-        return;
-      }
-      setScore(nextScore);
-      setCorrect(nextCorrect);
-      setIndex((i) => i + 1);
-    }, FEEDBACK_MS);
+    if (isCorrect) {
+      advanceTimerRef.current = window.setTimeout(() => {
+        advanceAfterAdjective(nextScore, nextCorrect);
+      }, FEEDBACK_MS);
+    }
+  }
+
+  function handleContinueAfterWrongAdjective() {
+    if (!adjectiveFeedback || adjectiveFeedback.correct) return;
+
+    const nextScore = score;
+    const nextCorrect = correct;
+    advanceAfterAdjective(nextScore, nextCorrect);
   }
 
   function finishGame(finalScore: number, finalCorrect: number) {
@@ -243,19 +317,16 @@ export function GenderSortMode({
       points,
     });
 
-    advanceTimerRef.current = window.setTimeout(() => {
-      setFeedback(null);
+    if (isCorrect) {
+      advanceTimerRef.current = window.setTimeout(() => {
+        advanceAfterNoun(nextScore, nextCorrect);
+      }, FEEDBACK_MS);
+    }
+  }
 
-      if (index + 1 >= queue.length) {
-        finishGame(nextScore, nextCorrect);
-        return;
-      }
-
-      setScore(nextScore);
-      setCorrect(nextCorrect);
-      setIndex((i) => i + 1);
-      setShownAt(Date.now());
-    }, FEEDBACK_MS);
+  function handleContinueAfterWrongNoun() {
+    if (!feedback || feedback.correct) return;
+    advanceAfterNoun(score, correct);
   }
 
   useEffect(() => {
@@ -390,7 +461,7 @@ export function GenderSortMode({
                 type="button"
                 disabled={locked}
                 onClick={() => handleAdjectiveAnswer(option.punjabi)}
-                className={`rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+                className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
                   showResult && isCorrect
                     ? "border-green-400 bg-green-50"
                     : showResult && isSelected
@@ -398,9 +469,12 @@ export function GenderSortMode({
                       : "border-zinc-200 bg-white hover:border-violet-300 hover:bg-violet-50"
                 }`}
               >
-                <span className="font-semibold text-zinc-900">{option.punjabi}</span>
-                <span className="mt-0.5 block text-xs text-violet-600">{option.romanised}</span>
-                <span className="mt-0.5 block text-xs text-zinc-400">{option.label}</span>
+                <PunjabiOptionLabel
+                  punjabi={option.punjabi}
+                  romanised={option.romanised}
+                  label={option.label}
+                  centered
+                />
               </button>
             );
           })}
@@ -408,8 +482,25 @@ export function GenderSortMode({
 
         {adjectiveFeedback && (
           <p className="text-center text-sm text-violet-600">
-            {adjectiveQuestion.correctAnswer} · {adjectiveQuestion.correctRomanised}
+            <span className="block text-lg font-semibold text-zinc-900">
+              {adjectiveQuestion.correctAnswer}
+            </span>
+            {adjectiveQuestion.correctRomanised ? (
+              <span className="block text-lg font-medium text-violet-600">
+                {adjectiveQuestion.correctRomanised}
+              </span>
+            ) : null}
           </p>
+        )}
+
+        {adjectiveFeedback && !adjectiveFeedback.correct && (
+          <button
+            type="button"
+            onClick={handleContinueAfterWrongAdjective}
+            className={ui.btnPrimaryBlock}
+          >
+            Next
+          </button>
         )}
       </div>
     );
@@ -423,6 +514,7 @@ export function GenderSortMode({
 
   return (
     <div className="space-y-6">
+      {challenge && <ChallengeModeBanner challenge={challenge} gameType="gender_sort" />}
       <div className="flex items-center justify-between gap-3">
         <Link href={gamesHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
           ← Exit
@@ -433,13 +525,13 @@ export function GenderSortMode({
       </div>
 
       <div className={`rounded-2xl border p-8 text-center shadow-sm transition-colors ${cardBorderClass}`}>
-        <p className="text-3xl font-bold text-zinc-900">{current?.punjabi_word}</p>
-        {current?.romanised && (
-          <p className="mt-2 text-lg font-medium text-violet-600">{current.romanised}</p>
+        {current && (
+          <NounPromptDisplay
+            punjabi={current.punjabi_word}
+            romanised={current.romanised}
+            english={current.english_meaning}
+          />
         )}
-        <p className={`text-sm text-zinc-500 ${current?.romanised ? "mt-1" : "mt-2"}`}>
-          {current?.english_meaning}
-        </p>
 
         {feedback && (
           <div
@@ -502,6 +594,16 @@ export function GenderSortMode({
           Feminine
         </button>
       </div>
+
+      {feedback && !feedback.correct && (
+        <button
+          type="button"
+          onClick={handleContinueAfterWrongNoun}
+          className={ui.btnPrimaryBlock}
+        >
+          Next
+        </button>
+      )}
     </div>
   );
 }

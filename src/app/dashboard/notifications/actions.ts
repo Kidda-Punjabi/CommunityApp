@@ -61,17 +61,34 @@ export async function publishAnnouncement(
 ): Promise<ActionResult> {
   const title = String(formData.get("title") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
+  const audience = String(formData.get("audience") ?? "all");
+  const recipientIds = formData
+    .getAll("recipient_ids")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
 
   if (!title || !body) return { error: "Title and message are required." };
+
+  if (audience === "selected" && recipientIds.length === 0) {
+    return { error: "Select at least one member, or choose all members." };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("admin_publish_announcement", {
     p_title: title,
     p_body: body,
+    p_recipient_user_ids: audience === "selected" ? recipientIds : null,
   });
 
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/notifications");
-  return { success: "Announcement sent to all members." };
+  revalidatePath("/admin/content");
+
+  const successMessage =
+    audience === "selected"
+      ? `Announcement sent to ${recipientIds.length} member${recipientIds.length === 1 ? "" : "s"}.`
+      : "Announcement sent to all members.";
+
+  return { success: successMessage };
 }

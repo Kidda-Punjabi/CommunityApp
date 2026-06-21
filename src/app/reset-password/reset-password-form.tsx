@@ -120,10 +120,8 @@ export function ResetPasswordForm() {
     }
 
     setStatus("done");
-    setSuccessMessage("Password updated. Redirecting you to sign in…");
-    setTimeout(() => {
-      router.push("/login?message=Password updated. Please sign in.");
-    }, 1200);
+    setSuccessMessage("Password updated. Taking you to your dashboard…");
+    router.replace("/dashboard/home");
   }
 
   if (status === "verifying") {

@@ -7,6 +7,8 @@ import {
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const POST_AUTH_PATH = "/dashboard/home";
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -63,9 +65,26 @@ export async function updateSession(request: NextRequest) {
     supabaseResponse = withReferralCookie(supabaseResponse);
   }
 
+  // Email confirm / OAuth codes may still land on legacy `/dashboard` Site URL.
+  if (request.nextUrl.pathname === "/dashboard") {
+    const code = request.nextUrl.searchParams.get("code");
+    if (code) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/callback";
+      url.searchParams.set("next", POST_AUTH_PATH);
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  if (request.nextUrl.pathname === "/dashboard") {
+    const url = request.nextUrl.clone();
+    url.pathname = POST_AUTH_PATH;
     return NextResponse.redirect(url);
   }
 
@@ -77,7 +96,7 @@ export async function updateSession(request: NextRequest) {
     }
     if (!isAdmin(user)) {
       const url = request.nextUrl.clone();
-      url.pathname = "/dashboard/home";
+      url.pathname = POST_AUTH_PATH;
       return NextResponse.redirect(url);
     }
   }
@@ -88,7 +107,7 @@ export async function updateSession(request: NextRequest) {
       request.nextUrl.pathname === "/signup")
   ) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard/home";
+    url.pathname = POST_AUTH_PATH;
     return NextResponse.redirect(url);
   }
 

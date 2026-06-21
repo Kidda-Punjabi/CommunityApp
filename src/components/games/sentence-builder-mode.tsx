@@ -23,6 +23,8 @@ import { buildSentenceBuilderLogEntry } from "@/lib/games/session-review-builder
 import type { RoundResult } from "@/lib/games/session-review";
 import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
 import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
+import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
+import { ui } from "@/lib/ui/styles";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
 import type { ChallengePlayContext } from "@/lib/challenges/types";
@@ -205,9 +207,17 @@ export function SentenceBuilderMode({
     ]);
     setFeedback(isCorrect ? "correct" : "wrong");
 
-    advanceTimerRef.current = window.setTimeout(() => {
-      advanceRound(isCorrect);
-    }, FEEDBACK_MS);
+    if (isCorrect) {
+      advanceTimerRef.current = window.setTimeout(() => {
+        advanceRound(true);
+      }, FEEDBACK_MS);
+    }
+  }
+
+  function handleContinueAfterWrong() {
+    if (feedback !== "wrong") return;
+    setFeedback(null);
+    advanceRound(false);
   }
 
   useEffect(() => {
@@ -305,7 +315,11 @@ export function SentenceBuilderMode({
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
           Form the sentence in Punjabi
         </p>
-        <p className="mt-3 text-lg font-semibold text-zinc-900">{current?.englishPrompt}</p>
+        <EnglishWithGenderMarkers
+          as="p"
+          text={current?.englishPrompt ?? ""}
+          className="mt-3 text-lg font-semibold text-zinc-900"
+        />
       </div>
 
       <div
@@ -349,7 +363,13 @@ export function SentenceBuilderMode({
       )}
 
       {feedback === "wrong" && current && (
-        <p className="text-center text-xs text-zinc-500">Try again on the next question.</p>
+        <button
+          type="button"
+          onClick={handleContinueAfterWrong}
+          className={ui.btnPrimaryBlock}
+        >
+          Next
+        </button>
       )}
 
       <div className="flex flex-wrap gap-2">

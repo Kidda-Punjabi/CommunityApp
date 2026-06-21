@@ -23,6 +23,10 @@ export const metadata: Metadata = {
   description: "Kidda community membership platform",
 };
 
+export const viewport = {
+  themeColor: "#fafafa",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -31,9 +35,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} min-h-dvh bg-zinc-50 antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="flex min-h-dvh flex-1 flex-col bg-zinc-50">{children}</body>
     </html>
   );
 }

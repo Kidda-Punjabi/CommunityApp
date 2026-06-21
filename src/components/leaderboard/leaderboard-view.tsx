@@ -48,6 +48,7 @@ function LeaderboardRow({
           preferred_name: entry.preferredName,
           avatar_url: entry.avatarUrl,
         }}
+        level={entry.learnerLevel}
         size="xs"
       />
       <div className="min-w-0 flex-1">

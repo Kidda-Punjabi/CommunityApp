@@ -122,6 +122,7 @@ export function CreateChallengeWizard({ friends, decks }: CreateChallengeWizardP
                           preferred_name: null,
                           avatar_url: friend.avatarUrl,
                         }}
+                        level={friend.learnerLevel}
                         size="sm"
                       />
                       <span className="text-sm font-medium text-zinc-900">{friend.displayName}</span>

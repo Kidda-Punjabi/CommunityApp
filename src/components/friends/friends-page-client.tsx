@@ -141,6 +141,7 @@ export function FriendsPageClient({ friends, requests }: FriendsPageClientProps)
                     preferred_name: null,
                     avatar_url: friend.avatarUrl,
                   }}
+                  level={friend.learnerLevel}
                   size="sm"
                 />
                 <div className="min-w-0 flex-1">

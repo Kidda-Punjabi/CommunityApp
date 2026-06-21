@@ -22,6 +22,8 @@ import { buildConjugationChallengeLogEntry } from "@/lib/games/session-review-bu
 import type { RoundResult } from "@/lib/games/session-review";
 import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
 import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
+import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
+import { ui } from "@/lib/ui/styles";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
 import type { ChallengePlayContext } from "@/lib/challenges/types";
@@ -95,7 +97,11 @@ function QuestionPrompt({ question }: { question: ChallengeQuestion }) {
             </span>
           )}
         </p>
-        <p className="text-sm text-zinc-500">{question.english}</p>
+        <EnglishWithGenderMarkers
+          as="p"
+          text={question.english}
+          className="text-sm text-zinc-500"
+        />
         <p className="text-sm leading-snug">
           <span className="font-medium text-violet-700">{question.tenseLabel}</span>
         </p>
@@ -115,7 +121,11 @@ function QuestionPrompt({ question }: { question: ChallengeQuestion }) {
             {question.gapSentenceRomanised}
           </p>
         ) : null}
-        <p className="text-sm text-zinc-500">{question.englishGloss}</p>
+        <EnglishWithGenderMarkers
+          as="p"
+          text={question.englishGloss}
+          className="text-sm text-zinc-500"
+        />
       </div>
     );
   }
@@ -236,6 +246,21 @@ export function ConjugationChallengeMode({
     setPhase("playing");
   }
 
+  function commitAnswer(isCorrect: boolean) {
+    const nextResults = [...results, isCorrect];
+
+    if (questionIndex + 1 >= questions.length) {
+      setResults(nextResults);
+      setFeedback(null);
+      setPhase("finished");
+      return;
+    }
+
+    setResults(nextResults);
+    setQuestionIndex((index) => index + 1);
+    setFeedback(null);
+  }
+
   function handleAnswer(answer: string) {
     if (phase !== "playing" || !current || feedback) return;
 
@@ -246,20 +271,16 @@ export function ConjugationChallengeMode({
     ]);
     setFeedback({ selected: answer, isCorrect });
 
-    advanceTimerRef.current = window.setTimeout(() => {
-      const nextResults = [...results, isCorrect];
+    if (isCorrect) {
+      advanceTimerRef.current = window.setTimeout(() => {
+        commitAnswer(true);
+      }, FEEDBACK_MS);
+    }
+  }
 
-      if (questionIndex + 1 >= questions.length) {
-        setResults(nextResults);
-        setFeedback(null);
-        setPhase("finished");
-        return;
-      }
-
-      setResults(nextResults);
-      setQuestionIndex((index) => index + 1);
-      setFeedback(null);
-    }, FEEDBACK_MS);
+  function handleContinueAfterWrong() {
+    if (!feedback || feedback.isCorrect) return;
+    commitAnswer(false);
   }
 
   useEffect(() => {
@@ -429,6 +450,16 @@ export function ConjugationChallengeMode({
           );
         })}
       </div>
+
+      {feedback && !feedback.isCorrect && (
+        <button
+          type="button"
+          onClick={handleContinueAfterWrong}
+          className={ui.btnPrimaryBlock}
+        >
+          Next
+        </button>
+      )}
     </div>
   );
 }

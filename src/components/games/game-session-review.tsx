@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import {
   encouragingScoreHeadline,
@@ -31,7 +32,11 @@ function PromptLines({
 }) {
   return (
     <div className={className}>
-      <p className="font-medium text-zinc-900">{prompt}</p>
+      <EnglishWithGenderMarkers
+        as="p"
+        text={prompt}
+        className="font-medium text-zinc-900"
+      />
       {promptRomanised ? (
         <p className="mt-0.5 text-sm text-violet-600">{promptRomanised}</p>
       ) : null}

@@ -11,11 +11,12 @@ import { ui } from "@/lib/ui/styles";
 type EditProfileFormProps = {
   userId: string;
   profile: ProfileNameFields & { avatar_url?: string | null };
+  learnerLevel?: number | null;
 };
 
 const initialState: ProfileActionState = {};
 
-export function EditProfileForm({ userId, profile }: EditProfileFormProps) {
+export function EditProfileForm({ userId, profile, learnerLevel }: EditProfileFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [state, formAction, pending] = useActionState(updateProfile, initialState);
@@ -80,6 +81,7 @@ export function EditProfileForm({ userId, profile }: EditProfileFormProps) {
         >
           <UserAvatar
             profile={{ full_name: fullName, preferred_name: preferredName, avatar_url: avatarUrl }}
+            level={learnerLevel}
             size="lg"
           />
           {uploading && (
