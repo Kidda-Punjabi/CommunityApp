@@ -3,6 +3,7 @@ export type Course = {
   name: string;
   description: string | null;
   display_order: number;
+  required_tier?: string | null;
 };
 
 export type Lesson = {
@@ -126,6 +127,44 @@ export type VerbConjugationRow = {
   created_at: string;
 };
 
+export type AdminEnrollment = {
+  id: string;
+  user_id: string;
+  course_id: string;
+  tutor_id: string;
+  delivery_mode: string | null;
+  cohort_id: string | null;
+  studentLabel: string;
+  studentEmail: string | null;
+  tutorLabel: string;
+  courseName: string;
+  courseTier: string | null;
+  cohortName: string | null;
+};
+
+export type AdminCohortMember = {
+  userId: string;
+  label: string;
+  email: string | null;
+};
+
+export type AdminCohort = {
+  id: string;
+  name: string;
+  course_id: string;
+  courseName: string;
+  tutor_id: string | null;
+  tutorLabel: string | null;
+  members: AdminCohortMember[];
+};
+
+export type AdminStaffMember = {
+  userId: string;
+  email: string | null;
+  displayName: string;
+  appRoles: string[];
+};
+
 export type AdminData = {
   courses: Course[];
   lessons: Lesson[];
@@ -139,6 +178,9 @@ export type AdminData = {
   grammarSentences: GrammarSentence[];
   verbConjugations: VerbConjugationRow[];
   genderedNouns: GenderedNoun[];
+  enrollments: AdminEnrollment[];
+  cohorts: AdminCohort[];
+  staffMembers: AdminStaffMember[];
   errors?: {
     courses?: string;
     lessons?: string;
@@ -152,5 +194,8 @@ export type AdminData = {
     grammarSentences?: string;
     verbConjugations?: string;
     genderedNouns?: string;
+    enrollments?: string;
+    cohorts?: string;
+    staffMembers?: string;
   };
 };

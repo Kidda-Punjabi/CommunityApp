@@ -34,8 +34,8 @@ ON CONFLICT (user_id, course_id) DO NOTHING;
 INSERT INTO public.course_access (user_id, course_id, granted_at)
 SELECT p.id, c.id, now()
 FROM public.profiles p
-JOIN public.courses c ON c.required_tier = p.membership_tier
-WHERE p.membership_tier IN ('foundational', 'beginners', 'community')
+JOIN public.courses c ON c.required_tier = p.membership_tier::text
+WHERE p.membership_tier::text IN ('foundational', 'beginners', 'community')
 ON CONFLICT (user_id, course_id) DO NOTHING;
 
 NOTIFY pgrst, 'reload schema';

@@ -24,6 +24,7 @@ import { pickCycledPool, type GameSessionSettingsChoice } from "@/lib/games/sess
 import { pickCycledPoolSeeded } from "@/lib/challenges/seeded-random";
 import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
+import { SessionProgressBar } from "@/components/session-progress-bar";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
 import type { ChallengePlayContext } from "@/lib/challenges/types";
 import { ui } from "@/lib/ui/styles";
@@ -430,6 +431,7 @@ export function GenderSortMode({
   if (sortMode === "adjectives" && adjectiveQuestion) {
     return (
       <div className="space-y-6">
+        <SessionProgressBar current={index + 1} total={adjectiveQueue.length} />
         {challenge && <ChallengeModeBanner challenge={challenge} gameType="gender_sort" />}
         <div className="flex items-center justify-between gap-3">
           <Link href={gamesHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
@@ -514,6 +516,7 @@ export function GenderSortMode({
 
   return (
     <div className="space-y-6">
+      <SessionProgressBar current={index + 1} total={queue.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="gender_sort" />}
       <div className="flex items-center justify-between gap-3">
         <Link href={gamesHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">

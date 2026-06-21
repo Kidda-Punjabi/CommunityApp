@@ -6,6 +6,7 @@ import { InviteFriendsCard } from "@/components/profile/invite-friends-card";
 import { ProgressionCard } from "@/components/profile/progression-card";
 import { WeeklyPointsCard } from "@/components/profile/weekly-points-card";
 import { UserAvatar } from "@/components/profile/user-avatar";
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { isAdmin } from "@/lib/auth/admin";
 import { loadViewerWeeklyPoints } from "@/lib/leaderboard/load-viewer-weekly-points";
 import { getCurrentWeekStart } from "@/lib/leaderboard/week";
@@ -53,6 +54,8 @@ export default async function ProfilePage() {
   const membershipLabel = access.viewAs?.active
     ? `Testing: ${access.viewAs.label}`
     : formatUnlockedCourseNames(access.courses, access.unlockedCourseIds);
+
+  const showAdminPanel = await canAccessAdminPanel(user!);
 
   return (
     <div className={ui.page}>
@@ -125,13 +128,13 @@ export default async function ProfilePage() {
           />
         )}
 
-        {isAdmin(user) && (
+        {showAdminPanel && (
           <div className="rounded-3xl bg-violet-50 p-5 shadow-[0_4px_24px_-6px_rgba(124,58,237,0.1)]">
             <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
               Admin
             </p>
             <p className="mt-2 text-sm text-zinc-600">
-              Manage courses, lessons, quizzes, and teachers.
+              Manage courses, lessons, quizzes, tutors, and teachers.
             </p>
             <Link href="/admin/content" className={`mt-4 ${ui.btnPrimary}`}>
               Open admin panel

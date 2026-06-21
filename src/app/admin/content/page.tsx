@@ -2,6 +2,7 @@ import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ensureDefaultCourses } from "@/lib/courses/ensure-default-courses";
 import { ensureStorageBuckets } from "@/lib/supabase/ensure-storage-buckets";
 import { AdminContent } from "./admin-content";
+import { loadAdminTutorPanelData } from "./tutor-actions";
 import type { AdminData } from "./types";
 
 export default async function AdminContentPage() {
@@ -9,6 +10,17 @@ export default async function AdminContentPage() {
 
   await ensureDefaultCourses(supabase);
   await ensureStorageBuckets(supabase);
+
+  const tutorPanel = await loadAdminTutorPanelData().catch(() => ({
+    enrollments: [] as AdminData["enrollments"],
+    cohorts: [] as AdminData["cohorts"],
+    staffMembers: [] as AdminData["staffMembers"],
+    errors: {
+      enrollments: undefined,
+      cohorts: undefined,
+      staffMembers: "Failed to load staff and tutor data.",
+    },
+  }));
 
   const [
     { data: courses, error: coursesError },
@@ -24,7 +36,7 @@ export default async function AdminContentPage() {
     { data: verbConjugations, error: verbConjugationsError },
     { data: genderedNouns, error: genderedNounsError },
   ] = await Promise.all([
-    supabase.from("courses").select("id, name, description, display_order").order("display_order"),
+    supabase.from("courses").select("id, name, description, display_order, required_tier").order("display_order"),
     supabase
       .from("lessons")
       .select("*, courses(name)")
@@ -63,6 +75,9 @@ export default async function AdminContentPage() {
     grammarSentences: (grammarSentences ?? []) as AdminData["grammarSentences"],
     verbConjugations: (verbConjugations ?? []) as AdminData["verbConjugations"],
     genderedNouns: (genderedNouns ?? []) as AdminData["genderedNouns"],
+    enrollments: tutorPanel.enrollments,
+    cohorts: tutorPanel.cohorts,
+    staffMembers: tutorPanel.staffMembers,
     errors: {
       courses: coursesError?.message,
       lessons: lessonsError?.message,
@@ -76,6 +91,9 @@ export default async function AdminContentPage() {
       grammarSentences: grammarSentencesError?.message,
       verbConjugations: verbConjugationsError?.message,
       genderedNouns: genderedNounsError?.message,
+      enrollments: tutorPanel.errors.enrollments,
+      cohorts: tutorPanel.errors.cohorts,
+      staffMembers: tutorPanel.errors.staffMembers,
     },
   };
 

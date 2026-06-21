@@ -26,6 +26,7 @@ import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-bann
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
 import { ui } from "@/lib/ui/styles";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
+import { SessionProgressBar } from "@/components/session-progress-bar";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
 import type { ChallengePlayContext } from "@/lib/challenges/types";
 const FEEDBACK_MS = 1800;
@@ -283,10 +284,9 @@ export function SentenceBuilderMode({
     );
   }
 
-  const progress = ((questionIndex + 1) / questions.length) * 100;
-
   return (
     <div className="space-y-5">
+      <SessionProgressBar current={questionIndex + 1} total={questions.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="sentence_builder" />}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
@@ -299,12 +299,6 @@ export function SentenceBuilderMode({
           <p className="text-sm font-semibold text-zinc-900">
             {score} correct
           </p>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-          <div
-            className="h-full rounded-full bg-violet-600 transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
         </div>
         <p className="text-xs text-zinc-500">
           Question {questionIndex + 1} of {questions.length}

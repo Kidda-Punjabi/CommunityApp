@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { SessionProgressBar } from "@/components/session-progress-bar";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { deckPracticeHref, pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 
@@ -85,6 +86,7 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
 
   return (
     <div className="space-y-4">
+      <SessionProgressBar current={index + 1} total={questions.length} />
       <div>
         <Link
           href={deckHubHref}

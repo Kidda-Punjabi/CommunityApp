@@ -8,6 +8,7 @@ import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import Link from "next/link";
 import { ui } from "@/lib/ui/styles";
+import type { ReactNode } from "react";
 
 type LearnLessonListProps = {
   title: string;
@@ -22,6 +23,7 @@ type LearnLessonListProps = {
     total: number;
   };
   backHref?: string;
+  staffSection?: ReactNode;
 };
 
 export function LearnLessonList({
@@ -34,6 +36,7 @@ export function LearnLessonList({
   completionMap,
   courseProgress,
   backHref = "/dashboard/learn",
+  staffSection,
 }: LearnLessonListProps) {
   const accessibleLessons = lessons.filter((lesson) =>
     canAccessLessonInContext(access, lesson)
@@ -66,6 +69,8 @@ export function LearnLessonList({
           />
         )}
       </div>
+
+      {staffSection}
 
       {lessons.length === 0 ? (
         <div className={ui.emptyState}>

@@ -8,6 +8,7 @@ import { sumPointsEarned } from "@/lib/points/notify-points-earned";
 import { quizScorePercent, saveQuizProgress } from "@/lib/progress/quiz-progress";
 import { PASSING_QUIZ_SCORE } from "@/lib/progress/quiz-progress";
 import { recordStreakActivity, type StreakResult } from "@/lib/progress/streak";
+import { SessionProgressBar } from "@/components/session-progress-bar";
 
 export type QuizQuestion = {
   id: string;
@@ -133,6 +134,7 @@ export function QuizPlayer({
 
   return (
     <div className="space-y-4">
+      <SessionProgressBar current={index + 1} total={questions.length} />
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
           {courseName}

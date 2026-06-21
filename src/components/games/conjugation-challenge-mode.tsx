@@ -25,6 +25,7 @@ import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-bann
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
 import { ui } from "@/lib/ui/styles";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
+import { SessionProgressBar } from "@/components/session-progress-bar";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
 import type { ChallengePlayContext } from "@/lib/challenges/types";
 const FEEDBACK_MS = 1000;
@@ -370,6 +371,7 @@ export function ConjugationChallengeMode({
 
   return (
     <div className="space-y-3">
+      <SessionProgressBar current={questionIndex + 1} total={questions.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="conjugation_challenge" />}
       <div className="flex items-center justify-between gap-3">
         <Link

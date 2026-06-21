@@ -1,4 +1,3 @@
-import { isAdmin } from "@/lib/auth/admin";
 import {
   normalizeReferralCode,
   REFERRAL_COOKIE_MAX_AGE_SECONDS,
@@ -92,11 +91,6 @@ export async function updateSession(request: NextRequest) {
     if (!user) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
-      return NextResponse.redirect(url);
-    }
-    if (!isAdmin(user)) {
-      const url = request.nextUrl.clone();
-      url.pathname = POST_AUTH_PATH;
       return NextResponse.redirect(url);
     }
   }

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { LevelTestQuestionBody } from "@/components/progression/level-test-question-body";
+import { SessionProgressBar } from "@/components/session-progress-bar";
 import { pickCycledPool } from "@/lib/games/session-settings";
 import {
   LEVEL_TEST_PASS_PCT,
@@ -135,6 +136,7 @@ export function LevelTestPlayer({
 
   return (
     <div className={`space-y-5 ${LIGHT_SURFACE}`}>
+      <SessionProgressBar current={index + 1} total={sessionQuestions.length} />
       <div className="flex items-center justify-between gap-3">
         <Link href={backHref} className="text-sm font-medium text-violet-700 hover:text-violet-600">
           ← Exit

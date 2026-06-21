@@ -1,6 +1,10 @@
 import { LearnLessonList } from "@/components/learn-lesson-list";
 import { LearnLockedCourse } from "@/components/learn-locked-course";
 import {
+  CommunityLeadSection,
+  MyTutorSection,
+} from "@/components/learn/course-staff-section";
+import {
   fetchLearnContent,
   filterFreeLessons,
 } from "@/lib/learning/load-learn-content";
@@ -18,6 +22,10 @@ import {
 } from "@/lib/progress/lesson-completion";
 import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
 import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
+import {
+  loadCommunityLeads,
+  loadMyTutorForTier,
+} from "@/lib/tutoring/load-course-staff";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 
@@ -84,6 +92,23 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
   );
   const courseProgress = summarizeCourseProgress(accessibleLessons, completionMap);
 
+  let staffSection = null;
+
+  if (track.id === "foundational" || track.id === "beginners") {
+    const tutorInfo = await loadMyTutorForTier(
+      supabase,
+      user!.id,
+      track.id,
+      access.courses
+    );
+    if (tutorInfo) {
+      staffSection = <MyTutorSection tutorInfo={tutorInfo} />;
+    }
+  } else if (track.id === "community") {
+    const leads = await loadCommunityLeads(supabase);
+    staffSection = <CommunityLeadSection leads={leads} />;
+  }
+
   return (
     <LearnLessonList
       title={track.title}
@@ -97,6 +122,7 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
         completed: courseProgress.completedLessons,
         total: courseProgress.totalLessons,
       }}
+      staffSection={staffSection}
     />
   );
 }

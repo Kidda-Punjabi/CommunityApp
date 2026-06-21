@@ -1,6 +1,6 @@
 "use server";
 
-import { isAdmin } from "@/lib/auth/admin";
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ensureStorageBuckets } from "@/lib/supabase/ensure-storage-buckets";
@@ -106,7 +106,7 @@ async function requireAdmin() {
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user || !isAdmin(user)) {
+  if (!user || !(await canAccessAdminPanel(user))) {
     throw new Error("Unauthorized");
   }
 
@@ -1174,7 +1174,32 @@ export type AdminMemberOption = {
   email: string | null;
   displayName: string;
   avatarUrl: string | null;
+  appRoles?: string[];
 };
+
+async function attachProfileRoles(
+  supabase: SupabaseClient,
+  members: Map<string, AdminMemberOption>
+) {
+  const ids = [...members.keys()];
+  if (ids.length === 0) return;
+
+  const { data: roleRows } = await supabase
+    .from("profile_roles")
+    .select("user_id, role")
+    .in("user_id", ids);
+
+  const rolesByUser = new Map<string, string[]>();
+  for (const row of roleRows ?? []) {
+    const list = rolesByUser.get(row.user_id) ?? [];
+    list.push(row.role);
+    rolesByUser.set(row.user_id, list);
+  }
+
+  for (const [userId, member] of members) {
+    member.appRoles = rolesByUser.get(userId) ?? [];
+  }
+}
 
 export async function searchAdminMembers(
   query: string
@@ -1203,6 +1228,7 @@ export async function searchAdminMembers(
         email: null,
         displayName: getDisplayName(profile) ?? "Member",
         avatarUrl: profile.avatar_url,
+        appRoles: [],
       });
     }
 
@@ -1233,6 +1259,7 @@ export async function searchAdminMembers(
           email: user.email ?? null,
           displayName: getDisplayName(profile ?? null) ?? user.email ?? "Member",
           avatarUrl: profile?.avatar_url ?? null,
+          appRoles: [],
         });
       }
     }
@@ -1243,6 +1270,8 @@ export async function searchAdminMembers(
         existing.email = user.email;
       }
     }
+
+    await attachProfileRoles(supabase, byId);
 
     return { results: [...byId.values()].slice(0, 25) };
   } catch (e) {
