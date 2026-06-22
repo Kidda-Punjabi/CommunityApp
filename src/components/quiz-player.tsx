@@ -47,6 +47,8 @@ export function QuizPlayer({
   const savedRef = useRef(false);
 
   const question = questions[index];
+  const isCorrect = selected === question.correct_answer;
+  const showNextButton = Boolean(selected && !isCorrect);
   const options = [
     { key: "a", label: question.option_a },
     { key: "b", label: question.option_b },
@@ -83,6 +85,30 @@ export function QuizPlayer({
     });
   }, [finished, quizId, lessonId, score, questions.length]);
 
+  function advanceQuestion() {
+    if (index + 1 >= questions.length) {
+      setFinished(true);
+      return;
+    }
+    setIndex((prev) => prev + 1);
+    setSelected(null);
+  }
+
+  useEffect(() => {
+    if (!selected || selected !== question.correct_answer) return;
+
+    const timeout = window.setTimeout(() => {
+      if (index + 1 >= questions.length) {
+        setFinished(true);
+      } else {
+        setIndex((prev) => prev + 1);
+        setSelected(null);
+      }
+    }, 1200);
+
+    return () => window.clearTimeout(timeout);
+  }, [selected, question.correct_answer, index, questions.length]);
+
   function handleSelect(optionKey: string) {
     if (selected) return;
     setSelected(optionKey);
@@ -92,12 +118,7 @@ export function QuizPlayer({
   }
 
   function handleNext() {
-    if (index + 1 >= questions.length) {
-      setFinished(true);
-      return;
-    }
-    setIndex((prev) => prev + 1);
-    setSelected(null);
+    advanceQuestion();
   }
 
   if (finished) {
@@ -182,14 +203,15 @@ export function QuizPlayer({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={handleNext}
-        disabled={!selected}
-        className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {index + 1 >= questions.length ? "See results" : "Next question"}
-      </button>
+      {showNextButton && (
+        <button
+          type="button"
+          onClick={handleNext}
+          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+        >
+          {index + 1 >= questions.length ? "See results" : "Next question"}
+        </button>
+      )}
     </div>
   );
 }

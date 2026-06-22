@@ -28,7 +28,7 @@ type HomeStreakState = HomeStreakInitial;
 
 const HomeStreakContext = createContext<HomeStreakState | null>(null);
 
-function useHomeStreakStats() {
+export function useHomeStreakStats() {
   const value = useContext(HomeStreakContext);
   if (!value) {
     throw new Error("HomeStreak components must be used within HomeStreakProvider");

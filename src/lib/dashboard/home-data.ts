@@ -1,6 +1,10 @@
-import { getDisplayName, getGreetingHeading } from "@/lib/profile/display-name";
+import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
-import { canAccessEvent, hasAccessToCourse } from "@/lib/membership/access";
+import { hasAccessToCourse } from "@/lib/membership/access";
+import {
+  formatMembersStudiedTodayLabel,
+  loadMembersStudiedToday,
+} from "@/lib/leaderboard/load-members-studied-today";
 import {
   getCourseAccessContext,
   type CourseAccessContext,
@@ -32,9 +36,12 @@ export type HomeContinueItem = {
   activityAt: string;
 };
 
+export type HomeMotivationData = {
+  studiedToday: boolean;
+};
+
 export type HomeDashboardData = {
   displayName: string | null;
-  greetingHeading: string;
   isFreeTier: boolean;
   primaryCta: HomePrimaryCta;
   starterPackHref: string;
@@ -53,6 +60,8 @@ export type HomeDashboardData = {
   showStarterPack: boolean;
   upcomingEvents: DisplayEvent[];
   access: CourseAccessContext;
+  motivation: HomeMotivationData;
+  membersStudiedTodayLabel: string | null;
 };
 
 type LessonProgressJoined = {
@@ -224,6 +233,7 @@ export async function getHomeDashboardData(
     { data: freeLessons },
     { data: quizzes },
     { data: events },
+    membersStudiedToday,
   ] = await Promise.all([
     loadEditableProfile(supabase, userId),
     supabase
@@ -247,6 +257,7 @@ export async function getHomeDashboardData(
     supabase.from("lessons").select("id, is_free").eq("is_free", true),
     supabase.from("quizzes").select("id, course_id, level_number, title"),
     supabase.from("events").select("*").order("starts_at", { ascending: true }),
+    loadMembersStudiedToday(supabase, activityDate),
   ]);
 
   const lessonRows = (lessonProgress ?? []).map((row) => ({
@@ -271,8 +282,8 @@ export async function getHomeDashboardData(
   }) as FlashcardProgressJoined[];
 
   const displayName = getDisplayName(profile);
-  const greetingHeading = getGreetingHeading(displayName);
   const isFreeTier = access.isFreeOnly;
+  const studiedToday = presentation.day_gap === 0;
 
   const lessonsCompleted = lessonRows.filter((row) => row.completed).length;
   const quizProgressMap = new Map<string, QuizProgressRow>(
@@ -340,9 +351,12 @@ export async function getHomeDashboardData(
 
   const { upcoming } = splitExpandedEvents((events ?? []) as StoredEvent[]);
 
+  const motivation: HomeMotivationData = {
+    studiedToday,
+  };
+
   return {
     displayName,
-    greetingHeading,
     isFreeTier,
     primaryCta,
     starterPackHref,
@@ -363,5 +377,7 @@ export async function getHomeDashboardData(
     showStarterPack: isFreeTier && !starterPackCompleted,
     upcomingEvents: upcoming.slice(0, 2),
     access,
+    motivation,
+    membersStudiedTodayLabel: formatMembersStudiedTodayLabel(membersStudiedToday),
   };
 }

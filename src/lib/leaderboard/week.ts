@@ -19,18 +19,27 @@ export function getCurrentWeekStart(activityDate = getLocalActivityDate()): stri
   return getWeekStartForActivityDate(activityDate);
 }
 
-export function shiftWeekStart(weekStart: string, weeksDelta: number): string {
-  const [year, month, day] = weekStart.split("-").map(Number);
+/** Add calendar days to an activity date (YYYY-MM-DD). */
+export function addActivityDays(activityDate: string, days: number): string {
+  const [year, month, day] = activityDate.slice(0, 10).split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
-  date.setUTCDate(date.getUTCDate() + weeksDelta * 7);
+  date.setUTCDate(date.getUTCDate() + days);
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");
   const d = String(date.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
+export function shiftWeekStart(weekStart: string, weeksDelta: number): string {
+  return addActivityDays(weekStart, weeksDelta * 7);
+}
+
+export function getWeekEndDate(weekStart: string): string {
+  return addActivityDays(weekStart, 6);
+}
+
 export function formatWeekRangeLabel(weekStart: string): string {
-  const end = shiftWeekStart(weekStart, 6);
+  const end = getWeekEndDate(weekStart);
   const startDate = parseActivityDate(weekStart);
   const endDate = parseActivityDate(end);
 

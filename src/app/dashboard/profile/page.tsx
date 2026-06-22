@@ -4,13 +4,10 @@ import { TestOnboardingButton } from "@/components/onboarding/test-onboarding-bu
 import { FriendsSection } from "@/components/profile/friends-section";
 import { InviteFriendsCard } from "@/components/profile/invite-friends-card";
 import { ProgressionCard } from "@/components/profile/progression-card";
-import { WeeklyPointsCard } from "@/components/profile/weekly-points-card";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { isAdmin } from "@/lib/auth/admin";
 import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
-import { loadViewerWeeklyPoints } from "@/lib/leaderboard/load-viewer-weekly-points";
-import { getCurrentWeekStart } from "@/lib/leaderboard/week";
 import {
   formatUnlockedCourseNames,
   getCourseAccessContext,
@@ -47,8 +44,6 @@ export default async function ProfilePage() {
 
   const access = await getCourseAccessContext(supabase, user!);
   const progression = await loadUserProgression(supabase, user!.id);
-  const currentWeekStart = getCurrentWeekStart();
-  const weeklyPoints = await loadViewerWeeklyPoints(supabase, user!.id, currentWeekStart);
   const referralData = await loadReferralProfileData(supabase, user!.id);
   const friendsData = await loadFriendsProfileData(supabase, user!.id);
 
@@ -93,7 +88,6 @@ export default async function ProfilePage() {
       </div>
 
       <div className={`mt-10 ${ui.stackLoose}`}>
-        <WeeklyPointsCard points={weeklyPoints} weekStart={currentWeekStart} />
         <FriendsSection
           friends={friendsData.friends}
           requests={friendsData.requests}
@@ -105,7 +99,7 @@ export default async function ProfilePage() {
           referrals={referralData.referrals}
           unavailableReason={referralData.unavailableReason}
         />
-        <ProgressionCard progression={progression} />
+        <ProgressionCard progression={progression} variant="full" />
 
         <div className={ui.card}>
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
