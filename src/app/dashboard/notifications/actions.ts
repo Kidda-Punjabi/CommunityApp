@@ -5,11 +5,17 @@ import { revalidatePath } from "next/cache";
 
 export type ActionResult = { error?: string; success?: string };
 
-export async function markNotificationRead(notificationId: string): Promise<void> {
+export async function markNotificationRead(notificationId: string): Promise<ActionResult> {
   const supabase = await createClient();
-  await supabase.rpc("mark_notification_read", { p_notification_id: notificationId });
+  const { error } = await supabase.rpc("mark_notification_read", {
+    p_notification_id: notificationId,
+  });
+
+  if (error) return { error: error.message };
+
   revalidatePath("/dashboard/notifications");
   revalidatePath("/dashboard/home");
+  return { success: "Marked as read." };
 }
 
 export async function markAllNotificationsRead(): Promise<ActionResult> {

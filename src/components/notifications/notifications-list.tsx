@@ -27,14 +27,34 @@ function formatWhen(iso: string): string {
   }).format(new Date(iso));
 }
 
+function notificationHref(item: NotificationItem): string | null {
+  const challengeId = item.payload.challenge_id;
+  if (typeof challengeId !== "string") return null;
+
+  if (item.type === "friend_game_challenge") {
+    return `/dashboard/challenges/${challengeId}/play`;
+  }
+
+  if (item.type === "friend_game_challenge_result") {
+    return `/dashboard/challenges/${challengeId}`;
+  }
+
+  return null;
+}
+
 export function NotificationsList({ notifications }: NotificationsListProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
+  const [locallyReadIds, setLocallyReadIds] = useState<Set<string>>(() => new Set());
   const [handledRequests, setHandledRequests] = useState<
     Record<string, "accepted" | "declined">
   >({});
+
+  function isRead(item: NotificationItem): boolean {
+    return Boolean(item.readAt) || locallyReadIds.has(item.id);
+  }
 
   function refresh() {
     router.refresh();
@@ -57,9 +77,43 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
     return null;
   }
 
+  async function markRead(notificationId: string): Promise<boolean> {
+    if (locallyReadIds.has(notificationId)) return true;
+
+    setLocallyReadIds((current) => new Set(current).add(notificationId));
+
+    const result = await markNotificationRead(notificationId);
+    if (result.error) {
+      setLocallyReadIds((current) => {
+        const next = new Set(current);
+        next.delete(notificationId);
+        return next;
+      });
+      setActionError(result.error);
+      return false;
+    }
+
+    return true;
+  }
+
+  async function handleNotificationClick(item: NotificationItem) {
+    setActionError(null);
+    const marked = await markRead(item.id);
+    if (!marked) return;
+
+    const href = notificationHref(item);
+    if (href) {
+      router.push(href);
+      return;
+    }
+
+    refresh();
+  }
+
   async function handleMarkAll() {
     startTransition(async () => {
       await markAllNotificationsRead();
+      setLocallyReadIds(new Set(notifications.map((item) => item.id)));
       refresh();
     });
   }
@@ -67,6 +121,7 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
   async function handleKudos(id: string) {
     setActionError(null);
     startTransition(async () => {
+      await markRead(id);
       const result = await sendKudos(id);
       if (result.error) setActionError(result.error);
       refresh();
@@ -93,16 +148,20 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
         ...prev,
         [requestId]: accept ? "accepted" : "declined",
       }));
-      await markNotificationRead(notificationId);
+      await markRead(notificationId);
       refresh();
     });
   }
 
-  async function handleOpen(item: NotificationItem) {
-    if (!item.readAt) {
-      await markNotificationRead(item.id);
-      refresh();
-    }
+  async function handleLinkClick(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    item: NotificationItem,
+    href: string
+  ) {
+    event.preventDefault();
+    setActionError(null);
+    const marked = await markRead(item.id);
+    if (marked) router.push(href);
   }
 
   return (
@@ -114,7 +173,7 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
           </Link>
           <h1 className="mt-3 text-2xl font-bold text-zinc-900">Notifications</h1>
         </div>
-        {notifications.some((n) => !n.readAt) && (
+        {notifications.some((n) => !isRead(n)) && (
           <button
             type="button"
             disabled={pending}
@@ -145,126 +204,131 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
         </div>
       ) : (
         <ul className="space-y-2">
-          {notifications.map((item) => (
-            <li
-              key={item.id}
-              className={`rounded-2xl border px-4 py-3 ${
-                item.readAt
-                  ? "border-zinc-100 bg-white"
-                  : "border-violet-100 bg-violet-50/50"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => void handleOpen(item)}
-                className="flex w-full items-start gap-3 text-left"
-              >
-                <UserAvatar
-                  profile={{
-                    full_name: item.actorDisplayName,
-                    preferred_name: null,
-                    avatar_url: item.actorAvatarUrl,
-                  }}
-                  size="sm"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-zinc-900">
-                    {notificationSummary(item)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-zinc-500">{formatWhen(item.createdAt)}</p>
-                  {item.type === "announcement" && typeof item.payload.body === "string" && (
-                    <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-                      {item.payload.body}
-                    </p>
-                  )}
-                </div>
-                {!item.readAt && (
-                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-violet-600" />
-                )}
-              </button>
+          {notifications.map((item) => {
+            const href = notificationHref(item);
+            const read = isRead(item);
 
-              {item.type === "friend_level_up" && !item.kudosSent && (
+            return (
+              <li
+                key={item.id}
+                className={`rounded-2xl border px-4 py-3 ${
+                  read ? "border-zinc-100 bg-white" : "border-violet-100 bg-violet-50/50"
+                }`}
+              >
                 <button
                   type="button"
-                  disabled={pending}
-                  onClick={() => void handleKudos(item.id)}
-                  className="mt-3 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                  onClick={() => void handleNotificationClick(item)}
+                  className="flex w-full items-start gap-3 text-left"
                 >
-                  Send kudos 🎉
-                </button>
-              )}
-
-              {item.type === "friend_level_up" && item.kudosSent && (
-                <p className="mt-2 text-xs font-medium text-emerald-700">Kudos sent!</p>
-              )}
-
-              {item.type === "friend_request" &&
-                typeof item.payload.request_id === "string" && (() => {
-                  const requestId = item.payload.request_id as string;
-                  const outcome = friendRequestOutcome(item);
-
-                  if (outcome === "accepted") {
-                    return (
-                      <p className="mt-2 text-xs font-medium text-emerald-700">
-                        Friend request accepted — you&apos;re now friends!
+                  <UserAvatar
+                    profile={{
+                      full_name: item.actorDisplayName,
+                      preferred_name: null,
+                      avatar_url: item.actorAvatarUrl,
+                    }}
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-zinc-900">
+                      {notificationSummary(item)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-zinc-500">{formatWhen(item.createdAt)}</p>
+                    {item.type === "announcement" && typeof item.payload.body === "string" && (
+                      <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+                        {item.payload.body}
                       </p>
-                    );
-                  }
+                    )}
+                  </div>
+                  {!read && (
+                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-violet-600" />
+                  )}
+                </button>
 
-                  if (outcome === "declined") {
+                {item.type === "friend_level_up" && !item.kudosSent && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void handleKudos(item.id)}
+                    className="mt-3 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    Send kudos 🎉
+                  </button>
+                )}
+
+                {item.type === "friend_level_up" && item.kudosSent && (
+                  <p className="mt-2 text-xs font-medium text-emerald-700">Kudos sent!</p>
+                )}
+
+                {item.type === "friend_request" &&
+                  typeof item.payload.request_id === "string" &&
+                  (() => {
+                    const requestId = item.payload.request_id as string;
+                    const outcome = friendRequestOutcome(item);
+
+                    if (outcome === "accepted") {
+                      return (
+                        <p className="mt-2 text-xs font-medium text-emerald-700">
+                          Friend request accepted — you&apos;re now friends!
+                        </p>
+                      );
+                    }
+
+                    if (outcome === "declined") {
+                      return (
+                        <p className="mt-2 text-xs font-medium text-zinc-500">Request declined.</p>
+                      );
+                    }
+
+                    if (outcome !== "pending") return null;
+
                     return (
-                      <p className="mt-2 text-xs font-medium text-zinc-500">Request declined.</p>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          disabled={pending || pendingRequestId === requestId}
+                          onClick={() =>
+                            void handleFriendRequest(item.id, requestId, true)
+                          }
+                          className="flex-1 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pending || pendingRequestId === requestId}
+                          onClick={() =>
+                            void handleFriendRequest(item.id, requestId, false)
+                          }
+                          className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                        >
+                          Decline
+                        </button>
+                      </div>
                     );
-                  }
+                  })()}
 
-                  if (outcome !== "pending") return null;
+                {item.type === "friend_game_challenge" && href && (
+                  <Link
+                    href={href}
+                    onClick={(event) => void handleLinkClick(event, item, href)}
+                    className="mt-3 block w-full rounded-lg bg-violet-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-violet-500"
+                  >
+                    Play challenge
+                  </Link>
+                )}
 
-                  return (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        disabled={pending || pendingRequestId === requestId}
-                        onClick={() =>
-                          void handleFriendRequest(item.id, requestId, true)
-                        }
-                        className="flex-1 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        type="button"
-                        disabled={pending || pendingRequestId === requestId}
-                        onClick={() =>
-                          void handleFriendRequest(item.id, requestId, false)
-                        }
-                        className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  );
-                })()}
-              {item.type === "friend_game_challenge" &&
-                typeof item.payload.challenge_id === "string" && (
-                <Link
-                  href={`/dashboard/challenges/${item.payload.challenge_id}/play`}
-                  className="mt-3 block w-full rounded-lg bg-violet-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-violet-500"
-                >
-                  Play challenge
-                </Link>
-              )}
-
-              {item.type === "friend_game_challenge_result" &&
-                typeof item.payload.challenge_id === "string" && (
-                <Link
-                  href={`/dashboard/challenges/${item.payload.challenge_id}`}
-                  className="mt-3 block w-full rounded-lg border border-violet-200 px-3 py-2 text-center text-sm font-semibold text-violet-700 hover:bg-violet-50"
-                >
-                  View result
-                </Link>
-              )}
-            </li>
-          ))}
+                {item.type === "friend_game_challenge_result" && href && (
+                  <Link
+                    href={href}
+                    onClick={(event) => void handleLinkClick(event, item, href)}
+                    className="mt-3 block w-full rounded-lg border border-violet-200 px-3 py-2 text-center text-sm font-semibold text-violet-700 hover:bg-violet-50"
+                  >
+                    View result
+                  </Link>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
