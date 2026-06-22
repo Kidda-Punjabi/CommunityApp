@@ -14,6 +14,8 @@ import { GenderSortTab } from "./components/gender-sort-tab";
 import { StaffTutorsTab } from "./components/staff-tutors-tab";
 import { MembersTab } from "./components/members-tab";
 import { AnnouncementsTab } from "./components/announcements-tab";
+import { BrandingTab } from "./components/branding-tab";
+import type { SiteBranding } from "@/lib/branding/types";
 
 const tabs = [
   { id: "lessons", label: "Courses & Lessons" },
@@ -27,12 +29,19 @@ const tabs = [
   { id: "members", label: "Members" },
   { id: "staff", label: "Staff & tutors" },
   { id: "announcements", label: "Announcements" },
+  { id: "branding", label: "Branding" },
   { id: "streaks", label: "Streak debug" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
 
-export function AdminContent({ data }: { data: AdminData }) {
+export function AdminContent({
+  data,
+  branding,
+}: {
+  data: AdminData;
+  branding: SiteBranding;
+}) {
   const [activeTab, setActiveTab] = useState<TabId>("lessons");
   const fetchErrors = Object.entries(data.errors ?? {}).filter(([, value]) => value);
 
@@ -79,6 +88,7 @@ export function AdminContent({ data }: { data: AdminData }) {
         {activeTab === "members" && <MembersTab data={data} />}
         {activeTab === "staff" && <StaffTutorsTab data={data} />}
         {activeTab === "announcements" && <AnnouncementsTab />}
+        {activeTab === "branding" && <BrandingTab initialBranding={branding} />}
         {activeTab === "streaks" && <StreakDebugTab />}
       </div>
     </div>

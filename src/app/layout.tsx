@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Poppins } from "next/font/google";
 import { Suspense } from "react";
 import { AuthRedirectHandler } from "@/components/auth-redirect-handler";
+import { loadSiteBranding } from "@/lib/branding/load-site-branding";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,10 +21,20 @@ const poppins = Poppins({
   weight: ["400", "500", "600", "700"],
 });
 
-export const metadata: Metadata = {
-  title: "Kidda",
-  description: "Kidda community membership platform",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await loadSiteBranding();
+
+  return {
+    title: "Kidda",
+    description: "Kidda community membership platform",
+    icons: branding.faviconUrl
+      ? {
+          icon: [{ url: branding.faviconUrl }],
+          shortcut: branding.faviconUrl,
+        }
+      : undefined,
+  };
+}
 
 export const viewport = {
   themeColor: "#fafafa",

@@ -1,4 +1,5 @@
 import { ensureDefaultCourses } from "@/lib/courses/ensure-default-courses";
+import { loadSiteBranding } from "@/lib/branding/load-site-branding";
 import { ensureStorageBuckets } from "@/lib/supabase/ensure-storage-buckets";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { AdminContent } from "./admin-content";
@@ -112,5 +113,7 @@ export default async function AdminContentPage() {
     },
   };
 
-  return <AdminContent data={data} />;
+  const branding = await loadSiteBranding();
+
+  return <AdminContent data={data} branding={branding} />;
 }

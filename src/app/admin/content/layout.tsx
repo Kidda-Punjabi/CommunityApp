@@ -1,4 +1,5 @@
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
+import { KiddaLogo } from "@/components/branding/kidda-logo";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -19,11 +20,14 @@ export default async function AdminLayout({
     <div className="min-h-dvh bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-violet-600">
-              Kidda Admin
-            </p>
-            <h1 className="text-lg font-bold text-zinc-900">Content Management</h1>
+          <div className="flex items-center gap-3">
+            <KiddaLogo variant="icon" size="sm" href="/dashboard/home" />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-violet-600">
+                Kidda Admin
+              </p>
+              <h1 className="text-lg font-bold text-zinc-900">Content Management</h1>
+            </div>
           </div>
           <a
             href="/dashboard/home"

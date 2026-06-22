@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/client";
 
-export type StorageBucket = "audio-files" | "profile-photos" | "lesson-pdfs";
+export type StorageBucket =
+  | "audio-files"
+  | "profile-photos"
+  | "lesson-pdfs"
+  | "site-branding";
 
 export async function uploadToStorage(bucket: StorageBucket, file: File) {
   const supabase = createClient();

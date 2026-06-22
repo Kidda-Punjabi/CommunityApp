@@ -2,6 +2,7 @@ import {
   AUTH_RECOVERY_COOKIE,
   authCallbackNextPath,
 } from "@/lib/auth/recovery-flow";
+import { KiddaLogo } from "@/components/branding/kidda-logo";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -41,10 +42,10 @@ export default async function Home({ searchParams }: HomeProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-gradient-to-br from-violet-50 via-white to-indigo-50 px-6 py-24">
       <div className="text-center">
-        <p className="text-sm font-semibold uppercase tracking-widest text-violet-600">
-          Kidda
-        </p>
-        <h1 className="mt-4 text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl">
+        <div className="flex justify-center">
+          <KiddaLogo variant="logo" size="lg" />
+        </div>
+        <h1 className="mt-6 text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl">
           Your community membership platform
         </h1>
         <p className="mx-auto mt-4 max-w-lg text-lg text-zinc-500">
