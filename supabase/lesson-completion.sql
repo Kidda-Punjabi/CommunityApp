@@ -74,8 +74,8 @@ BEGIN
   FROM public.lessons AS l
   WHERE l.id = p_lesson_id;
 
-  v_pdf_required := COALESCE(v_pdf_url, '') <> '';
-  v_audio_required := COALESCE(v_audio_url, '') <> '';
+  v_pdf_required := false;
+  v_audio_required := false;
 
   SELECT
     COALESCE(lp.completed, false),
@@ -143,15 +143,11 @@ BEGIN
   END IF;
 
   v_total :=
-    (CASE WHEN v_pdf_required THEN 1 ELSE 0 END)
-    + (CASE WHEN v_audio_required THEN 1 ELSE 0 END)
-    + (CASE WHEN v_flashcards_required THEN 1 ELSE 0 END)
+    (CASE WHEN v_flashcards_required THEN 1 ELSE 0 END)
     + (CASE WHEN v_quiz_required THEN 1 ELSE 0 END);
 
   v_done :=
-    (CASE WHEN v_pdf_required AND v_pdf THEN 1 ELSE 0 END)
-    + (CASE WHEN v_audio_required AND v_audio THEN 1 ELSE 0 END)
-    + (CASE WHEN v_flashcards_required AND v_flashcards_complete THEN 1 ELSE 0 END)
+    (CASE WHEN v_flashcards_required AND v_flashcards_complete THEN 1 ELSE 0 END)
     + (CASE WHEN v_quiz_required AND v_quiz_complete THEN 1 ELSE 0 END);
 
   RETURN QUERY

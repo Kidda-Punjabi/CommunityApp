@@ -107,26 +107,42 @@ export function CoursesLessonsTab({ data }: { data: AdminData }) {
             </select>
           </div>
           <div>
-            <label className={labelClass}>Lesson PDF</label>
+            <label className={labelClass}>Presentation link</label>
             <input
-              name="pdf"
-              type="file"
-              accept="application/pdf"
+              name="presentation_url"
+              type="url"
+              placeholder="https://docs.google.com/presentation/..."
               className={inputClass}
             />
             <p className="mt-1 text-xs text-zinc-500">
-              Primary lesson content. Uploaded to the lesson-pdfs bucket.
+              Google Slides, Canva, or any shareable presentation URL.
             </p>
           </div>
-          <div>
-            <label className={labelClass}>Audio file (optional)</label>
-            <input
-              name="audio"
-              type="file"
-              accept="audio/*"
-              className={inputClass}
-            />
-          </div>
+          <details className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+            <summary className="cursor-pointer text-sm font-medium text-zinc-600">
+              Legacy PDF / audio (optional)
+            </summary>
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className={labelClass}>Lesson PDF</label>
+                <input
+                  name="pdf"
+                  type="file"
+                  accept="application/pdf"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Audio file</label>
+                <input
+                  name="audio"
+                  type="file"
+                  accept="audio/*"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          </details>
           <FormMessage state={createState} />
           {createUploadError && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -173,6 +189,19 @@ export function CoursesLessonsTab({ data }: { data: AdminData }) {
                     </p>
                     <p className="mt-1 text-sm text-zinc-500">
                       {lesson.is_free ? "Free" : "Paid"}
+                      {lesson.presentation_url && (
+                        <>
+                          {" · "}
+                          <a
+                            href={lesson.presentation_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-violet-600 hover:underline"
+                          >
+                            Presentation
+                          </a>
+                        </>
+                      )}
                       {lesson.pdf_url && (
                         <>
                           {" · "}
@@ -299,27 +328,41 @@ function LessonEditRow({
           <option value="true">Free</option>
           <option value="false">Paid</option>
         </select>
-        <div>
-          <label className={labelClass}>Replace PDF</label>
-          {currentPdfName && (
-            <p className="mb-2 text-sm text-zinc-600">
-              Current file:{" "}
-              <a
-                href={lesson.pdf_url ?? "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-violet-600 hover:underline"
-              >
-                {currentPdfName}
-              </a>
-            </p>
-          )}
-          <input name="pdf" type="file" accept="application/pdf" className={inputClass} />
-        </div>
-        <div>
-          <label className={labelClass}>Replace audio (optional)</label>
-          <input name="audio" type="file" accept="audio/*" className={inputClass} />
-        </div>
+        <input
+          name="presentation_url"
+          type="url"
+          defaultValue={lesson.presentation_url ?? ""}
+          placeholder="https://docs.google.com/presentation/..."
+          className={inputClass}
+        />
+        <details className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+          <summary className="cursor-pointer text-sm font-medium text-zinc-600">
+            Legacy PDF / audio (optional)
+          </summary>
+          <div className="mt-3 space-y-3">
+            <div>
+              <label className={labelClass}>Replace PDF</label>
+              {currentPdfName && (
+                <p className="mb-2 text-sm text-zinc-600">
+                  Current file:{" "}
+                  <a
+                    href={lesson.pdf_url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-violet-600 hover:underline"
+                  >
+                    {currentPdfName}
+                  </a>
+                </p>
+              )}
+              <input name="pdf" type="file" accept="application/pdf" className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Replace audio</label>
+              <input name="audio" type="file" accept="audio/*" className={inputClass} />
+            </div>
+          </div>
+        </details>
         <FormMessage state={state} />
         {uploadError && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">

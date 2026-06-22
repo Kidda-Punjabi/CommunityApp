@@ -9,6 +9,10 @@ import {
   PracticeCompleteBadge,
 } from "@/components/lesson-completion-indicator";
 import { deckPracticeHref } from "@/lib/flashcards/utils";
+import {
+  SHOW_LESSON_AUDIO,
+  SHOW_LESSON_PDF,
+} from "@/lib/learning/lesson-content-flags";
 import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import type { FlashcardProgressRow } from "@/lib/progress/flashcard-progress";
@@ -42,8 +46,9 @@ export function LessonCard({
   flashcardProgressMap,
   recording,
 }: LessonCardProps) {
-  const hasPdf = Boolean(lesson.pdf_url);
-  const hasAudio = Boolean(lesson.audio_url);
+  const hasPresentation = Boolean(lesson.presentation_url);
+  const hasPdf = SHOW_LESSON_PDF && Boolean(lesson.pdf_url);
+  const hasAudio = SHOW_LESSON_AUDIO && Boolean(lesson.audio_url);
   const { quizId, quizTitle, flashcardSets } = lesson.practice;
   const hasQuiz = Boolean(quizId);
   const hasFlashcards = flashcardSets.length > 0;
@@ -56,8 +61,9 @@ export function LessonCard({
   }
 
   const quizDone = Boolean(completion?.quizRequired && completion.quizComplete);
-  const pdfDone = Boolean(completion?.pdfRequired && completion.pdfComplete);
-  const audioDone = Boolean(completion?.audioRequired && completion.audioComplete);
+
+  const hasLessonContent =
+    hasPresentation || hasPdf || hasAudio || Boolean(recording);
 
   return (
     <div id={`lesson-${lesson.id}`} className={`scroll-mt-6 ${ui.cardBordered}`}>
@@ -110,19 +116,24 @@ export function LessonCard({
         </div>
       )}
 
+      {contentUnlocked && hasPresentation && (
+        <div className="mt-3">
+          <p className="mb-2 text-xs font-medium text-zinc-500">Presentation</p>
+          <a
+            href={lesson.presentation_url!}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-flex w-full items-center justify-center gap-2 ${ui.btnSecondary}`}
+          >
+            Open presentation
+            <span aria-hidden="true">↗</span>
+          </a>
+        </div>
+      )}
+
       {contentUnlocked && hasPdf && (
         <div className="mt-3">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-zinc-500">Lesson PDF</span>
-            {pdfDone && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none">
-                  ✓
-                </span>
-                Completed
-              </span>
-            )}
-          </div>
+          <p className="mb-1.5 text-xs font-medium text-zinc-500">Lesson PDF</p>
           <LessonPdfViewer
             lessonId={lesson.id}
             pdfUrl={lesson.pdf_url!}
@@ -133,20 +144,8 @@ export function LessonCard({
       )}
 
       {contentUnlocked && hasAudio && (
-        <div className={hasPdf ? "mt-4 border-t border-zinc-100 pt-4" : "mt-3"}>
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-zinc-500">
-              {hasPdf ? "Listen along" : "Audio"}
-            </span>
-            {audioDone && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none">
-                  ✓
-                </span>
-                Completed
-              </span>
-            )}
-          </div>
+        <div className={hasPresentation || hasPdf ? "mt-4 border-t border-zinc-100 pt-4" : "mt-3"}>
+          <p className="mb-1.5 text-xs font-medium text-zinc-500">Audio</p>
           <LessonAudioPlayer
             lessonId={lesson.id}
             audioUrl={lesson.audio_url!}
@@ -158,7 +157,7 @@ export function LessonCard({
 
       {contentUnlocked && recording && <LessonRecordingPlayer recording={recording} />}
 
-      {contentUnlocked && !hasPdf && !hasAudio && !recording && (
+      {contentUnlocked && !hasLessonContent && (
         <p className="mt-3 text-sm text-zinc-500">Lesson content coming soon.</p>
       )}
 
@@ -171,7 +170,7 @@ export function LessonCard({
             {hasQuiz && (
               <Link
                 href={`/dashboard/practice/quiz/${quizId}`}
-                className={`flex items-center justify-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100`}
+                className="flex items-center justify-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
               >
                 <span className="min-w-0 truncate">
                   Go to quiz{quizTitle ? `: ${quizTitle}` : ""}

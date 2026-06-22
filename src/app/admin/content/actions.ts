@@ -119,6 +119,9 @@ function withDbHint(message: string): string {
   if (message.includes("pdf_url") && message.includes("schema cache")) {
     return `${message} Run supabase/lesson-pdfs.sql in the Supabase SQL Editor, then retry.`;
   }
+  if (message.includes("presentation_url") && message.includes("schema cache")) {
+    return `${message} Run supabase/lesson-presentations.sql in the Supabase SQL Editor, then retry.`;
+  }
   if (message.includes("lesson_id") && message.includes("schema cache")) {
     return `${message} Run supabase/lesson-links.sql in the Supabase SQL Editor, then retry.`;
   }
@@ -151,6 +154,7 @@ export async function createLesson(
     const isFree = formData.get("is_free") === "true";
     const audioUrl = (formData.get("audio_url") as string) || null;
     const pdfUrl = (formData.get("pdf_url") as string) || null;
+    const presentationUrl = String(formData.get("presentation_url") ?? "").trim() || null;
 
     if (!courseId || !title || Number.isNaN(lessonNumber)) {
       return { error: "Course, lesson number, and title are required." };
@@ -163,6 +167,7 @@ export async function createLesson(
       is_free: isFree,
       audio_url: audioUrl,
       pdf_url: pdfUrl,
+      presentation_url: presentationUrl,
     });
 
     if (error) return { error: withDbHint(error.message) };
@@ -187,12 +192,14 @@ export async function updateLesson(
     const isFree = formData.get("is_free") === "true";
     const audioUrl = formData.get("audio_url") as string | null;
     const pdfUrl = formData.get("pdf_url") as string | null;
+    const presentationUrl = String(formData.get("presentation_url") ?? "").trim();
 
     const updates: Record<string, unknown> = {
       course_id: courseId,
       lesson_number: lessonNumber,
       title,
       is_free: isFree,
+      presentation_url: presentationUrl || null,
     };
 
     if (audioUrl) {

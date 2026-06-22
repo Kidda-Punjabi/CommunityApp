@@ -18,7 +18,9 @@ export async function fetchLearnContent(supabase: SupabaseClient) {
   ] = await Promise.all([
     supabase
       .from("lessons")
-      .select("id, course_id, lesson_number, title, audio_url, pdf_url, is_free, courses(name)")
+      .select(
+        "id, course_id, lesson_number, title, audio_url, pdf_url, presentation_url, is_free, courses(name)"
+      )
       .order("lesson_number"),
     supabase.from("quizzes").select("id, course_id, level_number, title"),
     supabase
@@ -47,6 +49,7 @@ export async function fetchLearnContent(supabase: SupabaseClient) {
       title: lesson.title,
       audio_url: lesson.audio_url,
       pdf_url: lesson.pdf_url,
+      presentation_url: lesson.presentation_url ?? null,
       is_free: lesson.is_free,
       courses: course ? { name: course.name } : null,
     };

@@ -13,6 +13,7 @@ export type Lesson = {
   title: string;
   audio_url: string | null;
   pdf_url: string | null;
+  presentation_url: string | null;
   is_free: boolean;
   courses: { name: string } | null;
 };

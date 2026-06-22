@@ -61,10 +61,10 @@ export function computeLessonCompletionStatus(
   quizProgressByQuizId: Map<string, { completed: boolean; score: number | null }>,
   questionCountByQuizId: Map<string, number>
 ): LessonCompletionStatus {
-  const pdfRequired = Boolean(lesson.pdf_url);
-  const audioRequired = Boolean(lesson.audio_url);
-  const pdfComplete = !pdfRequired || progress.pdfComplete;
-  const audioComplete = !audioRequired || progress.audioComplete;
+  const pdfRequired = false;
+  const audioRequired = false;
+  const pdfComplete = !Boolean(lesson.pdf_url) || progress.pdfComplete;
+  const audioComplete = !Boolean(lesson.audio_url) || progress.audioComplete;
 
   const flashcardsRequired = linkedDeckIds.length > 0;
 
@@ -85,14 +85,10 @@ export function computeLessonCompletionStatus(
   }
 
   const partsTotal =
-    (pdfRequired ? 1 : 0) +
-    (audioRequired ? 1 : 0) +
     (flashcardsRequired ? 1 : 0) +
     (quizRequired ? 1 : 0);
 
   const partsDone =
-    (pdfRequired && pdfComplete ? 1 : 0) +
-    (audioRequired && audioComplete ? 1 : 0) +
     (flashcardsRequired && flashcardsComplete ? 1 : 0) +
     (quizRequired && quizComplete ? 1 : 0);
 
