@@ -5,6 +5,7 @@ import { getCourseAccessContext, tierLabelForCourse } from "@/lib/membership/unl
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
 import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
+import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import Link from "next/link";
 import { ui } from "@/lib/ui/styles";
@@ -24,6 +25,8 @@ type LearnLessonListProps = {
   };
   backHref?: string;
   staffSection?: ReactNode;
+  contentUnlockedMap?: Map<string, boolean>;
+  recordingMap?: Map<string, LessonRecordingView>;
 };
 
 export function LearnLessonList({
@@ -37,10 +40,16 @@ export function LearnLessonList({
   courseProgress,
   backHref = "/dashboard/learn",
   staffSection,
+  contentUnlockedMap,
+  recordingMap,
 }: LearnLessonListProps) {
-  const accessibleLessons = lessons.filter((lesson) =>
-    canAccessLessonInContext(access, lesson)
-  );
+  const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
+
+  const accessibleLessons = lessons.filter((lesson) => {
+    const canBrowse = canAccessLessonInContext(access, lesson);
+    const contentUnlocked = unlockedMap.get(lesson.id) ?? lesson.is_free;
+    return canBrowse && contentUnlocked;
+  });
 
   const progressSummary = courseProgress ?? {
     completed: accessibleLessons.filter(
@@ -86,13 +95,15 @@ export function LearnLessonList({
         <div className={ui.stack}>
           {lessons.map((lesson) => {
             const row = progressMap.get(lesson.id);
-            const canAccess = canAccessLessonInContext(access, lesson);
+            const canBrowse = canAccessLessonInContext(access, lesson);
+            const contentUnlocked = unlockedMap.get(lesson.id) ?? lesson.is_free;
 
             return (
               <LessonCard
                 key={lesson.id}
                 lesson={lesson}
-                canAccess={canAccess}
+                canBrowse={canBrowse}
+                contentUnlocked={contentUnlocked}
                 requiredCourseLabel={tierLabelForCourse(access.courses, lesson.course_id)}
                 progress={
                   row
@@ -104,8 +115,9 @@ export function LearnLessonList({
                       }
                     : undefined
                 }
-                completion={canAccess ? completionMap.get(lesson.id) : undefined}
+                completion={contentUnlocked ? completionMap.get(lesson.id) : undefined}
                 flashcardProgressMap={flashcardProgressMap}
+                recording={recordingMap?.get(lesson.id) ?? null}
               />
             );
           })}

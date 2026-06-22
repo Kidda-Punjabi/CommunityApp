@@ -2,12 +2,14 @@ import Link from "next/link";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import { LessonAudioPlayer } from "@/components/lesson-audio-player";
 import { LessonPdfViewer } from "@/components/lesson-pdf-viewer";
+import { LessonRecordingPlayer } from "@/components/lesson-recording-player";
 import {
   LessonCompletionRing,
   LessonRequirementStatus,
   PracticeCompleteBadge,
 } from "@/components/lesson-completion-indicator";
 import { deckPracticeHref } from "@/lib/flashcards/utils";
+import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import type { FlashcardProgressRow } from "@/lib/progress/flashcard-progress";
 import { ui } from "@/lib/ui/styles";
@@ -21,20 +23,24 @@ type LessonProgress = {
 
 type LessonCardProps = {
   lesson: LessonWithCourse;
-  canAccess: boolean;
+  canBrowse: boolean;
+  contentUnlocked: boolean;
   requiredCourseLabel?: string;
   progress?: LessonProgress;
   completion?: LessonCompletionStatus;
   flashcardProgressMap?: Map<string, FlashcardProgressRow>;
+  recording?: LessonRecordingView | null;
 };
 
 export function LessonCard({
   lesson,
-  canAccess,
+  canBrowse,
+  contentUnlocked,
   requiredCourseLabel,
   progress,
   completion,
   flashcardProgressMap,
+  recording,
 }: LessonCardProps) {
   const hasPdf = Boolean(lesson.pdf_url);
   const hasAudio = Boolean(lesson.audio_url);
@@ -61,10 +67,10 @@ export function LessonCard({
             Lesson {lesson.lesson_number}
           </p>
           <h3 className="mt-1 font-semibold text-zinc-900">{lesson.title}</h3>
-          {canAccess && completion && <LessonRequirementStatus status={completion} />}
+          {contentUnlocked && completion && <LessonRequirementStatus status={completion} />}
         </div>
         <div className="flex shrink-0 items-start gap-2">
-          {canAccess && completion && <LessonCompletionRing status={completion} />}
+          {contentUnlocked && completion && <LessonCompletionRing status={completion} />}
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-medium ${
               lesson.is_free
@@ -77,7 +83,7 @@ export function LessonCard({
         </div>
       </div>
 
-      {!canAccess && (
+      {!canBrowse && (
         <div className="mt-3 space-y-2">
           <p className="text-sm text-zinc-500">
             Unlock with{" "}
@@ -95,7 +101,16 @@ export function LessonCard({
         </div>
       )}
 
-      {canAccess && hasPdf && (
+      {canBrowse && !contentUnlocked && (
+        <div className="mt-3 rounded-xl bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-900">
+            Your tutor will unlock this lesson after your session. Check back here once it is
+            ready.
+          </p>
+        </div>
+      )}
+
+      {contentUnlocked && hasPdf && (
         <div className="mt-3">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-zinc-500">Lesson PDF</span>
@@ -117,7 +132,7 @@ export function LessonCard({
         </div>
       )}
 
-      {canAccess && hasAudio && (
+      {contentUnlocked && hasAudio && (
         <div className={hasPdf ? "mt-4 border-t border-zinc-100 pt-4" : "mt-3"}>
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-zinc-500">
@@ -141,11 +156,13 @@ export function LessonCard({
         </div>
       )}
 
-      {canAccess && !hasPdf && !hasAudio && (
+      {contentUnlocked && recording && <LessonRecordingPlayer recording={recording} />}
+
+      {contentUnlocked && !hasPdf && !hasAudio && !recording && (
         <p className="mt-3 text-sm text-zinc-500">Lesson content coming soon.</p>
       )}
 
-      {canAccess && (hasQuiz || hasFlashcards) && (
+      {contentUnlocked && (hasQuiz || hasFlashcards) && (
         <div className="mt-4 space-y-2 border-t border-zinc-100 pt-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Practice this lesson

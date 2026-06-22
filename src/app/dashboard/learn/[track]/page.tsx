@@ -26,6 +26,10 @@ import {
   loadCommunityLeads,
   loadMyTutorForTier,
 } from "@/lib/tutoring/load-course-staff";
+import {
+  fetchLessonContentUnlockMap,
+  fetchLessonRecordingsForUser,
+} from "@/lib/tutoring/lesson-content-access";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 
@@ -53,10 +57,17 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
 
   if (track.alwaysUnlocked) {
     const lessons = filterFreeLessons(allLessons);
-    const completionMap = await fetchLessonCompletionMap(supabase, user!.id, lessons);
-    const accessibleLessons = lessons.filter((lesson) =>
-      canAccessLessonInContext(access, lesson)
-    );
+    const lessonIds = lessons.map((lesson) => lesson.id);
+    const [completionMap, contentUnlockedMap, recordingMap] = await Promise.all([
+      fetchLessonCompletionMap(supabase, user!.id, lessons),
+      fetchLessonContentUnlockMap(supabase, user!.id, lessonIds),
+      fetchLessonRecordingsForUser(supabase, user!.id, lessonIds),
+    ]);
+    const accessibleLessons = lessons.filter((lesson) => {
+      const canBrowse = canAccessLessonInContext(access, lesson);
+      const contentUnlocked = contentUnlockedMap.get(lesson.id) ?? lesson.is_free;
+      return canBrowse && contentUnlocked;
+    });
     const courseProgress = summarizeCourseProgress(accessibleLessons, completionMap);
 
     return (
@@ -68,6 +79,8 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
         progressMap={lessonProgressMap}
         flashcardProgressMap={flashcardProgressMap}
         completionMap={completionMap}
+        contentUnlockedMap={contentUnlockedMap}
+        recordingMap={recordingMap}
         courseProgress={{
           completed: courseProgress.completedLessons,
           total: courseProgress.totalLessons,
@@ -86,10 +99,17 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
   }
 
   const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
-  const completionMap = await fetchLessonCompletionMap(supabase, user!.id, lessons);
-  const accessibleLessons = lessons.filter((lesson) =>
-    canAccessLessonInContext(access, lesson)
-  );
+  const lessonIds = lessons.map((lesson) => lesson.id);
+  const [completionMap, contentUnlockedMap, recordingMap] = await Promise.all([
+    fetchLessonCompletionMap(supabase, user!.id, lessons),
+    fetchLessonContentUnlockMap(supabase, user!.id, lessonIds),
+    fetchLessonRecordingsForUser(supabase, user!.id, lessonIds),
+  ]);
+  const accessibleLessons = lessons.filter((lesson) => {
+    const canBrowse = canAccessLessonInContext(access, lesson);
+    const contentUnlocked = contentUnlockedMap.get(lesson.id) ?? lesson.is_free;
+    return canBrowse && contentUnlocked;
+  });
   const courseProgress = summarizeCourseProgress(accessibleLessons, completionMap);
 
   let staffSection = null;
@@ -123,6 +143,8 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
         total: courseProgress.totalLessons,
       }}
       staffSection={staffSection}
+      contentUnlockedMap={contentUnlockedMap}
+      recordingMap={recordingMap}
     />
   );
 }

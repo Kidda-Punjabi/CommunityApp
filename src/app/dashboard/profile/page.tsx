@@ -8,6 +8,7 @@ import { WeeklyPointsCard } from "@/components/profile/weekly-points-card";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { isAdmin } from "@/lib/auth/admin";
+import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
 import { loadViewerWeeklyPoints } from "@/lib/leaderboard/load-viewer-weekly-points";
 import { getCurrentWeekStart } from "@/lib/leaderboard/week";
 import {
@@ -56,6 +57,7 @@ export default async function ProfilePage() {
     : formatUnlockedCourseNames(access.courses, access.unlockedCourseIds);
 
   const showAdminPanel = await canAccessAdminPanel(user!);
+  const showTutorDashboard = await canAccessTutorDashboard(supabase, user!.id);
 
   return (
     <div className={ui.page}>
@@ -126,6 +128,20 @@ export default async function ProfilePage() {
             }
             isOverrideActive={Boolean(access.viewAs?.active)}
           />
+        )}
+
+        {showTutorDashboard && (
+          <div className="rounded-3xl bg-violet-50 p-5 shadow-[0_4px_24px_-6px_rgba(124,58,237,0.1)]">
+            <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+              Tutor
+            </p>
+            <p className="mt-2 text-sm text-zinc-600">
+              Unlock lessons, manage cohorts, and add session recordings for your students.
+            </p>
+            <Link href="/dashboard/tutor" className={`mt-4 ${ui.btnPrimary}`}>
+              Open tutor dashboard
+            </Link>
+          </div>
         )}
 
         {showAdminPanel && (
