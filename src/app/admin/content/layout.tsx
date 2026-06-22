@@ -13,7 +13,7 @@ export default async function AdminLayout({
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
-  if (!(await canAccessAdminPanel(user))) redirect("/dashboard/home");
+  if (!(await canAccessAdminPanel(user, supabase))) redirect("/dashboard/home");
 
   return (
     <div className="min-h-dvh bg-zinc-50">

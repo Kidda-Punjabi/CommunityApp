@@ -56,7 +56,7 @@ export default async function ProfilePage() {
     ? `Testing: ${access.viewAs.label}`
     : formatUnlockedCourseNames(access.courses, access.unlockedCourseIds);
 
-  const showAdminPanel = await canAccessAdminPanel(user!);
+  const showAdminPanel = await canAccessAdminPanel(user!, supabase);
   const showTutorDashboard = await canAccessTutorDashboard(supabase, user!.id);
 
   return (

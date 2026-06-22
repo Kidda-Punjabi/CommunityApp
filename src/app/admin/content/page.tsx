@@ -1,24 +1,39 @@
-import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ensureDefaultCourses } from "@/lib/courses/ensure-default-courses";
 import { ensureStorageBuckets } from "@/lib/supabase/ensure-storage-buckets";
+import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { AdminContent } from "./admin-content";
+import { AdminServerError } from "./admin-server-error";
 import { loadAdminTutorPanelData } from "./tutor-actions";
 import type { AdminData } from "./types";
 
 export default async function AdminContentPage() {
-  const supabase = createServiceRoleClient();
+  const service = tryCreateServiceRoleClient();
+  if (service.error || !service.client) {
+    return <AdminServerError message={service.error ?? "Supabase admin client unavailable."} />;
+  }
 
-  await ensureDefaultCourses(supabase);
-  await ensureStorageBuckets(supabase);
+  const supabase = service.client;
 
-  const tutorPanel = await loadAdminTutorPanelData().catch(() => ({
+  try {
+    await ensureDefaultCourses(supabase);
+    await ensureStorageBuckets(supabase);
+  } catch (e) {
+    return (
+      <AdminServerError
+        message={e instanceof Error ? e.message : "Failed to prepare admin environment."}
+      />
+    );
+  }
+
+  const tutorPanel = await loadAdminTutorPanelData().catch((e) => ({
     enrollments: [] as AdminData["enrollments"],
     cohorts: [] as AdminData["cohorts"],
     staffMembers: [] as AdminData["staffMembers"],
     errors: {
       enrollments: undefined,
       cohorts: undefined,
-      staffMembers: "Failed to load staff and tutor data.",
+      staffMembers:
+        e instanceof Error ? e.message : "Failed to load staff and tutor data.",
     },
   }));
 

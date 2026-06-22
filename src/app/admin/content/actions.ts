@@ -106,7 +106,7 @@ async function requireAdmin() {
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user || !(await canAccessAdminPanel(user))) {
+  if (!user || !(await canAccessAdminPanel(user, authClient))) {
     throw new Error("Unauthorized");
   }
 
