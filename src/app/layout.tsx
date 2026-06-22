@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Poppins } from "next/font/google";
+import { AuthRedirectHandler } from "@/components/auth-redirect-handler";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,7 +38,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} min-h-dvh bg-zinc-50 antialiased`}
     >
-      <body className="flex min-h-dvh flex-1 flex-col bg-zinc-50">{children}</body>
+      <body className="flex min-h-dvh flex-1 flex-col bg-zinc-50">
+        <AuthRedirectHandler />
+        {children}
+      </body>
     </html>
   );
 }

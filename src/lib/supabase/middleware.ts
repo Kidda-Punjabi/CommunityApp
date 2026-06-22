@@ -75,6 +75,37 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  // Recovery / confirm links may land on Site URL (`/`) when redirect URLs are misconfigured.
+  if (request.nextUrl.pathname === "/") {
+    const code = request.nextUrl.searchParams.get("code");
+    const errorDescription = request.nextUrl.searchParams.get("error_description");
+    const type = request.nextUrl.searchParams.get("type");
+    const isRecovery = type === "recovery";
+
+    if (code) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/callback";
+      url.searchParams.set("next", isRecovery ? "/reset-password" : POST_AUTH_PATH);
+      return NextResponse.redirect(url);
+    }
+
+    if (errorDescription) {
+      const url = request.nextUrl.clone();
+      url.pathname = isRecovery ? "/reset-password" : "/login";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  if (request.nextUrl.pathname === "/reset-password") {
+    const code = request.nextUrl.searchParams.get("code");
+    if (code) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/callback";
+      url.searchParams.set("next", "/reset-password");
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

@@ -1,24 +1,12 @@
 "use server";
 
+import { getPublicAppUrl } from "@/lib/app-url";
 import { createClient } from "@/lib/supabase/server";
-import { headers } from "next/headers";
 
 export type ForgotPasswordState = {
   error?: string;
   success?: string;
 };
-
-function getBaseUrl(originHeader: string | null, hostHeader: string | null) {
-  if (originHeader) return originHeader;
-
-  if (hostHeader) {
-    const isLocalHost = hostHeader.includes("localhost");
-    const protocol = isLocalHost ? "http" : "https";
-    return `${protocol}://${hostHeader}`;
-  }
-
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-}
 
 export async function requestPasswordReset(
   _prevState: ForgotPasswordState,
@@ -31,14 +19,10 @@ export async function requestPasswordReset(
   }
 
   const supabase = await createClient();
-  const headerList = await headers();
-  const redirectBaseUrl = getBaseUrl(
-    headerList.get("origin"),
-    headerList.get("host")
-  );
+  const redirectTo = `${getPublicAppUrl()}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${redirectBaseUrl}/reset-password`,
+    redirectTo,
   });
 
   if (error) {

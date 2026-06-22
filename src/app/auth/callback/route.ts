@@ -13,6 +13,14 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = safeNextPath(searchParams.get("next"));
+  const errorDescription = searchParams.get("error_description");
+
+  if (errorDescription) {
+    const dest = next === "/reset-password" ? "/reset-password" : "/login";
+    return NextResponse.redirect(
+      `${origin}${dest}?error_description=${encodeURIComponent(errorDescription)}`
+    );
+  }
 
   if (code) {
     const cookieStore = await cookies();
@@ -37,6 +45,12 @@ export async function GET(request: Request) {
 
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
+    }
+
+    if (next === "/reset-password") {
+      return NextResponse.redirect(
+        `${origin}/reset-password?error_description=${encodeURIComponent(error.message)}`
+      );
     }
   }
 

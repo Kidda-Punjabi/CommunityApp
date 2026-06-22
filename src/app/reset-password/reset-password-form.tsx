@@ -24,7 +24,17 @@ export function ResetPasswordForm() {
       if (queryError) {
         if (!isActive) return;
         setStatus("error");
-        setErrorMessage(queryError);
+        setErrorMessage(decodeURIComponent(queryError.replace(/\+/g, " ")));
+        return;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        if (!isActive) return;
+        setStatus("ready");
         return;
       }
 
