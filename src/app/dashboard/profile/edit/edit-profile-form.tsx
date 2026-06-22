@@ -76,13 +76,14 @@ export function EditProfileForm({ userId, profile, learnerLevel }: EditProfileFo
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="relative rounded-full ring-4 ring-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="relative transition-opacity hover:opacity-90 disabled:opacity-60"
           aria-label="Upload profile photo"
         >
           <UserAvatar
             profile={{ full_name: fullName, preferred_name: preferredName, avatar_url: avatarUrl }}
             level={learnerLevel}
             size="lg"
+            className="shadow-sm ring-4 ring-white"
           />
           {uploading && (
             <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">

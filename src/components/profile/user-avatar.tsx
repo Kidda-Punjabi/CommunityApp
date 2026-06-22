@@ -23,6 +23,13 @@ const BADGE_CLASSES = {
   lg: "h-7 min-w-7 px-1 text-xs -bottom-1 -right-1 ring-2",
 } as const;
 
+const ICON_CLASSES = {
+  xs: "h-4 w-4",
+  sm: "h-5 w-5",
+  md: "h-8 w-8",
+  lg: "h-10 w-10",
+} as const;
+
 function PersonIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -57,75 +64,22 @@ export function UserAvatar({
   const initial = getAvatarInitial(profile);
   const showLevel = level != null && level > 0;
 
-  const avatarContent = profile.avatar_url ? (
+  const content = profile.avatar_url ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={profile.avatar_url}
-      alt=""
-      className={`rounded-full object-cover ${sizeClass}`}
-    />
+    <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
   ) : (
     <div
-      className={`flex items-center justify-center rounded-full bg-zinc-200 font-semibold text-zinc-600 ${sizeClass}`}
+      className="flex h-full w-full items-center justify-center bg-zinc-200 font-semibold text-zinc-600"
       aria-hidden="true"
     >
-      {initial ? (
-        <span>{initial}</span>
-      ) : (
-        <PersonIcon
-          className={
-            size === "xs"
-              ? "h-4 w-4"
-              : size === "sm"
-                ? "h-5 w-5"
-                : size === "md"
-                  ? "h-8 w-8"
-                  : "h-10 w-10"
-          }
-        />
-      )}
+      {initial ? <span>{initial}</span> : <PersonIcon className={ICON_CLASSES[size]} />}
     </div>
   );
 
-  if (!showLevel) {
-    if (profile.avatar_url) {
-      return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={profile.avatar_url}
-          alt=""
-          className={`rounded-full object-cover ${sizeClass} ${className}`}
-        />
-      );
-    }
-    return (
-      <div
-        className={`flex items-center justify-center rounded-full bg-zinc-200 font-semibold text-zinc-600 ${sizeClass} ${className}`}
-        aria-hidden="true"
-      >
-        {initial ? (
-          <span>{initial}</span>
-        ) : (
-          <PersonIcon
-            className={
-              size === "xs"
-                ? "h-4 w-4"
-                : size === "sm"
-                  ? "h-5 w-5"
-                  : size === "md"
-                    ? "h-8 w-8"
-                    : "h-10 w-10"
-            }
-          />
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className={`relative inline-flex shrink-0 ${className}`}>
-      {avatarContent}
-      <LevelBadge level={level} size={size} />
+    <div className={`relative inline-flex shrink-0 rounded-full ${sizeClass} ${className}`}>
+      <div className="h-full w-full overflow-hidden rounded-full">{content}</div>
+      {showLevel && <LevelBadge level={level} size={size} />}
     </div>
   );
 }

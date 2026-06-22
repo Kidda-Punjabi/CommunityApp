@@ -62,17 +62,16 @@ export default async function ProfilePage() {
   return (
     <div className={ui.page}>
       <div className="text-center">
-        <div className="mx-auto w-fit shadow-[0_4px_20px_-4px_rgba(24,24,27,0.12)] ring-4 ring-white">
-          <UserAvatar
-            profile={{
-              full_name: profile?.full_name,
-              preferred_name: profile?.preferred_name,
-              avatar_url: profile?.avatar_url,
-            }}
-            level={progression.learnerLevel}
-            size="lg"
-          />
-        </div>
+        <UserAvatar
+          profile={{
+            full_name: profile?.full_name,
+            preferred_name: profile?.preferred_name,
+            avatar_url: profile?.avatar_url,
+          }}
+          level={progression.learnerLevel}
+          size="lg"
+          className="mx-auto shadow-[0_4px_20px_-4px_rgba(24,24,27,0.12)] ring-4 ring-white"
+        />
         <h1 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900">
           Profile
         </h1>
