@@ -165,6 +165,44 @@ export type AdminStaffMember = {
   appRoles: string[];
 };
 
+export type AdminMemberListItem = {
+  userId: string;
+  email: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+  accessTiers: string[];
+};
+
+export type AdminMemberDetail = {
+  userId: string;
+  email: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+  courseAccess: {
+    foundational: boolean;
+    beginners: boolean;
+    community: boolean;
+  };
+  courseIds: {
+    foundational: string | null;
+    beginners: string | null;
+    community: string | null;
+  };
+  foundationalEnrollment: {
+    enrollmentId: string;
+    tutorId: string;
+    tutorLabel: string | null;
+  } | null;
+  beginnersEnrollment: {
+    enrollmentId: string;
+    tutorId: string;
+    tutorLabel: string | null;
+    deliveryMode: "one_to_one" | "group" | null;
+    cohortId: string | null;
+  } | null;
+  activeCohorts: { cohortId: string; cohortName: string }[];
+};
+
 export type AdminData = {
   courses: Course[];
   lessons: Lesson[];

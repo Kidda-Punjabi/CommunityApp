@@ -12,6 +12,7 @@ import { SentenceBuilderTab } from "./components/sentence-builder-tab";
 import { ConjugationTab } from "./components/conjugation-tab";
 import { GenderSortTab } from "./components/gender-sort-tab";
 import { StaffTutorsTab } from "./components/staff-tutors-tab";
+import { MembersTab } from "./components/members-tab";
 import { AnnouncementsTab } from "./components/announcements-tab";
 
 const tabs = [
@@ -23,6 +24,7 @@ const tabs = [
   { id: "gender-sort", label: "Gender sort" },
   { id: "events", label: "Events" },
   { id: "teachers", label: "Teachers" },
+  { id: "members", label: "Members" },
   { id: "staff", label: "Staff & tutors" },
   { id: "announcements", label: "Announcements" },
   { id: "streaks", label: "Streak debug" },
@@ -74,6 +76,7 @@ export function AdminContent({ data }: { data: AdminData }) {
         {activeTab === "gender-sort" && <GenderSortTab data={data} />}
         {activeTab === "events" && <EventsTab data={data} />}
         {activeTab === "teachers" && <TeachersTab data={data} />}
+        {activeTab === "members" && <MembersTab data={data} />}
         {activeTab === "staff" && <StaffTutorsTab data={data} />}
         {activeTab === "announcements" && <AnnouncementsTab />}
         {activeTab === "streaks" && <StreakDebugTab />}
