@@ -1,4 +1,9 @@
 import {
+  AUTH_RECOVERY_COOKIE,
+  authCallbackNextPath,
+  buildAuthCallbackUrl,
+} from "@/lib/auth/recovery-flow";
+import {
   normalizeReferralCode,
   REFERRAL_COOKIE_MAX_AGE_SECONDS,
   REFERRAL_COOKIE_NAME,
@@ -80,18 +85,23 @@ export async function updateSession(request: NextRequest) {
     const code = request.nextUrl.searchParams.get("code");
     const errorDescription = request.nextUrl.searchParams.get("error_description");
     const type = request.nextUrl.searchParams.get("type");
-    const isRecovery = type === "recovery";
+    const hasRecoveryCookie =
+      request.cookies.get(AUTH_RECOVERY_COOKIE)?.value === "1";
 
     if (code) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/auth/callback";
-      url.searchParams.set("next", isRecovery ? "/reset-password" : POST_AUTH_PATH);
-      return NextResponse.redirect(url);
+      const next = authCallbackNextPath(type, hasRecoveryCookie);
+      const redirectUrl = new URL(buildAuthCallbackUrl(request.nextUrl.origin, code, next));
+      const response = NextResponse.redirect(redirectUrl);
+      response.cookies.delete(AUTH_RECOVERY_COOKIE);
+      return response;
     }
 
     if (errorDescription) {
       const url = request.nextUrl.clone();
-      url.pathname = isRecovery ? "/reset-password" : "/login";
+      url.pathname =
+        authCallbackNextPath(type, hasRecoveryCookie) === "/reset-password"
+          ? "/reset-password"
+          : "/login";
       return NextResponse.redirect(url);
     }
   }

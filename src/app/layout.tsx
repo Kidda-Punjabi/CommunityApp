@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Poppins } from "next/font/google";
+import { Suspense } from "react";
 import { AuthRedirectHandler } from "@/components/auth-redirect-handler";
 import "./globals.css";
 
@@ -39,7 +40,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} min-h-dvh bg-zinc-50 antialiased`}
     >
       <body className="flex min-h-dvh flex-1 flex-col bg-zinc-50">
-        <AuthRedirectHandler />
+        <Suspense fallback={null}>
+          <AuthRedirectHandler />
+        </Suspense>
         {children}
       </body>
     </html>

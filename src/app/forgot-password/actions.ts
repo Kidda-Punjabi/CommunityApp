@@ -1,7 +1,9 @@
 "use server";
 
+import { AUTH_RECOVERY_COOKIE } from "@/lib/auth/recovery-flow";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 
 export type ForgotPasswordState = {
   error?: string;
@@ -28,6 +30,15 @@ export async function requestPasswordReset(
   if (error) {
     return { error: error.message };
   }
+
+  const cookieStore = await cookies();
+  cookieStore.set(AUTH_RECOVERY_COOKIE, "1", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60,
+    path: "/",
+  });
 
   return {
     success:

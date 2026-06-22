@@ -1,6 +1,43 @@
+import {
+  AUTH_RECOVERY_COOKIE,
+  authCallbackNextPath,
+} from "@/lib/auth/recovery-flow";
+import { cookies } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+type HomeProps = {
+  searchParams: Promise<{
+    code?: string;
+    type?: string;
+    error_description?: string;
+  }>;
+};
+
+export default async function Home({ searchParams }: HomeProps) {
+  const params = await searchParams;
+
+  if (params.code) {
+    const cookieStore = await cookies();
+    const hasRecoveryCookie =
+      cookieStore.get(AUTH_RECOVERY_COOKIE)?.value === "1";
+    const next = authCallbackNextPath(params.type ?? null, hasRecoveryCookie);
+    redirect(
+      `/auth/callback?next=${encodeURIComponent(next)}&code=${encodeURIComponent(params.code)}`
+    );
+  }
+
+  if (params.error_description) {
+    const cookieStore = await cookies();
+    const hasRecoveryCookie =
+      cookieStore.get(AUTH_RECOVERY_COOKIE)?.value === "1";
+    const dest =
+      authCallbackNextPath(params.type ?? null, hasRecoveryCookie) === "/reset-password"
+        ? "/reset-password"
+        : "/login";
+    redirect(`${dest}?error_description=${encodeURIComponent(params.error_description)}`);
+  }
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-gradient-to-br from-violet-50 via-white to-indigo-50 px-6 py-24">
       <div className="text-center">
