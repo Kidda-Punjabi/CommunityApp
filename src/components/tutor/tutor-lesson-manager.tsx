@@ -8,6 +8,11 @@ import {
   setCohortLessonUnlock,
   setStudentLessonUnlock,
 } from "@/app/dashboard/tutor/actions";
+import {
+  adminRemoveCohortLessonRecording,
+  adminSaveCohortLessonRecording,
+  adminSetCohortLessonUnlock,
+} from "@/app/admin/content/cohort-actions";
 import type { TutorLessonRow } from "@/lib/tutoring/load-tutor-dashboard";
 import { ui } from "@/lib/ui/styles";
 import { useRouter } from "next/navigation";
@@ -25,13 +30,24 @@ type CohortScope = {
   cohortId: string;
 };
 
-type TutorLessonManagerProps = {
-  lessons: TutorLessonRow[];
-  scope: StudentScope | CohortScope;
-  scopeLabel: string;
+type AdminCohortScope = {
+  mode: "admin-cohort";
+  cohortId: string;
 };
 
-export function TutorLessonManager({ lessons, scope, scopeLabel }: TutorLessonManagerProps) {
+type TutorLessonManagerProps = {
+  lessons: TutorLessonRow[];
+  scope: StudentScope | CohortScope | AdminCohortScope;
+  scopeLabel: string;
+  onChanged?: () => void;
+};
+
+export function TutorLessonManager({
+  lessons,
+  scope,
+  scopeLabel,
+  onChanged,
+}: TutorLessonManagerProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<TutorActionResult>({});
@@ -39,21 +55,28 @@ export function TutorLessonManager({ lessons, scope, scopeLabel }: TutorLessonMa
 
   function refresh() {
     startTransition(() => {
+      onChanged?.();
       router.refresh();
     });
   }
 
   async function handleToggle(lesson: TutorLessonRow) {
     setMessage({});
-    const result =
-      scope.mode === "student"
-        ? await setStudentLessonUnlock(
-            scope.studentId,
-            scope.courseId,
-            lesson.id,
-            !lesson.unlocked
-          )
-        : await setCohortLessonUnlock(scope.cohortId, lesson.id, !lesson.unlocked);
+    let result: TutorActionResult;
+
+    if (scope.mode === "student") {
+      result = await setStudentLessonUnlock(
+        scope.studentId,
+        scope.courseId,
+        lesson.id,
+        !lesson.unlocked
+      );
+    } else if (scope.mode === "admin-cohort") {
+      result = await adminSetCohortLessonUnlock(scope.cohortId, lesson.id, !lesson.unlocked);
+    } else {
+      result = await setCohortLessonUnlock(scope.cohortId, lesson.id, !lesson.unlocked);
+    }
+
     setMessage(result);
     if (!result.error) refresh();
   }
@@ -61,10 +84,16 @@ export function TutorLessonManager({ lessons, scope, scopeLabel }: TutorLessonMa
   async function handleSaveRecording(lessonId: string) {
     setMessage({});
     const url = recordingDrafts[lessonId] ?? "";
-    const result =
-      scope.mode === "student"
-        ? await saveStudentLessonRecording(scope.studentId, scope.courseId, lessonId, url)
-        : await saveCohortLessonRecording(scope.cohortId, lessonId, url);
+    let result: TutorActionResult;
+
+    if (scope.mode === "student") {
+      result = await saveStudentLessonRecording(scope.studentId, scope.courseId, lessonId, url);
+    } else if (scope.mode === "admin-cohort") {
+      result = await adminSaveCohortLessonRecording(scope.cohortId, lessonId, url);
+    } else {
+      result = await saveCohortLessonRecording(scope.cohortId, lessonId, url);
+    }
+
     setMessage(result);
     if (!result.error) {
       setRecordingDrafts((current) => {
@@ -78,10 +107,16 @@ export function TutorLessonManager({ lessons, scope, scopeLabel }: TutorLessonMa
 
   async function handleRemoveRecording(lessonId: string) {
     setMessage({});
-    const result =
-      scope.mode === "student"
-        ? await removeStudentLessonRecording(scope.studentId, lessonId)
-        : await removeCohortLessonRecording(scope.cohortId, lessonId);
+    let result: TutorActionResult;
+
+    if (scope.mode === "student") {
+      result = await removeStudentLessonRecording(scope.studentId, lessonId);
+    } else if (scope.mode === "admin-cohort") {
+      result = await adminRemoveCohortLessonRecording(scope.cohortId, lessonId);
+    } else {
+      result = await removeCohortLessonRecording(scope.cohortId, lessonId);
+    }
+
     setMessage(result);
     if (!result.error) refresh();
   }
@@ -93,8 +128,8 @@ export function TutorLessonManager({ lessons, scope, scopeLabel }: TutorLessonMa
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-600">
-        Tick lessons to unlock them for {scopeLabel}. Untick when you want to hide content
-        again. Add a recording link for catch-up sessions.
+        Tick lessons to unlock them for {scopeLabel}. Students only see recordings for lessons
+        that are unlocked. Paste a YouTube, Loom, or Zoom link after each session.
       </p>
 
       {message.error && (
@@ -124,58 +159,57 @@ export function TutorLessonManager({ lessons, scope, scopeLabel }: TutorLessonMa
                 </p>
                 <p className="font-semibold text-zinc-900">{lesson.title}</p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {lesson.unlocked ? "Unlocked" : "Locked"}
+                  {lesson.unlocked ? "Unlocked for cohort" : "Locked"}
+                  {lesson.recordingUrl ? " · Recording saved" : ""}
                 </p>
               </div>
             </div>
 
-            {lesson.unlocked && (
-              <div className="mt-4 space-y-2 border-t border-zinc-100 pt-4">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                  Recording link
-                </label>
-                {lesson.recordingUrl ? (
-                  <div className="space-y-2">
-                    <a
-                      href={lesson.recordingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block truncate text-sm font-medium text-violet-600 hover:text-violet-500"
-                    >
-                      {lesson.recordingUrl}
-                    </a>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => handleRemoveRecording(lesson.id)}
-                      className="text-sm font-medium text-red-600 hover:text-red-500"
-                    >
-                      Remove link
-                    </button>
-                  </div>
-                ) : null}
-                <input
-                  type="url"
-                  value={recordingDrafts[lesson.id] ?? lesson.recordingUrl ?? ""}
-                  onChange={(event) =>
-                    setRecordingDrafts((current) => ({
-                      ...current,
-                      [lesson.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="https://youtube.com/... or Zoom / Loom link"
-                  className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-                />
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => handleSaveRecording(lesson.id)}
-                  className={ui.btnSecondary}
-                >
-                  Save recording link
-                </button>
-              </div>
-            )}
+            <div className="mt-4 space-y-2 border-t border-zinc-100 pt-4">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Session recording link
+              </label>
+              {lesson.recordingUrl ? (
+                <div className="space-y-2">
+                  <a
+                    href={lesson.recordingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block truncate text-sm font-medium text-violet-600 hover:text-violet-500"
+                  >
+                    {lesson.recordingUrl}
+                  </a>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => handleRemoveRecording(lesson.id)}
+                    className="text-sm font-medium text-red-600 hover:text-red-500"
+                  >
+                    Remove link
+                  </button>
+                </div>
+              ) : null}
+              <input
+                type="url"
+                value={recordingDrafts[lesson.id] ?? lesson.recordingUrl ?? ""}
+                onChange={(event) =>
+                  setRecordingDrafts((current) => ({
+                    ...current,
+                    [lesson.id]: event.target.value,
+                  }))
+                }
+                placeholder="https://youtube.com/... or Zoom / Loom link"
+                className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+              />
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => handleSaveRecording(lesson.id)}
+                className={ui.btnSecondary}
+              >
+                {lesson.recordingUrl ? "Update recording link" : "Save recording link"}
+              </button>
+            </div>
           </li>
         ))}
       </ul>

@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
+import { canAccessTutorDashboard, canManageCohort } from "@/lib/tutoring/tutor-access";
 import { revalidatePath } from "next/cache";
 
 export type TutorActionResult = {
@@ -99,15 +99,7 @@ export async function setCohortLessonUnlock(
   try {
     const { supabase, userId } = await requireTutorAction();
 
-    const { data: enrollment } = await supabase
-      .from("course_enrollments")
-      .select("id")
-      .eq("tutor_id", userId)
-      .eq("cohort_id", cohortId)
-      .limit(1)
-      .maybeSingle();
-
-    if (!enrollment) {
+    if (!(await canManageCohort(supabase, userId, cohortId))) {
       return { error: "You are not the tutor for this cohort." };
     }
 
@@ -204,15 +196,7 @@ export async function saveCohortLessonRecording(
     const url = normalizeRecordingUrl(recordingUrl);
     if (!url) return { error: "Enter a valid http(s) recording link." };
 
-    const { data: enrollment } = await supabase
-      .from("course_enrollments")
-      .select("id")
-      .eq("tutor_id", userId)
-      .eq("cohort_id", cohortId)
-      .limit(1)
-      .maybeSingle();
-
-    if (!enrollment) {
+    if (!(await canManageCohort(supabase, userId, cohortId))) {
       return { error: "You are not the tutor for this cohort." };
     }
 
@@ -285,15 +269,9 @@ export async function removeCohortLessonRecording(
   try {
     const { supabase, userId } = await requireTutorAction();
 
-    const { data: enrollment } = await supabase
-      .from("course_enrollments")
-      .select("id")
-      .eq("tutor_id", userId)
-      .eq("cohort_id", cohortId)
-      .limit(1)
-      .maybeSingle();
-
-    if (!enrollment) return { error: "Not authorized." };
+    if (!(await canManageCohort(supabase, userId, cohortId))) {
+      return { error: "Not authorized." };
+    }
 
     const { error } = await supabase
       .from("lesson_recordings")

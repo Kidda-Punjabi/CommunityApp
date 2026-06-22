@@ -80,15 +80,17 @@ export default async function ProfilePage() {
           <p className="mt-1 text-lg font-medium text-zinc-700">{displayName}</p>
         )}
         <p className="mt-1 text-sm text-zinc-500">{user?.email}</p>
-        <Link href="/dashboard/profile/edit" className={`mt-5 ${ui.btnSecondary}`}>
-          Edit profile
-        </Link>
-        <Link
-          href="/dashboard/profile/notifications"
-          className="mt-2 inline-block text-sm font-medium text-zinc-500 hover:text-violet-600"
-        >
-          Notification settings
-        </Link>
+        <div className="mt-5 flex flex-col items-center gap-3">
+          <Link href="/dashboard/profile/edit" className={ui.btnSecondary}>
+            Edit profile
+          </Link>
+          <Link
+            href="/dashboard/profile/notifications"
+            className="text-sm font-medium text-zinc-500 hover:text-violet-600"
+          >
+            Notification settings
+          </Link>
+        </div>
       </div>
 
       <div className={`mt-10 ${ui.stackLoose}`}>

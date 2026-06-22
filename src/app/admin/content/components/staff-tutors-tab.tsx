@@ -28,6 +28,7 @@ import {
   labelClass,
   secondaryButtonClass,
 } from "./ui";
+import { AdminCohortLessonPanel } from "./admin-cohort-lesson-panel";
 
 const initialState: ActionResult = {};
 
@@ -46,6 +47,7 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
   const [cohortMemberPick, setCohortMemberPick] = useState<AdminMemberOption[]>([]);
   const [newCohortName, setNewCohortName] = useState("");
   const [newCohortTutorId, setNewCohortTutorId] = useState("");
+  const [lessonsCohortId, setLessonsCohortId] = useState<string | null>(null);
 
   const [roleState, roleAction, rolePending] = useActionState(setUserAppRoles, initialState);
   const [assignState, assignAction, assignPending] = useActionState(
@@ -469,6 +471,28 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
                   {cohort.courseName}
                   {cohort.tutorLabel ? ` · ${cohort.tutorLabel}` : ""}
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLessonsCohortId((current) =>
+                        current === cohort.id ? null : cohort.id
+                      )
+                    }
+                    className={buttonClass}
+                  >
+                    {lessonsCohortId === cohort.id
+                      ? "Hide lessons & recordings"
+                      : "Lessons & recordings"}
+                  </button>
+                </div>
+                {lessonsCohortId === cohort.id && (
+                  <AdminCohortLessonPanel
+                    cohortId={cohort.id}
+                    cohortName={cohort.name}
+                    onClose={() => setLessonsCohortId(null)}
+                  />
+                )}
                 <ul className="mt-3 space-y-2">
                   {cohort.members.length === 0 ? (
                     <li className="text-sm text-zinc-500">No active members.</li>

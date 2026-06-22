@@ -1,4 +1,5 @@
 import { getDisplayName } from "@/lib/profile/display-name";
+import { canManageCohort } from "@/lib/tutoring/tutor-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type TutorStudentRow = {
@@ -227,15 +228,8 @@ export async function loadTutorCohortLessons(
   if (cohortError) throw cohortError;
   if (!cohort) return null;
 
-  const { data: hasEnrollment } = await supabase
-    .from("course_enrollments")
-    .select("id")
-    .eq("tutor_id", tutorId)
-    .eq("cohort_id", cohortId)
-    .limit(1)
-    .maybeSingle();
-
-  if (!hasEnrollment) return null;
+  const allowed = await canManageCohort(supabase, tutorId, cohortId);
+  if (!allowed) return null;
 
   const course = Array.isArray(cohort.courses) ? cohort.courses[0] : cohort.courses;
 

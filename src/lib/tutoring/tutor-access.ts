@@ -24,3 +24,30 @@ export async function canAccessTutorDashboard(
   const roles = await loadCurrentUserAppRoles(supabase, userId);
   return hasAnyRole(roles, TUTOR_DASHBOARD_ROLES);
 }
+
+export async function canManageCohort(
+  supabase: SupabaseClient,
+  userId: string,
+  cohortId: string
+): Promise<boolean> {
+  const roles = await loadCurrentUserAppRoles(supabase, userId);
+  if (roles.includes("master_admin")) return true;
+
+  const { data: cohort } = await supabase
+    .from("cohorts")
+    .select("tutor_id")
+    .eq("id", cohortId)
+    .maybeSingle();
+
+  if (cohort?.tutor_id === userId) return true;
+
+  const { data: enrollment } = await supabase
+    .from("course_enrollments")
+    .select("id")
+    .eq("tutor_id", userId)
+    .eq("cohort_id", cohortId)
+    .limit(1)
+    .maybeSingle();
+
+  return Boolean(enrollment);
+}
