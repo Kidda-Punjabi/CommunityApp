@@ -16,7 +16,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_course_id UUID;
-  v_tier TEXT;
+  v_tier TEXT
   v_course_name TEXT;
   v_is_free BOOLEAN;
   v_enrollment public.course_enrollments%ROWTYPE;
