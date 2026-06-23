@@ -11,6 +11,10 @@ export type TutorActionResult = {
 
 function revalidateTutorPaths() {
   revalidatePath("/dashboard/tutor");
+  revalidatePath("/dashboard/tutor/attendance");
+  revalidatePath("/dashboard/tutor/homework");
+  revalidatePath("/dashboard/tutor/lessons");
+  revalidatePath("/dashboard/tutor/profile");
   revalidatePath("/dashboard/tutor/student", "layout");
   revalidatePath("/dashboard/tutor/cohort", "layout");
   revalidatePath("/dashboard/learn");

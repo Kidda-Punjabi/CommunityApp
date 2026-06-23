@@ -131,7 +131,7 @@ export default async function ProfilePage() {
               Tutor
             </p>
             <p className="mt-2 text-sm text-zinc-600">
-              Unlock lessons, manage cohorts, and add session recordings for your students.
+              Mark attendance, review homework, unlock lessons, and manage your students.
             </p>
             <Link href="/dashboard/tutor" className={`mt-4 ${ui.btnPrimary}`}>
               Open tutor dashboard

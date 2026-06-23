@@ -1,10 +1,9 @@
 import { TutorLessonManager } from "@/components/tutor/tutor-lesson-manager";
-import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
 import { loadTutorStudentLessons } from "@/lib/tutoring/load-tutor-dashboard";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 type TutorStudentPageProps = {
   params: Promise<{ studentId: string; courseId: string }>;
@@ -17,21 +16,16 @@ export default async function TutorStudentPage({ params }: TutorStudentPageProps
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
-
-  const allowed = await canAccessTutorDashboard(supabase, user.id);
-  if (!allowed) redirect("/dashboard/profile");
-
-  const data = await loadTutorStudentLessons(supabase, user.id, studentId, courseId);
+  const data = await loadTutorStudentLessons(supabase, user!.id, studentId, courseId);
   if (!data) notFound();
 
   return (
     <div className={ui.page}>
       <Link
-        href="/dashboard/tutor"
+        href="/dashboard/tutor/lessons"
         className="text-sm font-medium text-violet-600 hover:text-violet-500"
       >
-        ← Back to tutor dashboard
+        ← Back to lessons
       </Link>
 
       <div className="mb-8 mt-4">

@@ -24,6 +24,7 @@ async function requireTutorHomeworkAction() {
 
 function revalidateTutorHomeworkPaths() {
   revalidatePath("/dashboard/tutor");
+  revalidatePath("/dashboard/tutor/homework");
   revalidatePath("/dashboard/learn");
 }
 

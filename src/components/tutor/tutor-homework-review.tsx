@@ -10,6 +10,7 @@ import { ui } from "@/lib/ui/styles";
 
 type TutorHomeworkReviewProps = {
   submissions: PendingHomeworkReviewRow[];
+  fullPage?: boolean;
 };
 
 function formatSubmittedAt(iso: string): string {
@@ -131,18 +132,34 @@ function HomeworkReviewCard({
   );
 }
 
-export function TutorHomeworkReview({ submissions }: TutorHomeworkReviewProps) {
+export function TutorHomeworkReview({
+  submissions,
+  fullPage = false,
+}: TutorHomeworkReviewProps) {
   const [rows, setRows] = useState(submissions);
 
   useEffect(() => {
     setRows(submissions);
   }, [submissions]);
 
-  return (
-    <section className={ui.section}>
-      <h2 className={ui.sectionTitle}>Homework review</h2>
+  const list = (
+    <>
       {rows.length === 0 ? (
-        <p className="text-sm text-zinc-500">No homework waiting for review.</p>
+        <div className={fullPage ? ui.emptyState : undefined}>
+          {fullPage ? (
+            <>
+              <span className="text-5xl" role="img" aria-hidden="true">
+                🎧
+              </span>
+              <p className="mt-4 text-lg font-semibold text-zinc-900">All caught up</p>
+              <p className="mt-2 text-sm text-zinc-500">
+                No homework waiting for review right now.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-zinc-500">No homework waiting for review.</p>
+          )}
+        </div>
       ) : (
         <ul className="space-y-4">
           {rows.map((submission) => (
@@ -156,6 +173,17 @@ export function TutorHomeworkReview({ submissions }: TutorHomeworkReviewProps) {
           ))}
         </ul>
       )}
+    </>
+  );
+
+  if (fullPage) {
+    return list;
+  }
+
+  return (
+    <section className={ui.section}>
+      <h2 className={ui.sectionTitle}>Homework review</h2>
+      {list}
     </section>
   );
 }
