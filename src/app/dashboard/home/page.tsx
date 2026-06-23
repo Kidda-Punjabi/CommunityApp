@@ -88,16 +88,16 @@ export default async function HomePage() {
             <p className="mt-1 text-lg font-bold text-zinc-900">
               {dashboard.stats.lessonsCompleted}
             </p>
-            <p className="text-xs text-zinc-500">completed</p>
+            <p className="text-xs text-zinc-500">practice complete</p>
           </div>
           <div className={ui.statCard}>
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-              Quiz
+              Quizzes
             </p>
             <p className="mt-1 text-lg font-bold text-zinc-900">
-              {dashboard.stats.quizLevelLabel}
+              {dashboard.stats.quizzesPassed}
             </p>
-            <p className="text-xs text-zinc-500">reached</p>
+            <p className="text-xs text-zinc-500">passed</p>
           </div>
         </section>
 
@@ -155,31 +155,6 @@ export default async function HomePage() {
             </div>
           </Link>
         </section>
-
-        {dashboard.continueItem && (
-          <section className={ui.section}>
-            <h2 className={ui.sectionTitle}>Continue where you left off</h2>
-            <Link href={dashboard.continueItem.href} className={ui.cardInteractive}>
-              <div className="flex items-center gap-4">
-                <span className={ui.listRowIcon} aria-hidden="true">
-                  {dashboard.continueItem.type === "lesson" && "📖"}
-                  {dashboard.continueItem.type === "quiz" && "✓"}
-                  {dashboard.continueItem.type === "flashcard" && "🃏"}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-                    {dashboard.continueItem.type === "lesson" && "Lesson"}
-                    {dashboard.continueItem.type === "quiz" && "Quiz"}
-                    {dashboard.continueItem.type === "flashcard" && "Flashcards"}
-                  </p>
-                  <p className="mt-1 font-semibold text-zinc-900">{dashboard.continueItem.title}</p>
-                  <p className="mt-0.5 text-sm text-zinc-500">{dashboard.continueItem.subtitle}</p>
-                  <p className="mt-3 text-sm font-semibold text-violet-600">Resume →</p>
-                </div>
-              </div>
-            </Link>
-          </section>
-        )}
 
         {dashboard.showStarterPack && (
           <section className={ui.section}>

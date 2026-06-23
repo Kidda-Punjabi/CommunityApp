@@ -1,6 +1,6 @@
 import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
-import { hasAccessToCourse } from "@/lib/membership/access";
+import { getCourseRequiredTier, hasAccessToCourse } from "@/lib/membership/access";
 import {
   formatMembersStudiedTodayLabel,
   loadMembersStudiedToday,
@@ -9,31 +9,37 @@ import {
   getCourseAccessContext,
   type CourseAccessContext,
 } from "@/lib/membership/unlocked";
+import { findCoursesForTier } from "@/lib/membership/courses";
 import {
   splitExpandedEvents,
   type DisplayEvent,
   type StoredEvent,
 } from "@/lib/events/recurrence";
-import { buildQuizLevelPathway, type QuizProgressRow } from "@/lib/progress/quiz-progress";
+import {
+  canAccessLessonInContext,
+  isLessonContentUnlockedForUser,
+} from "@/lib/learning/learn-access";
+import {
+  learnTrackPath,
+  type LearnTrackId,
+} from "@/lib/learning/learn-catalog";
+import { buildQuizLevelPathway, isQuizPassing, type QuizProgressRow } from "@/lib/progress/quiz-progress";
+import {
+  fetchLessonCompletionMap,
+  type LessonCompletionStatus,
+} from "@/lib/progress/lesson-completion";
 import {
   computeStreakPresentation,
   mapStreakRowSnapshot,
   presentationToHomeStats,
 } from "@/lib/progress/activity-date";
 import { getUserActivityDate } from "@/lib/progress/server-activity-date";
+import { fetchLessonContentUnlockMap } from "@/lib/tutoring/lesson-content-access";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type HomePrimaryCta = {
   label: string;
   href: string;
-};
-
-export type HomeContinueItem = {
-  type: "lesson" | "quiz" | "flashcard";
-  title: string;
-  subtitle: string;
-  href: string;
-  activityAt: string;
 };
 
 export type HomeMotivationData = {
@@ -53,9 +59,8 @@ export type HomeDashboardData = {
     streakWarning: boolean;
     rescueStreak: number;
     lessonsCompleted: number;
-    quizLevelLabel: string;
+    quizzesPassed: number;
   };
-  continueItem: HomeContinueItem | null;
   hasAnyProgress: boolean;
   showStarterPack: boolean;
   upcomingEvents: DisplayEvent[];
@@ -112,8 +117,101 @@ function unwrapRelation<T>(value: T | T[] | null | undefined): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-function lessonHref(lessonId: string) {
-  return `/dashboard/learn/free#lesson-${lessonId}`;
+type HomeLessonRef = {
+  id: string;
+  course_id: string;
+  lesson_number: number;
+  title: string;
+  is_free: boolean;
+  pdf_url?: string | null;
+  audio_url?: string | null;
+};
+
+const CURRICULUM_TRACK_ORDER: LearnTrackId[] = [
+  "free",
+  "foundational",
+  "beginners",
+  "community",
+];
+
+function lessonLearnHref(lessonId: string, trackId: LearnTrackId) {
+  return `${learnTrackPath(trackId)}#lesson-${lessonId}`;
+}
+
+function trackIdForLesson(
+  lesson: HomeLessonRef,
+  access: CourseAccessContext
+): LearnTrackId {
+  if (lesson.is_free) return "free";
+
+  const course = access.courses.find((item) => item.id === lesson.course_id);
+  if (!course) return "free";
+
+  return getCourseRequiredTier(course);
+}
+
+function lessonsInCurriculumOrder(
+  lessons: HomeLessonRef[],
+  access: CourseAccessContext
+): HomeLessonRef[] {
+  const ordered: HomeLessonRef[] = [];
+
+  for (const trackId of CURRICULUM_TRACK_ORDER) {
+    if (trackId === "free") {
+      ordered.push(
+        ...lessons
+          .filter((lesson) => lesson.is_free)
+          .sort((a, b) => a.lesson_number - b.lesson_number)
+      );
+      continue;
+    }
+
+    const courseIds = new Set(
+      findCoursesForTier(access.courses, trackId).map((course) => course.id)
+    );
+
+    ordered.push(
+      ...lessons
+        .filter((lesson) => courseIds.has(lesson.course_id) && !lesson.is_free)
+        .sort((a, b) => a.lesson_number - b.lesson_number)
+    );
+  }
+
+  return ordered;
+}
+
+function lessonUnitLabel(trackId: LearnTrackId) {
+  return trackId === "community" ? "Week" : "Lesson";
+}
+
+function findNextLesson(
+  lessons: HomeLessonRef[],
+  access: CourseAccessContext,
+  completionMap: Map<string, LessonCompletionStatus>,
+  contentUnlockedMap: Map<string, boolean>
+): { lesson: HomeLessonRef; trackId: LearnTrackId } | null {
+  for (const lesson of lessonsInCurriculumOrder(lessons, access)) {
+    if (!canAccessLessonInContext(access, lesson)) continue;
+    if (
+      !isLessonContentUnlockedForUser(
+        access,
+        lesson,
+        contentUnlockedMap.get(lesson.id)
+      )
+    ) {
+      continue;
+    }
+
+    if (completionMap.get(lesson.id)?.fullyComplete) continue;
+
+    return { lesson, trackId: trackIdForLesson(lesson, access) };
+  }
+
+  return null;
+}
+
+function starterPackLessonHref(lessonId: string) {
+  return lessonLearnHref(lessonId, "free");
 }
 
 function findCurrentQuiz(
@@ -138,70 +236,50 @@ function findCurrentQuiz(
   return null;
 }
 
-function pickContinueItem(
-  lessonRows: LessonProgressJoined[],
-  quizRows: QuizProgressJoined[],
-  flashcardRows: FlashcardProgressJoined[]
-): HomeContinueItem | null {
-  const candidates: HomeContinueItem[] = [];
+function countAccessibleLessonsCompleted(
+  lessons: HomeLessonRef[],
+  access: CourseAccessContext,
+  completionMap: Map<string, LessonCompletionStatus>,
+  contentUnlockedMap: Map<string, boolean>
+): number {
+  return lessons.filter((lesson) => {
+    if (!canAccessLessonInContext(access, lesson)) return false;
+    if (
+      !isLessonContentUnlockedForUser(
+        access,
+        lesson,
+        contentUnlockedMap.get(lesson.id)
+      )
+    ) {
+      return false;
+    }
+    return completionMap.get(lesson.id)?.fullyComplete ?? false;
+  }).length;
+}
 
-  for (const row of lessonRows) {
-    const lesson = row.lessons;
-    if (!lesson) continue;
-    candidates.push({
-      type: "lesson",
-      title: lesson.title,
-      subtitle: `Lesson ${lesson.lesson_number}`,
-      href: lessonHref(lesson.id),
-      activityAt: row.updated_at,
-    });
-  }
+function countQuizzesPassed(
+  quizRows: QuizProgressJoined[],
+  access: CourseAccessContext,
+  questionCountByQuizId: Map<string, number>
+): number {
+  let passed = 0;
 
   for (const row of quizRows) {
     const quiz = row.quizzes;
-    if (!quiz || !row.last_attempted_at) continue;
-    candidates.push({
-      type: "quiz",
-      title: quiz.title,
-      subtitle: `Level ${quiz.level_number}`,
-      href: `/dashboard/practice/quiz/${quiz.id}`,
-      activityAt: row.last_attempted_at,
-    });
+    if (!quiz) continue;
+    if (!hasAccessToCourse(access.unlockedCourseIds, quiz.course_id)) continue;
+
+    if (
+      isQuizPassing(
+        { completed: row.completed, score: row.score },
+        questionCountByQuizId.get(quiz.id) ?? 0
+      )
+    ) {
+      passed++;
+    }
   }
 
-  for (const row of flashcardRows) {
-    const flashcard = row.flashcards;
-    const lesson = flashcard?.lessons;
-    if (!lesson || !row.last_reviewed_at) continue;
-    const href =
-      flashcard.deck_id != null
-        ? `/dashboard/practice/flashcards/${lesson.id}/${flashcard.deck_id}`
-        : `/dashboard/practice/flashcards/${lesson.id}`;
-    candidates.push({
-      type: "flashcard",
-      title: lesson.title,
-      subtitle: `Flashcards · Lesson ${lesson.lesson_number}`,
-      href,
-      activityAt: row.last_reviewed_at,
-    });
-  }
-
-  if (candidates.length === 0) return null;
-
-  candidates.sort(
-    (a, b) => new Date(b.activityAt).getTime() - new Date(a.activityAt).getTime()
-  );
-
-  return candidates[0];
-}
-
-function highestCompletedQuizLevel(quizRows: QuizProgressJoined[]) {
-  let maxLevel = 0;
-  for (const row of quizRows) {
-    if (!row.completed || !row.quizzes) continue;
-    maxLevel = Math.max(maxLevel, row.quizzes.level_number);
-  }
-  return maxLevel > 0 ? `Level ${maxLevel}` : "Level 1";
+  return passed;
 }
 
 export async function getHomeDashboardData(
@@ -231,7 +309,9 @@ export async function getHomeDashboardData(
     { data: quizProgress },
     { data: flashcardProgress },
     { data: freeLessons },
+    { data: allLessons },
     { data: quizzes },
+    { data: quizQuestions },
     { data: events },
     membersStudiedToday,
   ] = await Promise.all([
@@ -255,7 +335,12 @@ export async function getHomeDashboardData(
       )
       .eq("user_id", userId),
     supabase.from("lessons").select("id, is_free").eq("is_free", true),
+    supabase
+      .from("lessons")
+      .select("id, course_id, lesson_number, title, is_free, pdf_url, audio_url")
+      .order("lesson_number"),
     supabase.from("quizzes").select("id, course_id, level_number, title"),
+    supabase.from("quiz_questions").select("quiz_id"),
     supabase.from("events").select("*").order("starts_at", { ascending: true }),
     loadMembersStudiedToday(supabase, activityDate),
   ]);
@@ -285,7 +370,6 @@ export async function getHomeDashboardData(
   const isFreeTier = access.isFreeOnly;
   const studiedToday = presentation.day_gap === 0;
 
-  const lessonsCompleted = lessonRows.filter((row) => row.completed).length;
   const quizProgressMap = new Map<string, QuizProgressRow>(
     quizRows.map((row) => [
       row.quiz_id,
@@ -300,6 +384,32 @@ export async function getHomeDashboardData(
     (streakStats.streak ?? 0) > 0 ||
     (presentation.longest_streak ?? 0) > 0;
 
+  const lessonCatalog = (allLessons ?? []) as HomeLessonRef[];
+  const [completionMap, contentUnlockedMap] = await Promise.all([
+    fetchLessonCompletionMap(supabase, userId, lessonCatalog),
+    fetchLessonContentUnlockMap(supabase, userId, lessonCatalog, access),
+  ]);
+
+  const questionCountByQuizId = new Map<string, number>();
+  for (const row of quizQuestions ?? []) {
+    questionCountByQuizId.set(
+      row.quiz_id,
+      (questionCountByQuizId.get(row.quiz_id) ?? 0) + 1
+    );
+  }
+
+  const lessonsCompleted = countAccessibleLessonsCompleted(
+    lessonCatalog,
+    access,
+    completionMap,
+    contentUnlockedMap
+  );
+  const quizzesPassed = countQuizzesPassed(
+    quizRows,
+    access,
+    questionCountByQuizId
+  );
+
   const freeLessonIds = (freeLessons ?? []).map((lesson) => lesson.id);
   const completedFreeLessonIds = new Set(
     lessonRows.filter((row) => row.completed).map((row) => row.lesson_id)
@@ -308,11 +418,18 @@ export async function getHomeDashboardData(
     freeLessonIds.length === 0 ||
     freeLessonIds.every((id) => completedFreeLessonIds.has(id));
 
-  const inProgressLesson = [...lessonRows]
-    .filter((row) => !row.completed && row.lessons)
-    .sort(
-      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-    )[0];
+  const firstFreeLessonId =
+    freeLessonIds.find((id) => !completedFreeLessonIds.has(id)) ?? freeLessonIds[0];
+  const starterPackHref = firstFreeLessonId
+    ? starterPackLessonHref(firstFreeLessonId)
+    : "/dashboard/learn";
+
+  const nextLesson = findNextLesson(
+    lessonCatalog,
+    access,
+    completionMap,
+    contentUnlockedMap
+  );
 
   const currentQuiz = findCurrentQuiz(
     quizzes ?? [],
@@ -320,17 +437,12 @@ export async function getHomeDashboardData(
     access.unlockedCourseIds
   );
 
-  const firstFreeLessonId =
-    freeLessonIds.find((id) => !completedFreeLessonIds.has(id)) ?? freeLessonIds[0];
-  const starterPackHref = firstFreeLessonId
-    ? lessonHref(firstFreeLessonId)
-    : "/dashboard/learn";
-
   let primaryCta: HomePrimaryCta;
-  if (inProgressLesson?.lessons) {
+  if (nextLesson) {
+    const { lesson, trackId } = nextLesson;
     primaryCta = {
-      label: `Continue Lesson ${inProgressLesson.lessons.title}`,
-      href: lessonHref(inProgressLesson.lessons.id),
+      label: `${lessonUnitLabel(trackId)} ${lesson.lesson_number}: ${lesson.title}`,
+      href: lessonLearnHref(lesson.id, trackId),
     };
   } else if (currentQuiz) {
     primaryCta = {
@@ -368,11 +480,8 @@ export async function getHomeDashboardData(
       streakWarning: streakStats.streakWarning,
       rescueStreak: streakStats.rescueStreak,
       lessonsCompleted,
-      quizLevelLabel: highestCompletedQuizLevel(quizRows),
+      quizzesPassed,
     },
-    continueItem: hasAnyProgress
-      ? pickContinueItem(lessonRows, quizRows, flashcardRows)
-      : null,
     hasAnyProgress,
     showStarterPack: isFreeTier && !starterPackCompleted,
     upcomingEvents: upcoming.slice(0, 2),
