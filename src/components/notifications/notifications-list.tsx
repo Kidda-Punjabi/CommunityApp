@@ -29,14 +29,25 @@ function formatWhen(iso: string): string {
 
 function notificationHref(item: NotificationItem): string | null {
   const challengeId = item.payload.challenge_id;
-  if (typeof challengeId !== "string") return null;
+  if (typeof challengeId === "string") {
+    if (item.type === "friend_game_challenge") {
+      return `/dashboard/challenges/${challengeId}/play`;
+    }
 
-  if (item.type === "friend_game_challenge") {
-    return `/dashboard/challenges/${challengeId}/play`;
+    if (item.type === "friend_game_challenge_result") {
+      return `/dashboard/challenges/${challengeId}`;
+    }
   }
 
-  if (item.type === "friend_game_challenge_result") {
-    return `/dashboard/challenges/${challengeId}`;
+  if (item.type === "homework_reviewed") {
+    const lessonId = item.payload.lesson_id;
+    const tier = item.payload.course_tier;
+    const track =
+      tier === "beginners" || tier === "foundational" ? tier : "foundational";
+    if (typeof lessonId === "string") {
+      return `/dashboard/learn/${track}#lesson-${lessonId}`;
+    }
+    return "/dashboard/learn";
   }
 
   return null;

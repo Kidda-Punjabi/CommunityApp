@@ -53,6 +53,7 @@ export async function updateNotificationSettings(
     p_kudos: formData.get("kudos") === "on",
     p_announcements: formData.get("announcements") === "on",
     p_game_challenges: formData.get("game_challenges") === "on",
+    p_homework_reviews: formData.get("homework_reviews") === "on",
   });
 
   if (error) return { error: error.message };

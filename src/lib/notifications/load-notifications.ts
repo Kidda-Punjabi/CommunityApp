@@ -23,6 +23,7 @@ export type NotificationSettings = {
   kudos: boolean;
   announcements: boolean;
   gameChallenges: boolean;
+  homeworkReviews: boolean;
 };
 
 type ActorProfile = {
@@ -169,6 +170,7 @@ export async function loadNotificationSettings(
     kudos: boolean;
     announcements: boolean;
     game_challenges: boolean;
+    homework_reviews: boolean;
   };
 
   return {
@@ -177,6 +179,7 @@ export async function loadNotificationSettings(
     kudos: row.kudos,
     announcements: row.announcements,
     gameChallenges: row.game_challenges ?? true,
+    homeworkReviews: row.homework_reviews ?? true,
   };
 }
 
@@ -212,6 +215,13 @@ export function notificationSummary(item: NotificationItem): string {
         return `${name} won your challenge!`;
       }
       return `Challenge result is in — see who won`;
+    }
+    case "homework_reviewed": {
+      const lessonTitle = String(item.payload.lesson_title ?? "your lesson");
+      if (item.payload.approved === true) {
+        return `${name} approved your homework for ${lessonTitle}`;
+      }
+      return `${name} left feedback on your homework for ${lessonTitle}`;
     }
     default:
       return "New notification";

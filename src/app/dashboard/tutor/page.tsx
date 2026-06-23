@@ -1,6 +1,8 @@
 import { TutorDashboardOverview } from "@/components/tutor/tutor-dashboard-overview";
+import { TutorHomeworkReview } from "@/components/tutor/tutor-homework-review";
 import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
 import { loadTutorDashboard } from "@/lib/tutoring/load-tutor-dashboard";
+import { loadPendingHomeworkReviews } from "@/lib/tutoring/homework-submissions";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -17,7 +19,10 @@ export default async function TutorDashboardPage() {
   const allowed = await canAccessTutorDashboard(supabase, user.id);
   if (!allowed) redirect("/dashboard/profile");
 
-  const data = await loadTutorDashboard(supabase, user.id);
+  const [data, pendingHomework] = await Promise.all([
+    loadTutorDashboard(supabase, user.id),
+    loadPendingHomeworkReviews(supabase),
+  ]);
 
   return (
     <div className={ui.page}>
@@ -36,9 +41,11 @@ export default async function TutorDashboardPage() {
           Tutor dashboard
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Unlock lessons and add session recordings for your students.
+          Unlock lessons, review homework, and add session recordings for your students.
         </p>
       </div>
+
+      <TutorHomeworkReview submissions={pendingHomework} />
 
       <TutorDashboardOverview
         foundationalStudents={data.foundationalStudents}

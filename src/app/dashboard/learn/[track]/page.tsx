@@ -31,6 +31,7 @@ import {
   fetchLessonContentUnlockMap,
   fetchLessonRecordingsForUser,
 } from "@/lib/tutoring/lesson-content-access";
+import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 
@@ -103,10 +104,15 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
   }
 
   const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
-  const [completionMap, contentUnlockedMap, recordingMap] = await Promise.all([
+  const showHomework = track.id === "foundational" || track.id === "beginners";
+  const lessonIds = lessons.map((lesson) => lesson.id);
+  const [completionMap, contentUnlockedMap, recordingMap, homeworkMap] = await Promise.all([
     fetchLessonCompletionMap(supabase, user!.id, lessons),
     fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
-    fetchLessonRecordingsForUser(supabase, user!.id, lessons.map((lesson) => lesson.id)),
+    fetchLessonRecordingsForUser(supabase, user!.id, lessonIds),
+    showHomework
+      ? fetchHomeworkSubmissionsForUser(supabase, user!.id, lessonIds)
+      : Promise.resolve(new Map()),
   ]);
   const accessibleLessons = lessons.filter((lesson) => {
     const canBrowse = canAccessLessonInContext(access, lesson);
@@ -157,6 +163,8 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
       staffSection={staffSection}
       contentUnlockedMap={contentUnlockedMap}
       recordingMap={recordingMap}
+      homeworkMap={homeworkMap}
+      showHomework={showHomework}
     />
   );
 }

@@ -60,6 +60,12 @@ export function NotificationSettingsForm({ settings }: NotificationSettingsFormP
             description="When a friend challenges you to beat their score"
             defaultChecked={settings.gameChallenges}
           />
+          <SettingRow
+            name="homework_reviews"
+            label="Homework feedback"
+            description="When your tutor reviews your homework"
+            defaultChecked={settings.homeworkReviews}
+          />
         </ul>
 
         {state.error && <p className="mt-4 text-sm text-red-600">{state.error}</p>}

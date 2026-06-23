@@ -13,7 +13,9 @@ import {
   SHOW_LESSON_AUDIO,
   SHOW_LESSON_PDF,
 } from "@/lib/learning/lesson-content-flags";
+import { HomeworkSubmissionSection } from "@/components/homework/homework-submission-section";
 import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
+import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import type { FlashcardProgressRow } from "@/lib/progress/flashcard-progress";
 import { ui } from "@/lib/ui/styles";
@@ -34,6 +36,8 @@ type LessonCardProps = {
   completion?: LessonCompletionStatus;
   flashcardProgressMap?: Map<string, FlashcardProgressRow>;
   recording?: LessonRecordingView | null;
+  homework?: HomeworkSubmissionView | null;
+  showHomework?: boolean;
   /** e.g. "Week" for community course; defaults to "Lesson". */
   unitLabel?: string;
 };
@@ -47,6 +51,8 @@ export function LessonCard({
   completion,
   flashcardProgressMap,
   recording,
+  homework,
+  showHomework = false,
   unitLabel = "Lesson",
 }: LessonCardProps) {
   const hasPresentation = Boolean(lesson.presentation_url);
@@ -159,6 +165,10 @@ export function LessonCard({
       )}
 
       {contentUnlocked && recording && <LessonRecordingPlayer recording={recording} />}
+
+      {contentUnlocked && showHomework && (
+        <HomeworkSubmissionSection lessonId={lesson.id} submission={homework ?? null} />
+      )}
 
       {contentUnlocked && !hasLessonContent && (
         <p className="mt-3 text-sm text-zinc-500">Lesson content coming soon.</p>

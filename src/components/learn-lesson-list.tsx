@@ -9,6 +9,7 @@ import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
 import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
 import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
+import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import Link from "next/link";
 import { ui } from "@/lib/ui/styles";
@@ -30,6 +31,8 @@ type LearnLessonListProps = {
   staffSection?: ReactNode;
   contentUnlockedMap?: Map<string, boolean>;
   recordingMap?: Map<string, LessonRecordingView>;
+  homeworkMap?: Map<string, HomeworkSubmissionView>;
+  showHomework?: boolean;
   unitLabel?: string;
 };
 
@@ -46,6 +49,8 @@ export function LearnLessonList({
   staffSection,
   contentUnlockedMap,
   recordingMap,
+  homeworkMap,
+  showHomework = false,
   unitLabel,
 }: LearnLessonListProps) {
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
@@ -131,6 +136,8 @@ export function LearnLessonList({
                 completion={contentUnlocked ? completionMap.get(lesson.id) : undefined}
                 flashcardProgressMap={flashcardProgressMap}
                 recording={recordingMap?.get(lesson.id) ?? null}
+                homework={homeworkMap?.get(lesson.id) ?? null}
+                showHomework={showHomework}
                 unitLabel={unitLabel}
               />
             );
