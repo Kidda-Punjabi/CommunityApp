@@ -34,6 +34,8 @@ type LessonCardProps = {
   completion?: LessonCompletionStatus;
   flashcardProgressMap?: Map<string, FlashcardProgressRow>;
   recording?: LessonRecordingView | null;
+  /** e.g. "Week" for community course; defaults to "Lesson". */
+  unitLabel?: string;
 };
 
 export function LessonCard({
@@ -45,6 +47,7 @@ export function LessonCard({
   completion,
   flashcardProgressMap,
   recording,
+  unitLabel = "Lesson",
 }: LessonCardProps) {
   const hasPresentation = Boolean(lesson.presentation_url);
   const hasPdf = SHOW_LESSON_PDF && Boolean(lesson.pdf_url);
@@ -70,7 +73,7 @@ export function LessonCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-            Lesson {lesson.lesson_number}
+            {unitLabel} {lesson.lesson_number}
           </p>
           <h3 className="mt-1 font-semibold text-zinc-900">{lesson.title}</h3>
           {contentUnlocked && completion && <LessonRequirementStatus status={completion} />}

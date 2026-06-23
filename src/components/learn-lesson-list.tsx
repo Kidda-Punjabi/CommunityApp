@@ -1,6 +1,9 @@
 import { LessonCard } from "@/components/lesson-card";
 import { CourseProgressBar } from "@/components/course-progress-bar";
-import { canAccessLessonInContext } from "@/lib/learning/learn-access";
+import {
+  canAccessLessonInContext,
+  isLessonContentUnlockedForUser,
+} from "@/lib/learning/learn-access";
 import { getCourseAccessContext, tierLabelForCourse } from "@/lib/membership/unlocked";
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
@@ -27,6 +30,7 @@ type LearnLessonListProps = {
   staffSection?: ReactNode;
   contentUnlockedMap?: Map<string, boolean>;
   recordingMap?: Map<string, LessonRecordingView>;
+  unitLabel?: string;
 };
 
 export function LearnLessonList({
@@ -42,12 +46,17 @@ export function LearnLessonList({
   staffSection,
   contentUnlockedMap,
   recordingMap,
+  unitLabel,
 }: LearnLessonListProps) {
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
 
   const accessibleLessons = lessons.filter((lesson) => {
     const canBrowse = canAccessLessonInContext(access, lesson);
-    const contentUnlocked = unlockedMap.get(lesson.id) ?? lesson.is_free;
+    const contentUnlocked = isLessonContentUnlockedForUser(
+      access,
+      lesson,
+      unlockedMap.get(lesson.id)
+    );
     return canBrowse && contentUnlocked;
   });
 
@@ -96,7 +105,11 @@ export function LearnLessonList({
           {lessons.map((lesson) => {
             const row = progressMap.get(lesson.id);
             const canBrowse = canAccessLessonInContext(access, lesson);
-            const contentUnlocked = unlockedMap.get(lesson.id) ?? lesson.is_free;
+            const contentUnlocked = isLessonContentUnlockedForUser(
+              access,
+              lesson,
+              unlockedMap.get(lesson.id)
+            );
 
             return (
               <LessonCard
@@ -118,6 +131,7 @@ export function LearnLessonList({
                 completion={contentUnlocked ? completionMap.get(lesson.id) : undefined}
                 flashcardProgressMap={flashcardProgressMap}
                 recording={recordingMap?.get(lesson.id) ?? null}
+                unitLabel={unitLabel}
               />
             );
           })}

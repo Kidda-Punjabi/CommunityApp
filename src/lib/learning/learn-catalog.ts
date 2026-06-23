@@ -41,7 +41,7 @@ export const LEARN_TRACKS: LearnTrack[] = [
   {
     id: "community",
     title: "Community",
-    description: "Live sessions, advanced content, and the full Kidda community.",
+    description: "24 weeks of live sessions, advanced content, and the full Kidda community.",
     tier: "community",
     alwaysUnlocked: false,
     unlockUrl: "https://kidda.app/community/",

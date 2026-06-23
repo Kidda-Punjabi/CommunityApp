@@ -1,4 +1,15 @@
+import {
+  isCommunityCourseLesson,
+  isLessonContentUnlockedForUser,
+} from "@/lib/learning/learn-access";
+import type { CourseAccessContext } from "@/lib/membership/unlocked";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+type LessonUnlockRef = {
+  id: string;
+  course_id: string;
+  is_free: boolean;
+};
 
 export type LessonRecordingView = {
   id: string;
@@ -10,13 +21,29 @@ export type LessonRecordingView = {
 export async function fetchLessonContentUnlockMap(
   supabase: SupabaseClient,
   userId: string,
-  lessonIds: string[]
+  lessons: LessonUnlockRef[],
+  access: CourseAccessContext
 ): Promise<Map<string, boolean>> {
   const map = new Map<string, boolean>();
-  if (lessonIds.length === 0) return map;
+  if (lessons.length === 0) return map;
+
+  const rpcLessonIds: string[] = [];
+
+  for (const lesson of lessons) {
+    if (isCommunityCourseLesson(access, lesson.course_id)) {
+      map.set(
+        lesson.id,
+        isLessonContentUnlockedForUser(access, lesson, undefined)
+      );
+    } else {
+      rpcLessonIds.push(lesson.id);
+    }
+  }
+
+  if (rpcLessonIds.length === 0) return map;
 
   const results = await Promise.all(
-    lessonIds.map(async (lessonId) => {
+    rpcLessonIds.map(async (lessonId) => {
       const { data, error } = await supabase.rpc("is_lesson_content_unlocked", {
         p_user_id: userId,
         p_lesson_id: lessonId,
@@ -27,7 +54,12 @@ export async function fetchLessonContentUnlockMap(
   );
 
   for (const [lessonId, unlocked] of results) {
-    map.set(lessonId, unlocked);
+    const lesson = lessons.find((row) => row.id === lessonId);
+    if (!lesson) continue;
+    map.set(
+      lessonId,
+      isLessonContentUnlockedForUser(access, lesson, unlocked)
+    );
   }
 
   return map;

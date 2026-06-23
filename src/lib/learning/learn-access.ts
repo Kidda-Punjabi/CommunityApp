@@ -65,3 +65,27 @@ export function canAccessLessonInContext(
   const tier = getCourseRequiredTier(course);
   return hasTierAccess(access, tier);
 }
+
+export function isCommunityCourseLesson(
+  access: CourseAccessContext,
+  courseId: string
+): boolean {
+  const course = access.courses.find((item) => item.id === courseId);
+  if (!course) return false;
+  return getCourseRequiredTier(course) === "community";
+}
+
+/** Community: course access unlocks every lesson. Foundational/Beginners use tutor unlock RPC. */
+export function isLessonContentUnlockedForUser(
+  access: CourseAccessContext,
+  lesson: { course_id: string; is_free: boolean },
+  rpcUnlocked?: boolean
+): boolean {
+  if (lesson.is_free) return true;
+
+  if (isCommunityCourseLesson(access, lesson.course_id)) {
+    return canAccessLessonInContext(access, lesson);
+  }
+
+  return rpcUnlocked ?? false;
+}

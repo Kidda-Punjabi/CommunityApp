@@ -537,11 +537,12 @@ AS $$
 DECLARE
   v_course_id UUID;
   v_tier TEXT;
+  v_course_name TEXT;
   v_is_free BOOLEAN;
   v_enrollment public.course_enrollments%ROWTYPE;
 BEGIN
-  SELECT l.course_id, l.is_free, c.required_tier
-  INTO v_course_id, v_is_free, v_tier
+  SELECT l.course_id, l.is_free, c.required_tier, c.name
+  INTO v_course_id, v_is_free, v_tier, v_course_name
   FROM public.lessons l
   JOIN public.courses c ON c.id = l.course_id
   WHERE l.id = p_lesson_id;
@@ -559,7 +560,7 @@ BEGIN
   END IF;
 
   -- Community Option A: course_access unlocks all Community lessons
-  IF COALESCE(v_tier, '') = 'community' THEN
+  IF COALESCE(v_tier, '') = 'community' OR COALESCE(v_course_name, '') ILIKE '%community%' THEN
     RETURN true;
   END IF;
 
