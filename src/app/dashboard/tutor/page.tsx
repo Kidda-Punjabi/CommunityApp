@@ -8,7 +8,13 @@ import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-export default async function TutorDashboardPage() {
+type TutorDashboardPageProps = {
+  searchParams: Promise<{ error?: string }>;
+};
+
+export default async function TutorDashboardPage({
+  searchParams,
+}: TutorDashboardPageProps) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -19,10 +25,16 @@ export default async function TutorDashboardPage() {
   const allowed = await canAccessTutorDashboard(supabase, user.id);
   if (!allowed) redirect("/dashboard/profile");
 
-  const [data, pendingHomework] = await Promise.all([
+  const [params, data, pendingHomework] = await Promise.all([
+    searchParams,
     loadTutorDashboard(supabase, user.id),
     loadPendingHomeworkReviews(supabase),
   ]);
+
+  const accessError =
+    params.error === "cohort-access"
+      ? "That cohort could not be opened. If this keeps happening, ask an admin to confirm your tutor assignment."
+      : null;
 
   return (
     <div className={ui.page}>
@@ -44,6 +56,12 @@ export default async function TutorDashboardPage() {
           Unlock lessons, review homework, and add session recordings for your students.
         </p>
       </div>
+
+      {accessError && (
+        <p className="mb-6 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {accessError}
+        </p>
+      )}
 
       <TutorHomeworkReview submissions={pendingHomework} />
 

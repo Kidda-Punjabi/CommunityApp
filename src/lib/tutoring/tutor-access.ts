@@ -41,13 +41,12 @@ export async function canManageCohort(
 
   if (cohort?.tutor_id === userId) return true;
 
-  const { data: enrollment } = await supabase
+  const { data: enrollments } = await supabase
     .from("course_enrollments")
     .select("id")
     .eq("tutor_id", userId)
     .eq("cohort_id", cohortId)
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
-  return Boolean(enrollment);
+  return (enrollments?.length ?? 0) > 0;
 }

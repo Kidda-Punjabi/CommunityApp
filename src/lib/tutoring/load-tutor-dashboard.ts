@@ -48,25 +48,49 @@ export async function loadTutorDashboard(
     ),
   ];
 
-  const [{ data: profiles }, { data: cohortRows }, { data: memberRows }] =
-    await Promise.all([
-      studentIds.length > 0
-        ? supabase
-            .from("profiles")
-            .select("id, full_name, preferred_name")
-            .in("id", studentIds)
-        : Promise.resolve({ data: [] as { id: string; full_name: string | null; preferred_name: string | null }[] }),
-      cohortIds.length > 0
-        ? supabase.from("cohorts").select("id, name, course_id").in("id", cohortIds)
-        : Promise.resolve({ data: [] as { id: string; name: string; course_id: string }[] }),
-      cohortIds.length > 0
-        ? supabase
-            .from("cohort_members")
-            .select("cohort_id, user_id")
-            .in("cohort_id", cohortIds)
-            .is("left_at", null)
-        : Promise.resolve({ data: [] as { cohort_id: string; user_id: string }[] }),
-    ]);
+  const [
+    { data: profiles },
+    { data: cohortRows },
+    { data: assignedCohortRows },
+    { data: memberRows },
+  ] = await Promise.all([
+    studentIds.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, full_name, preferred_name")
+          .in("id", studentIds)
+      : Promise.resolve({
+          data: [] as { id: string; full_name: string | null; preferred_name: string | null }[],
+        }),
+    cohortIds.length > 0
+      ? supabase.from("cohorts").select("id, name, course_id").in("id", cohortIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; course_id: string }[] }),
+    supabase.from("cohorts").select("id, name, course_id").eq("tutor_id", tutorId),
+    cohortIds.length > 0
+      ? supabase
+          .from("cohort_members")
+          .select("cohort_id, user_id")
+          .in("cohort_id", cohortIds)
+          .is("left_at", null)
+      : Promise.resolve({ data: [] as { cohort_id: string; user_id: string }[] }),
+  ]);
+
+  const allCohortIds = [
+    ...new Set([
+      ...cohortIds,
+      ...(assignedCohortRows ?? []).map((row) => row.id),
+    ]),
+  ];
+
+  let membersByCohortFromDb = memberRows ?? [];
+  if (allCohortIds.length > cohortIds.length) {
+    const { data: extraMembers } = await supabase
+      .from("cohort_members")
+      .select("cohort_id, user_id")
+      .in("cohort_id", allCohortIds)
+      .is("left_at", null);
+    membersByCohortFromDb = extraMembers ?? [];
+  }
 
   const nameById = new Map(
     (profiles ?? []).map((profile) => [
@@ -75,9 +99,13 @@ export async function loadTutorDashboard(
     ] as const)
   );
 
-  const cohortNameById = new Map((cohortRows ?? []).map((c) => [c.id, c.name] as const));
+  const cohortNameById = new Map(
+    [...(cohortRows ?? []), ...(assignedCohortRows ?? [])].map(
+      (c) => [c.id, c.name] as const
+    )
+  );
   const membersByCohort = new Map<string, string[]>();
-  for (const member of memberRows ?? []) {
+  for (const member of membersByCohortFromDb) {
     const list = membersByCohort.get(member.cohort_id) ?? [];
     list.push(nameById.get(member.user_id) ?? "Member");
     membersByCohort.set(member.cohort_id, list);
@@ -122,6 +150,27 @@ export async function loadTutorDashboard(
     } else if (tier === "beginners") {
       beginnersOneToOne.push(studentRow);
     }
+  }
+
+  for (const cohort of assignedCohortRows ?? []) {
+    if (beginnersGroupsMap.has(cohort.id)) continue;
+
+    const members = membersByCohort.get(cohort.id) ?? [];
+    const course = (enrollmentRows ?? []).find((row) => row.course_id === cohort.course_id);
+    const courseFromJoin = course
+      ? Array.isArray(course.courses)
+        ? course.courses[0]
+        : course.courses
+      : null;
+
+    beginnersGroupsMap.set(cohort.id, {
+      cohortId: cohort.id,
+      cohortName: cohort.name,
+      courseId: cohort.course_id,
+      courseName: courseFromJoin?.name ?? "Beginners",
+      memberCount: members.length,
+      studentNames: members,
+    });
   }
 
   return {
@@ -219,6 +268,9 @@ export async function loadTutorCohortLessons(
   members: { userId: string; name: string }[];
   lessons: TutorLessonRow[];
 } | null> {
+  const allowed = await canManageCohort(supabase, tutorId, cohortId);
+  if (!allowed) return null;
+
   const { data: cohort, error: cohortError } = await supabase
     .from("cohorts")
     .select("id, name, course_id, courses(name)")
@@ -226,19 +278,36 @@ export async function loadTutorCohortLessons(
     .maybeSingle();
 
   if (cohortError) throw cohortError;
-  if (!cohort) return null;
 
-  const allowed = await canManageCohort(supabase, tutorId, cohortId);
-  if (!allowed) return null;
+  let cohortName = cohort?.name ?? "Cohort";
+  let courseId = cohort?.course_id ?? null;
+  let courseName =
+    (Array.isArray(cohort?.courses) ? cohort.courses[0] : cohort?.courses)?.name ?? null;
 
-  const course = Array.isArray(cohort.courses) ? cohort.courses[0] : cohort.courses;
+  if (!courseId) {
+    const { data: enrollment } = await supabase
+      .from("course_enrollments")
+      .select("course_id, courses(name)")
+      .eq("tutor_id", tutorId)
+      .eq("cohort_id", cohortId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!enrollment) return null;
+
+    courseId = enrollment.course_id;
+    const course = Array.isArray(enrollment.courses)
+      ? enrollment.courses[0]
+      : enrollment.courses;
+    courseName = course?.name ?? "Course";
+  }
 
   const [{ data: lessons }, { data: unlocks }, { data: recordings }, { data: memberRows }] =
     await Promise.all([
       supabase
         .from("lessons")
         .select("id, lesson_number, title")
-        .eq("course_id", cohort.course_id)
+        .eq("course_id", courseId)
         .order("lesson_number"),
       supabase.from("cohort_lesson_unlocks").select("lesson_id").eq("cohort_id", cohortId),
       supabase.from("lesson_recordings").select("id, lesson_id, storage_path").eq("cohort_id", cohortId),
@@ -268,8 +337,8 @@ export async function loadTutorCohortLessons(
   );
 
   return {
-    cohortName: cohort.name,
-    courseName: course?.name ?? "Course",
+    cohortName,
+    courseName: courseName ?? "Course",
     members: memberIds.map((userId) => ({
       userId,
       name: nameById.get(userId) ?? "Member",

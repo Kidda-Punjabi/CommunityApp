@@ -4,7 +4,7 @@ import { loadTutorCohortLessons } from "@/lib/tutoring/load-tutor-dashboard";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 
 type TutorCohortPageProps = {
   params: Promise<{ cohortId: string }>;
@@ -23,7 +23,9 @@ export default async function TutorCohortPage({ params }: TutorCohortPageProps) 
   if (!allowed) redirect("/dashboard/profile");
 
   const data = await loadTutorCohortLessons(supabase, user.id, cohortId);
-  if (!data) notFound();
+  if (!data) {
+    redirect("/dashboard/tutor?error=cohort-access");
+  }
 
   return (
     <div className={ui.page}>
