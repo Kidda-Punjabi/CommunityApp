@@ -59,7 +59,13 @@ export function BattleArena({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(15);
-  const opponentLastSeenRef = useRef<number>(Date.now());
+  const opponentLastSeenRef = useRef(0);
+  const opponentActivityConfirmedRef = useRef(false);
+
+  const markOpponentActive = useCallback(() => {
+    opponentLastSeenRef.current = Date.now();
+    opponentActivityConfirmedRef.current = true;
+  }, []);
 
   const youArePlayerOne = session.player_one_id === currentUserId;
   const opponent = youArePlayerOne ? resolvedPlayerTwo : playerOne;
@@ -103,13 +109,21 @@ export function BattleArena({
       return;
     }
     setRound(next);
+
+    const opponentAnswered = youArePlayerOne
+      ? next.player_two_answered_at
+      : next.player_one_answered_at;
+    if (opponentAnswered) {
+      markOpponentActive();
+    }
+
     if (next.resolved_at) {
       setPhase("result");
     } else if (next.round_number === session.current_round) {
       setSubmitted(false);
       setPhase("playing");
     }
-  }, [phase, round, session.current_round]);
+  }, [phase, round, session.current_round, youArePlayerOne, markOpponentActive]);
 
   const question = round?.question_payload as BattleQuestionPayload | undefined;
   const multiplier = roundMultiplier(session.current_round);
@@ -178,9 +192,18 @@ export function BattleArena({
       if (data.round) setRound(data.round);
     })();
 
-    const timer = window.setTimeout(() => setPhase("playing"), OPPONENT_JOINED_MS);
+    const timer = window.setTimeout(() => {
+      markOpponentActive();
+      setPhase("playing");
+    }, OPPONENT_JOINED_MS);
     return () => window.clearTimeout(timer);
-  }, [phase, session.id, session.player_two_id]);
+  }, [phase, session.id, session.player_two_id, markOpponentActive]);
+
+  useEffect(() => {
+    if (phase === "playing") {
+      markOpponentActive();
+    }
+  }, [phase, markOpponentActive]);
 
   useEffect(() => {
     if (session.status !== "active" || !round || round.resolved_at) return;
@@ -217,7 +240,7 @@ export function BattleArena({
   }, [session.id, session.status, round]);
 
   useEffect(() => {
-    if (session.status !== "waiting" && session.status !== "active") return;
+    if (phase !== "playing" || session.status !== "active" || !session.player_two_id) return;
 
     const supabase = createClient();
     const channel = supabase.channel(`battle-presence:${session.id}`, {
@@ -235,7 +258,7 @@ export function BattleArena({
         );
 
         if (opponentPresent) {
-          opponentLastSeenRef.current = Date.now();
+          markOpponentActive();
         }
       })
       .subscribe(async (status) => {
@@ -245,7 +268,7 @@ export function BattleArena({
       });
 
     const watchdog = window.setInterval(() => {
-      if (session.status !== "active" || !session.player_two_id) return;
+      if (!opponentActivityConfirmedRef.current) return;
       if (Date.now() - opponentLastSeenRef.current > BATTLE_DISCONNECT_MS) {
         void abandonBattleSession(session.id);
       }
@@ -255,7 +278,7 @@ export function BattleArena({
       window.clearInterval(watchdog);
       void supabase.removeChannel(channel);
     };
-  }, [currentUserId, session, youArePlayerOne]);
+  }, [currentUserId, session.id, session.status, session.player_two_id, phase, youArePlayerOne, markOpponentActive]);
 
   useEffect(() => {
     if (session.status !== "active" || phase !== "playing") return;
@@ -315,7 +338,12 @@ export function BattleArena({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Could not submit answer.");
+        const message = data.error ?? "Could not submit answer.";
+        if (message.toLowerCase().includes("not active")) {
+          setSession((current) => ({ ...current, status: "abandoned" }));
+          setPhase("abandoned");
+        }
+        setError(message);
         setSubmitted(false);
         return;
       }
