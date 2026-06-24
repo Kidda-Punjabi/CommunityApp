@@ -47,6 +47,14 @@ function LessonsIcon({ active }: { active: boolean }) {
   );
 }
 
+function CalendarIcon({ active }: { active: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M4.5 8.25h15M4.5 19.5a2.25 2.25 0 0 0 2.25 2.25h10.5a2.25 2.25 0 0 0 2.25-2.25V8.25H4.5v11.25Z" />
+    </svg>
+  );
+}
+
 function ProfileIcon({ active }: { active: boolean }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
@@ -80,6 +88,11 @@ const navItems: NavItem[] = [
       pathname.startsWith("/dashboard/tutor/cohort"),
   },
   {
+    href: "/dashboard/tutor/calendar",
+    label: "Calendar",
+    match: (pathname) => pathname.startsWith("/dashboard/tutor/calendar"),
+  },
+  {
     href: "/dashboard/tutor/profile",
     label: "Profile",
     match: (pathname) => pathname.startsWith("/dashboard/tutor/profile"),
@@ -96,6 +109,8 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
       return <HomeworkIcon active={active} />;
     case "Lessons":
       return <LessonsIcon active={active} />;
+    case "Calendar":
+      return <CalendarIcon active={active} />;
     case "Profile":
       return <ProfileIcon active={active} />;
     default:

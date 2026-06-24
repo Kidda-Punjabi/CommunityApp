@@ -11,6 +11,7 @@ import {
   BATTLE_ROUND_TIMEOUT_MS,
 } from "@/lib/battle/constants";
 import type { BattlePlayerProfile } from "@/lib/battle/load-battle";
+import { getDisplayName } from "@/lib/profile/display-name";
 import { roundMultiplier } from "@/lib/battle/scoring";
 import type { BattleQuestionPayload, BattleRoundRow, BattleSessionRow } from "@/lib/battle/types";
 import { useBattleRealtime } from "@/hooks/use-battle-realtime";
@@ -28,7 +29,9 @@ type BattleArenaProps = {
   inviteCode: string;
 };
 
-type Phase = "playing" | "result" | "finished" | "waiting" | "abandoned";
+type Phase = "playing" | "result" | "finished" | "waiting" | "opponent_joined" | "abandoned";
+
+const OPPONENT_JOINED_MS = 1800;
 
 export function BattleArena({
   initialSession,
@@ -40,35 +43,60 @@ export function BattleArena({
 }: BattleArenaProps) {
   const [session, setSession] = useState(initialSession);
   const [round, setRound] = useState<BattleRoundRow | null>(initialRound);
-  const [phase, setPhase] = useState<Phase>(
-    initialSession.status === "waiting"
-      ? "waiting"
-      : initialSession.status === "completed"
-        ? "finished"
-        : initialSession.status === "abandoned"
-          ? "abandoned"
-          : "playing"
-  );
+  const [resolvedPlayerTwo, setResolvedPlayerTwo] = useState<BattlePlayerProfile | null>(playerTwo);
+  const [phase, setPhase] = useState<Phase>(() => {
+    if (initialSession.status === "waiting") return "waiting";
+    if (initialSession.status === "completed") return "finished";
+    if (initialSession.status === "abandoned") return "abandoned";
+    if (
+      initialSession.status === "active" &&
+      initialSession.player_two_id === currentUserId
+    ) {
+      return "opponent_joined";
+    }
+    return "playing";
+  });
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(15);
   const opponentLastSeenRef = useRef<number>(Date.now());
 
   const youArePlayerOne = session.player_one_id === currentUserId;
-  const opponent = youArePlayerOne ? playerTwo : playerOne;
-  const you = youArePlayerOne ? playerOne : playerTwo!;
+  const opponent = youArePlayerOne ? resolvedPlayerTwo : playerOne;
+  const you = youArePlayerOne ? playerOne : (resolvedPlayerTwo ?? playerOne);
 
-  const question = round?.question_payload as BattleQuestionPayload | undefined;
-  const multiplier = roundMultiplier(session.current_round);
-
-  const handleSessionChange = useCallback((next: BattleSessionRow) => {
+  const activateBattle = useCallback((next: BattleSessionRow) => {
     setSession(next);
-    if (next.status === "completed") setPhase("finished");
-    if (next.status === "abandoned") setPhase("abandoned");
-    if (next.status === "active" && phase === "waiting") {
-      setPhase("playing");
-    }
-  }, [phase]);
+    setPhase((current) => {
+      if (next.status === "completed") return "finished";
+      if (next.status === "abandoned") return "abandoned";
+      if (next.status === "active" && (current === "waiting" || current === "opponent_joined")) {
+        return "opponent_joined";
+      }
+      return current;
+    });
+  }, []);
+
+  const handleSessionChange = useCallback(
+    (next: BattleSessionRow) => {
+      if (next.status === "completed") {
+        setSession(next);
+        setPhase("finished");
+        return;
+      }
+      if (next.status === "abandoned") {
+        setSession(next);
+        setPhase("abandoned");
+        return;
+      }
+      if (next.status === "active" && next.player_two_id) {
+        activateBattle(next);
+        return;
+      }
+      setSession(next);
+    },
+    [activateBattle]
+  );
 
   const handleRoundChange = useCallback((next: BattleRoundRow) => {
     if (phase === "result" && round && next.round_number !== round.round_number) {
@@ -83,11 +111,76 @@ export function BattleArena({
     }
   }, [phase, round, session.current_round]);
 
+  const question = round?.question_payload as BattleQuestionPayload | undefined;
+  const multiplier = roundMultiplier(session.current_round);
+
   useBattleRealtime({
     sessionId: session.id,
     onSessionChange: handleSessionChange,
     onRoundChange: handleRoundChange,
   });
+
+  useEffect(() => {
+    if (phase !== "waiting") return;
+
+    const supabase = createClient();
+
+    const poll = async () => {
+      const { data } = await supabase
+        .from("battle_sessions")
+        .select("*")
+        .eq("id", session.id)
+        .maybeSingle();
+
+      if (data?.status === "active" && data.player_two_id) {
+        handleSessionChange(data as BattleSessionRow);
+      }
+    };
+
+    void poll();
+    const id = window.setInterval(() => void poll(), 2000);
+    return () => window.clearInterval(id);
+  }, [phase, session.id, handleSessionChange]);
+
+  useEffect(() => {
+    if (phase !== "opponent_joined" || !session.player_two_id) return;
+
+    const supabase = createClient();
+    const opponentId = session.player_two_id;
+
+    void (async () => {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, full_name, preferred_name, avatar_url")
+        .eq("id", opponentId)
+        .maybeSingle();
+
+      if (profile) {
+        setResolvedPlayerTwo({
+          id: profile.id,
+          displayName: getDisplayName(profile) ?? "Opponent",
+          avatarUrl: profile.avatar_url ?? null,
+        });
+      } else {
+        setResolvedPlayerTwo({
+          id: opponentId,
+          displayName: "Opponent",
+          avatarUrl: null,
+        });
+      }
+
+      const res = await fetch("/api/battle/ensure-round", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: session.id }),
+      });
+      const data = await res.json();
+      if (data.round) setRound(data.round);
+    })();
+
+    const timer = window.setTimeout(() => setPhase("playing"), OPPONENT_JOINED_MS);
+    return () => window.clearTimeout(timer);
+  }, [phase, session.id, session.player_two_id]);
 
   useEffect(() => {
     if (session.status !== "active" || !round || round.resolved_at) return;
@@ -275,9 +368,30 @@ export function BattleArena({
             </div>
           ) : null}
         </div>
+        <p className="mt-4 text-center text-sm text-zinc-400">Waiting for someone to join…</p>
         <Link href="/dashboard/home" className={`mt-6 inline-block ${ui.btnGhost}`}>
           Back to home
         </Link>
+      </div>
+    );
+  }
+
+  if (phase === "opponent_joined") {
+    const joinedName = youArePlayerOne
+      ? (resolvedPlayerTwo?.displayName ?? "Your opponent")
+      : playerOne.displayName;
+
+    return (
+      <div className={ui.page}>
+        <div className={`${ui.card} text-center`}>
+          <p className="text-4xl" aria-hidden="true">
+            ⚔️
+          </p>
+          <h1 className="mt-4 text-2xl font-bold text-zinc-900">
+            {youArePlayerOne ? `${joinedName} has joined!` : "You're in!"}
+          </h1>
+          <p className="mt-2 text-sm text-zinc-500">Starting battle…</p>
+        </div>
       </div>
     );
   }
@@ -362,15 +476,19 @@ export function BattleArena({
         </span>
       </div>
 
-      {phase === "result" && round && playerTwo ? (
+      {phase === "result" && round && resolvedPlayerTwo ? (
         <div className="mt-6">
           <BattleRoundResult
             round={round}
             playerOne={playerOne}
-            playerTwo={playerTwo}
+            playerTwo={resolvedPlayerTwo}
             youArePlayerOne={youArePlayerOne}
           />
         </div>
+      ) : null}
+
+      {phase === "playing" && !question ? (
+        <p className="mt-8 text-center text-sm text-zinc-500">Loading round…</p>
       ) : null}
 
       {phase === "playing" && question ? (

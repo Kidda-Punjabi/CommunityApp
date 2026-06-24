@@ -84,6 +84,11 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
           />
         )}
         <QuickTaskLink
+          href="/dashboard/tutor/calendar"
+          title="Calendar & lessons"
+          description="Connect Google Calendar and manage upcoming live sessions"
+        />
+        <QuickTaskLink
           href="/dashboard/tutor/lessons"
           title="Manage lessons"
           description="Unlock lessons and add session recordings"

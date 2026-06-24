@@ -103,6 +103,27 @@ export default async function HomePage() {
 
         <section className={ui.section}>
           <WeeklyPointsCard points={weeklyPoints} weekStart={currentWeekStart} />
+          <Link href="/dashboard/schedule" className={`mt-3 block ${ui.cardInteractive}`}>
+            <div className="flex items-center gap-4">
+              <span className={ui.listRowIcon} aria-hidden="true">
+                📅
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+                  Tutoring
+                </p>
+                <p className="mt-0.5 font-heading font-semibold text-zinc-900">Upcoming lessons</p>
+                <p className="mt-0.5 text-sm text-zinc-500">
+                  Join live sessions and request to reschedule if needed
+                </p>
+              </div>
+              <span className={ui.btnIcon} aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-4 w-4">
+                  <path d="M8 5.14v14.72a1 1 0 0 0 1.5.86l11.04-7.36a1 1 0 0 0 0-1.72L9.5 4.28A1 1 0 0 0 8 5.14z" />
+                </svg>
+              </span>
+            </div>
+          </Link>
           <Link href="/dashboard/challenges/new" className={`mt-3 block ${ui.cardInteractive}`}>
             <div className="flex items-center gap-4">
               <span className={ui.listRowIcon} aria-hidden="true">
