@@ -126,7 +126,7 @@ export default async function HomePage() {
               </span>
             </div>
           </Link>
-          <Link href="/dashboard/battle/create" className={`mt-3 block ${ui.cardInteractive}`}>
+          <Link href="/dashboard/battle" className={`mt-3 block ${ui.cardInteractive}`}>
             <div className="flex items-center gap-4">
               <span className={ui.listRowIcon} aria-hidden="true">
                 ⚡

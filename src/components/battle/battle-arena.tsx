@@ -239,7 +239,7 @@ export function BattleArena({
 
   const shareUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
-    return `${window.location.origin}/dashboard/battle/join/${inviteCode}`;
+    return `${window.location.origin}/dashboard/battle?code=${encodeURIComponent(inviteCode)}`;
   }, [inviteCode]);
 
   if (phase === "waiting") {
@@ -247,7 +247,9 @@ export function BattleArena({
       <div className={ui.page}>
         <h1 className="text-2xl font-bold text-zinc-900">Waiting for opponent</h1>
         <p className="mt-2 text-sm text-zinc-500">
-          Share your battle code so a friend can join live.
+          Share the code or link below. Your friend opens{" "}
+          <span className="font-medium text-zinc-700">Battle a Friend</span> on their dashboard and
+          enters the code under &ldquo;Join a battle&rdquo;.
         </p>
         <div className={`mt-6 ${ui.card} text-center`}>
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Battle code</p>
@@ -255,13 +257,22 @@ export function BattleArena({
             {inviteCode}
           </p>
           {shareUrl ? (
-            <button
-              type="button"
-              className={`mt-4 ${ui.btnSecondary}`}
-              onClick={() => void navigator.clipboard.writeText(shareUrl)}
-            >
-              Copy invite link
-            </button>
+            <div className="mt-4 space-y-2">
+              <button
+                type="button"
+                className={ui.btnSecondary}
+                onClick={() => void navigator.clipboard.writeText(inviteCode)}
+              >
+                Copy code
+              </button>
+              <button
+                type="button"
+                className={`${ui.btnSecondary} ml-2`}
+                onClick={() => void navigator.clipboard.writeText(shareUrl)}
+              >
+                Copy invite link
+              </button>
+            </div>
           ) : null}
         </div>
         <Link href="/dashboard/home" className={`mt-6 inline-block ${ui.btnGhost}`}>
@@ -303,7 +314,7 @@ export function BattleArena({
               ? "You reduced your opponent to zero HP."
               : `${opponent?.displayName ?? "Your opponent"} won the battle.`}
           </p>
-          <Link href="/dashboard/battle/create" className={`mt-6 inline-block ${ui.btnPrimary}`}>
+          <Link href="/dashboard/battle" className={`mt-6 inline-block ${ui.btnPrimary}`}>
             Battle again
           </Link>
           <Link href="/dashboard/home" className={`mt-3 block ${ui.btnGhost}`}>

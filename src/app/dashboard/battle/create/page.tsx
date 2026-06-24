@@ -1,10 +1,5 @@
-import { BattleCreateForm } from "@/components/battle/battle-create-form";
-import { ui } from "@/lib/ui/styles";
+import { redirect } from "next/navigation";
 
 export default function BattleCreatePage() {
-  return (
-    <div className={ui.page}>
-      <BattleCreateForm />
-    </div>
-  );
+  redirect("/dashboard/battle");
 }

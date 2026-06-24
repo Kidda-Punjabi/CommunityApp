@@ -1,14 +1,13 @@
-import Link from "next/link";
-import { BattleJoinForm } from "@/components/battle/battle-join-form";
-import { ui } from "@/lib/ui/styles";
+import { redirect } from "next/navigation";
 
-export default function BattleJoinPage() {
-  return (
-    <div className={ui.page}>
-      <BattleJoinForm />
-      <Link href="/dashboard/battle/create" className={`mt-6 inline-block ${ui.btnGhost}`}>
-        Or create your own battle
-      </Link>
-    </div>
-  );
+type BattleJoinPageProps = {
+  searchParams: Promise<{ code?: string }>;
+};
+
+export default async function BattleJoinPage({ searchParams }: BattleJoinPageProps) {
+  const { code } = await searchParams;
+  if (code?.trim()) {
+    redirect(`/dashboard/battle?code=${encodeURIComponent(code.trim().toUpperCase())}`);
+  }
+  redirect("/dashboard/battle");
 }

@@ -29,7 +29,7 @@ export default async function GamesPage() {
       <div className="space-y-10">
         <section>
           <h2 className={ui.sectionTitle}>Live PvP</h2>
-          <Link href="/dashboard/battle/create" className={ui.cardInteractive}>
+          <Link href="/dashboard/battle" className={ui.cardInteractive}>
             <div className="flex items-center gap-4">
               <span className={ui.listRowIcon} aria-hidden="true">
                 ⚡
