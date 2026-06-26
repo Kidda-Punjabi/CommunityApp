@@ -12,6 +12,7 @@ export type ScheduledSessionRow = {
   id: string;
   tutor_id: string;
   google_event_id: string;
+  google_recurring_event_id: string | null;
   student_id: string | null;
   cohort_id: string | null;
   course_id: string | null;
@@ -61,6 +62,7 @@ export type GoogleCalendarEvent = {
   hangoutLink?: string | null;
   location?: string | null;
   attendeeEmails: string[];
+  recurringEventId?: string | null;
   status?: string;
   updated?: string;
 };

@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import {
+  excludeCalendarSession,
   resolveRescheduleRequest,
   setSessionReschedulingAllowed,
   type CalendarActionResult,
@@ -140,6 +141,15 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
     if (result.success) window.location.reload();
   };
 
+  const markNotALesson = async (scope: "event" | "series") => {
+    setPending(true);
+    setMessage(null);
+    const result = await excludeCalendarSession(session.id, scope);
+    setMessage(result.success ?? result.error ?? null);
+    setPending(false);
+    if (result.success) window.location.reload();
+  };
+
   const who =
     session.studentName ??
     (session.cohortName ? `Group · ${session.cohortName}` : "Unmatched event");
@@ -181,6 +191,24 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
         >
           {session.rescheduling_allowed ? "Lock rescheduling" : "Allow rescheduling"}
         </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => void markNotALesson("event")}
+          className={ui.btnGhost}
+        >
+          Not a lesson
+        </button>
+        {session.google_recurring_event_id ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void markNotALesson("series")}
+            className={ui.btnGhost}
+          >
+            Not a lesson (whole series)
+          </button>
+        ) : null}
         {message ? <span className="text-xs text-zinc-500">{message}</span> : null}
       </div>
     </li>

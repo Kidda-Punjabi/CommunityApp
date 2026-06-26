@@ -1,6 +1,7 @@
 import { GoogleCalendarSetupNotice } from "@/components/tutor/google-calendar-setup-notice";
 import { CalendarSchemaNotice } from "@/components/schedule/calendar-schema-notice";
 import Link from "next/link";
+import { TutorCalendarAutoSync } from "@/components/tutor/tutor-calendar-auto-sync";
 import { TutorCalendarSyncButton } from "@/components/tutor/tutor-calendar-sync-button";
 import {
   TutorRescheduleInbox,
@@ -100,11 +101,17 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
 
         {schemaReady && status.connected ? (
           <>
+            <TutorCalendarAutoSync
+              connected={status.connected}
+              lastSyncedAt={status.lastSyncedAt}
+            />
             <p className="text-sm text-zinc-600">
               Connected as <span className="font-medium">{status.googleAccountEmail}</span>
               {status.lastSyncedAt
                 ? ` · Last synced ${new Date(status.lastSyncedAt).toLocaleString("en-GB")}`
                 : ""}
+              {" · "}
+              Auto-syncs when you open this page and every 15 minutes on the server.
             </p>
             <TutorCalendarSyncButton />
             <form action={disconnectGoogleCalendar}>

@@ -6,7 +6,8 @@ import { matchEventToStudents } from "@/lib/calendar/match-events";
 import { shouldImportLessonEvent } from "@/lib/calendar/lesson-filter";
 import { isStudentOnAttendeeList } from "@/lib/calendar/session-visibility";
 import type { TutorStudentMatchCandidate } from "@/lib/calendar/match-events";
-import type { GoogleCalendarEvent } from "@/lib/calendar/types";
+import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
+import { isCalendarEventExcluded } from "@/lib/calendar/exclusions";
 
 const DB_CHUNK_SIZE = 100;
 
@@ -30,6 +31,7 @@ type ExistingSessionRow = {
 type SessionUpsertRow = {
   tutor_id: string;
   google_event_id: string;
+  google_recurring_event_id: string | null;
   student_id: string | null;
   cohort_id: string | null;
   course_id: string | null;
@@ -96,6 +98,7 @@ function buildSessionRow(
   return {
     tutor_id: tutorId,
     google_event_id: event.id,
+    google_recurring_event_id: event.recurringEventId ?? null,
     student_id: match.studentId,
     cohort_id: match.studentId ? null : match.cohortId,
     course_id: match.courseId,
@@ -112,6 +115,25 @@ function buildSessionRow(
   };
 }
 
+export async function loadTutorCalendarExclusions(
+  adminClient: SupabaseClient,
+  tutorId: string
+): Promise<CalendarExclusionRow[]> {
+  const { data, error } = await adminClient
+    .from("tutor_calendar_event_exclusions")
+    .select("google_event_id, google_recurring_event_id, scope")
+    .eq("tutor_id", tutorId);
+
+  if (error) {
+    if (error.code === "PGRST205" || error.message?.includes("tutor_calendar_event_exclusions")) {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data ?? []) as CalendarExclusionRow[];
+}
+
 export async function syncTutorGoogleCalendar(
   adminClient: SupabaseClient,
   tutorId: string,
@@ -126,7 +148,7 @@ export async function syncTutorGoogleCalendar(
   if (error) throw error;
   if (!connection) throw new Error("Google Calendar is not connected.");
 
-  const [{ accessToken }, { students, cohorts }, { data: existingSessions, error: existingError }] =
+  const [{ accessToken }, { students, cohorts }, { data: existingSessions, error: existingError }, exclusions] =
     await Promise.all([
       getValidAccessToken(adminClient, connection as ConnectionRow),
       loadTutorMatchCandidates(adminClient, tutorId),
@@ -134,6 +156,7 @@ export async function syncTutorGoogleCalendar(
         .from("tutor_scheduled_sessions")
         .select("id, google_event_id, rescheduling_allowed, match_method")
         .eq("tutor_id", tutorId),
+      loadTutorCalendarExclusions(adminClient, tutorId),
     ]);
 
   if (existingError) throw existingError;
@@ -161,6 +184,12 @@ export async function syncTutorGoogleCalendar(
   let skipped = 0;
 
   for (const event of events) {
+    if (isCalendarEventExcluded(event, exclusions)) {
+      skippedGoogleEventIds.push(event.id);
+      skipped += 1;
+      continue;
+    }
+
     const match = matchEventToStudents(event, students, cohorts);
 
     if (!shouldImportLessonEvent(event, match)) {
@@ -182,6 +211,7 @@ export async function syncTutorGoogleCalendar(
           meet_link: row.meet_link,
           location: row.location,
           attendee_emails: row.attendee_emails,
+          google_recurring_event_id: row.google_recurring_event_id,
           google_updated_at: row.google_updated_at,
           updated_at: row.updated_at,
         },

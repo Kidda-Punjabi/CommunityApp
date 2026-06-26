@@ -12,6 +12,7 @@ type GoogleApiEvent = {
   summary?: string;
   status?: string;
   updated?: string;
+  recurringEventId?: string;
   hangoutLink?: string;
   location?: string;
   start?: { dateTime?: string; date?: string };
@@ -23,7 +24,7 @@ type GoogleApiEvent = {
 };
 
 const EVENT_FIELDS =
-  "items(id,summary,status,updated,start,end,attendees(email),location,hangoutLink,conferenceData(entryPoints)),nextPageToken,nextSyncToken";
+  "items(id,summary,status,updated,start,end,attendees(email),recurringEventId,location,hangoutLink,conferenceData(entryPoints)),nextPageToken,nextSyncToken";
 
 function extractMeetLink(event: GoogleApiEvent): string | null {
   if (event.hangoutLink) return event.hangoutLink;
@@ -53,6 +54,7 @@ function mapGoogleEvent(event: GoogleApiEvent): GoogleCalendarEvent | null {
     hangoutLink: extractMeetLink(event),
     location: event.location ?? null,
     attendeeEmails,
+    recurringEventId: event.recurringEventId ?? null,
     status: event.status,
     updated: event.updated,
   };

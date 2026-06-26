@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getRescheduleEligibility } from "@/lib/calendar/reschedule-policy";
+import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
 export type CalendarActionResult = { error?: string; success?: string };
@@ -132,4 +133,99 @@ export async function setSessionReschedulingAllowed(
 
   revalidatePath("/dashboard/tutor/calendar");
   return { success: allowed ? "Rescheduling enabled." : "Rescheduling locked for this lesson." };
+}
+
+export async function excludeCalendarSession(
+  sessionId: string,
+  scope: "event" | "series"
+): Promise<CalendarActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: session, error: sessionError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, tutor_id, google_event_id, google_recurring_event_id, title")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (sessionError || !session) return { error: "Lesson not found." };
+  if (session.tutor_id !== user.id) return { error: "Not allowed." };
+
+  if (scope === "series" && !session.google_recurring_event_id) {
+    return {
+      error: "This is not a recurring event. Use “Not a lesson” to hide this event only.",
+    };
+  }
+
+  const { client: adminClient, error: configError } = tryCreateServiceRoleClient();
+  if (!adminClient) return { error: configError };
+
+  const exclusionRow =
+    scope === "series"
+      ? {
+          tutor_id: user.id,
+          google_recurring_event_id: session.google_recurring_event_id,
+          google_event_id: null,
+          title: session.title,
+          scope: "series" as const,
+        }
+      : {
+          tutor_id: user.id,
+          google_event_id: session.google_event_id,
+          google_recurring_event_id: null,
+          title: session.title,
+          scope: "event" as const,
+        };
+
+  if (scope === "series" && session.google_recurring_event_id) {
+    await adminClient
+      .from("tutor_calendar_event_exclusions")
+      .delete()
+      .eq("tutor_id", user.id)
+      .eq("google_recurring_event_id", session.google_recurring_event_id);
+  } else {
+    await adminClient
+      .from("tutor_calendar_event_exclusions")
+      .delete()
+      .eq("tutor_id", user.id)
+      .eq("google_event_id", session.google_event_id);
+  }
+
+  const { error: exclusionError } = await adminClient
+    .from("tutor_calendar_event_exclusions")
+    .insert(exclusionRow);
+
+  if (exclusionError) {
+    if (exclusionError.code === "PGRST205") {
+      return { error: "Calendar exclusions are not set up yet. Run the latest SQL migration." };
+    }
+    return { error: exclusionError.message };
+  }
+
+  if (scope === "series" && session.google_recurring_event_id) {
+    const { error: deleteError } = await adminClient
+      .from("tutor_scheduled_sessions")
+      .delete()
+      .eq("tutor_id", user.id)
+      .eq("google_recurring_event_id", session.google_recurring_event_id);
+    if (deleteError) return { error: deleteError.message };
+  } else {
+    const { error: deleteError } = await adminClient
+      .from("tutor_scheduled_sessions")
+      .delete()
+      .eq("id", sessionId);
+    if (deleteError) return { error: deleteError.message };
+  }
+
+  revalidatePath("/dashboard/tutor/calendar");
+  revalidatePath("/dashboard/schedule");
+  return {
+    success:
+      scope === "series"
+        ? "Recurring series hidden — future occurrences will not sync as lessons."
+        : "Removed from upcoming lessons.",
+  };
 }
