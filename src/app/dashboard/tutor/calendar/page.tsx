@@ -13,6 +13,7 @@ import {
   loadTutorPendingRescheduleRequests,
   loadTutorUpcomingSessions,
 } from "@/lib/calendar/load-sessions";
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { formatGoogleCalendarError } from "@/lib/calendar/format-google-error";
 import { isGoogleOAuthConfigured } from "@/lib/calendar/google-oauth";
 import { formatCalendarLoadError } from "@/lib/calendar/schema";
@@ -57,6 +58,9 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
   const requests = requestLoad.requests;
 
   const oauthConfigured = isGoogleOAuthConfigured();
+  const showAdminSetup =
+    process.env.NODE_ENV === "development" ||
+    (await canAccessAdminPanel(user, supabase));
   const justConnected = params.connected === "1";
   const connectError = params.error
     ? formatGoogleCalendarError(decodeURIComponent(params.error))
@@ -92,7 +96,7 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
       <section className={`${ui.card} mb-8 space-y-4`}>
         <h2 className="font-heading text-lg font-semibold text-zinc-900">Google Calendar</h2>
 
-        {!oauthConfigured ? <GoogleCalendarSetupNotice /> : null}
+        {!oauthConfigured ? <GoogleCalendarSetupNotice showAdminSetup={showAdminSetup} /> : null}
 
         {schemaReady && status.connected ? (
           <>
