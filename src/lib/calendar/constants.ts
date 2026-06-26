@@ -6,3 +6,7 @@ export const GOOGLE_CALENDAR_SCOPES = [
 ] as const;
 
 export const CALENDAR_SYNC_LOOKAHEAD_DAYS = 60;
+
+/** When set, only calendar events whose title contains this tag are imported (after student match). */
+export const LESSON_EVENT_TITLE_TAG =
+  process.env.GOOGLE_CALENDAR_LESSON_TITLE_TAG?.trim() || null;

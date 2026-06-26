@@ -21,7 +21,11 @@ export function TutorCalendarSyncButton() {
         setError(formatGoogleCalendarError(data.error ?? "Sync failed."));
         return;
       }
-      setMessage(`Synced ${data.synced} event${data.synced === 1 ? "" : "s"} (${data.unmatched} unmatched).`);
+      setMessage(
+        `Synced ${data.synced} lesson${data.synced === 1 ? "" : "s"}` +
+          (data.skipped > 0 ? ` · ${data.skipped} other calendar events ignored` : "") +
+          "."
+      );
       window.location.reload();
     } catch {
       setError("Sync failed.");

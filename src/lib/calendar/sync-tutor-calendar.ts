@@ -3,6 +3,7 @@ import { listGoogleCalendarEvents } from "@/lib/calendar/google-calendar-api";
 import { refreshGoogleAccessToken } from "@/lib/calendar/google-oauth";
 import { loadTutorMatchCandidates } from "@/lib/calendar/load-match-candidates";
 import { matchEventToStudents } from "@/lib/calendar/match-events";
+import { shouldImportLessonEvent } from "@/lib/calendar/lesson-filter";
 
 type ConnectionRow = {
   tutor_id: string;
@@ -49,7 +50,7 @@ async function getValidAccessToken(
 export async function syncTutorGoogleCalendar(
   adminClient: SupabaseClient,
   tutorId: string
-): Promise<{ synced: number; unmatched: number }> {
+): Promise<{ synced: number; skipped: number }> {
   const { data: connection, error } = await adminClient
     .from("tutor_google_calendar_connections")
     .select("*")
@@ -69,10 +70,21 @@ export async function syncTutorGoogleCalendar(
   const { students, cohorts } = await loadTutorMatchCandidates(adminClient, tutorId);
 
   let synced = 0;
-  let unmatched = 0;
+  let skipped = 0;
 
   for (const event of events) {
     const match = matchEventToStudents(event, students, cohorts);
+
+    if (!shouldImportLessonEvent(event, match)) {
+      await adminClient
+        .from("tutor_scheduled_sessions")
+        .delete()
+        .eq("tutor_id", tutorId)
+        .eq("google_event_id", event.id)
+        .eq("match_method", "unmatched");
+      skipped += 1;
+      continue;
+    }
 
     const row = {
       tutor_id: tutorId,
@@ -113,9 +125,14 @@ export async function syncTutorGoogleCalendar(
       await adminClient.from("tutor_scheduled_sessions").insert(row);
     }
 
-    if (match.matchMethod === "unmatched") unmatched += 1;
     synced += 1;
   }
+
+  await adminClient
+    .from("tutor_scheduled_sessions")
+    .delete()
+    .eq("tutor_id", tutorId)
+    .eq("match_method", "unmatched");
 
   await adminClient
     .from("tutor_google_calendar_connections")
@@ -125,7 +142,7 @@ export async function syncTutorGoogleCalendar(
     })
     .eq("tutor_id", tutorId);
 
-  return { synced, unmatched };
+  return { synced, skipped };
 }
 
 export async function upsertTutorGoogleConnection(

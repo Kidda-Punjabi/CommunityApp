@@ -129,6 +129,7 @@ export async function loadTutorUpcomingSessions(
     .select("*")
     .eq("tutor_id", tutorId)
     .eq("status", "scheduled")
+    .neq("match_method", "unmatched")
     .gte("starts_at", nowIso)
     .order("starts_at", { ascending: true });
 

@@ -28,8 +28,20 @@ function normalizeEmail(email: string): string {
 
 function titleContainsName(title: string, displayName: string): boolean {
   const normalizedTitle = title.toLowerCase();
-  const firstName = displayName.trim().split(/\s+/)[0]?.toLowerCase();
-  if (!firstName || firstName.length < 2) return false;
+  const normalizedName = displayName.trim().toLowerCase();
+  if (normalizedName.length < 2) return false;
+
+  if (normalizedTitle.includes(normalizedName)) return true;
+
+  const nameParts = normalizedName.split(/\s+/).filter(Boolean);
+  if (nameParts.length >= 2) {
+    const firstName = nameParts[0]!;
+    const lastName = nameParts[nameParts.length - 1]!;
+    return normalizedTitle.includes(firstName) && normalizedTitle.includes(lastName);
+  }
+
+  const firstName = nameParts[0];
+  if (!firstName || firstName.length < 3) return false;
   return normalizedTitle.includes(firstName);
 }
 
