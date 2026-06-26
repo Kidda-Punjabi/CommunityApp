@@ -10,7 +10,11 @@ export default async function StudentSchedulePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { sessions, schemaReady } = await loadStudentUpcomingSessions(supabase, user!.id);
+  const { sessions, schemaReady } = await loadStudentUpcomingSessions(
+    supabase,
+    user!.id,
+    user!.email
+  );
 
   return (
     <div className={ui.page}>

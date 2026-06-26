@@ -9,6 +9,7 @@ import type {
 } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isCalendarSchemaMissingError } from "@/lib/calendar/schema";
+import { isSessionVisibleToStudent } from "@/lib/calendar/session-visibility";
 
 const IN_FILTER_CHUNK_SIZE = 80;
 
@@ -52,14 +53,38 @@ export async function loadTutorCalendarStatus(
 
 export async function loadStudentUpcomingSessions(
   supabase: SupabaseClient,
-  studentId: string
+  studentId: string,
+  studentEmail: string | null | undefined
 ): Promise<StudentSessionsLoadResult> {
   const nowIso = new Date().toISOString();
+
+  const { data: enrollments, error: enrollmentsError } = await supabase
+    .from("course_enrollments")
+    .select("tutor_id")
+    .eq("user_id", studentId);
+
+  if (enrollmentsError) {
+    if (isCalendarSchemaMissingError(enrollmentsError)) {
+      return { sessions: [], schemaReady: false };
+    }
+    throw enrollmentsError;
+  }
+
+  const tutorIds = [
+    ...new Set((enrollments ?? []).map((enrollment) => enrollment.tutor_id).filter(Boolean)),
+  ];
+
+  if (tutorIds.length === 0) {
+    return { sessions: [], schemaReady: true };
+  }
 
   const { data: sessions, error } = await supabase
     .from("tutor_scheduled_sessions")
     .select("*")
+    .in("tutor_id", tutorIds)
     .eq("status", "scheduled")
+    .neq("match_method", "unmatched")
+    .neq("match_method", "title_name")
     .gte("starts_at", nowIso)
     .order("starts_at", { ascending: true });
 
@@ -70,13 +95,16 @@ export async function loadStudentUpcomingSessions(
     throw error;
   }
 
-  const visible = (sessions ?? []) as ScheduledSessionRow[];
+  const normalizedEmail = studentEmail?.trim().toLowerCase() ?? "";
+  const visible = ((sessions ?? []) as ScheduledSessionRow[]).filter((session) =>
+    isSessionVisibleToStudent(session, studentId, normalizedEmail)
+  );
   if (visible.length === 0) {
     return { sessions: [], schemaReady: true };
   }
 
   const sessionIds = visible.map((session) => session.id);
-  const tutorIds = [...new Set(visible.map((session) => session.tutor_id))];
+  const sessionTutorIds = [...new Set(visible.map((session) => session.tutor_id))];
 
   const [{ data: requests, error: requestsError }, { data: tutors, error: tutorsError }] =
     await Promise.all([
@@ -88,7 +116,7 @@ export async function loadStudentUpcomingSessions(
       supabase
         .from("profiles")
         .select("id, full_name, preferred_name")
-        .in("id", tutorIds),
+        .in("id", sessionTutorIds),
     ]);
 
   if (requestsError && !isCalendarSchemaMissingError(requestsError)) throw requestsError;
@@ -130,6 +158,7 @@ export async function loadTutorUpcomingSessions(
     .eq("tutor_id", tutorId)
     .eq("status", "scheduled")
     .neq("match_method", "unmatched")
+    .neq("match_method", "title_name")
     .gte("starts_at", nowIso)
     .order("starts_at", { ascending: true });
 

@@ -6,7 +6,9 @@ export function shouldImportLessonEvent(
   event: GoogleCalendarEvent,
   match: SessionMatchResult
 ): boolean {
-  if (match.matchMethod === "unmatched") return false;
+  if (match.matchMethod === "unmatched" || match.matchMethod === "title_name") {
+    return false;
+  }
 
   if (LESSON_EVENT_TITLE_TAG && !event.summary.includes(LESSON_EVENT_TITLE_TAG)) {
     return false;
@@ -18,8 +20,9 @@ export function shouldImportLessonEvent(
 export function lessonImportSkipReason(
   event: GoogleCalendarEvent,
   match: SessionMatchResult
-): "unmatched" | "missing_title_tag" | null {
+): "unmatched" | "title_name" | "missing_title_tag" | null {
   if (match.matchMethod === "unmatched") return "unmatched";
+  if (match.matchMethod === "title_name") return "title_name";
   if (LESSON_EVENT_TITLE_TAG && !event.summary.includes(LESSON_EVENT_TITLE_TAG)) {
     return "missing_title_tag";
   }

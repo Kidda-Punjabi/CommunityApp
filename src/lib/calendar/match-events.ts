@@ -59,7 +59,7 @@ export function matchEventToStudents(
     const student = matchedByEmail[0];
     return {
       studentId: student.studentId,
-      cohortId: student.cohortId,
+      cohortId: null,
       courseId: student.courseId,
       matchMethod: "attendee_email",
     };
@@ -101,7 +101,7 @@ export function matchEventToStudents(
     const student = titleMatches[0];
     return {
       studentId: student.studentId,
-      cohortId: student.cohortId,
+      cohortId: null,
       courseId: student.courseId,
       matchMethod: "title_name",
     };

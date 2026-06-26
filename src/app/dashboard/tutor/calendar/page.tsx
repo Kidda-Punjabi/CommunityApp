@@ -112,9 +112,8 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
         ) : schemaReady ? (
           <>
             <p className="text-sm text-zinc-600">
-              Sync lessons from your Google Calendar. Only events linked to your students are
-              imported — add a student as a calendar attendee, or include their name in the event
-              title.
+              Sync lessons from your Google Calendar. Only events with a student&apos;s Kidda
+              email on the invite are imported and shown to them.
             </p>
             {oauthConfigured ? (
               <Link href="/api/google/calendar/connect" className={ui.btnPrimary}>

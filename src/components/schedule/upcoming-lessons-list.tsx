@@ -22,8 +22,8 @@ export function UpcomingLessonsList({ sessions }: UpcomingLessonsListProps) {
       <div className={ui.emptyState}>
         <p className="font-semibold text-zinc-900">No upcoming live lessons</p>
         <p className="mt-2 text-sm text-zinc-500">
-          When your tutor schedules lessons on Google Calendar, they&apos;ll show up here with a
-          join link.
+          When your tutor adds you to a Google Calendar invite, your live lessons will show up here
+          with a join link.
         </p>
       </div>
     );

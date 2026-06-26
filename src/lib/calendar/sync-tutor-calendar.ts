@@ -4,6 +4,8 @@ import { refreshGoogleAccessToken } from "@/lib/calendar/google-oauth";
 import { loadTutorMatchCandidates } from "@/lib/calendar/load-match-candidates";
 import { matchEventToStudents } from "@/lib/calendar/match-events";
 import { shouldImportLessonEvent } from "@/lib/calendar/lesson-filter";
+import { isStudentOnAttendeeList } from "@/lib/calendar/session-visibility";
+import type { TutorStudentMatchCandidate } from "@/lib/calendar/match-events";
 
 type ConnectionRow = {
   tutor_id: string;
@@ -80,8 +82,7 @@ export async function syncTutorGoogleCalendar(
         .from("tutor_scheduled_sessions")
         .delete()
         .eq("tutor_id", tutorId)
-        .eq("google_event_id", event.id)
-        .eq("match_method", "unmatched");
+        .eq("google_event_id", event.id);
       skipped += 1;
       continue;
     }
@@ -90,7 +91,7 @@ export async function syncTutorGoogleCalendar(
       tutor_id: tutorId,
       google_event_id: event.id,
       student_id: match.studentId,
-      cohort_id: match.cohortId,
+      cohort_id: match.studentId ? null : match.cohortId,
       course_id: match.courseId,
       title: event.summary,
       starts_at: event.start,
@@ -128,11 +129,7 @@ export async function syncTutorGoogleCalendar(
     synced += 1;
   }
 
-  await adminClient
-    .from("tutor_scheduled_sessions")
-    .delete()
-    .eq("tutor_id", tutorId)
-    .eq("match_method", "unmatched");
+  await cleanupStaleTutorSessions(adminClient, tutorId, students);
 
   await adminClient
     .from("tutor_google_calendar_connections")
@@ -143,6 +140,62 @@ export async function syncTutorGoogleCalendar(
     .eq("tutor_id", tutorId);
 
   return { synced, skipped };
+}
+
+async function cleanupStaleTutorSessions(
+  adminClient: SupabaseClient,
+  tutorId: string,
+  students: TutorStudentMatchCandidate[]
+) {
+  const emailByStudentId = new Map(
+    students.map((student) => [student.studentId, student.email.toLowerCase()])
+  );
+
+  const { data: sessions, error } = await adminClient
+    .from("tutor_scheduled_sessions")
+    .select("id, student_id, attendee_emails, match_method")
+    .eq("tutor_id", tutorId);
+
+  if (error) throw error;
+
+  const staleIds = (sessions ?? [])
+    .filter((session) => {
+      if (session.match_method === "unmatched" || session.match_method === "title_name") {
+        return true;
+      }
+
+      if (!session.student_id) return false;
+
+      const studentEmail = emailByStudentId.get(session.student_id);
+      if (!studentEmail) return true;
+
+      return !isStudentOnAttendeeList(studentEmail, session.attendee_emails ?? []);
+    })
+    .map((session) => session.id);
+
+  if (staleIds.length === 0) {
+    await adminClient
+      .from("tutor_scheduled_sessions")
+      .update({ cohort_id: null })
+      .eq("tutor_id", tutorId)
+      .not("student_id", "is", null);
+    return;
+  }
+
+  for (let index = 0; index < staleIds.length; index += 80) {
+    const chunk = staleIds.slice(index, index + 80);
+    const { error: deleteError } = await adminClient
+      .from("tutor_scheduled_sessions")
+      .delete()
+      .in("id", chunk);
+    if (deleteError) throw deleteError;
+  }
+
+  await adminClient
+    .from("tutor_scheduled_sessions")
+    .update({ cohort_id: null })
+    .eq("tutor_id", tutorId)
+    .not("student_id", "is", null);
 }
 
 export async function upsertTutorGoogleConnection(
