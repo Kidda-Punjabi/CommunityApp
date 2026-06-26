@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { GOOGLE_CALENDAR_SCOPES } from "@/lib/calendar/constants";
 
+import { getPublicAppUrl } from "@/lib/app-url";
+
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
@@ -44,16 +46,29 @@ export function verifyOAuthState(state: string): OAuthStatePayload | null {
   }
 }
 
-export function getGoogleOAuthConfig() {
-  const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI;
+export function getGoogleCalendarRedirectUri(): string {
+  const configured = process.env.GOOGLE_CALENDAR_REDIRECT_URI?.trim();
+  if (configured) return configured;
+  return `${getPublicAppUrl()}/api/google/calendar/callback`;
+}
 
-  if (!clientId || !clientSecret || !redirectUri) {
+export function getGoogleOAuthConfig() {
+  const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
+
+  if (!clientId || !clientSecret) {
     return null;
   }
 
-  return { clientId, clientSecret, redirectUri };
+  return {
+    clientId,
+    clientSecret,
+    redirectUri: getGoogleCalendarRedirectUri(),
+  };
+}
+
+export function isGoogleOAuthConfigured(): boolean {
+  return getGoogleOAuthConfig() !== null;
 }
 
 export function buildGoogleCalendarConnectUrl(tutorId: string): string | null {

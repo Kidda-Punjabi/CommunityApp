@@ -226,7 +226,24 @@ GRANT EXECUTE ON FUNCTION public.student_can_view_session(UUID, UUID) TO authent
 
 -- ---------------------------------------------------------------------------
 -- RPC: calendar connection status (no tokens exposed)
+-- Uses profile_roles (same source as the tutor dashboard), not legacy is_tutor().
 -- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.user_can_access_tutor_dashboard(p_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profile_roles pr
+    WHERE pr.user_id = p_user_id
+      AND pr.role IN ('tutor'::public.app_role, 'master_admin'::public.app_role)
+  )
+  OR public.is_admin();
+$$;
 
 CREATE OR REPLACE FUNCTION public.get_tutor_calendar_connection_status()
 RETURNS JSONB
@@ -242,7 +259,7 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated';
   END IF;
 
-  IF NOT public.is_tutor() AND NOT public.is_master_admin() THEN
+  IF NOT public.user_can_access_tutor_dashboard(v_user) THEN
     RAISE EXCEPTION 'Tutor access required';
   END IF;
 
@@ -277,10 +294,15 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated';
   END IF;
 
+  IF NOT public.user_can_access_tutor_dashboard(v_user) THEN
+    RAISE EXCEPTION 'Tutor access required';
+  END IF;
+
   DELETE FROM public.tutor_google_calendar_connections WHERE tutor_id = v_user;
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION public.user_can_access_tutor_dashboard(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_tutor_calendar_connection_status() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.disconnect_tutor_google_calendar() TO authenticated;
 

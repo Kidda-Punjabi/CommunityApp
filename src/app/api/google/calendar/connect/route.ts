@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildGoogleCalendarConnectUrl } from "@/lib/calendar/google-oauth";
 import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
+import { getPublicAppUrl } from "@/lib/app-url";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -10,7 +11,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"));
+    return NextResponse.redirect(new URL("/login", getPublicAppUrl()));
   }
 
   const allowed = await canAccessTutorDashboard(supabase, user.id);
@@ -23,7 +24,7 @@ export async function GET() {
     return NextResponse.json(
       {
         error:
-          "Google Calendar is not configured. Set GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET, and GOOGLE_CALENDAR_REDIRECT_URI.",
+          "Google Calendar is not configured. Set GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET in .env.local.",
       },
       { status: 500 }
     );

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatGoogleCalendarError } from "@/lib/calendar/format-google-error";
 import { useState } from "react";
 import { ui } from "@/lib/ui/styles";
 
@@ -17,7 +18,7 @@ export function TutorCalendarSyncButton() {
       const res = await fetch("/api/google/calendar/sync", { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Sync failed.");
+        setError(formatGoogleCalendarError(data.error ?? "Sync failed."));
         return;
       }
       setMessage(`Synced ${data.synced} event${data.synced === 1 ? "" : "s"} (${data.unmatched} unmatched).`);

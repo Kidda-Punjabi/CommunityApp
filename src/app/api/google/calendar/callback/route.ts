@@ -5,11 +5,11 @@ import {
   verifyOAuthState,
 } from "@/lib/calendar/google-oauth";
 import { syncTutorGoogleCalendar, upsertTutorGoogleConnection } from "@/lib/calendar/sync-tutor-calendar";
+import { getPublicAppUrl } from "@/lib/app-url";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 
 function appUrl(path: string): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  return `${base}${path}`;
+  return `${getPublicAppUrl()}${path}`;
 }
 
 export async function GET(request: Request) {

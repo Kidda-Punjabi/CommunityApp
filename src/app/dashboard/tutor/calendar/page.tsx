@@ -1,3 +1,5 @@
+import { GoogleCalendarSetupNotice } from "@/components/tutor/google-calendar-setup-notice";
+import { CalendarSchemaNotice } from "@/components/schedule/calendar-schema-notice";
 import Link from "next/link";
 import { TutorCalendarSyncButton } from "@/components/tutor/tutor-calendar-sync-button";
 import {
@@ -11,7 +13,9 @@ import {
   loadTutorPendingRescheduleRequests,
   loadTutorUpcomingSessions,
 } from "@/lib/calendar/load-sessions";
-import { getGoogleOAuthConfig } from "@/lib/calendar/google-oauth";
+import { formatGoogleCalendarError } from "@/lib/calendar/format-google-error";
+import { isGoogleOAuthConfigured } from "@/lib/calendar/google-oauth";
+import { formatCalendarLoadError } from "@/lib/calendar/schema";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 
@@ -25,16 +29,38 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [params, status, sessions, requests] = await Promise.all([
-    searchParams,
-    loadTutorCalendarStatus(supabase),
-    loadTutorUpcomingSessions(supabase, user!.id),
-    loadTutorPendingRescheduleRequests(supabase, user!.id),
-  ]);
+  const params = await searchParams;
+  const status = await loadTutorCalendarStatus(supabase);
 
-  const oauthConfigured = Boolean(getGoogleOAuthConfig());
+  let sessionLoad: Awaited<ReturnType<typeof loadTutorUpcomingSessions>> = {
+    sessions: [],
+    schemaReady: status.schemaReady,
+  };
+  let requestLoad: Awaited<ReturnType<typeof loadTutorPendingRescheduleRequests>> = {
+    requests: [],
+    schemaReady: status.schemaReady,
+  };
+  let loadError: string | null = null;
+
+  try {
+    [sessionLoad, requestLoad] = await Promise.all([
+      loadTutorUpcomingSessions(supabase, user!.id),
+      loadTutorPendingRescheduleRequests(supabase, user!.id),
+    ]);
+  } catch (error) {
+    loadError = formatCalendarLoadError(error);
+  }
+
+  const schemaReady =
+    status.schemaReady && sessionLoad.schemaReady && requestLoad.schemaReady;
+  const sessions = sessionLoad.sessions;
+  const requests = requestLoad.requests;
+
+  const oauthConfigured = isGoogleOAuthConfigured();
   const justConnected = params.connected === "1";
-  const connectError = params.error ? decodeURIComponent(params.error) : null;
+  const connectError = params.error
+    ? formatGoogleCalendarError(decodeURIComponent(params.error))
+    : null;
 
   return (
     <div className={ui.page}>
@@ -55,24 +81,25 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
         </p>
       ) : null}
 
+      {loadError ? (
+        <p className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {loadError}
+        </p>
+      ) : null}
+
+      {!schemaReady ? <CalendarSchemaNotice className="mb-6" /> : null}
+
       <section className={`${ui.card} mb-8 space-y-4`}>
         <h2 className="font-heading text-lg font-semibold text-zinc-900">Google Calendar</h2>
 
-        {!oauthConfigured ? (
-          <p className="text-sm text-amber-800">
-            Google Calendar OAuth is not configured on this environment yet. Ask an admin to set{" "}
-            <code className="text-xs">GOOGLE_CALENDAR_CLIENT_ID</code>,{" "}
-            <code className="text-xs">GOOGLE_CALENDAR_CLIENT_SECRET</code>, and{" "}
-            <code className="text-xs">GOOGLE_CALENDAR_REDIRECT_URI</code>.
-          </p>
-        ) : null}
+        {!oauthConfigured ? <GoogleCalendarSetupNotice /> : null}
 
-        {status.connected ? (
+        {schemaReady && status.connected ? (
           <>
             <p className="text-sm text-zinc-600">
               Connected as <span className="font-medium">{status.googleAccountEmail}</span>
               {status.lastSyncedAt
-                ? ` · Last synced ${new Date(status.lastSyncedAt).toLocaleString()}`
+                ? ` · Last synced ${new Date(status.lastSyncedAt).toLocaleString("en-GB")}`
                 : ""}
             </p>
             <TutorCalendarSyncButton />
@@ -82,7 +109,7 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
               </button>
             </form>
           </>
-        ) : (
+        ) : schemaReady ? (
           <>
             <p className="text-sm text-zinc-600">
               Sync lessons from your Google Calendar. Events are matched to students when their
@@ -94,7 +121,7 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
               </Link>
             ) : null}
           </>
-        )}
+        ) : null}
       </section>
 
       <TutorRescheduleInbox requests={requests} />

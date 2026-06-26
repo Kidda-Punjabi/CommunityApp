@@ -57,16 +57,16 @@ export function getRescheduleEligibility(
 export function formatSessionWhen(startsAtIso: string, endsAtIso: string): string {
   const start = new Date(startsAtIso);
   const end = new Date(endsAtIso);
-  const date = start.toLocaleDateString(undefined, {
+  const date = start.toLocaleDateString("en-GB", {
     weekday: "short",
-    month: "short",
     day: "numeric",
+    month: "short",
   });
-  const startTime = start.toLocaleTimeString(undefined, {
+  const startTime = start.toLocaleTimeString("en-GB", {
     hour: "numeric",
     minute: "2-digit",
   });
-  const endTime = end.toLocaleTimeString(undefined, {
+  const endTime = end.toLocaleTimeString("en-GB", {
     hour: "numeric",
     minute: "2-digit",
   });

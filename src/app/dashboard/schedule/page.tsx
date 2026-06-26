@@ -1,3 +1,4 @@
+import { CalendarSchemaNotice } from "@/components/schedule/calendar-schema-notice";
 import { UpcomingLessonsList } from "@/components/schedule/upcoming-lessons-list";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import { createClient } from "@/lib/supabase/server";
@@ -9,7 +10,7 @@ export default async function StudentSchedulePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const sessions = await loadStudentUpcomingSessions(supabase, user!.id);
+  const { sessions, schemaReady } = await loadStudentUpcomingSessions(supabase, user!.id);
 
   return (
     <div className={ui.page}>
@@ -19,6 +20,8 @@ export default async function StudentSchedulePage() {
           Live sessions with your tutor. Join from here when it&apos;s time.
         </p>
       </div>
+
+      {!schemaReady ? <CalendarSchemaNotice className="mb-6" /> : null}
 
       <UpcomingLessonsList sessions={sessions} />
     </div>
