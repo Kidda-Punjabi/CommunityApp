@@ -100,6 +100,8 @@ export async function loadTutorMatchCandidates(
     };
   });
 
+  const dedupedStudents = dedupeStudentsById(students);
+
   const cohorts: TutorCohortMatchCandidate[] = allCohortRows.map((cohort) => {
     const cohortMemberUserIds = (members ?? [])
       .filter((member) => member.cohort_id === cohort.id)
@@ -114,5 +116,21 @@ export async function loadTutorMatchCandidates(
     };
   });
 
-  return { students, cohorts };
+  return {
+    students: dedupedStudents,
+    cohorts,
+  };
+}
+
+function dedupeStudentsById(
+  students: TutorStudentMatchCandidate[]
+): TutorStudentMatchCandidate[] {
+  const byId = new Map<string, TutorStudentMatchCandidate>();
+  for (const student of students) {
+    const existing = byId.get(student.studentId);
+    if (!existing || (!existing.email && student.email)) {
+      byId.set(student.studentId, student);
+    }
+  }
+  return [...byId.values()];
 }

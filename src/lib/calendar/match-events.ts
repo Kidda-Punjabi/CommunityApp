@@ -45,15 +45,45 @@ function titleContainsName(title: string, displayName: string): boolean {
   return normalizedTitle.includes(firstName);
 }
 
+function uniqueStudentsById(
+  students: TutorStudentMatchCandidate[]
+): TutorStudentMatchCandidate[] {
+  const byId = new Map<string, TutorStudentMatchCandidate>();
+  for (const student of students) {
+    const existing = byId.get(student.studentId);
+    if (!existing || (!existing.email && student.email)) {
+      byId.set(student.studentId, student);
+    }
+  }
+  return [...byId.values()];
+}
+
+function matchStudentsByAttendeeEmails(
+  students: TutorStudentMatchCandidate[],
+  attendeeSet: Set<string>
+): TutorStudentMatchCandidate[] {
+  const matched: TutorStudentMatchCandidate[] = [];
+  const seenStudentIds = new Set<string>();
+
+  for (const student of students) {
+    if (!student.email) continue;
+    if (!attendeeSet.has(normalizeEmail(student.email))) continue;
+    if (seenStudentIds.has(student.studentId)) continue;
+    seenStudentIds.add(student.studentId);
+    matched.push(student);
+  }
+
+  return matched;
+}
+
 export function matchEventToStudents(
   event: GoogleCalendarEvent,
   students: TutorStudentMatchCandidate[],
   cohorts: TutorCohortMatchCandidate[]
 ): SessionMatchResult {
+  const dedupedStudents = uniqueStudentsById(students);
   const attendeeSet = new Set(event.attendeeEmails.map(normalizeEmail));
-  const matchedByEmail = students.filter((student) =>
-    attendeeSet.has(normalizeEmail(student.email))
-  );
+  const matchedByEmail = matchStudentsByAttendeeEmails(dedupedStudents, attendeeSet);
 
   if (matchedByEmail.length === 1) {
     const student = matchedByEmail[0];
@@ -93,7 +123,7 @@ export function matchEventToStudents(
     }
   }
 
-  const titleMatches = students.filter((student) =>
+  const titleMatches = dedupedStudents.filter((student) =>
     titleContainsName(event.summary, student.displayName)
   );
 

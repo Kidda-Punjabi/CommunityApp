@@ -114,7 +114,8 @@ function buildSessionRow(
 
 export async function syncTutorGoogleCalendar(
   adminClient: SupabaseClient,
-  tutorId: string
+  tutorId: string,
+  options?: { forceFullSync?: boolean }
 ): Promise<{ synced: number; skipped: number }> {
   const { data: connection, error } = await adminClient
     .from("tutor_google_calendar_connections")
@@ -144,10 +145,12 @@ export async function syncTutorGoogleCalendar(
     ])
   );
 
+  const syncToken = options?.forceFullSync ? null : connection.sync_token;
+
   const { events, nextSyncToken } = await listGoogleCalendarEvents(
     accessToken,
     connection.calendar_id,
-    { syncToken: connection.sync_token }
+    { syncToken }
   );
 
   const updatedAt = new Date().toISOString();

@@ -22,6 +22,9 @@ type GoogleApiEvent = {
   };
 };
 
+const EVENT_FIELDS =
+  "items(id,summary,status,updated,start,end,attendees(email),location,hangoutLink,conferenceData(entryPoints)),nextPageToken,nextSyncToken";
+
 function extractMeetLink(event: GoogleApiEvent): string | null {
   if (event.hangoutLink) return event.hangoutLink;
 
@@ -32,7 +35,7 @@ function extractMeetLink(event: GoogleApiEvent): string | null {
 }
 
 function mapGoogleEvent(event: GoogleApiEvent): GoogleCalendarEvent | null {
-  if (!event.id || !event.summary) return null;
+  if (!event.id) return null;
 
   const startIso = event.start?.dateTime ?? event.start?.date;
   const endIso = event.end?.dateTime ?? event.end?.date;
@@ -44,7 +47,7 @@ function mapGoogleEvent(event: GoogleApiEvent): GoogleCalendarEvent | null {
 
   return {
     id: event.id,
-    summary: event.summary,
+    summary: event.summary?.trim() || "Lesson",
     start: startIso,
     end: endIso,
     hangoutLink: extractMeetLink(event),
@@ -55,7 +58,7 @@ function mapGoogleEvent(event: GoogleApiEvent): GoogleCalendarEvent | null {
   };
 }
 
-export async function listGoogleCalendarEvents(
+async function fetchEventPages(
   accessToken: string,
   calendarId: string,
   options?: { syncToken?: string | null }
@@ -68,17 +71,19 @@ export async function listGoogleCalendarEvents(
   const timeMax = new Date(
     Date.now() + CALENDAR_SYNC_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
+  const useIncremental = Boolean(options?.syncToken);
 
   do {
     const params = new URLSearchParams({
       singleEvents: "true",
-      orderBy: "startTime",
       maxResults: "250",
+      fields: EVENT_FIELDS,
     });
 
-    if (options?.syncToken) {
-      params.set("syncToken", options.syncToken);
+    if (useIncremental) {
+      params.set("syncToken", options!.syncToken!);
     } else {
+      params.set("orderBy", "startTime");
       params.set("timeMin", timeMin);
       params.set("timeMax", timeMax);
     }
@@ -90,6 +95,10 @@ export async function listGoogleCalendarEvents(
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+
+    if (res.status === 410) {
+      return { events: [], nextSyncToken: null };
+    }
 
     if (!res.ok) {
       const text = await res.text();
@@ -109,4 +118,18 @@ export async function listGoogleCalendarEvents(
   } while (pageToken);
 
   return { events, nextSyncToken };
+}
+
+export async function listGoogleCalendarEvents(
+  accessToken: string,
+  calendarId: string,
+  options?: { syncToken?: string | null }
+): Promise<{ events: GoogleCalendarEvent[]; nextSyncToken: string | null }> {
+  let result = await fetchEventPages(accessToken, calendarId, options);
+
+  if (options?.syncToken && result.events.length === 0 && result.nextSyncToken === null) {
+    result = await fetchEventPages(accessToken, calendarId, { syncToken: null });
+  }
+
+  return result;
 }

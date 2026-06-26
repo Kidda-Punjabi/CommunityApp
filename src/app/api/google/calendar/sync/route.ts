@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 /** Vercel Pro allows up to 300s; first full calendar sync can be slow. */
 export const maxDuration = 300;
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -28,7 +28,15 @@ export async function POST() {
   }
 
   try {
-    const result = await syncTutorGoogleCalendar(client, user.id);
+    let forceFullSync = false;
+    try {
+      const body = (await request.json()) as { forceFullSync?: boolean };
+      forceFullSync = body.forceFullSync === true;
+    } catch {
+      // empty body is fine
+    }
+
+    const result = await syncTutorGoogleCalendar(client, user.id, { forceFullSync });
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sync failed.";
