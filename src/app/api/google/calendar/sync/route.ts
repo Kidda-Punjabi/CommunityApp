@@ -4,6 +4,9 @@ import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
+/** Vercel Pro allows up to 300s; first full calendar sync can be slow. */
+export const maxDuration = 300;
+
 export async function POST() {
   const supabase = await createClient();
   const {

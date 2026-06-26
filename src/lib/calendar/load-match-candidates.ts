@@ -5,6 +5,34 @@ import type {
   TutorStudentMatchCandidate,
 } from "@/lib/calendar/match-events";
 
+const EMAIL_LOOKUP_CHUNK_SIZE = 20;
+
+async function loadEmailsForUserIds(
+  adminClient: SupabaseClient,
+  userIds: string[]
+): Promise<Map<string, string>> {
+  const emailByUserId = new Map<string, string>();
+  const uniqueIds = [...new Set(userIds)];
+  if (uniqueIds.length === 0) return emailByUserId;
+
+  for (let index = 0; index < uniqueIds.length; index += EMAIL_LOOKUP_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(index, index + EMAIL_LOOKUP_CHUNK_SIZE);
+    const results = await Promise.all(
+      chunk.map(async (userId) => {
+        const { data, error } = await adminClient.auth.admin.getUserById(userId);
+        if (error || !data.user?.email) return null;
+        return [userId, data.user.email.toLowerCase()] as const;
+      })
+    );
+
+    for (const entry of results) {
+      if (entry) emailByUserId.set(entry[0], entry[1]);
+    }
+  }
+
+  return emailByUserId;
+}
+
 export async function loadTutorMatchCandidates(
   adminClient: SupabaseClient,
   tutorId: string
@@ -55,12 +83,8 @@ export async function loadTutorMatchCandidates(
     ),
   ];
 
-  const { data: authUsers } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-
-  const emailByUserId = new Map<string, string>();
-  for (const user of authUsers.users) {
-    if (user.email) emailByUserId.set(user.id, user.email.toLowerCase());
-  }
+  const memberUserIds = (members ?? []).map((member) => member.user_id);
+  const emailByUserId = await loadEmailsForUserIds(adminClient, [...studentIds, ...memberUserIds]);
 
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
 
@@ -77,14 +101,14 @@ export async function loadTutorMatchCandidates(
   });
 
   const cohorts: TutorCohortMatchCandidate[] = allCohortRows.map((cohort) => {
-    const memberUserIds = (members ?? [])
+    const cohortMemberUserIds = (members ?? [])
       .filter((member) => member.cohort_id === cohort.id)
       .map((member) => member.user_id);
     return {
       cohortId: cohort.id,
       cohortName: cohort.name,
       courseId: cohort.course_id,
-      memberEmails: memberUserIds
+      memberEmails: cohortMemberUserIds
         .map((userId) => emailByUserId.get(userId))
         .filter((email): email is string => Boolean(email)),
     };

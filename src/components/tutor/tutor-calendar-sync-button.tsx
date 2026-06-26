@@ -16,7 +16,13 @@ export function TutorCalendarSyncButton() {
 
     try {
       const res = await fetch("/api/google/calendar/sync", { method: "POST" });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 504) {
+        setError(
+          "Sync timed out on the server. Try again — later syncs are faster once your calendar is linked."
+        );
+        return;
+      }
       if (!res.ok) {
         setError(formatGoogleCalendarError(data.error ?? "Sync failed."));
         return;
