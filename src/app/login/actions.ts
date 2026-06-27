@@ -1,5 +1,6 @@
 "use server";
 
+import { persistLastUser } from "@/lib/auth/remember-last-user";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -28,6 +29,8 @@ export async function login(
   if (error) {
     return { error: error.message };
   }
+
+  await persistLastUser(supabase);
 
   redirect("/dashboard/home");
 }

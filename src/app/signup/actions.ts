@@ -1,6 +1,7 @@
 "use server";
 
 import type { AuthState } from "@/app/login/actions";
+import { persistLastUser } from "@/lib/auth/remember-last-user";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { normalizeReferralCode, REFERRAL_COOKIE_NAME } from "@/lib/referrals/constants";
 import { createClient } from "@/lib/supabase/server";
@@ -56,6 +57,8 @@ export async function signup(
       await supabase.rpc("register_referral", { p_referral_code: referralCode });
       cookieStore.delete(REFERRAL_COOKIE_NAME);
     }
+
+    await persistLastUser(supabase);
 
     redirect("/dashboard/home");
   }

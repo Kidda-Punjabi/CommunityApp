@@ -1,17 +1,42 @@
 import { AuthCard } from "@/components/auth-card";
+import { ContinueAsUserCard } from "@/components/auth/continue-as-user-card";
+import { getContinueAsUser } from "@/lib/auth/continue-as-user";
+import { clearLastUserCookie } from "@/lib/auth/remember-last-user";
+import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 import { LoginForm } from "./login-form";
 
 type LoginPageProps = {
-  searchParams: Promise<{ message?: string }>;
+  searchParams: Promise<{ message?: string; switch?: string; email?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { message } = await searchParams;
+  const { message, switch: switchAccount, email: emailParam } = await searchParams;
+  const switchingAccount = switchAccount === "1";
+
+  if (switchingAccount) {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+    await clearLastUserCookie();
+  }
+
+  const continueAs = switchingAccount ? null : await getContinueAsUser();
+  const rememberedEmail = continueAs?.email ?? emailParam?.trim() ?? "";
+  const showRememberedLogin =
+    !switchingAccount &&
+    !continueAs?.sessionActive &&
+    Boolean(rememberedEmail && continueAs);
 
   return (
     <AuthCard
-      title="Welcome back"
-      subtitle="Sign in to your Kidda account"
+      title={continueAs?.sessionActive ? "You're signed in" : "Welcome back"}
+      subtitle={
+        continueAs?.sessionActive
+          ? "Pick up where you left off"
+          : showRememberedLogin
+            ? "Enter your password to continue"
+            : "Sign in to your Kidda account"
+      }
       footer={{
         text: "Don't have an account?",
         linkText: "Sign up",
@@ -19,11 +44,35 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       }}
     >
       {message && (
-        <p className="mb-5 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-          {message}
-        </p>
+        <p className="mb-5 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{message}</p>
       )}
-      <LoginForm />
+
+      {continueAs?.sessionActive ? (
+        <ContinueAsUserCard user={continueAs} variant="auth" />
+      ) : (
+        <>
+          {showRememberedLogin && continueAs ? (
+            <div className="mb-6">
+              <ContinueAsUserCard user={continueAs} variant="auth" showSwitchLink={false} />
+            </div>
+          ) : null}
+
+          {!continueAs?.sessionActive ? (
+            <LoginForm
+              defaultEmail={showRememberedLogin ? rememberedEmail : undefined}
+              rememberedAccount={showRememberedLogin}
+            />
+          ) : null}
+
+          {showRememberedLogin ? (
+            <p className="mt-4 text-center text-sm text-zinc-500">
+              <Link href="/login?switch=1" className="font-medium text-violet-600 hover:text-violet-500">
+                Use another account
+              </Link>
+            </p>
+          ) : null}
+        </>
+      )}
     </AuthCard>
   );
 }

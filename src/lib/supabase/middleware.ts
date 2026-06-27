@@ -4,6 +4,13 @@ import {
   buildAuthCallbackUrl,
 } from "@/lib/auth/recovery-flow";
 import {
+  lastUserCookieOptions,
+  lastUserFromAuthMetadata,
+  LAST_USER_COOKIE,
+  parseLastUser,
+  serializeLastUser,
+} from "@/lib/auth/last-user";
+import {
   normalizeReferralCode,
   REFERRAL_COOKIE_MAX_AGE_SECONDS,
   REFERRAL_COOKIE_NAME,
@@ -136,14 +143,18 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  if (
-    user &&
-    (request.nextUrl.pathname === "/login" ||
-      request.nextUrl.pathname === "/signup")
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = POST_AUTH_PATH;
-    return NextResponse.redirect(url);
+  if (user?.email) {
+    const remembered = lastUserFromAuthMetadata(user);
+    if (remembered) {
+      const existing = parseLastUser(request.cookies.get(LAST_USER_COOKIE)?.value);
+      if (!existing || existing.email !== remembered.email) {
+        supabaseResponse.cookies.set(
+          LAST_USER_COOKIE,
+          serializeLastUser(remembered),
+          lastUserCookieOptions()
+        );
+      }
+    }
   }
 
   return supabaseResponse;
