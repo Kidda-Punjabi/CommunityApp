@@ -59,10 +59,10 @@ export type GoogleCalendarEvent = {
   summary: string;
   start: string;
   end: string;
-  hangoutLink?: string | null;
-  location?: string | null;
+  hangoutLink: string | null;
+  location: string | null;
   attendeeEmails: string[];
-  recurringEventId?: string | null;
+  recurringEventId: string | null;
   status?: string;
   updated?: string;
 };
