@@ -8,6 +8,7 @@ import { isStudentOnAttendeeList } from "@/lib/calendar/session-visibility";
 import type { TutorStudentMatchCandidate } from "@/lib/calendar/match-events";
 import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
 import { isCalendarEventExcluded } from "@/lib/calendar/exclusions";
+import type { GoogleCalendarEvent } from "@/lib/calendar/types";
 
 const DB_CHUNK_SIZE = 100;
 
@@ -105,8 +106,8 @@ function buildSessionRow(
     title: event.summary,
     starts_at: event.start,
     ends_at: event.end,
-    meet_link: event.hangoutLink,
-    location: event.location,
+    meet_link: event.hangoutLink ?? null,
+    location: event.location ?? null,
     attendee_emails: event.attendeeEmails,
     match_method: match.matchMethod,
     google_updated_at: event.updated ?? null,

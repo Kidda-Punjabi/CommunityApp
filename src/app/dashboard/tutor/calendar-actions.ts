@@ -163,22 +163,7 @@ export async function excludeCalendarSession(
   const { client: adminClient, error: configError } = tryCreateServiceRoleClient();
   if (!adminClient) return { error: configError };
 
-  const exclusionRow =
-    scope === "series"
-      ? {
-          tutor_id: user.id,
-          google_recurring_event_id: session.google_recurring_event_id,
-          google_event_id: null,
-          title: session.title,
-          scope: "series" as const,
-        }
-      : {
-          tutor_id: user.id,
-          google_event_id: session.google_event_id,
-          google_recurring_event_id: null,
-          title: session.title,
-          scope: "event" as const,
-        };
+  let exclusionError: { code?: string; message: string } | null = null;
 
   if (scope === "series" && session.google_recurring_event_id) {
     await adminClient
@@ -186,17 +171,31 @@ export async function excludeCalendarSession(
       .delete()
       .eq("tutor_id", user.id)
       .eq("google_recurring_event_id", session.google_recurring_event_id);
+
+    const { error } = await adminClient.from("tutor_calendar_event_exclusions").insert({
+      tutor_id: user.id,
+      google_recurring_event_id: session.google_recurring_event_id,
+      google_event_id: null,
+      title: session.title,
+      scope: "series",
+    });
+    exclusionError = error;
   } else {
     await adminClient
       .from("tutor_calendar_event_exclusions")
       .delete()
       .eq("tutor_id", user.id)
       .eq("google_event_id", session.google_event_id);
-  }
 
-  const { error: exclusionError } = await adminClient
-    .from("tutor_calendar_event_exclusions")
-    .insert(exclusionRow);
+    const { error } = await adminClient.from("tutor_calendar_event_exclusions").insert({
+      tutor_id: user.id,
+      google_event_id: session.google_event_id,
+      google_recurring_event_id: null,
+      title: session.title,
+      scope: "event",
+    });
+    exclusionError = error;
+  }
 
   if (exclusionError) {
     if (exclusionError.code === "PGRST205") {
