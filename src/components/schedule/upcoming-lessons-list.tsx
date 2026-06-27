@@ -6,6 +6,8 @@ import {
   requestLessonReschedule,
   type CalendarActionResult,
 } from "@/app/dashboard/tutor/calendar-actions";
+import { LessonsViewToggle, type LessonsViewMode } from "@/components/schedule/lessons-view-toggle";
+import { MonthLessonsCalendar } from "@/components/schedule/month-lessons-calendar";
 import { formatSessionWhen, hoursUntilSession } from "@/lib/calendar/reschedule-policy";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { ui } from "@/lib/ui/styles";
@@ -17,6 +19,8 @@ type UpcomingLessonsListProps = {
 };
 
 export function UpcomingLessonsList({ sessions }: UpcomingLessonsListProps) {
+  const [viewMode, setViewMode] = useState<LessonsViewMode>("list");
+
   if (sessions.length === 0) {
     return (
       <div className={ui.emptyState}>
@@ -30,11 +34,28 @@ export function UpcomingLessonsList({ sessions }: UpcomingLessonsListProps) {
   }
 
   return (
-    <ul className="space-y-4">
-      {sessions.map((session) => (
-        <LessonSessionCard key={session.id} session={session} />
-      ))}
-    </ul>
+    <div>
+      <LessonsViewToggle mode={viewMode} onChange={setViewMode} />
+      {viewMode === "list" ? (
+        <ul className="space-y-4">
+          {sessions.map((session) => (
+            <LessonSessionCard key={session.id} session={session} />
+          ))}
+        </ul>
+      ) : (
+        <MonthLessonsCalendar
+          sessions={sessions.map((session) => ({
+            id: session.id,
+            title: session.title,
+            starts_at: session.starts_at,
+            ends_at: session.ends_at,
+            meet_link: session.meet_link,
+            subtitle: session.tutorName,
+          }))}
+          emptySelectionLabel="No lessons on this day."
+        />
+      )}
+    </div>
   );
 }
 

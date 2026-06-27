@@ -9,6 +9,10 @@ import type { TutorStudentMatchCandidate } from "@/lib/calendar/match-events";
 import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
 import { isCalendarEventExcluded } from "@/lib/calendar/exclusions";
 import type { GoogleCalendarEvent } from "@/lib/calendar/types";
+import {
+  removeReplacedRecurringInstance,
+  removeSameDayLessonDuplicate,
+} from "@/lib/calendar/session-dedup";
 
 const DB_CHUNK_SIZE = 100;
 
@@ -170,8 +174,9 @@ export async function syncTutorGoogleCalendar(
   );
 
   const syncToken = options?.forceFullSync ? null : connection.sync_token;
+  const isFullSync = !syncToken;
 
-  const { events, nextSyncToken } = await listGoogleCalendarEvents(
+  const { events, nextSyncToken, cancelledEventIds } = await listGoogleCalendarEvents(
     accessToken,
     connection.calendar_id,
     { syncToken }
@@ -181,8 +186,20 @@ export async function syncTutorGoogleCalendar(
   const toUpsert: SessionUpsertRow[] = [];
   const manualUpdates: Array<{ id: string; payload: Record<string, unknown> }> = [];
   const skippedGoogleEventIds: string[] = [];
+  const seenGoogleEventIds = new Set<string>();
   let synced = 0;
   let skipped = 0;
+
+  if (cancelledEventIds.length > 0) {
+    await runInChunks(cancelledEventIds, DB_CHUNK_SIZE, async (chunk) => {
+      const { error: deleteError } = await adminClient
+        .from("tutor_scheduled_sessions")
+        .delete()
+        .eq("tutor_id", tutorId)
+        .in("google_event_id", chunk);
+      if (deleteError) throw deleteError;
+    });
+  }
 
   for (const event of events) {
     if (isCalendarEventExcluded(event, exclusions)) {
@@ -201,6 +218,9 @@ export async function syncTutorGoogleCalendar(
 
     const existing = existingByGoogleEventId.get(event.id);
     const row = buildSessionRow(tutorId, event, match, updatedAt);
+
+    await removeReplacedRecurringInstance(adminClient, tutorId, event, match);
+    await removeSameDayLessonDuplicate(adminClient, tutorId, event, match);
 
     if (existing?.match_method === "manual") {
       manualUpdates.push({
@@ -221,6 +241,7 @@ export async function syncTutorGoogleCalendar(
       toUpsert.push(row);
     }
 
+    seenGoogleEventIds.add(event.id);
     synced += 1;
   }
 
@@ -252,6 +273,10 @@ export async function syncTutorGoogleCalendar(
     );
   });
 
+  if (isFullSync) {
+    await reconcileRemovedCalendarEvents(adminClient, tutorId, seenGoogleEventIds);
+  }
+
   await cleanupStaleTutorSessions(adminClient, tutorId, students);
 
   await adminClient
@@ -263,6 +288,39 @@ export async function syncTutorGoogleCalendar(
     .eq("tutor_id", tutorId);
 
   return { synced, skipped };
+}
+
+async function reconcileRemovedCalendarEvents(
+  adminClient: SupabaseClient,
+  tutorId: string,
+  seenGoogleEventIds: Set<string>
+) {
+  const nowIso = new Date().toISOString();
+  const { data: sessions, error } = await adminClient
+    .from("tutor_scheduled_sessions")
+    .select("id, google_event_id, match_method")
+    .eq("tutor_id", tutorId)
+    .eq("status", "scheduled")
+    .gte("starts_at", nowIso);
+
+  if (error) throw error;
+
+  const staleIds = (sessions ?? [])
+    .filter(
+      (session) =>
+        session.match_method !== "manual" && !seenGoogleEventIds.has(session.google_event_id)
+    )
+    .map((session) => session.id);
+
+  if (staleIds.length === 0) return;
+
+  await runInChunks(staleIds, DB_CHUNK_SIZE, async (chunk) => {
+    const { error: deleteError } = await adminClient
+      .from("tutor_scheduled_sessions")
+      .delete()
+      .in("id", chunk);
+    if (deleteError) throw deleteError;
+  });
 }
 
 async function cleanupStaleTutorSessions(

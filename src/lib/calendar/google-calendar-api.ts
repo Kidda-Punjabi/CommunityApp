@@ -64,8 +64,13 @@ async function fetchEventPages(
   accessToken: string,
   calendarId: string,
   options?: { syncToken?: string | null }
-): Promise<{ events: GoogleCalendarEvent[]; nextSyncToken: string | null }> {
+): Promise<{
+  events: GoogleCalendarEvent[];
+  nextSyncToken: string | null;
+  cancelledEventIds: string[];
+}> {
   const events: GoogleCalendarEvent[] = [];
+  const cancelledEventIds: string[] = [];
   let pageToken: string | undefined;
   let nextSyncToken: string | null = null;
 
@@ -99,7 +104,7 @@ async function fetchEventPages(
     });
 
     if (res.status === 410) {
-      return { events: [], nextSyncToken: null };
+      return { events: [], nextSyncToken: null, cancelledEventIds: [] };
     }
 
     if (!res.ok) {
@@ -110,7 +115,10 @@ async function fetchEventPages(
     const data = (await res.json()) as GoogleEventsListResponse;
 
     for (const item of data.items ?? []) {
-      if (item.status === "cancelled") continue;
+      if (item.status === "cancelled") {
+        if (item.id) cancelledEventIds.push(item.id);
+        continue;
+      }
       const mapped = mapGoogleEvent(item);
       if (mapped) events.push(mapped);
     }
@@ -119,14 +127,18 @@ async function fetchEventPages(
     if (data.nextSyncToken) nextSyncToken = data.nextSyncToken;
   } while (pageToken);
 
-  return { events, nextSyncToken };
+  return { events, nextSyncToken, cancelledEventIds };
 }
 
 export async function listGoogleCalendarEvents(
   accessToken: string,
   calendarId: string,
   options?: { syncToken?: string | null }
-): Promise<{ events: GoogleCalendarEvent[]; nextSyncToken: string | null }> {
+): Promise<{
+  events: GoogleCalendarEvent[];
+  nextSyncToken: string | null;
+  cancelledEventIds: string[];
+}> {
   let result = await fetchEventPages(accessToken, calendarId, options);
 
   if (options?.syncToken && result.events.length === 0 && result.nextSyncToken === null) {
