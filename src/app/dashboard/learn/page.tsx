@@ -1,4 +1,5 @@
 import { LearnCourseCard } from "@/components/learn-course-card";
+import { MyPackagesSection } from "@/components/packages/package-hub-panel";
 import {
   fetchLearnContent,
   filterFreeLessons,
@@ -10,6 +11,7 @@ import {
   lessonCountForTrack,
 } from "@/lib/learning/learn-access";
 import { LEARN_TRACKS } from "@/lib/learning/learn-catalog";
+import { loadStudentPackages } from "@/lib/packages/load-student-packages";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { ui } from "@/lib/ui/styles";
 import {
@@ -35,7 +37,10 @@ export default async function LearnPage() {
   }
 
   const access = await getCourseAccessContext(supabase, user!);
-  const allLessons = await fetchLearnContent(supabase);
+  const [allLessons, studentPackages] = await Promise.all([
+    fetchLearnContent(supabase),
+    loadStudentPackages(supabase, user!),
+  ]);
   const completionMap = await fetchLessonCompletionMap(supabase, user!.id, allLessons);
 
   const tracks = LEARN_TRACKS.map((track) => {
@@ -89,9 +94,15 @@ export default async function LearnPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Choose a course to start learning.
+          Your packages connect lessons, your tutor, and live sessions in one place.
         </p>
       </div>
+
+      <MyPackagesSection packages={studentPackages} />
+
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+        All courses
+      </h2>
 
       <div className={ui.stack}>
         {tracks.map(({ track, locked, lessonCount, courseProgress }) => (

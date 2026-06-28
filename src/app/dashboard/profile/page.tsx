@@ -145,7 +145,7 @@ export default async function ProfilePage() {
               Admin
             </p>
             <p className="mt-2 text-sm text-zinc-600">
-              Manage courses, lessons, quizzes, tutors, and teachers.
+              Manage courses, lessons, quizzes, and tutors.
             </p>
             <Link href="/admin/content" className={`mt-4 ${ui.btnPrimary}`}>
               Open admin panel

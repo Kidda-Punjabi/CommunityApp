@@ -1,7 +1,9 @@
+import { AdminShell } from "@/components/admin/admin-shell";
+import { loadAdminData } from "@/lib/admin/load-admin-data";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
-import { KiddaLogo } from "@/components/branding/kidda-logo";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { AdminServerError } from "./admin-server-error";
 
 export default async function AdminLayout({
   children,
@@ -16,28 +18,14 @@ export default async function AdminLayout({
   if (!user) redirect("/login");
   if (!(await canAccessAdminPanel(user, supabase))) redirect("/dashboard/home");
 
+  const result = await loadAdminData();
+  if (!result.ok) {
+    return <AdminServerError message={result.error} />;
+  }
+
   return (
-    <div className="min-h-dvh bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-3">
-            <KiddaLogo variant="icon" size="sm" href="/dashboard/home" />
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-violet-600">
-                Kidda Admin
-              </p>
-              <h1 className="text-lg font-bold text-zinc-900">Content Management</h1>
-            </div>
-          </div>
-          <a
-            href="/dashboard/home"
-            className="text-sm font-medium text-zinc-500 hover:text-zinc-700"
-          >
-            ← Back to app
-          </a>
-        </div>
-      </header>
-      <main className="mx-auto max-w-4xl px-4 py-6">{children}</main>
-    </div>
+    <AdminShell data={result.data} branding={result.branding}>
+      {children}
+    </AdminShell>
   );
 }

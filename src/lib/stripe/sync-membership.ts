@@ -66,16 +66,18 @@ export async function syncMembershipFromStripeEvent(event: Stripe.Event) {
 
     const stripe = getStripe();
     const full = await stripe.subscriptions.retrieve(subscription.id, {
-      expand: ["items.data.price.product", "customer"],
+      expand: ["items.data.price"],
     });
 
     if (!userId) {
-      const customer = full.customer;
-      const email =
-        typeof customer !== "string" && customer && !("deleted" in customer)
-          ? customer.email
-          : null;
-      if (email) userId = await findUserIdByEmail(email);
+      const customerId =
+        typeof full.customer === "string" ? full.customer : full.customer?.id ?? null;
+      if (customerId) {
+        const customer = await stripe.customers.retrieve(customerId);
+        if (!("deleted" in customer) && customer.email) {
+          userId = await findUserIdByEmail(customer.email);
+        }
+      }
     }
 
     if (!userId) return { updated: false, unlockedTiers: [] as PaidCourseTier[] };

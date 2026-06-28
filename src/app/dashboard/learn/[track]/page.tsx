@@ -1,9 +1,10 @@
 import { LearnLessonList } from "@/components/learn-lesson-list";
 import { LearnLockedCourse } from "@/components/learn-locked-course";
+import { PackageHubPanel } from "@/components/packages/package-hub-panel";
 import {
-  CommunityLeadSection,
-  MyTutorSection,
-} from "@/components/learn/course-staff-section";
+  findStudentPackageForTrack,
+  loadStudentPackages,
+} from "@/lib/packages/load-student-packages";
 import {
   fetchLearnContent,
   filterFreeLessons,
@@ -23,9 +24,9 @@ import {
 } from "@/lib/progress/lesson-completion";
 import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
 import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
+import { CommunityLeadSection } from "@/components/learn/course-staff-section";
 import {
   loadCommunityLeads,
-  loadMyTutorForTier,
 } from "@/lib/tutoring/load-course-staff";
 import {
   fetchLessonContentUnlockMap,
@@ -50,12 +51,14 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [access, allLessons, lessonProgressMap, flashcardProgressMap] = await Promise.all([
-    getCourseAccessContext(supabase, user!),
-    fetchLearnContent(supabase),
-    fetchLessonProgressMap(supabase, user!.id),
-    fetchFlashcardProgressMap(supabase, user!.id),
-  ]);
+  const [access, allLessons, lessonProgressMap, flashcardProgressMap, studentPackages] =
+    await Promise.all([
+      getCourseAccessContext(supabase, user!),
+      fetchLearnContent(supabase),
+      fetchLessonProgressMap(supabase, user!.id),
+      fetchFlashcardProgressMap(supabase, user!.id),
+      loadStudentPackages(supabase, user!),
+    ]);
 
   if (track.alwaysUnlocked) {
     const lessons = filterFreeLessons(allLessons);
@@ -124,18 +127,21 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
     return canBrowse && contentUnlocked;
   });
   const courseProgress = summarizeCourseProgress(accessibleLessons, completionMap);
+  const studentPackage = findStudentPackageForTrack(studentPackages, track.id);
 
   let staffSection = null;
 
-  if (track.id === "foundational" || track.id === "beginners") {
-    const tutorInfo = await loadMyTutorForTier(
-      supabase,
-      user!.id,
-      track.id,
-      access.courses
-    );
-    if (tutorInfo) {
-      staffSection = <MyTutorSection tutorInfo={tutorInfo} />;
+  if (studentPackage) {
+    if (track.id === "community") {
+      const leads = await loadCommunityLeads(supabase);
+      staffSection = (
+        <>
+          <PackageHubPanel pkg={studentPackage} />
+          <CommunityLeadSection leads={leads} />
+        </>
+      );
+    } else {
+      staffSection = <PackageHubPanel pkg={studentPackage} />;
     }
   } else if (track.id === "community") {
     const leads = await loadCommunityLeads(supabase);

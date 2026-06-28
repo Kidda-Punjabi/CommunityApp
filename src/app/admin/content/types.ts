@@ -69,16 +69,6 @@ export type Flashcard = {
   icon_name: string | null;
 };
 
-export type Teacher = {
-  id: string;
-  name: string;
-  bio: string | null;
-  photo_url: string | null;
-  specialty: string | null;
-  contact_link: string | null;
-  display_order: number;
-};
-
 export type Event = {
   id: string;
   title: string;
@@ -212,7 +202,6 @@ export type AdminData = {
   flashcardSets: FlashcardSet[];
   setCourseLinks: SetCourseLink[];
   flashcards: Flashcard[];
-  teachers: Teacher[];
   events: Event[];
   grammarSentences: GrammarSentence[];
   verbConjugations: VerbConjugationRow[];
@@ -228,7 +217,6 @@ export type AdminData = {
     flashcardSets?: string;
     setCourseLinks?: string;
     flashcards?: string;
-    teachers?: string;
     events?: string;
     grammarSentences?: string;
     verbConjugations?: string;

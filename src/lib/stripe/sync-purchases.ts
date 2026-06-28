@@ -69,7 +69,7 @@ export async function collectTiersForCustomer(
     customer: customerId,
     status: "all",
     limit: 100,
-    expand: ["data.items.data.price.product"],
+    expand: ["data.items.data.price"],
   });
 
   for (const subscription of subscriptions.data) {
