@@ -1,5 +1,8 @@
 export const RESCHEDULE_CUTOFF_MS = 24 * 60 * 60 * 1000;
 
+/** Group lessons: alternate cohort requests must be at least 3 days before the session. */
+export const COHORT_SWITCH_CUTOFF_MS = 3 * 24 * 60 * 60 * 1000;
+
 export const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/userinfo.email",

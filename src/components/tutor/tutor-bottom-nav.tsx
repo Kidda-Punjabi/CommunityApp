@@ -90,7 +90,9 @@ const navItems: NavItem[] = [
   {
     href: "/dashboard/tutor/calendar",
     label: "Calendar",
-    match: (pathname) => pathname.startsWith("/dashboard/tutor/calendar"),
+    match: (pathname) =>
+      pathname.startsWith("/dashboard/tutor/calendar") ||
+      pathname.startsWith("/dashboard/tutor/requests"),
   },
   {
     href: "/dashboard/tutor/profile",

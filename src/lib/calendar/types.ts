@@ -41,11 +41,36 @@ export type RescheduleRequestRow = {
   created_at: string;
 };
 
+export type CohortSwitchRequestStatus = "pending" | "approved" | "denied" | "cancelled";
+
+export type CohortSwitchRequestRow = {
+  id: string;
+  session_id: string;
+  student_id: string;
+  from_cohort_id: string;
+  to_cohort_id: string;
+  message: string | null;
+  status: CohortSwitchRequestStatus;
+  tutor_response: string | null;
+  resolved_at: string | null;
+  created_at: string;
+};
+
+export type AlternateCohortOption = {
+  id: string;
+  name: string;
+};
+
 export type StudentScheduledSession = ScheduledSessionRow & {
   tutorName: string;
+  cohortName: string | null;
   rescheduleRequest: RescheduleRequestRow | null;
   canRequestReschedule: boolean;
   rescheduleLockedReason: string | null;
+  cohortSwitchRequest: CohortSwitchRequestRow | null;
+  canRequestCohortSwitch: boolean;
+  cohortSwitchLockedReason: string | null;
+  alternateCohorts: AlternateCohortOption[];
 };
 
 export type TutorScheduledSession = ScheduledSessionRow & {

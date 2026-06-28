@@ -10,6 +10,7 @@ export function isCalendarSchemaMissingError(error: PostgrestLikeError): boolean
     error.code === "PGRST202" ||
     message.includes("tutor_scheduled_sessions") ||
     message.includes("lesson_reschedule_requests") ||
+    message.includes("cohort_switch_requests") ||
     message.includes("tutor_google_calendar_connections") ||
     message.includes("tutor_calendar_event_exclusions") ||
     message.includes("get_tutor_calendar_connection_status")

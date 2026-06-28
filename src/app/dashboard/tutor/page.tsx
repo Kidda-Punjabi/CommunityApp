@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
+import { loadTutorPendingRequestCounts } from "@/lib/calendar/load-sessions";
 import { loadTutorDashboard } from "@/lib/tutoring/load-tutor-dashboard";
 import { loadPendingHomeworkReviews } from "@/lib/tutoring/homework-submissions";
 import { getDisplayName } from "@/lib/profile/display-name";
@@ -17,11 +18,12 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [params, data, pendingHomework, profile] = await Promise.all([
+  const [params, data, pendingHomework, profile, pendingRequests] = await Promise.all([
     searchParams,
     loadTutorDashboard(supabase, user!.id),
     loadPendingHomeworkReviews(supabase),
     loadEditableProfile(supabase, user!.id),
+    loadTutorPendingRequestCounts(supabase, user!.id),
   ]);
 
   const displayName = getDisplayName(profile);
@@ -29,6 +31,7 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
     data.foundationalStudents.length + data.beginnersOneToOne.length;
   const cohortCount = data.beginnersGroups.length;
   const homeworkCount = pendingHomework.length;
+  const requestCount = pendingRequests.total;
 
   const accessError =
     params.error === "cohort-access"
@@ -66,6 +69,16 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
         Quick tasks
       </h2>
       <ul className="space-y-3">
+        <QuickTaskLink
+          href="/dashboard/tutor/requests"
+          title="Review student requests"
+          description={
+            requestCount > 0
+              ? `${requestCount} reschedule or cohort request${requestCount === 1 ? "" : "s"} waiting`
+              : "No pending reschedule or cohort requests"
+          }
+          badge={requestCount > 0 ? String(requestCount) : undefined}
+        />
         <QuickTaskLink
           href="/dashboard/tutor/homework"
           title="Review homework"

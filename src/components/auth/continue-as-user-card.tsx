@@ -40,7 +40,7 @@ export function ContinueAsUserCard({
   showSwitchLink = true,
 }: ContinueAsUserCardProps) {
   const continueHref = user.sessionActive ? "/dashboard/home" : `/login?email=${encodeURIComponent(user.email)}`;
-  const switchHref = user.sessionActive ? "/login?switch=1" : "/login?switch=1";
+  const switchHref = "/login/switch";
 
   if (variant === "home") {
     return (

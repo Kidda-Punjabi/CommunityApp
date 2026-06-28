@@ -3,15 +3,12 @@ import { CalendarSchemaNotice } from "@/components/schedule/calendar-schema-noti
 import Link from "next/link";
 import { TutorCalendarAutoSync } from "@/components/tutor/tutor-calendar-auto-sync";
 import { TutorCalendarSyncButton } from "@/components/tutor/tutor-calendar-sync-button";
-import {
-  TutorRescheduleInbox,
-  TutorUpcomingSessionsList,
-} from "@/components/tutor/tutor-calendar-section";
+import { TutorUpcomingSessionsList } from "@/components/tutor/tutor-calendar-section";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
 import { disconnectGoogleCalendar } from "@/app/dashboard/tutor/calendar-actions";
 import {
   loadTutorCalendarStatus,
-  loadTutorPendingRescheduleRequests,
+  loadTutorPendingRequestCounts,
   loadTutorUpcomingSessions,
 } from "@/lib/calendar/load-sessions";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
@@ -38,25 +35,20 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
     sessions: [],
     schemaReady: status.schemaReady,
   };
-  let requestLoad: Awaited<ReturnType<typeof loadTutorPendingRescheduleRequests>> = {
-    requests: [],
-    schemaReady: status.schemaReady,
-  };
+  let pendingRequests = { total: 0, rescheduleCount: 0, cohortSwitchCount: 0 };
   let loadError: string | null = null;
 
   try {
-    [sessionLoad, requestLoad] = await Promise.all([
+    [sessionLoad, pendingRequests] = await Promise.all([
       loadTutorUpcomingSessions(supabase, user!.id),
-      loadTutorPendingRescheduleRequests(supabase, user!.id),
+      loadTutorPendingRequestCounts(supabase, user!.id),
     ]);
   } catch (error) {
     loadError = formatCalendarLoadError(error);
   }
 
-  const schemaReady =
-    status.schemaReady && sessionLoad.schemaReady && requestLoad.schemaReady;
+  const schemaReady = status.schemaReady && sessionLoad.schemaReady;
   const sessions = sessionLoad.sessions;
-  const requests = requestLoad.requests;
 
   const oauthConfigured = isGoogleOAuthConfigured();
   const showAdminSetup =
@@ -135,7 +127,18 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
         ) : null}
       </section>
 
-      <TutorRescheduleInbox requests={requests} />
+      {pendingRequests.total > 0 ? (
+        <Link
+          href="/dashboard/tutor/requests"
+          className="mb-8 block rounded-2xl bg-violet-50 px-4 py-3 text-sm text-violet-900 transition-colors hover:bg-violet-100"
+        >
+          <span className="font-semibold">
+            {pendingRequests.total} student request{pendingRequests.total === 1 ? "" : "s"} waiting
+          </span>
+          {" — "}
+          Review reschedules and alternate cohort requests →
+        </Link>
+      ) : null}
 
       <section className="mt-8">
         <h2 className={ui.sectionTitle}>Upcoming lessons</h2>

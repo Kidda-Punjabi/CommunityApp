@@ -2,12 +2,15 @@
 
 import { useActionState, useState } from "react";
 import {
+  cancelCohortSwitchRequest,
   cancelRescheduleRequest,
+  requestCohortSwitch,
   requestLessonReschedule,
   type CalendarActionResult,
 } from "@/app/dashboard/tutor/calendar-actions";
 import { LessonsViewToggle, type LessonsViewMode } from "@/components/schedule/lessons-view-toggle";
 import { MonthLessonsCalendar } from "@/components/schedule/month-lessons-calendar";
+import { COHORT_SWITCH_WARNING } from "@/lib/calendar/cohort-switch-policy";
 import { formatSessionWhen, hoursUntilSession } from "@/lib/calendar/reschedule-policy";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { ui } from "@/lib/ui/styles";
@@ -60,8 +63,10 @@ export function UpcomingLessonsList({ sessions }: UpcomingLessonsListProps) {
 }
 
 function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
-  const [showForm, setShowForm] = useState(false);
+  const [showRescheduleForm, setShowRescheduleForm] = useState(false);
+  const [showCohortSwitchForm, setShowCohortSwitchForm] = useState(false);
   const hoursLeft = hoursUntilSession(session.starts_at);
+  const isGroupLesson = Boolean(session.cohort_id);
 
   return (
     <li className={ui.cardBordered}>
@@ -70,6 +75,9 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
             {session.tutorName}
           </p>
+          {isGroupLesson && session.cohortName ? (
+            <p className="mt-1 text-xs font-medium text-zinc-500">Group · {session.cohortName}</p>
+          ) : null}
           <p className="mt-1 font-semibold text-zinc-900">{session.title}</p>
           <p className="mt-1 text-sm text-zinc-500">
             {formatSessionWhen(session.starts_at, session.ends_at)}
@@ -114,9 +122,45 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
         </p>
       ) : null}
 
-      {session.canRequestReschedule && !showForm ? (
-        <button type="button" className={`mt-3 ${ui.btnGhost}`} onClick={() => setShowForm(true)}>
+      {session.cohortSwitchRequest?.status === "pending" ? (
+        <PendingCohortSwitchBanner requestId={session.cohortSwitchRequest.id} />
+      ) : null}
+
+      {session.cohortSwitchRequest?.status === "approved" ? (
+        <p className="mt-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Your tutor approved joining another cohort for this lesson.
+          {session.cohortSwitchRequest.tutor_response
+            ? ` Note: ${session.cohortSwitchRequest.tutor_response}`
+            : " Check with them for the updated group invite."}
+        </p>
+      ) : null}
+
+      {session.cohortSwitchRequest?.status === "denied" ? (
+        <p className="mt-3 rounded-2xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
+          Alternate cohort request declined.
+          {session.cohortSwitchRequest.tutor_response
+            ? ` ${session.cohortSwitchRequest.tutor_response}`
+            : " Please attend your usual group or contact your tutor."}
+        </p>
+      ) : null}
+
+      {session.canRequestReschedule && !showRescheduleForm ? (
+        <button
+          type="button"
+          className={`mt-3 ${ui.btnGhost}`}
+          onClick={() => setShowRescheduleForm(true)}
+        >
           Request to reschedule
+        </button>
+      ) : null}
+
+      {session.canRequestCohortSwitch && !showCohortSwitchForm ? (
+        <button
+          type="button"
+          className={`mt-3 ${ui.btnGhost}`}
+          onClick={() => setShowCohortSwitchForm(true)}
+        >
+          Request to join alternate cohort
         </button>
       ) : null}
 
@@ -124,7 +168,26 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
         <p className="mt-3 text-sm text-zinc-500">{session.rescheduleLockedReason}</p>
       ) : null}
 
-      {showForm ? <RescheduleRequestForm sessionId={session.id} onDone={() => setShowForm(false)} /> : null}
+      {!session.canRequestCohortSwitch &&
+      isGroupLesson &&
+      session.cohortSwitchLockedReason &&
+      !session.cohortSwitchRequest ? (
+        <p className="mt-3 text-sm text-zinc-500">{session.cohortSwitchLockedReason}</p>
+      ) : null}
+
+      {showRescheduleForm ? (
+        <RescheduleRequestForm
+          sessionId={session.id}
+          onDone={() => setShowRescheduleForm(false)}
+        />
+      ) : null}
+
+      {showCohortSwitchForm ? (
+        <CohortSwitchRequestForm
+          session={session}
+          onDone={() => setShowCohortSwitchForm(false)}
+        />
+      ) : null}
     </li>
   );
 }
@@ -157,6 +220,34 @@ function PendingRequestBanner({ requestId }: { requestId: string }) {
   );
 }
 
+function PendingCohortSwitchBanner({ requestId }: { requestId: string }) {
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  const cancel = async () => {
+    setPending(true);
+    const result = await cancelCohortSwitchRequest(requestId);
+    setMessage(result.success ?? result.error ?? null);
+    setPending(false);
+    if (result.success) window.location.reload();
+  };
+
+  return (
+    <div className="mt-3 rounded-2xl bg-violet-50 px-3 py-2 text-sm text-violet-900">
+      Alternate cohort request pending — your tutor will respond soon.
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => void cancel()}
+        className="ml-2 font-semibold underline"
+      >
+        Cancel request
+      </button>
+      {message ? <span className="mt-1 block text-xs">{message}</span> : null}
+    </div>
+  );
+}
+
 function RescheduleRequestForm({
   sessionId,
   onDone,
@@ -174,7 +265,9 @@ function RescheduleRequestForm({
     <form action={action} className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
       <input type="hidden" name="session_id" value={sessionId} />
       <div>
-        <label className="mb-1 block text-sm font-medium text-zinc-700">Why do you need to reschedule?</label>
+        <label className="mb-1 block text-sm font-medium text-zinc-700">
+          Why do you need to reschedule?
+        </label>
         <textarea
           name="message"
           required
@@ -197,6 +290,70 @@ function RescheduleRequestForm({
       <p className="text-xs text-zinc-500">
         Requests must be made at least 24 hours before the lesson. Your tutor may not be able to
         accommodate every request.
+      </p>
+      {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
+      <div className="flex gap-2">
+        <button type="submit" disabled={pending} className={ui.btnPrimary}>
+          {pending ? "Sending…" : "Send request"}
+        </button>
+        <button type="button" onClick={onDone} className={ui.btnGhost}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function CohortSwitchRequestForm({
+  session,
+  onDone,
+}: {
+  session: StudentScheduledSession;
+  onDone: () => void;
+}) {
+  const [state, action, pending] = useActionState(requestCohortSwitch, initial);
+
+  if (state.success) {
+    return <p className="mt-3 text-sm text-emerald-700">{state.success}</p>;
+  }
+
+  return (
+    <form action={action} className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
+      <input type="hidden" name="session_id" value={session.id} />
+      <div>
+        <label className="mb-1 block text-sm font-medium text-zinc-700">
+          Which cohort would you like to join instead?
+        </label>
+        <select
+          name="to_cohort_id"
+          required
+          className="mt-1.5 block w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+          defaultValue=""
+        >
+          <option value="" disabled>
+            Select a cohort
+          </option>
+          {session.alternateCohorts.map((cohort) => (
+            <option key={cohort.id} value={cohort.id}>
+              {cohort.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-zinc-700">
+          Why do you need a different group? (optional)
+        </label>
+        <textarea
+          name="message"
+          rows={3}
+          className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm"
+          placeholder="Brief explanation for your tutor"
+        />
+      </div>
+      <p className="rounded-2xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{COHORT_SWITCH_WARNING}</p>
+      <p className="text-xs text-zinc-500">
+        Requests must be made at least 3 days before the lesson.
       </p>
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
       <div className="flex gap-2">

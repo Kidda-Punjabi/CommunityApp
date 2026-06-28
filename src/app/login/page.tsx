@@ -1,31 +1,19 @@
 import { AuthCard } from "@/components/auth-card";
 import { ContinueAsUserCard } from "@/components/auth/continue-as-user-card";
 import { getContinueAsUser } from "@/lib/auth/continue-as-user";
-import { clearLastUserCookie } from "@/lib/auth/remember-last-user";
-import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { LoginForm } from "./login-form";
 
 type LoginPageProps = {
-  searchParams: Promise<{ message?: string; switch?: string; email?: string }>;
+  searchParams: Promise<{ message?: string; email?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { message, switch: switchAccount, email: emailParam } = await searchParams;
-  const switchingAccount = switchAccount === "1";
-
-  if (switchingAccount) {
-    const supabase = await createClient();
-    await supabase.auth.signOut();
-    await clearLastUserCookie();
-  }
-
-  const continueAs = switchingAccount ? null : await getContinueAsUser();
+  const { message, email: emailParam } = await searchParams;
+  const continueAs = await getContinueAsUser();
   const rememberedEmail = continueAs?.email ?? emailParam?.trim() ?? "";
   const showRememberedLogin =
-    !switchingAccount &&
-    !continueAs?.sessionActive &&
-    Boolean(rememberedEmail && continueAs);
+    !continueAs?.sessionActive && Boolean(rememberedEmail && continueAs);
 
   return (
     <AuthCard
@@ -66,7 +54,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           {showRememberedLogin ? (
             <p className="mt-4 text-center text-sm text-zinc-500">
-              <Link href="/login?switch=1" className="font-medium text-violet-600 hover:text-violet-500">
+              <Link href="/login/switch" className="font-medium text-violet-600 hover:text-violet-500">
                 Use another account
               </Link>
             </p>
