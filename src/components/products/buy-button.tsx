@@ -8,7 +8,6 @@ type BuyButtonProps = {
   className?: string;
   configured: boolean;
   fallbackUrl?: string | null;
-  href?: string;
 };
 
 export function BuyButton({
@@ -17,17 +16,11 @@ export function BuyButton({
   className,
   configured,
   fallbackUrl,
-  href,
 }: BuyButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleClick() {
-    if (href) {
-      document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
-      return;
-    }
-
     if (!configured) {
       if (fallbackUrl) {
         window.open(fallbackUrl, "_blank", "noopener,noreferrer");

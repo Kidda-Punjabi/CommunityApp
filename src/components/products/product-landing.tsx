@@ -52,23 +52,12 @@ export function ProductLanding({
   fallbackCheckoutUrl,
 }: ProductLandingProps) {
   const checkoutOptions = checkoutOptionsForContent(content);
-  const hasEmbeddedCheckout = checkoutOptions.some((option) =>
+  const showEmbeddedCheckout = checkoutOptions.some((option) =>
     isEmbeddedCheckoutConfigured(option.key)
   );
   const primaryKey = primaryCheckoutKey(content);
 
   function tierCta(checkoutKey: string, label = "Buy Now") {
-    if (hasEmbeddedCheckout) {
-      return (
-        <BuyButton
-          checkoutKey={checkoutKey}
-          label={label}
-          configured
-          href="#checkout"
-        />
-      );
-    }
-
     return (
       <BuyButton
         checkoutKey={checkoutKey}
@@ -80,36 +69,12 @@ export function ProductLanding({
   }
 
   function heroCta() {
-    if (hasEmbeddedCheckout) {
+    if (primaryKey) {
       return (
         <BuyButton
-          checkoutKey={primaryKey ?? ""}
+          checkoutKey={primaryKey}
           label={content.heroCta}
-          configured={Boolean(primaryKey)}
-          href="#checkout"
-          className={ui.btnPrimaryBlock}
-        />
-      );
-    }
-
-    if (content.pricingTiers?.length === 1) {
-      return (
-        <BuyButton
-          checkoutKey={content.pricingTiers[0].checkoutKey}
-          label={content.heroCta}
-          configured={isCheckoutConfigured(content.pricingTiers[0].checkoutKey)}
-          fallbackUrl={fallbackCheckoutUrl}
-          className={ui.btnPrimaryBlock}
-        />
-      );
-    }
-
-    if (content.singlePrice) {
-      return (
-        <BuyButton
-          checkoutKey={content.singlePrice.checkoutKey}
-          label={content.heroCta}
-          configured={isCheckoutConfigured(content.singlePrice.checkoutKey)}
+          configured={isCheckoutConfigured(primaryKey)}
           fallbackUrl={fallbackCheckoutUrl}
           className={ui.btnPrimaryBlock}
         />
@@ -332,7 +297,7 @@ export function ProductLanding({
               </div>
             )}
 
-            {!owned && checkoutOptions.length > 0 && (
+            {!owned && showEmbeddedCheckout && checkoutOptions.length > 0 && (
               <ProductCheckoutSection
                 options={checkoutOptions}
                 defaultKey={primaryKey ?? undefined}
