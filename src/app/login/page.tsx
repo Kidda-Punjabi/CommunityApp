@@ -1,7 +1,9 @@
 import { AuthCard } from "@/components/auth-card";
 import { ContinueAsUserCard } from "@/components/auth/continue-as-user-card";
 import { getContinueAsUser } from "@/lib/auth/continue-as-user";
+import { safeNextPath } from "@/lib/auth/safe-next-path";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { LoginForm } from "./login-form";
 
 type LoginPageProps = {
@@ -11,6 +13,11 @@ type LoginPageProps = {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { message, email: emailParam, next } = await searchParams;
   const continueAs = await getContinueAsUser();
+
+  if (continueAs?.sessionActive) {
+    redirect(safeNextPath(next));
+  }
+
   const rememberedEmail = continueAs?.email ?? emailParam?.trim() ?? "";
   const showRememberedLogin =
     !continueAs?.sessionActive && Boolean(rememberedEmail && continueAs);

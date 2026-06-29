@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 const PRODUCTS = [
   {
     slug: "foundational" as const,
@@ -27,7 +29,7 @@ export default async function CoursesIndexPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const backHref = user ? "/dashboard/profile" : "/";
+  const backHref = user ? "/dashboard/home" : "/";
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-violet-50 via-white to-zinc-50">

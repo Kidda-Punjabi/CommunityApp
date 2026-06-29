@@ -104,7 +104,7 @@ export function EventCard({
             </span>
             .
           </p>
-          <Link href="/dashboard/membership" className={ui.btnGhost}>
+          <Link href="/courses" className={ui.btnGhost}>
             View courses →
           </Link>
         </div>

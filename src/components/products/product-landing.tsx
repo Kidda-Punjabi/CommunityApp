@@ -96,8 +96,8 @@ export function ProductLanding({
             <KiddaLogo variant="logo" size="sm" />
           </Link>
           {isLoggedIn ? (
-            <Link href="/dashboard/profile/billing" className="text-sm font-medium text-violet-600">
-              Billing
+            <Link href="/dashboard/home" className="text-sm font-medium text-violet-600">
+              Dashboard
             </Link>
           ) : (
             <Link href="/login" className="text-sm font-medium text-violet-600">

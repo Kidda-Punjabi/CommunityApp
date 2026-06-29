@@ -11,6 +11,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 type CoursePageProps = {
   params: Promise<{ slug: string }>;
 };

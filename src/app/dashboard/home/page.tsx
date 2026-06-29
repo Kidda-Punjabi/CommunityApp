@@ -230,7 +230,7 @@ export default async function HomePage() {
                 Go beyond the starter pack with pronunciation, core vocabulary, and
                 guided lessons at your own pace.
               </p>
-              <Link href="/dashboard/membership" className={`mt-5 ${ui.btnPrimary}`}>
+              <Link href="/courses" className={`mt-5 ${ui.btnPrimary}`}>
                 View courses
               </Link>
             </div>
