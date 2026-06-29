@@ -4,12 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-function safeNextPath(next: string | null): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) {
-    return "/dashboard/home";
-  }
-  return next;
-}
+import { safeNextPath } from "@/lib/auth/safe-next-path";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);

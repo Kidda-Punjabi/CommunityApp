@@ -1,6 +1,7 @@
 "use server";
 
 import { persistLastUser } from "@/lib/auth/remember-last-user";
+import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -32,5 +33,6 @@ export async function login(
 
   await persistLastUser(supabase);
 
-  redirect("/dashboard/home");
+  const next = safeNextPath(formData.get("next") as string | null);
+  redirect(next);
 }

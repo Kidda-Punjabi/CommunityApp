@@ -10,13 +10,15 @@ type LoginFormProps = {
   defaultEmail?: string;
   /** When set, email is fixed (remembered account) and only password is shown. */
   rememberedAccount?: boolean;
+  nextPath?: string;
 };
 
-export function LoginForm({ defaultEmail, rememberedAccount = false }: LoginFormProps) {
+export function LoginForm({ defaultEmail, rememberedAccount = false, nextPath }: LoginFormProps) {
   const [state, formAction, pending] = useActionState(login, initialState);
 
   return (
     <form action={formAction} className="space-y-5">
+      {nextPath ? <input type="hidden" name="next" value={nextPath} /> : null}
       {rememberedAccount && defaultEmail ? (
         <input type="hidden" name="email" value={defaultEmail} />
       ) : (

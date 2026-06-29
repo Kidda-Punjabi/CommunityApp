@@ -103,6 +103,8 @@ export function getCourseCatalog(): CourseCatalogItem[] {
 
   return courses.map((course) => ({
     ...course,
-    learnMoreUrl: process.env[course.envKey]?.trim() || null,
+    learnMoreUrl:
+      process.env[course.envKey]?.trim() ||
+      `/courses/${course.tier === "foundational" ? "foundational" : course.tier}`,
   }));
 }

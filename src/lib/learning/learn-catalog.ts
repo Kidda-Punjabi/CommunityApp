@@ -26,7 +26,7 @@ export const LEARN_TRACKS: LearnTrack[] = [
     description: "Pronunciation, core vocabulary, and everyday phrases.",
     tier: "foundational",
     alwaysUnlocked: false,
-    unlockUrl: "https://kidda.app/fd",
+    unlockUrl: "/courses/foundational",
     lockProductName: "Foundational Course",
   },
   {
@@ -35,7 +35,7 @@ export const LEARN_TRACKS: LearnTrack[] = [
     description: "Build confidence with guided lessons for early learners.",
     tier: "beginners",
     alwaysUnlocked: false,
-    unlockUrl: "https://www.kidda.app/bc/",
+    unlockUrl: "/courses/beginners",
     lockProductName: "Beginners Course",
   },
   {
@@ -44,7 +44,7 @@ export const LEARN_TRACKS: LearnTrack[] = [
     description: "24 weeks of live sessions, advanced content, and the full Kidda community.",
     tier: "community",
     alwaysUnlocked: false,
-    unlockUrl: "https://kidda.app/community/",
+    unlockUrl: "/courses/community",
     lockProductName: "Kidda Community",
   },
 ];

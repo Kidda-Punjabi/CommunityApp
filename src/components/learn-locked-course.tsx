@@ -6,7 +6,13 @@ type LearnLockedCourseProps = {
   lessonCount: number;
 };
 
+function isInternalUrl(url: string): boolean {
+  return url.startsWith("/");
+}
+
 export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps) {
+  const unlockHref = track.unlockUrl ?? `/courses/${track.id}`;
+
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
       <Link
@@ -25,9 +31,16 @@ export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps
           Unlock {track.lockProductName ?? track.title} to access all{" "}
           {lessonCount} lesson{lessonCount === 1 ? "" : "s"}.
         </p>
-        {track.unlockUrl && (
+        {isInternalUrl(unlockHref) ? (
+          <Link
+            href={unlockHref}
+            className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+          >
+            Find out more
+          </Link>
+        ) : (
           <a
-            href={track.unlockUrl}
+            href={unlockHref}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
@@ -36,10 +49,10 @@ export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps
           </a>
         )}
         <Link
-          href="/dashboard/membership"
+          href="/dashboard/profile/billing"
           className="mt-3 text-sm font-medium text-violet-600 hover:text-violet-500"
         >
-          View your courses
+          View billing & purchases
         </Link>
       </div>
     </div>

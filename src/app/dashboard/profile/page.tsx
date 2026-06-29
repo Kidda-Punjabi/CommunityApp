@@ -106,12 +106,20 @@ export default async function ProfilePage() {
             Membership
           </p>
           <p className="mt-1 text-lg font-semibold text-violet-600">{membershipLabel}</p>
-          <Link
-            href="/dashboard/membership"
-            className="mt-3 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
-          >
-            {access.isFreeOnly ? "Browse courses →" : "Buy another course →"}
-          </Link>
+          <div className="mt-3 flex flex-col gap-1">
+            <Link
+              href="/dashboard/profile/billing"
+              className="text-sm font-semibold text-violet-600 hover:text-violet-500"
+            >
+              Billing & purchases →
+            </Link>
+            <Link
+              href="/courses"
+              className="text-sm font-semibold text-violet-600 hover:text-violet-500"
+            >
+              {access.isFreeOnly ? "Browse courses →" : "Buy another course →"}
+            </Link>
+          </div>
         </div>
 
         {isAdmin(user) && (

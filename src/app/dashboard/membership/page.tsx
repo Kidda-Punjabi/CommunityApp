@@ -4,10 +4,17 @@ import {
   formatUnlockedCourseNames,
   getCourseAccessContext,
 } from "@/lib/membership/unlocked";
+import { productPath } from "@/lib/products/content";
 import { getCourseCatalog } from "@/lib/stripe/products";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+
+const TIER_TO_SLUG = {
+  foundational: "foundational",
+  beginners: "beginners",
+  community: "community",
+} as const;
 
 export default async function MembershipPage() {
   const supabase = await createClient();
@@ -44,16 +51,23 @@ export default async function MembershipPage() {
           Courses
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Purchases are checked automatically from Stripe. You own:{" "}
+          You own:{" "}
           <span className="font-semibold text-violet-600">
             {formatUnlockedCourseNames(access.courses, access.unlockedCourseIds)}
           </span>
         </p>
+        <Link
+          href="/dashboard/profile/billing"
+          className="mt-2 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
+        >
+          Billing & purchases →
+        </Link>
       </div>
 
       <div className="space-y-4">
         {catalog.map((course) => {
           const owned = ownsCatalogCourse(course.tier);
+          const productPage = productPath(TIER_TO_SLUG[course.tier]);
 
           return (
             <div
@@ -74,19 +88,13 @@ export default async function MembershipPage() {
                     Open Learn →
                   </Link>
                 </div>
-              ) : course.learnMoreUrl ? (
-                <a
-                  href={course.learnMoreUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              ) : (
+                <Link
+                  href={productPage}
                   className="mt-4 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
                 >
-                  Find out more about {TIER_LABELS[course.tier]} →
-                </a>
-              ) : (
-                <p className="mt-4 text-sm text-zinc-500">
-                  Learn-more link not configured yet.
-                </p>
+                  View {TIER_LABELS[course.tier]} →
+                </Link>
               )}
             </div>
           );

@@ -5,11 +5,11 @@ import Link from "next/link";
 import { LoginForm } from "./login-form";
 
 type LoginPageProps = {
-  searchParams: Promise<{ message?: string; email?: string }>;
+  searchParams: Promise<{ message?: string; email?: string; next?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { message, email: emailParam } = await searchParams;
+  const { message, email: emailParam, next } = await searchParams;
   const continueAs = await getContinueAsUser();
   const rememberedEmail = continueAs?.email ?? emailParam?.trim() ?? "";
   const showRememberedLogin =
@@ -49,6 +49,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <LoginForm
               defaultEmail={showRememberedLogin ? rememberedEmail : undefined}
               rememberedAccount={showRememberedLogin}
+              nextPath={next}
             />
           ) : null}
 
