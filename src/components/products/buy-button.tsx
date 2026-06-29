@@ -1,35 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 type BuyButtonProps = {
   checkoutKey: string;
   label?: string;
   className?: string;
-  isLoggedIn: boolean;
-  returnPath: string;
   configured: boolean;
   fallbackUrl?: string | null;
+  href?: string;
 };
 
 export function BuyButton({
   checkoutKey,
   label = "Buy Now",
   className,
-  isLoggedIn,
-  returnPath,
   configured,
   fallbackUrl,
+  href,
 }: BuyButtonProps) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleClick() {
-    if (!isLoggedIn) {
-      const next = encodeURIComponent(returnPath);
-      router.push(`/login?next=${next}`);
+    if (href) {
+      document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
       return;
     }
 

@@ -1,7 +1,11 @@
 import { KiddaLogo } from "@/components/branding/kidda-logo";
 import { BuyButton } from "@/components/products/buy-button";
+import { ProductCheckoutSection } from "@/components/products/product-checkout-section";
 import { ProductFaq } from "@/components/products/product-faq";
-import { isCheckoutConfigured } from "@/lib/products/checkout";
+import {
+  isCheckoutConfigured,
+  isEmbeddedCheckoutConfigured,
+} from "@/lib/products/checkout";
 import type { ProductPageContent } from "@/lib/products/content";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -13,13 +17,111 @@ type ProductLandingProps = {
   fallbackCheckoutUrl?: string | null;
 };
 
+function checkoutOptionsForContent(content: ProductPageContent) {
+  if (content.pricingTiers?.length) {
+    return content.pricingTiers.map((tier) => ({
+      key: tier.checkoutKey,
+      label: tier.name,
+    }));
+  }
+
+  if (content.singlePrice) {
+    return [
+      {
+        key: content.singlePrice.checkoutKey,
+        label: content.singlePrice.label,
+      },
+    ];
+  }
+
+  return [];
+}
+
+function primaryCheckoutKey(content: ProductPageContent): string | null {
+  const highlighted = content.pricingTiers?.find((tier) => tier.highlight);
+  if (highlighted) return highlighted.checkoutKey;
+  if (content.pricingTiers?.[0]) return content.pricingTiers[0].checkoutKey;
+  if (content.singlePrice) return content.singlePrice.checkoutKey;
+  return null;
+}
+
 export function ProductLanding({
   content,
   isLoggedIn,
   owned = false,
   fallbackCheckoutUrl,
 }: ProductLandingProps) {
-  const returnPath = `/courses/${content.slug}`;
+  const checkoutOptions = checkoutOptionsForContent(content);
+  const hasEmbeddedCheckout = checkoutOptions.some((option) =>
+    isEmbeddedCheckoutConfigured(option.key)
+  );
+  const primaryKey = primaryCheckoutKey(content);
+
+  function tierCta(checkoutKey: string, label = "Buy Now") {
+    if (hasEmbeddedCheckout) {
+      return (
+        <BuyButton
+          checkoutKey={checkoutKey}
+          label={label}
+          configured
+          href="#checkout"
+        />
+      );
+    }
+
+    return (
+      <BuyButton
+        checkoutKey={checkoutKey}
+        label={label}
+        configured={isCheckoutConfigured(checkoutKey)}
+        fallbackUrl={fallbackCheckoutUrl}
+      />
+    );
+  }
+
+  function heroCta() {
+    if (hasEmbeddedCheckout) {
+      return (
+        <BuyButton
+          checkoutKey={primaryKey ?? ""}
+          label={content.heroCta}
+          configured={Boolean(primaryKey)}
+          href="#checkout"
+          className={ui.btnPrimaryBlock}
+        />
+      );
+    }
+
+    if (content.pricingTiers?.length === 1) {
+      return (
+        <BuyButton
+          checkoutKey={content.pricingTiers[0].checkoutKey}
+          label={content.heroCta}
+          configured={isCheckoutConfigured(content.pricingTiers[0].checkoutKey)}
+          fallbackUrl={fallbackCheckoutUrl}
+          className={ui.btnPrimaryBlock}
+        />
+      );
+    }
+
+    if (content.singlePrice) {
+      return (
+        <BuyButton
+          checkoutKey={content.singlePrice.checkoutKey}
+          label={content.heroCta}
+          configured={isCheckoutConfigured(content.singlePrice.checkoutKey)}
+          fallbackUrl={fallbackCheckoutUrl}
+          className={ui.btnPrimaryBlock}
+        />
+      );
+    }
+
+    return (
+      <Link href="/signup" className={ui.btnPrimaryBlock}>
+        {content.heroCta}
+      </Link>
+    );
+  }
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-violet-50 via-white to-zinc-50">
@@ -41,7 +143,6 @@ export function ProductLanding({
       </header>
 
       <main className="mx-auto max-w-2xl px-5 py-8 pb-16">
-        {/* Hero */}
         <section className="text-center">
           {content.heroBadge && (
             <p className="inline-flex rounded-full bg-violet-100 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-violet-700">
@@ -70,39 +171,10 @@ export function ProductLanding({
               </Link>
             </div>
           ) : (
-            <div className="mt-8">
-              {content.pricingTiers?.length === 1 && (
-                <BuyButton
-                  checkoutKey={content.pricingTiers[0].checkoutKey}
-                  label={content.heroCta}
-                  isLoggedIn={isLoggedIn}
-                  returnPath={returnPath}
-                  configured={isCheckoutConfigured(content.pricingTiers[0].checkoutKey)}
-                  fallbackUrl={fallbackCheckoutUrl}
-                  className={ui.btnPrimaryBlock}
-                />
-              )}
-              {content.singlePrice && !content.pricingTiers?.length && (
-                <BuyButton
-                  checkoutKey={content.singlePrice.checkoutKey}
-                  label={content.heroCta}
-                  isLoggedIn={isLoggedIn}
-                  returnPath={returnPath}
-                  configured={isCheckoutConfigured(content.singlePrice.checkoutKey)}
-                  fallbackUrl={fallbackCheckoutUrl}
-                  className={ui.btnPrimaryBlock}
-                />
-              )}
-              {!content.pricingTiers?.length && !content.singlePrice && (
-                <Link href="/signup" className={ui.btnPrimaryBlock}>
-                  {content.heroCta}
-                </Link>
-              )}
-            </div>
+            <div className="mt-8">{heroCta()}</div>
           )}
         </section>
 
-        {/* Features */}
         {content.features.length > 0 && (
           <section className="mt-14">
             {content.featuresSectionTitle && (
@@ -130,7 +202,6 @@ export function ProductLanding({
           <p className="mt-6 text-center text-sm text-zinc-500">{content.footerNote}</p>
         )}
 
-        {/* What's included */}
         {content.includedItems && content.includedItems.length > 0 && (
           <section className="mt-14">
             <h2 className="mb-6 text-center font-heading text-xl font-bold text-zinc-900">
@@ -149,7 +220,6 @@ export function ProductLanding({
           </section>
         )}
 
-        {/* Curriculum */}
         {content.curriculum && content.curriculum.length > 0 && (
           <section className="mt-14">
             <h2 className="mb-6 text-center font-heading text-xl font-bold text-zinc-900">
@@ -174,7 +244,6 @@ export function ProductLanding({
           </section>
         )}
 
-        {/* Audience */}
         {content.audience && (
           <section className="mt-14">
             <h2 className="mb-4 text-center font-heading text-xl font-bold text-zinc-900">
@@ -196,7 +265,6 @@ export function ProductLanding({
           </section>
         )}
 
-        {/* Pricing */}
         {!owned && (content.pricingTiers?.length || content.singlePrice) && (
           <section className="mt-14" id="pricing">
             <h2 className="mb-2 text-center text-xs font-semibold uppercase tracking-wider text-zinc-400">
@@ -216,13 +284,7 @@ export function ProductLanding({
                   <p className="mt-1 text-sm text-zinc-500">{content.singlePrice.priceNote}</p>
                 )}
                 <div className="mt-6">
-                  <BuyButton
-                    checkoutKey={content.singlePrice.checkoutKey}
-                    isLoggedIn={isLoggedIn}
-                    returnPath={returnPath}
-                    configured={isCheckoutConfigured(content.singlePrice.checkoutKey)}
-                    fallbackUrl={fallbackCheckoutUrl}
-                  />
+                  {tierCta(content.singlePrice.checkoutKey)}
                 </div>
               </div>
             )}
@@ -249,7 +311,9 @@ export function ProductLanding({
                     {tier.priceNote && (
                       <p
                         className="mt-1 text-sm text-zinc-500"
-                        dangerouslySetInnerHTML={{ __html: tier.priceNote.replace(/~~(.+?)~~/g, "<s>$1</s>") }}
+                        dangerouslySetInnerHTML={{
+                          __html: tier.priceNote.replace(/~~(.+?)~~/g, "<s>$1</s>"),
+                        }}
                       />
                     )}
                     <ul className="mt-4 space-y-2">
@@ -262,23 +326,21 @@ export function ProductLanding({
                         </li>
                       ))}
                     </ul>
-                    <div className="mt-6">
-                      <BuyButton
-                        checkoutKey={tier.checkoutKey}
-                        isLoggedIn={isLoggedIn}
-                        returnPath={returnPath}
-                        configured={isCheckoutConfigured(tier.checkoutKey)}
-                        fallbackUrl={fallbackCheckoutUrl}
-                      />
-                    </div>
+                    <div className="mt-6">{tierCta(tier.checkoutKey)}</div>
                   </div>
                 ))}
               </div>
             )}
+
+            {!owned && checkoutOptions.length > 0 && (
+              <ProductCheckoutSection
+                options={checkoutOptions}
+                defaultKey={primaryKey ?? undefined}
+              />
+            )}
           </section>
         )}
 
-        {/* FAQ */}
         {content.faq.length > 0 && (
           <section className="mt-14">
             <h2 className="mb-6 text-center font-heading text-xl font-bold text-zinc-900">
@@ -288,37 +350,9 @@ export function ProductLanding({
           </section>
         )}
 
-        {/* Bottom CTA */}
         {!owned && (
           <section className="mt-14 text-center">
-            {content.pricingTiers?.[0] && (
-              <BuyButton
-                checkoutKey={
-                  content.pricingTiers.find((t) => t.highlight)?.checkoutKey ??
-                  content.pricingTiers[0].checkoutKey
-                }
-                label={content.heroCta}
-                isLoggedIn={isLoggedIn}
-                returnPath={returnPath}
-                configured={isCheckoutConfigured(
-                  content.pricingTiers.find((t) => t.highlight)?.checkoutKey ??
-                    content.pricingTiers[0].checkoutKey
-                )}
-                fallbackUrl={fallbackCheckoutUrl}
-                className={ui.btnPrimaryBlock}
-              />
-            )}
-            {content.singlePrice && !content.pricingTiers?.length && (
-              <BuyButton
-                checkoutKey={content.singlePrice.checkoutKey}
-                label={content.heroCta}
-                isLoggedIn={isLoggedIn}
-                returnPath={returnPath}
-                configured={isCheckoutConfigured(content.singlePrice.checkoutKey)}
-                fallbackUrl={fallbackCheckoutUrl}
-                className={ui.btnPrimaryBlock}
-              />
-            )}
+            {primaryKey && heroCta()}
           </section>
         )}
 

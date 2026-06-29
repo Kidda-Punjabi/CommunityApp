@@ -1,5 +1,6 @@
 import "server-only";
 
+import { TIER_LABELS } from "@/lib/membership/tiers";
 import { tierFromStripeIds } from "@/lib/stripe/products";
 import { tiersFromLineItems } from "@/lib/stripe/sync-purchases";
 import { getStripe } from "@/lib/stripe/server";
@@ -139,7 +140,7 @@ export async function loadUserBilling(): Promise<{
         customer: customerId,
         status: "all",
         limit: 20,
-        expand: ["data.items.data.price.product"],
+        expand: ["data.items.data.price"],
       });
 
       for (const sub of subs.data) {
@@ -149,21 +150,17 @@ export async function loadUserBilling(): Promise<{
         };
         const item = sub.items.data[0];
         const price = item?.price;
-        const product = price?.product;
+        const productId =
+          typeof price?.product === "string" ? price.product : price?.product?.id ?? null;
+        const tier = tierFromStripeIds(productId, price?.id ?? null);
         const productName =
-          typeof product === "object" && product && "name" in product
-            ? (product.name ?? "Subscription")
-            : "Subscription";
-
-        const tier = tierFromStripeIds(
-          typeof product === "object" && product && "id" in product ? product.id : null,
-          price?.id ?? null
-        );
-
+          tier && tier !== "free"
+            ? TIER_LABELS[tier]
+            : price?.nickname?.trim() || "Subscription";
         subscriptions.push({
           id: sub.id,
           status: sub.status,
-          productName: tier ? `${productName}` : productName,
+          productName,
           amountLabel: formatAmount(price?.unit_amount ?? null, price?.currency ?? null),
           interval: price?.recurring?.interval ?? null,
           currentPeriodEnd: billingFields.current_period_end
