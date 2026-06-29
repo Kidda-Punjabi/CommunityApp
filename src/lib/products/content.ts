@@ -239,12 +239,23 @@ const BEGINNERS_CONTENT: ProductPageContent = {
       "Sikhs Reconnecting Spiritually – You want to understand paath, simran, and katha more deeply through language.",
     ],
   },
-  singlePrice: {
-    label: "12-Week Beginners Course",
-    price: process.env.NEXT_PUBLIC_PRODUCT_PRICE_BEGINNERS?.trim() || "See checkout",
-    priceNote: "Live group course · 12 weeks · completion certificate",
-    checkoutKey: "beginners",
-  },
+  pricingSectionTitle: "Invest in Your Punjabi",
+  pricingTiers: [
+    {
+      id: "group",
+      name: "12-Week Beginners Course",
+      price: "£400",
+      priceNote: "Live group course · 12 weeks · completion certificate",
+      highlight: true,
+      features: [
+        "1 live group lesson per week with real instructors",
+        "Weekly speaking practice with other learners",
+        "Homework, quizzes, and printable resources",
+        "Accountability community and completion certificate",
+      ],
+      checkoutKey: "beginners",
+    },
+  ],
   faq: [
     {
       question: "Do I need to know any Punjabi before joining?",

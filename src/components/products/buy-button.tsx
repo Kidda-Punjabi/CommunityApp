@@ -23,7 +23,7 @@ export function BuyButton({
   async function handleClick() {
     if (!configured) {
       if (fallbackUrl) {
-        window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+        window.location.href = fallbackUrl;
         return;
       }
       setError("Checkout is not configured yet. Please contact support.");

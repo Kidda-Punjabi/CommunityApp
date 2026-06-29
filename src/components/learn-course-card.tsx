@@ -41,6 +41,10 @@ export function LearnCourseCard({
 }: LearnCourseCardProps) {
   const showLock = !track.alwaysUnlocked && locked;
   const showProgress = !showLock && courseProgress && courseProgress.total > 0;
+  const href =
+    showLock && track.id !== "free"
+      ? `/courses/${track.id}`
+      : learnTrackPath(track.id);
 
   const subtitle = showProgress
     ? track.description
@@ -50,7 +54,7 @@ export function LearnCourseCard({
 
   return (
     <Link
-      href={learnTrackPath(track.id)}
+      href={href}
       className={`group ${ui.listRow} ${showLock ? "opacity-90" : ""}`}
     >
       <span className={ui.listRowIcon}>

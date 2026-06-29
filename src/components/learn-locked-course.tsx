@@ -33,10 +33,10 @@ export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps
         </p>
         {isInternalUrl(unlockHref) ? (
           <Link
-            href={unlockHref}
+            href={`${unlockHref}#pricing`}
             className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
           >
-            Find out more
+            View course & buy
           </Link>
         ) : (
           <a
@@ -45,7 +45,7 @@ export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps
             rel="noopener noreferrer"
             className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
           >
-            Find out more
+            View course & buy
           </a>
         )}
         <Link

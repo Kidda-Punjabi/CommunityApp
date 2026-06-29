@@ -1,5 +1,4 @@
 import { LearnLessonList } from "@/components/learn-lesson-list";
-import { LearnLockedCourse } from "@/components/learn-locked-course";
 import { PackageHubPanel } from "@/components/packages/package-hub-panel";
 import {
   findStudentPackageForTrack,
@@ -14,7 +13,6 @@ import {
   filterLessonsForTrack,
   isLearnTrackUnlocked,
   isLessonContentUnlockedForUser,
-  lessonCountForTrack,
 } from "@/lib/learning/learn-access";
 import { getLearnTrack } from "@/lib/learning/learn-catalog";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
@@ -34,7 +32,7 @@ import {
 } from "@/lib/tutoring/lesson-content-access";
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { createClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 type LearnTrackPageProps = {
   params: Promise<{ track: string }>;
@@ -100,10 +98,9 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
   if (!track.tier) notFound();
 
   const unlocked = isLearnTrackUnlocked(track, access);
-  const lessonCount = lessonCountForTrack(allLessons, access.courses, track.tier);
 
   if (!unlocked) {
-    return <LearnLockedCourse track={track} lessonCount={lessonCount} />;
+    redirect(`/courses/${track.id}#pricing`);
   }
 
   const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
