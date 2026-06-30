@@ -1,11 +1,12 @@
 "use server";
 
 import { requireAdminFromActions } from "@/app/admin/content/actions";
+import type { AdminPaymentsQuery } from "@/lib/stripe/admin-payment-types";
 import { loadAdminStripePayments } from "@/lib/stripe/load-admin-payments";
 
-export async function listAdminStripePayments(limit = 50) {
+export async function listAdminStripePayments(query: AdminPaymentsQuery = {}) {
   await requireAdminFromActions();
-  return loadAdminStripePayments(limit);
+  return loadAdminStripePayments(query);
 }
 
 export async function syncPaymentAccessForEmail(email: string) {

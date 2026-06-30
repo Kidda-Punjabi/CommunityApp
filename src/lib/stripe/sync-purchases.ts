@@ -3,6 +3,10 @@ import { courseIdsForTiers, fetchCourses } from "@/lib/membership/courses";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { tierFromStripeIds } from "./products";
 import { getStripe } from "./server";
+import {
+  syncStudentPackagesFromPurchases,
+  type PurchaseForStudentPackage,
+} from "./sync-student-packages-from-payment";
 import type Stripe from "stripe";
 
 function tiersFromLineItems(
@@ -77,6 +81,73 @@ export async function collectTiersForCustomer(
   }
 
   return tiers;
+}
+
+export async function collectPurchasesForCustomer(
+  stripe: Stripe,
+  customerId: string
+): Promise<PurchaseForStudentPackage[]> {
+  const purchases: PurchaseForStudentPackage[] = [];
+
+  const sessions = await stripe.checkout.sessions.list({
+    customer: customerId,
+    limit: 100,
+  });
+
+  for (const session of sessions.data) {
+    if (session.payment_status !== "paid") continue;
+
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
+      expand: ["data.price.product"],
+    });
+
+    const checkoutKey = session.metadata?.checkout_key ?? null;
+    const purchasedAt = new Date(session.created * 1000).toISOString();
+
+    for (const tier of tiersFromLineItems(lineItems.data)) {
+      purchases.push({
+        tier,
+        checkoutKey,
+        purchasedAt,
+        sessionId: session.id,
+        mode: session.mode === "subscription" ? "subscription" : "payment",
+      });
+    }
+  }
+
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 100,
+    expand: ["data.items.data.price"],
+  });
+
+  for (const subscription of subscriptions.data) {
+    if (subscription.status !== "active" && subscription.status !== "trialing") {
+      continue;
+    }
+
+    const purchasedAt = new Date(subscription.created * 1000).toISOString();
+    const checkoutKey = subscription.metadata?.checkout_key ?? "community";
+
+    for (const item of subscription.items.data) {
+      const price = item.price;
+      const product = price.product;
+      const productId =
+        typeof product === "string" ? product : product?.id ?? null;
+      const tier = tierFromStripeIds(productId, price.id);
+      if (tier && tier !== "free") {
+        purchases.push({
+          tier,
+          checkoutKey,
+          purchasedAt,
+          skipOnboarding: true,
+        });
+      }
+    }
+  }
+
+  return purchases;
 }
 
 export async function findUserIdByEmail(email: string): Promise<string | null> {
@@ -156,6 +227,7 @@ export async function syncStripePurchasesForUser(userId: string, email: string) 
   const stripe = getStripe();
   const supabase = createServiceRoleClient();
   const tiers = new Set<PaidCourseTier>();
+  const purchases: PurchaseForStudentPackage[] = [];
   let primaryCustomerId: string | null = null;
 
   const { data: profile } = await supabase
@@ -179,6 +251,7 @@ export async function syncStripePurchasesForUser(userId: string, email: string) 
   for (const customerId of customerIds) {
     const customerTiers = await collectTiersForCustomer(stripe, customerId);
     for (const tier of customerTiers) tiers.add(tier);
+    purchases.push(...(await collectPurchasesForCustomer(stripe, customerId)));
   }
 
   const unlockedTiers = [...tiers];
@@ -186,7 +259,9 @@ export async function syncStripePurchasesForUser(userId: string, email: string) 
     return { updated: false, unlockedTiers: [] as PaidCourseTier[] };
   }
 
-  return grantCoursesToUser(userId, unlockedTiers, primaryCustomerId);
+  const grantResult = await grantCoursesToUser(userId, unlockedTiers, primaryCustomerId);
+  await syncStudentPackagesFromPurchases(userId, purchases);
+  return grantResult;
 }
 
 export { tiersFromLineItems };

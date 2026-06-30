@@ -9,10 +9,17 @@ import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 
 type AdminPackageDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ roster?: string }>;
 };
 
-export default async function AdminPackageDetailPage({ params }: AdminPackageDetailPageProps) {
+export default async function AdminPackageDetailPage({
+  params,
+  searchParams,
+}: AdminPackageDetailPageProps) {
   const { id } = await params;
+  const { roster } = await searchParams;
+  const initialRoster =
+    roster === "interested" || roster === "confirmed" ? roster : null;
   const kind = await resolvePackageKind(id);
   if (!kind) notFound();
 
@@ -47,5 +54,11 @@ export default async function AdminPackageDetailPage({ params }: AdminPackageDet
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return <AdminPackageDetailView detail={detail} tutors={tutors} />;
+  return (
+    <AdminPackageDetailView
+      detail={detail}
+      tutors={tutors}
+      initialRoster={initialRoster}
+    />
+  );
 }

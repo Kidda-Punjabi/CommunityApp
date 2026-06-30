@@ -14,6 +14,21 @@ export type AdminPaymentRow = {
   stripeUrl: string;
 };
 
+export type AdminPaymentsQuery = {
+  search?: string;
+  fromDate?: string | null;
+  toDate?: string | null;
+  startingAfter?: string | null;
+  pageSize?: number;
+};
+
+export type AdminPaymentsResult = {
+  payments: AdminPaymentRow[];
+  error: string | null;
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
 const TIER_LABELS: Record<string, string> = {
   foundational: "Foundational",
   beginners: "Beginners",

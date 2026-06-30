@@ -66,3 +66,50 @@ export function membershipStatusLabel(status: PackageMembershipStatus): string {
   };
   return labels[status] ?? status;
 }
+
+export type PackageDeliveryFormat = "group" | "one_to_one" | "community";
+
+export const PACKAGE_DELIVERY_FORMATS: PackageDeliveryFormat[] = [
+  "group",
+  "one_to_one",
+  "community",
+];
+
+export function packageDeliveryFormat(row: {
+  kind: "cohort" | "package_instance" | "community";
+  deliveryMode: "group" | "one_to_one" | null;
+}): PackageDeliveryFormat {
+  if (row.kind === "community") return "community";
+  if (row.deliveryMode === "group") return "group";
+  return "one_to_one";
+}
+
+export function packageDeliveryFormatLabel(format: PackageDeliveryFormat): string {
+  const labels: Record<PackageDeliveryFormat, string> = {
+    group: "Group",
+    one_to_one: "1-1",
+    community: "Community",
+  };
+  return labels[format];
+}
+
+export function packageDeliveryFormatPillTone(
+  format: PackageDeliveryFormat
+): "amber" | "violet" | "green" | "zinc" {
+  if (format === "group") return "violet";
+  if (format === "one_to_one") return "amber";
+  return "green";
+}
+
+const PACKAGE_DELIVERY_FORMAT_SORT_ORDER: Record<PackageDeliveryFormat, number> = {
+  group: 0,
+  one_to_one: 1,
+  community: 2,
+};
+
+export function comparePackageDeliveryFormats(
+  a: PackageDeliveryFormat,
+  b: PackageDeliveryFormat
+): number {
+  return PACKAGE_DELIVERY_FORMAT_SORT_ORDER[a] - PACKAGE_DELIVERY_FORMAT_SORT_ORDER[b];
+}

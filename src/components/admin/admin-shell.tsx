@@ -1,5 +1,6 @@
 import { AdminBottomNav } from "@/components/admin/admin-bottom-nav";
 import { AdminDataShell } from "@/components/admin/admin-data-shell";
+import { AdminWidthContainer } from "@/components/admin/admin-width-container";
 import { KiddaLogo } from "@/components/branding/kidda-logo";
 import type { AdminData } from "@/app/admin/content/types";
 import type { SiteBranding } from "@/lib/branding/types";
@@ -15,9 +16,9 @@ export function AdminShell({ data, branding, children }: AdminShellProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-zinc-50">
       <header className="border-b border-zinc-200/80 bg-white">
-        <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-4">
+        <AdminWidthContainer className="flex items-center justify-between px-5 py-4">
           <div className="flex items-center gap-3">
-            <KiddaLogo variant="icon" size="sm" href="/admin/content" />
+            <KiddaLogo variant="icon" size="sm" href="/admin/content" branding={branding} />
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
                 Admin
@@ -31,7 +32,7 @@ export function AdminShell({ data, branding, children }: AdminShellProps) {
           >
             App →
           </Link>
-        </div>
+        </AdminWidthContainer>
       </header>
 
       <AdminDataShell data={data} branding={branding}>

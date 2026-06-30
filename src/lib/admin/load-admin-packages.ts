@@ -7,6 +7,7 @@ import type {
   PackagesRosterMember,
 } from "@/lib/admin/packages/types";
 import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin/package-status";
+import { fetchCommunityPackageProduct } from "@/lib/admin/community-package";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -309,7 +310,61 @@ export async function loadAdminPackagesList(
     });
   }
 
+  const communityRow = await loadCommunityPackageRow(supabase, profileById, courseById);
+  if (communityRow) {
+    rows.unshift(communityRow);
+  }
+
   return { rows };
+}
+
+async function loadCommunityPackageRow(
+  supabase: SupabaseClient,
+  profileById: Map<string, ProfileRow>,
+  courseById: Map<string, string>
+): Promise<AdminPackageListRow | null> {
+  const communityProduct = await fetchCommunityPackageProduct(supabase);
+  if (!communityProduct) return null;
+
+  const { data: communityMembers } = await supabase
+    .from("student_packages")
+    .select("id, user_id, status")
+    .eq("package_id", communityProduct.id)
+    .is("package_instance_id", null);
+
+  const userIds = (communityMembers ?? []).map((row) => row.user_id);
+  const emailById = await loadEmails(supabase, userIds);
+
+  const roster = rosterFromPackages(
+    (communityMembers ?? []).map((row) => ({
+      id: row.id,
+      user_id: row.user_id,
+      status: row.status as PackageMembershipStatus,
+    })),
+    profileById,
+    emailById
+  );
+
+  return {
+    kind: "community",
+    id: communityProduct.id,
+    name: communityProduct.name,
+    courseId: communityProduct.courseId,
+    courseName: courseById.get(communityProduct.courseId) ?? "Community",
+    packageId: communityProduct.id,
+    tutorId: null,
+    tutorName: null,
+    status: "in_progress",
+    startDayOfWeek: null,
+    startDate: null,
+    endDate: null,
+    capacity: 9999,
+    deliveryMode: null,
+    active: communityProduct.active,
+    ...roster,
+    lessonUnlockCount: 0,
+    lastLessonLoggedAt: null,
+  };
 }
 
 export async function loadAdminPackageDetail(
@@ -327,7 +382,12 @@ export async function loadAdminPackageDetail(
   let packageId: string | null = null;
   let packageName: string | null = null;
 
-  if (kind === "cohort") {
+  if (kind === "community") {
+    const product = await fetchCommunityPackageProduct(supabase);
+    active = product?.active ?? true;
+    packageId = product?.id ?? null;
+    packageName = product?.name ?? null;
+  } else if (kind === "cohort") {
     const { data: cohort } = await supabase
       .from("cohorts")
       .select("active, course_id")
@@ -343,7 +403,7 @@ export async function loadAdminPackageDetail(
       .maybeSingle();
     packageId = groupPkg?.id ?? null;
     packageName = groupPkg?.name ?? null;
-  } else {
+  } else if (kind === "package_instance") {
     const { data: instance } = await supabase
       .from("package_instances")
       .select("active, package_id, packages(name)")
@@ -355,7 +415,10 @@ export async function loadAdminPackageDetail(
     packageName = pkg?.name ?? null;
   }
 
-  const lessonLog = await loadLessonLog(supabase, kind, id, base.courseId);
+  const lessonLog =
+    kind === "community"
+      ? []
+      : await loadLessonLog(supabase, kind, id, base.courseId);
 
   return {
     detail: {
@@ -374,6 +437,10 @@ async function loadLessonLog(
   id: string,
   courseId: string
 ): Promise<PackageLessonLogEntry[]> {
+  if (kind === "community") {
+    return [];
+  }
+
   if (kind === "cohort") {
     const { data: unlocks } = await supabase
       .from("cohort_lesson_unlocks")

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AdminWidthContainer } from "@/components/admin/admin-width-container";
 
 type NavItem = {
   href: string;
@@ -47,6 +48,14 @@ function PackagesIcon({ active }: { active: boolean }) {
   );
 }
 
+function OnboardingIcon({ active }: { active: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  );
+}
+
 function SiteIcon({ active }: { active: boolean }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
@@ -73,6 +82,11 @@ const navItems: NavItem[] = [
     match: (pathname) => pathname.startsWith("/admin/packages"),
   },
   {
+    href: "/admin/onboarding",
+    label: "Onboard",
+    match: (pathname) => pathname.startsWith("/admin/onboarding"),
+  },
+  {
     href: "/admin/content/curriculum",
     label: "Content",
     match: (pathname) =>
@@ -94,6 +108,8 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
       return <PeopleIcon active={active} />;
     case "Packages":
       return <PackagesIcon active={active} />;
+    case "Onboard":
+      return <OnboardingIcon active={active} />;
     case "Content":
       return <ContentIcon active={active} />;
     case "Site":
@@ -108,7 +124,7 @@ export function AdminBottomNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-violet-200/70 bg-violet-50/95 shadow-[0_-4px_24px_-8px_rgba(124,58,237,0.12)] backdrop-blur-md">
-      <div className="mx-auto flex max-w-lg items-stretch justify-around px-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5">
+      <AdminWidthContainer className="flex items-stretch justify-around px-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5 sm:px-5">
         {navItems.map((item) => {
           const active = item.match(pathname);
 
@@ -133,7 +149,7 @@ export function AdminBottomNav() {
             </Link>
           );
         })}
-      </div>
+      </AdminWidthContainer>
     </nav>
   );
 }

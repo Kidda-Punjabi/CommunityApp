@@ -15,6 +15,11 @@ import type {
   PackagesViewConfig,
 } from "@/lib/admin/packages/types";
 import { DEFAULT_PACKAGES_VIEW_CONFIG } from "@/lib/admin/packages/types";
+import {
+  fetchCommunityPackageProduct,
+  syncCommunityCourseAccess,
+} from "@/lib/admin/community-package";
+import { ensureOnboardingChecklistForStudentPackage, markOnboardingPackageAssigned } from "@/lib/stripe/sync-student-packages-from-payment";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin/package-status";
@@ -22,9 +27,11 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 const PACKAGES_PATH = "/admin/packages";
+const ONBOARDING_PATH = "/admin/onboarding";
 
 function revalidatePackages(id?: string) {
   revalidatePath(PACKAGES_PATH);
+  revalidatePath(ONBOARDING_PATH);
   if (id) revalidatePath(`${PACKAGES_PATH}/${id}`);
 }
 
@@ -60,6 +67,8 @@ export async function fetchAdminPackageDetail(
 
 export async function resolvePackageKind(id: string): Promise<AdminPackageKind | null> {
   const supabase = await requireAdminFromActions();
+  const communityProduct = await fetchCommunityPackageProduct(supabase);
+  if (communityProduct?.id === id) return "community";
   const { data: cohort } = await supabase.from("cohorts").select("id").eq("id", id).maybeSingle();
   if (cohort) return "cohort";
   const { data: instance } = await supabase
@@ -78,6 +87,9 @@ export async function updatePackageInstanceStatus(
 ): Promise<ActionResult> {
   try {
     const supabase = await requireAdminFromActions();
+    if (kind === "community") {
+      return { error: "Community is always active — manage members on the roster instead." };
+    }
     const table = kind === "cohort" ? "cohorts" : "package_instances";
     const { error } = await supabase.from(table).update({ status }).eq("id", id);
     if (error) return { error: error.message };
@@ -103,6 +115,19 @@ export async function updatePackageRunFields(
 ): Promise<ActionResult> {
   try {
     const supabase = await requireAdminFromActions();
+    if (kind === "community") {
+      const payload: Record<string, unknown> = {};
+      if (fields.name !== undefined) payload.name = fields.name;
+      if (fields.active !== undefined) payload.active = fields.active;
+      if (Object.keys(payload).length === 0) {
+        return { success: "Nothing to update." };
+      }
+      const { error } = await supabase.from("packages").update(payload).eq("id", id);
+      if (error) return { error: error.message };
+      revalidatePackages(id);
+      return { success: "Community package updated." };
+    }
+
     const table = kind === "cohort" ? "cohorts" : "package_instances";
     const payload: Record<string, unknown> = {};
     if (fields.name !== undefined) payload.name = fields.name;
@@ -275,16 +300,201 @@ export async function updateStudentPackageMembershipStatus(
 ): Promise<ActionResult> {
   try {
     const supabase = await requireAdminFromActions();
+    const { data: row, error: loadError } = await supabase
+      .from("student_packages")
+      .select("id, user_id, course_id, package_id, packages(slug)")
+      .eq("id", studentPackageId)
+      .maybeSingle();
+
+    if (loadError) return { error: loadError.message };
+    if (!row) return { error: "Student package not found." };
+
     const { error } = await supabase
       .from("student_packages")
       .update({ status })
       .eq("id", studentPackageId);
     if (error) return { error: error.message };
+
+    const pkg = Array.isArray(row.packages) ? row.packages[0] : row.packages;
+    if (pkg?.slug === "community") {
+      const sync = await syncCommunityCourseAccess(
+        supabase,
+        row.user_id,
+        row.course_id,
+        status
+      );
+      if (sync.error) return { error: sync.error };
+    }
+
     revalidatePackages();
     return { success: "Student status updated." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update student status." };
   }
+}
+
+export async function addPackageRunMember(
+  kind: AdminPackageKind,
+  runId: string,
+  userId: string,
+  status: PackageMembershipStatus = "interested"
+): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+    if (!userId) return { error: "Member is required." };
+    if (status !== "interested" && status !== "confirmed") {
+      return { error: "New members can only be added as Interested or Confirmed." };
+    }
+
+    if (kind === "community") {
+      const communityProduct = await fetchCommunityPackageProduct(supabase);
+      if (!communityProduct) {
+        return { error: "Community package product not found. Run supabase/student-packages.sql." };
+      }
+
+      const { error } = await supabase.from("student_packages").upsert(
+        {
+          user_id: userId,
+          package_id: communityProduct.id,
+          course_id: communityProduct.courseId,
+          status,
+          purchased_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,package_id" }
+      );
+
+      if (error) return { error: error.message };
+
+      const sync = await syncCommunityCourseAccess(
+        supabase,
+        userId,
+        communityProduct.courseId,
+        status
+      );
+      if (sync.error) return { error: sync.error };
+
+      revalidatePackages(communityProduct.id);
+      return { success: "Member added to community." };
+    }
+
+    if (kind === "cohort") {
+      const { data: cohort, error: cohortError } = await supabase
+        .from("cohorts")
+        .select("id, course_id, tutor_id")
+        .eq("id", runId)
+        .maybeSingle();
+
+      if (cohortError) return { error: cohortError.message };
+      if (!cohort) return { error: "Cohort not found." };
+
+      const { data: groupPkg, error: pkgError } = await supabase
+        .from("packages")
+        .select("id, slug")
+        .eq("course_id", cohort.course_id)
+        .eq("delivery_mode", "group")
+        .maybeSingle();
+
+      if (pkgError) return { error: pkgError.message };
+      if (!groupPkg) return { error: "Group package product not found for this course." };
+
+      const { data: enrollment, error: enrollmentError } = await supabase
+        .from("course_enrollments")
+        .upsert(
+          {
+            user_id: userId,
+            course_id: cohort.course_id,
+            tutor_id: cohort.tutor_id,
+            delivery_mode: "group",
+            cohort_id: cohort.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,course_id" }
+        )
+        .select("id")
+        .single();
+
+      if (enrollmentError) return { error: enrollmentError.message };
+
+      const { data: studentPackage, error: spError } = await supabase
+        .from("student_packages")
+        .upsert(
+          {
+            user_id: userId,
+            package_id: groupPkg.id,
+            course_id: cohort.course_id,
+            enrollment_id: enrollment.id,
+            status,
+            purchased_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,package_id" }
+        )
+        .select("id")
+        .single();
+
+      if (spError) return { error: spError.message };
+
+      await ensureOnboardingChecklistForStudentPackage(
+        supabase,
+        studentPackage.id,
+        groupPkg.slug,
+        new Date().toISOString()
+      );
+      await markOnboardingPackageAssigned(supabase, studentPackage.id);
+
+      revalidatePackages(runId);
+      return { success: `Member added as ${status === "confirmed" ? "confirmed" : "interested"}.` };
+    }
+
+    const { data: instance, error: instanceError } = await supabase
+      .from("package_instances")
+      .select("id, package_id, course_id, packages(slug)")
+      .eq("id", runId)
+      .maybeSingle();
+
+    if (instanceError) return { error: instanceError.message };
+    if (!instance) return { error: "Package run not found." };
+
+    const pkg = Array.isArray(instance.packages) ? instance.packages[0] : instance.packages;
+    const packageSlug = pkg?.slug ?? "foundational";
+
+    const { data: studentPackage, error: spError } = await supabase
+      .from("student_packages")
+      .upsert(
+        {
+          user_id: userId,
+          package_id: instance.package_id,
+          course_id: instance.course_id,
+          package_instance_id: instance.id,
+          status,
+          purchased_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,package_id" }
+      )
+      .select("id")
+      .single();
+
+    if (spError) return { error: spError.message };
+
+    await ensureOnboardingChecklistForStudentPackage(
+      supabase,
+      studentPackage.id,
+      packageSlug,
+      new Date().toISOString()
+    );
+    await markOnboardingPackageAssigned(supabase, studentPackage.id);
+
+    revalidatePackages(runId);
+    return { success: `Member added as ${status === "confirmed" ? "confirmed" : "interested"}.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to add member." };
+  }
+}
+
+export async function addCommunityPackageMember(
+  userId: string,
+  status: PackageMembershipStatus = "confirmed"
+): Promise<ActionResult> {
+  return addPackageRunMember("community", "", userId, status);
 }
 
 export async function fetchOnboardingChecklist(studentPackageId: string): Promise<{
@@ -336,6 +546,7 @@ export async function upsertOnboardingChecklist(
     }
 
     revalidatePackages();
+    revalidatePath(ONBOARDING_PATH);
     return { success: "Checklist saved." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to save checklist." };
@@ -352,13 +563,24 @@ function parsePackagesViewConfig(raw: unknown): PackagesViewConfig {
       tutorIds: Array.isArray(config.filters?.tutorIds) ? config.filters.tutorIds : [],
       courseIds: Array.isArray(config.filters?.courseIds) ? config.filters.courseIds : [],
       deliveryModes: Array.isArray(config.filters?.deliveryModes)
-        ? config.filters.deliveryModes
+        ? config.filters.deliveryModes.filter(
+            (mode): mode is "group" | "one_to_one" | "community" =>
+              mode === "group" || mode === "one_to_one" || mode === "community"
+          )
         : [],
     },
     groupBy:
-      config.groupBy === "status" || config.groupBy === "tutor" ? config.groupBy : "none",
+      config.groupBy === "status" ||
+      config.groupBy === "tutor" ||
+      config.groupBy === "course" ||
+      config.groupBy === "format"
+        ? config.groupBy
+        : "none",
     sort: {
-      field: config.sort?.field === "name" ? "name" : "startDate",
+      field:
+        config.sort?.field === "name" || config.sort?.field === "format"
+          ? config.sort.field
+          : "startDate",
       direction: config.sort?.direction === "asc" ? "asc" : "desc",
     },
   };

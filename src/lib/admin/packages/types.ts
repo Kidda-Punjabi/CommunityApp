@@ -3,7 +3,7 @@ import type {
   PackageMembershipStatus,
 } from "@/lib/admin/package-status";
 
-export type AdminPackageKind = "cohort" | "package_instance";
+export type AdminPackageKind = "cohort" | "package_instance" | "community";
 
 export type PackagesRosterMember = {
   userId: string;
@@ -44,11 +44,11 @@ export type PackagesViewConfig = {
     status: PackageInstanceStatus[];
     tutorIds: string[];
     courseIds: string[];
-    deliveryModes: Array<"group" | "one_to_one">;
+    deliveryModes: Array<"group" | "one_to_one" | "community">;
   };
-  groupBy: "none" | "status" | "tutor";
+  groupBy: "none" | "status" | "tutor" | "course" | "format";
   sort: {
-    field: "startDate" | "name";
+    field: "startDate" | "name" | "format";
     direction: "asc" | "desc";
   };
 };

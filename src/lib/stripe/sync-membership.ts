@@ -4,6 +4,7 @@ import {
   syncStripePurchasesForUser,
   tiersFromLineItems,
 } from "./sync-purchases";
+import { syncStudentPackagesFromPurchases } from "./sync-student-packages-from-payment";
 import { type PaidCourseTier } from "@/lib/membership/access";
 import { tierFromStripeIds } from "./products";
 import { getStripe } from "./server";
@@ -48,7 +49,21 @@ export async function syncMembershipFromCheckoutSession(sessionId: string) {
       ? session.customer
       : session.customer?.id ?? null;
 
-  return grantCoursesToUser(userId, purchasedTiers, customerId);
+  const checkoutKey = session.metadata?.checkout_key ?? null;
+  const purchasedAt = new Date(session.created * 1000).toISOString();
+
+  const grantResult = await grantCoursesToUser(userId, purchasedTiers, customerId);
+  await syncStudentPackagesFromPurchases(
+    userId,
+    purchasedTiers.map((tier) => ({
+      tier,
+      checkoutKey,
+      purchasedAt,
+      sessionId: session.id,
+      mode: session.mode === "subscription" ? "subscription" : "payment",
+    }))
+  );
+  return grantResult;
 }
 
 export async function syncMembershipFromStripeEvent(event: Stripe.Event) {
@@ -100,7 +115,11 @@ export async function syncMembershipFromStripeEvent(event: Stripe.Event) {
     const customerId =
       typeof full.customer === "string" ? full.customer : full.customer?.id ?? null;
 
-    return grantCoursesToUser(userId, purchasedTiers, customerId);
+    const checkoutKey = full.metadata?.checkout_key ?? "community";
+    const purchasedAt = new Date(full.created * 1000).toISOString();
+
+    const grantResult = await grantCoursesToUser(userId, purchasedTiers, customerId);
+    return grantResult;
   }
 
   return { updated: false, unlockedTiers: [] as PaidCourseTier[] };

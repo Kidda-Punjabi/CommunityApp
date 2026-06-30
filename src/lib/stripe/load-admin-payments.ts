@@ -1,12 +1,25 @@
 import "server-only";
 
-import type { AdminPaymentRow } from "@/lib/stripe/admin-payment-types";
+import type {
+  AdminPaymentRow,
+  AdminPaymentsQuery,
+  AdminPaymentsResult,
+} from "@/lib/stripe/admin-payment-types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { tiersFromLineItems } from "@/lib/stripe/sync-purchases";
 import { getStripe } from "@/lib/stripe/server";
+import type Stripe from "stripe";
 
-export type { AdminPaymentRow } from "@/lib/stripe/admin-payment-types";
+export type {
+  AdminPaymentRow,
+  AdminPaymentsQuery,
+  AdminPaymentsResult,
+} from "@/lib/stripe/admin-payment-types";
+
+const DEFAULT_PAGE_SIZE = 25;
+const STRIPE_PAGE_SIZE = 100;
+const MAX_STRIPE_PAGES_PER_REQUEST = 12;
 
 function formatAmount(amountTotal: number | null, currency: string | null): string | null {
   if (amountTotal == null || !currency) return null;
@@ -14,6 +27,37 @@ function formatAmount(amountTotal: number | null, currency: string | null): stri
     style: "currency",
     currency: currency.toUpperCase(),
   }).format(amountTotal / 100);
+}
+
+function stripeCreatedFilter(
+  fromDate?: string | null,
+  toDate?: string | null
+): Stripe.Checkout.SessionListParams["created"] | undefined {
+  if (!fromDate && !toDate) return undefined;
+  const created: Stripe.RangeQueryParam = {};
+  if (fromDate) {
+    created.gte = Math.floor(new Date(`${fromDate}T00:00:00.000Z`).getTime() / 1000);
+  }
+  if (toDate) {
+    created.lte = Math.floor(new Date(`${toDate}T23:59:59.999Z`).getTime() / 1000);
+  }
+  return created;
+}
+
+function isPaidSession(session: Stripe.Checkout.Session): boolean {
+  return session.payment_status === "paid" || session.status === "complete";
+}
+
+function matchesSearch(payment: AdminPaymentRow, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    (payment.email?.toLowerCase().includes(q) ?? false) ||
+    (payment.appUserLabel?.toLowerCase().includes(q) ?? false) ||
+    payment.products.some((product) => product.toLowerCase().includes(q)) ||
+    (payment.amountLabel?.toLowerCase().includes(q) ?? false) ||
+    payment.tiers.some((tier) => tier.toLowerCase().includes(q))
+  );
 }
 
 async function buildEmailToUserMap(
@@ -64,10 +108,10 @@ async function buildEmailToUserMap(
 }
 
 async function loadLineItemsForSessions(
-  stripe: ReturnType<typeof getStripe>,
+  stripe: Stripe,
   sessionIds: string[]
 ) {
-  const lineItemsBySession = new Map<string, Awaited<ReturnType<typeof stripe.checkout.sessions.listLineItems>>["data"]>();
+  const lineItemsBySession = new Map<string, Stripe.LineItem[]>();
 
   const chunkSize = 8;
   for (let index = 0; index < sessionIds.length; index += chunkSize) {
@@ -86,64 +130,123 @@ async function loadLineItemsForSessions(
   return lineItemsBySession;
 }
 
-export async function loadAdminStripePayments(limit = 50): Promise<{
-  payments: AdminPaymentRow[];
-  error: string | null;
-}> {
+function sessionToPaymentRow(
+  session: Stripe.Checkout.Session,
+  lineItems: Stripe.LineItem[],
+  userByEmail: Map<string, { id: string; label: string }>
+): AdminPaymentRow {
+  const tiers = tiersFromLineItems(lineItems);
+  const products = lineItems.map((item) => item.description ?? "Purchase");
+  const email = session.customer_details?.email ?? session.customer_email ?? null;
+  const normalizedEmail = email?.trim().toLowerCase() ?? null;
+  const appUser = normalizedEmail ? userByEmail.get(normalizedEmail) : undefined;
+
+  return {
+    sessionId: session.id,
+    createdAt: new Date(session.created * 1000).toISOString(),
+    email,
+    amountLabel: formatAmount(session.amount_total, session.currency),
+    paymentStatus: session.payment_status,
+    sessionStatus: session.status ?? "unknown",
+    products,
+    tiers,
+    appUserId: appUser?.id ?? null,
+    appUserLabel: appUser?.label ?? null,
+    stripeUrl: `https://dashboard.stripe.com/checkout/sessions/${session.id}`,
+  };
+}
+
+async function mapSessionsToPayments(
+  stripe: Stripe,
+  sessions: Stripe.Checkout.Session[]
+): Promise<AdminPaymentRow[]> {
+  if (sessions.length === 0) return [];
+
+  const lineItemsBySession = await loadLineItemsForSessions(
+    stripe,
+    sessions.map((session) => session.id)
+  );
+
+  const emails = sessions
+    .map((session) => session.customer_details?.email ?? session.customer_email ?? null)
+    .filter((email): email is string => Boolean(email));
+
+  const userByEmail = await buildEmailToUserMap(emails);
+
+  return sessions.map((session) =>
+    sessionToPaymentRow(session, lineItemsBySession.get(session.id) ?? [], userByEmail)
+  );
+}
+
+export async function loadAdminStripePayments(
+  query: AdminPaymentsQuery = {}
+): Promise<AdminPaymentsResult> {
   if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_")) {
-    return { payments: [], error: "STRIPE_SECRET_KEY is not configured." };
+    return {
+      payments: [],
+      error: "STRIPE_SECRET_KEY is not configured.",
+      hasMore: false,
+      nextCursor: null,
+    };
   }
+
+  const pageSize = Math.min(Math.max(query.pageSize ?? DEFAULT_PAGE_SIZE, 1), 50);
+  const search = query.search?.trim() ?? "";
+  const created = stripeCreatedFilter(query.fromDate, query.toDate);
 
   try {
     const stripe = getStripe();
-    const sessions = await stripe.checkout.sessions.list({
-      limit: Math.min(limit, 100),
-    });
+    const payments: AdminPaymentRow[] = [];
+    let cursor = query.startingAfter ?? undefined;
+    let stripeHasMore = true;
+    let pagesFetched = 0;
 
-    const paidSessions = sessions.data.filter(
-      (session) => session.payment_status === "paid" || session.status === "complete"
-    );
+    while (
+      payments.length < pageSize &&
+      stripeHasMore &&
+      pagesFetched < MAX_STRIPE_PAGES_PER_REQUEST
+    ) {
+      const page = await stripe.checkout.sessions.list({
+        limit: STRIPE_PAGE_SIZE,
+        starting_after: cursor,
+        created,
+      });
 
-    const lineItemsBySession = await loadLineItemsForSessions(
-      stripe,
-      paidSessions.map((session) => session.id)
-    );
+      pagesFetched += 1;
+      stripeHasMore = page.has_more;
 
-    const emails = paidSessions
-      .map((session) => session.customer_details?.email ?? session.customer_email ?? null)
-      .filter((email): email is string => Boolean(email));
+      const lastSession = page.data.at(-1);
+      if (!lastSession) {
+        stripeHasMore = false;
+        break;
+      }
+      cursor = lastSession.id;
 
-    const userByEmail = await buildEmailToUserMap(emails);
+      const paidOnPage = page.data.filter(isPaidSession);
+      if (paidOnPage.length === 0) continue;
 
-    const payments: AdminPaymentRow[] = paidSessions.map((session) => {
-      const lineItems = lineItemsBySession.get(session.id) ?? [];
-      const tiers = tiersFromLineItems(lineItems);
-      const products = lineItems.map((item) => item.description ?? "Purchase");
+      const mapped = await mapSessionsToPayments(stripe, paidOnPage);
+      for (const payment of mapped) {
+        if (search && !matchesSearch(payment, search)) continue;
+        payments.push(payment);
+        if (payments.length >= pageSize) break;
+      }
+    }
 
-      const email = session.customer_details?.email ?? session.customer_email ?? null;
-      const normalizedEmail = email?.trim().toLowerCase() ?? null;
-      const appUser = normalizedEmail ? userByEmail.get(normalizedEmail) : undefined;
+    const nextCursor = stripeHasMore && cursor ? cursor : null;
 
-      return {
-        sessionId: session.id,
-        createdAt: new Date(session.created * 1000).toISOString(),
-        email,
-        amountLabel: formatAmount(session.amount_total, session.currency),
-        paymentStatus: session.payment_status,
-        sessionStatus: session.status ?? "unknown",
-        products,
-        tiers,
-        appUserId: appUser?.id ?? null,
-        appUserLabel: appUser?.label ?? null,
-        stripeUrl: `https://dashboard.stripe.com/checkout/sessions/${session.id}`,
-      };
-    });
-
-    return { payments, error: null };
+    return {
+      payments,
+      error: null,
+      hasMore: Boolean(nextCursor),
+      nextCursor,
+    };
   } catch (error) {
     return {
       payments: [],
       error: error instanceof Error ? error.message : "Failed to load Stripe payments.",
+      hasMore: false,
+      nextCursor: null,
     };
   }
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import { AdminDataProvider } from "@/app/admin/content/admin-data-provider";
+import { AdminWidthContainer } from "@/components/admin/admin-width-container";
 import type { AdminData } from "@/app/admin/content/types";
 import type { SiteBranding } from "@/lib/branding/types";
-import { ui } from "@/lib/ui/styles";
+import { cn, ui } from "@/lib/ui/styles";
 
 type AdminDataShellProps = {
   data: AdminData;
@@ -14,9 +15,9 @@ type AdminDataShellProps = {
 export function AdminDataShell({ data, branding, children }: AdminDataShellProps) {
   return (
     <AdminDataProvider data={data} branding={branding}>
-      <div className={`mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.navClearance}`}>
+      <AdminWidthContainer className={cn("flex min-h-0 w-full flex-1 flex-col", ui.navClearance)}>
         {children}
-      </div>
+      </AdminWidthContainer>
     </AdminDataProvider>
   );
 }

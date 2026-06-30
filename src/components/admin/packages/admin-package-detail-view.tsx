@@ -4,15 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
-  fetchOnboardingChecklist,
+  addPackageRunMember,
   updatePackageInstanceStatus,
   updatePackageRunFields,
   updateStudentPackageMembershipStatus,
-  upsertOnboardingChecklist,
 } from "@/app/admin/packages/actions";
+import { searchAdminMembers, type AdminMemberOption } from "@/app/admin/content/actions";
 import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
+import { OnboardingChecklistModal } from "@/components/admin/onboarding/onboarding-checklist-modal";
 import { PackageRunFormModal } from "@/components/admin/packages/package-run-form-modal";
-import type { AdminPackageDetail, OnboardingChecklistRow, PackagesRosterMember } from "@/lib/admin/packages/types";
+import type { AdminPackageDetail, AdminPackageKind, PackagesRosterMember } from "@/lib/admin/packages/types";
 import {
   PACKAGE_INSTANCE_STATUSES,
   PACKAGE_MEMBERSHIP_STATUSES,
@@ -21,7 +22,15 @@ import {
   packageStatusPillTone,
 } from "@/lib/admin/package-status";
 import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin/package-status";
+import {
+  dateInputFromIso,
+  isoFromDateInput,
+  PACKAGE_WEEKDAYS,
+  weekdayFromDateInput,
+} from "@/lib/admin/package-schedule";
 import { ui } from "@/lib/ui/styles";
+
+const WEEKDAYS = [...PACKAGE_WEEKDAYS];
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -42,170 +51,17 @@ function formatDateTime(iso: string): string {
   }).format(new Date(iso));
 }
 
-const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
-type ChecklistModalProps = {
-  member: PackagesRosterMember;
-  checklistType: "group" | "one_to_one";
-  onClose: () => void;
-};
-
-function OnboardingChecklistModal({ member, checklistType, onClose }: ChecklistModalProps) {
-  const [checklist, setChecklist] = useState<OnboardingChecklistRow | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [pending, startTransition] = useTransition();
-
-  useEffect(() => {
-    fetchOnboardingChecklist(member.studentPackageId).then((result) => {
-      setChecklist(result.checklist);
-      setError(result.error ?? null);
-      setLoading(false);
-    });
-  }, [member.studentPackageId]);
-
-  const fields: Array<{ key: keyof OnboardingChecklistRow; label: string; boolean?: boolean }> = [
-    { key: "timeAssigned", label: "Time assigned", boolean: true },
-    { key: "welcomeEmail", label: "Welcome email", boolean: true },
-    { key: "calendarInvite", label: "Calendar invite", boolean: true },
-    { key: "tutorNotified", label: "Tutor notified", boolean: true },
-    { key: "packageCreated", label: "Package created", boolean: true },
-    { key: "whatsappChatMade", label: "WhatsApp chat made", boolean: true },
-    { key: "scheduleWhatsappChat", label: "Schedule WhatsApp chat", boolean: true },
-    { key: "onboardingCompleted", label: "Onboarding completed", boolean: true },
-  ];
-
-  function toggleField(key: keyof OnboardingChecklistRow) {
-    if (!checklist) return;
-    setChecklist({ ...checklist, [key]: !checklist[key] });
-  }
-
-  function save() {
-    startTransition(async () => {
-      const result = await upsertOnboardingChecklist(member.studentPackageId, checklistType, {
-        id: checklist?.id,
-        timeAssigned: checklist?.timeAssigned,
-        welcomeEmail: checklist?.welcomeEmail,
-        calendarInvite: checklist?.calendarInvite,
-        tutorNotified: checklist?.tutorNotified,
-        packageCreated: checklist?.packageCreated,
-        whatsappChatMade: checklist?.whatsappChatMade,
-        scheduleWhatsappChat: checklist?.scheduleWhatsappChat,
-        onboardingCompleted: checklist?.onboardingCompleted,
-        paymentDate: checklist?.paymentDate,
-        notes: checklist?.notes,
-      });
-      if (result.error) setError(result.error);
-      else onClose();
-    });
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-zinc-900">Onboarding checklist</h3>
-            <p className="text-sm text-zinc-500">{member.label}</p>
-          </div>
-          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600">
-            ×
-          </button>
-        </div>
-
-        {loading && <p className="text-sm text-zinc-500">Loading…</p>}
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-
-        {!loading && (
-          <div className="space-y-3">
-            {fields.map((field) => (
-              <label key={field.key} className="flex items-center gap-3 text-sm text-zinc-700">
-                <input
-                  type="checkbox"
-                  checked={Boolean(checklist?.[field.key])}
-                  onChange={() => toggleField(field.key)}
-                />
-                {field.label}
-              </label>
-            ))}
-            <label className="block text-sm text-zinc-700">
-              Payment date
-              <input
-                type="date"
-                value={checklist?.paymentDate ?? ""}
-                onChange={(e) =>
-                  setChecklist((c) => ({
-                    ...(c ?? {
-                      id: "",
-                      checklistType,
-                      timeAssigned: false,
-                      welcomeEmail: false,
-                      calendarInvite: false,
-                      tutorNotified: false,
-                      packageCreated: false,
-                      whatsappChatMade: false,
-                      scheduleWhatsappChat: false,
-                      onboardingCompleted: false,
-                      paymentDate: null,
-                      notes: null,
-                    }),
-                    paymentDate: e.target.value || null,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-              />
-            </label>
-            <label className="block text-sm text-zinc-700">
-              Notes
-              <textarea
-                value={checklist?.notes ?? ""}
-                onChange={(e) =>
-                  setChecklist((c) => ({
-                    ...(c ?? {
-                      id: "",
-                      checklistType,
-                      timeAssigned: false,
-                      welcomeEmail: false,
-                      calendarInvite: false,
-                      tutorNotified: false,
-                      packageCreated: false,
-                      whatsappChatMade: false,
-                      scheduleWhatsappChat: false,
-                      onboardingCompleted: false,
-                      paymentDate: null,
-                      notes: null,
-                    }),
-                    notes: e.target.value,
-                  }))
-                }
-                rows={3}
-                className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={save}
-              disabled={pending}
-              className={ui.btnPrimary}
-            >
-              Save checklist
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function RosterSection({
   title,
   members,
   checklistType,
+  showChecklist = true,
   onUpdated,
 }: {
   title: string;
   members: PackagesRosterMember[];
   checklistType: "group" | "one_to_one";
+  showChecklist?: boolean;
   onUpdated: () => void;
 }) {
   const [checklistMember, setChecklistMember] = useState<PackagesRosterMember | null>(null);
@@ -245,13 +101,15 @@ function RosterSection({
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={() => setChecklistMember(member)}
-                  className="text-xs font-semibold text-violet-600 hover:text-violet-500"
-                >
-                  Checklist →
-                </button>
+                {showChecklist && (
+                  <button
+                    type="button"
+                    onClick={() => setChecklistMember(member)}
+                    className="text-xs font-semibold text-violet-600 hover:text-violet-500"
+                  >
+                    Checklist →
+                  </button>
+                )}
               </div>
             </li>
           ))}
@@ -259,7 +117,8 @@ function RosterSection({
       )}
       {checklistMember && (
         <OnboardingChecklistModal
-          member={checklistMember}
+          studentPackageId={checklistMember.studentPackageId}
+          studentLabel={checklistMember.label}
           checklistType={checklistType}
           onClose={() => setChecklistMember(null)}
         />
@@ -268,12 +127,139 @@ function RosterSection({
   );
 }
 
+function AddPackageRunMemberSection({
+  kind,
+  runId,
+  isCommunity,
+  defaultStatus,
+  onAdded,
+}: {
+  kind: AdminPackageKind;
+  runId: string;
+  isCommunity: boolean;
+  defaultStatus: PackageMembershipStatus;
+  onAdded: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<PackageMembershipStatus>(defaultStatus);
+  const [results, setResults] = useState<AdminMemberOption[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setStatus(defaultStatus);
+  }, [defaultStatus]);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setSearchError(null);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      setSearchError(null);
+      void searchAdminMembers(trimmed).then((response) => {
+        setSearching(false);
+        if (response.error) {
+          setSearchError(response.error);
+          setResults([]);
+          return;
+        }
+        setResults(response.results ?? []);
+      });
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  function addMember(member: AdminMemberOption) {
+    setActionError(null);
+    startTransition(async () => {
+      const result = await addPackageRunMember(kind, runId, member.userId, status);
+      if (result.error) {
+        setActionError(result.error);
+        return;
+      }
+      setQuery("");
+      setResults([]);
+      onAdded();
+    });
+  }
+
+  return (
+    <section className={ui.card}>
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Add member</h2>
+      <p className="mt-1 text-sm text-zinc-500">
+        {isCommunity
+          ? "Confirmed members get community course access, all community lessons, and community events."
+          : "Add a student to this run as interested or confirmed."}
+      </p>
+      {!isCommunity && (
+        <label className="mt-4 block text-sm text-zinc-700">
+          Add as
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as PackageMembershipStatus)}
+            className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+          >
+            <option value="interested">Interested</option>
+            <option value="confirmed">Confirmed</option>
+          </select>
+        </label>
+      )}
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search by name or email…"
+        className="mt-4 w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+        autoComplete="off"
+      />
+      {searching && <p className="mt-2 text-sm text-zinc-500">Searching…</p>}
+      {searchError && <p className="mt-2 text-sm text-red-600">{searchError}</p>}
+      {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}
+      {results.length > 0 && (
+        <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-zinc-200 p-1">
+          {results.map((member) => (
+            <li key={member.userId}>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => addMember(member)}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-violet-50 disabled:opacity-50"
+              >
+                <span>
+                  <span className="block font-medium text-zinc-900">{member.displayName}</span>
+                  {member.email && (
+                    <span className="block text-xs text-zinc-500">{member.email}</span>
+                  )}
+                </span>
+                <span className="text-xs font-semibold text-violet-600">Add</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 type AdminPackageDetailViewProps = {
   detail: AdminPackageDetail;
   tutors: Array<{ id: string; name: string }>;
+  initialRoster?: "interested" | "confirmed" | null;
 };
 
-export function AdminPackageDetailView({ detail, tutors }: AdminPackageDetailViewProps) {
+export function AdminPackageDetailView({
+  detail,
+  tutors,
+  initialRoster = null,
+}: AdminPackageDetailViewProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [showEditModal, setShowEditModal] = useState(false);
@@ -281,22 +267,43 @@ export function AdminPackageDetailView({ detail, tutors }: AdminPackageDetailVie
   const [tutorId, setTutorId] = useState(detail.tutorId ?? "");
   const [status, setStatus] = useState<PackageInstanceStatus>(detail.status);
   const [startDay, setStartDay] = useState(detail.startDayOfWeek ?? "");
-  const [startDate, setStartDate] = useState(detail.startDate?.slice(0, 10) ?? "");
-  const [endDate, setEndDate] = useState(detail.endDate?.slice(0, 10) ?? "");
+  const [startDate, setStartDate] = useState(dateInputFromIso(detail.startDate));
+  const [endDate, setEndDate] = useState(dateInputFromIso(detail.endDate));
   const [capacity, setCapacity] = useState(String(detail.capacity));
+  const [active, setActive] = useState(detail.active);
 
+  const isCommunity = detail.kind === "community";
   const checklistType = detail.deliveryMode === "group" ? "group" : "one_to_one";
+  const addMemberDefaultStatus: PackageMembershipStatus =
+    initialRoster === "interested" ? "interested" : "confirmed";
+
+  useEffect(() => {
+    if (!initialRoster) return;
+    const el = document.getElementById(`roster-${initialRoster}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [initialRoster]);
+
+  function handleStartDateChange(value: string) {
+    setStartDate(value);
+    if (!value || startDay) return;
+    const weekday = weekdayFromDateInput(value);
+    if (weekday) setStartDay(weekday);
+  }
 
   function saveHeader() {
     startTransition(async () => {
-      await updatePackageRunFields(detail.kind, detail.id, {
-        name,
-        tutorId: tutorId || null,
-        startDayOfWeek: startDay || null,
-        startDate: startDate ? new Date(startDate).toISOString() : null,
-        endDate: endDate ? new Date(endDate).toISOString() : null,
-        capacity: Number(capacity) || detail.capacity,
-      });
+      if (isCommunity) {
+        await updatePackageRunFields(detail.kind, detail.id, { name, active });
+      } else {
+        await updatePackageRunFields(detail.kind, detail.id, {
+          name,
+          tutorId: tutorId || null,
+          startDayOfWeek: startDay || null,
+          startDate: isoFromDateInput(startDate),
+          endDate: isoFromDateInput(endDate),
+          capacity: Number(capacity) || detail.capacity,
+        });
+      }
       router.refresh();
     });
   }
@@ -324,8 +331,13 @@ export function AdminPackageDetailView({ detail, tutors }: AdminPackageDetailVie
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{detail.name}</h1>
             <p className="mt-1 text-sm text-zinc-500">
               {detail.courseName}
-              {detail.packageName ? ` · ${detail.packageName}` : ""}
-              {detail.deliveryMode === "group" ? " · Group cohort" : " · 1-1 instance"}
+              {isCommunity
+                ? " · Community membership"
+                : detail.packageName
+                  ? ` · ${detail.packageName}`
+                  : ""}
+              {!isCommunity &&
+                (detail.deliveryMode === "group" ? " · Group cohort" : " · 1-1 instance")}
               {!detail.active && " · Archived"}
             </p>
           </div>
@@ -337,9 +349,11 @@ export function AdminPackageDetailView({ detail, tutors }: AdminPackageDetailVie
             >
               Edit
             </button>
-            <AdminStatusPill tone={packageStatusPillTone(status)}>
-              {packageStatusLabel(status)}
-            </AdminStatusPill>
+            {!isCommunity && (
+              <AdminStatusPill tone={packageStatusPillTone(status)}>
+                {packageStatusLabel(status)}
+              </AdminStatusPill>
+            )}
           </div>
         </div>
 
@@ -352,86 +366,99 @@ export function AdminPackageDetailView({ detail, tutors }: AdminPackageDetailVie
               className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
             />
           </label>
-          <label className="text-sm text-zinc-700">
-            Status
-            <select
-              value={status}
-              onChange={(e) => saveStatus(e.target.value as PackageInstanceStatus)}
-              className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-            >
-              {PACKAGE_INSTANCE_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {packageStatusLabel(s)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm text-zinc-700">
-            Tutor
-            <select
-              value={tutorId}
-              onChange={(e) => setTutorId(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-            >
-              <option value="">Unassigned</option>
-              {tutors.map((tutor) => (
-                <option key={tutor.id} value={tutor.id}>
-                  {tutor.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm text-zinc-700">
-            Capacity
-            <input
-              type="number"
-              min={1}
-              value={capacity}
-              onChange={(e) => setCapacity(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-            />
-          </label>
-          <label className="text-sm text-zinc-700">
-            Start day
-            <select
-              value={startDay}
-              onChange={(e) => setStartDay(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-            >
-              <option value="">—</option>
-              {WEEKDAYS.map((day) => (
-                <option key={day} value={day}>
-                  {day}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm text-zinc-700">
-            Delivery
-            <input
-              value={detail.deliveryMode === "group" ? "Group" : "1-1 / small-group"}
-              readOnly
-              className="mt-1 w-full rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2 text-zinc-600"
-            />
-          </label>
-          <label className="text-sm text-zinc-700">
-            Start date
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-            />
-          </label>
-          <label className="text-sm text-zinc-700">
-            End date
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-            />
-          </label>
+          {isCommunity ? (
+            <label className="flex items-end gap-2 pb-2 text-sm text-zinc-700">
+              <input
+                type="checkbox"
+                checked={active}
+                onChange={(e) => setActive(e.target.checked)}
+              />
+              Active (uncheck to hide from new signups)
+            </label>
+          ) : (
+            <>
+              <label className="text-sm text-zinc-700">
+                Status
+                <select
+                  value={status}
+                  onChange={(e) => saveStatus(e.target.value as PackageInstanceStatus)}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                >
+                  {PACKAGE_INSTANCE_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {packageStatusLabel(s)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm text-zinc-700">
+                Tutor
+                <select
+                  value={tutorId}
+                  onChange={(e) => setTutorId(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                >
+                  <option value="">Unassigned</option>
+                  {tutors.map((tutor) => (
+                    <option key={tutor.id} value={tutor.id}>
+                      {tutor.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm text-zinc-700">
+                Capacity
+                <input
+                  type="number"
+                  min={1}
+                  value={capacity}
+                  onChange={(e) => setCapacity(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-zinc-700">
+                Start day
+                <select
+                  value={startDay}
+                  onChange={(e) => setStartDay(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                >
+                  <option value="">—</option>
+                  {WEEKDAYS.map((day) => (
+                    <option key={day} value={day}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm text-zinc-700">
+                Delivery
+                <input
+                  value={detail.deliveryMode === "group" ? "Group" : "1-1 / small-group"}
+                  readOnly
+                  className="mt-1 w-full rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2 text-zinc-600"
+                />
+              </label>
+              <label className="text-sm text-zinc-700">
+                Start date
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-zinc-700">
+                End date
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                />
+              </label>
+            </>
+          )}
         </div>
 
         <button
@@ -445,20 +472,34 @@ export function AdminPackageDetailView({ detail, tutors }: AdminPackageDetailVie
       </div>
 
       <div className={`mb-8 ${ui.stack}`}>
-        <RosterSection
-          title="Interested"
-          members={detail.interested}
-          checklistType={checklistType}
-          onUpdated={() => router.refresh()}
+        <AddPackageRunMemberSection
+          kind={detail.kind}
+          runId={detail.id}
+          isCommunity={isCommunity}
+          defaultStatus={addMemberDefaultStatus}
+          onAdded={() => router.refresh()}
         />
-        <RosterSection
-          title="Confirmed"
-          members={detail.confirmed}
-          checklistType={checklistType}
-          onUpdated={() => router.refresh()}
-        />
+        <div id="roster-interested">
+          <RosterSection
+            title="Interested"
+            members={detail.interested}
+            checklistType={checklistType}
+            showChecklist={!isCommunity}
+            onUpdated={() => router.refresh()}
+          />
+        </div>
+        <div id="roster-confirmed">
+          <RosterSection
+            title="Confirmed"
+            members={detail.confirmed}
+            checklistType={checklistType}
+            showChecklist={!isCommunity}
+            onUpdated={() => router.refresh()}
+          />
+        </div>
       </div>
 
+      {!isCommunity && (
       <section className={ui.card}>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Lesson log</h2>
         <p className="mt-1 text-xs text-zinc-500">Lessons unlocked for this package run.</p>
@@ -477,6 +518,18 @@ export function AdminPackageDetailView({ detail, tutors }: AdminPackageDetailVie
           </ul>
         )}
       </section>
+      )}
+
+      {isCommunity && (
+        <section className={ui.card}>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Access</h2>
+          <p className="mt-2 text-sm text-zinc-600">
+            Confirmed community members automatically receive course access. All community lessons
+            unlock without per-lesson tutor unlocks, and community-tier events appear on their
+            Events tab.
+          </p>
+        </section>
+      )}
 
       {showEditModal && (
         <PackageRunFormModal
