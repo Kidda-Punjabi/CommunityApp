@@ -41,6 +41,14 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     needsDeck: true,
   },
   {
+    type: "picture_match",
+    title: "Picture Match",
+    description: "See the picture and pick the correct Punjabi word",
+    emoji: "🖼️",
+    section: "vocabulary",
+    href: "/dashboard/games/picture-match",
+  },
+  {
     type: "streak_survival",
     title: "Streak Survival",
     description: "One wrong answer ends the run — how long can you survive?",

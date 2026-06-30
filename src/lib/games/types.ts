@@ -6,6 +6,7 @@ export const GAME_TYPES = [
   "sentence_builder",
   "conjugation_challenge",
   "gender_sort",
+  "picture_match",
 ] as const;
 
 export type GameType = (typeof GAME_TYPES)[number];
