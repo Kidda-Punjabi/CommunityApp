@@ -1,5 +1,6 @@
-import Link from "next/link";
+import { switchAccount } from "@/app/login/switch-account";
 import type { ContinueAsUser } from "@/lib/auth/continue-as-user";
+import Link from "next/link";
 
 type ContinueAsUserCardProps = {
   user: ContinueAsUser;
@@ -40,7 +41,6 @@ export function ContinueAsUserCard({
   showSwitchLink = true,
 }: ContinueAsUserCardProps) {
   const continueHref = user.sessionActive ? "/dashboard/home" : `/login?email=${encodeURIComponent(user.email)}`;
-  const switchHref = "/login/switch";
 
   if (variant === "home") {
     return (
@@ -63,12 +63,14 @@ export function ContinueAsUserCard({
         </Link>
 
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Link
-            href={switchHref}
-            className="rounded-lg border border-zinc-300 bg-white px-6 py-3 text-center text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
-          >
-            Use another account
-          </Link>
+          <form action={switchAccount} className="flex-1 sm:flex-initial">
+            <button
+              type="submit"
+              className="w-full rounded-lg border border-zinc-300 bg-white px-6 py-3 text-center text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
+            >
+              Use another account
+            </button>
+          </form>
           <Link
             href="/signup"
             className="rounded-lg border border-zinc-300 bg-white px-6 py-3 text-center text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
@@ -107,9 +109,14 @@ export function ContinueAsUserCard({
 
       {showSwitchLink ? (
         <p className="text-center text-sm text-zinc-500">
-          <Link href={switchHref} className="font-medium text-violet-600 hover:text-violet-500">
-            Use another account
-          </Link>
+          <form action={switchAccount} className="inline">
+            <button
+              type="submit"
+              className="font-medium text-violet-600 hover:text-violet-500"
+            >
+              Use another account
+            </button>
+          </form>
         </p>
       ) : null}
     </div>

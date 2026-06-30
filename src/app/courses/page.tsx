@@ -1,3 +1,4 @@
+import { BookCallCard } from "@/components/booking/book-call-card";
 import { getProductContent } from "@/lib/products/content";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -13,8 +14,8 @@ const PRODUCTS = [
   },
   {
     slug: "beginners" as const,
-    tagline: "Speak confidently in 12 weeks",
-    price: "Live group course",
+    tagline: "Group from £400 · 1-to-1 from £480",
+    price: "12-week live course",
   },
   {
     slug: "community" as const,
@@ -43,6 +44,8 @@ export default async function CoursesIndexPage() {
         </p>
 
         <div className={`mt-8 ${ui.stackLoose}`}>
+          <BookCallCard variant="compact" />
+
           {PRODUCTS.map((product) => {
             const content = getProductContent(product.slug);
             return (

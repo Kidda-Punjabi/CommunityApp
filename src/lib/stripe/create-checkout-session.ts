@@ -2,8 +2,8 @@ import "server-only";
 
 import {
   getCheckoutConfig,
-  getPaymentLinkForCheckout,
-  getPriceIdForCheckout,
+  resolveCheckoutPriceId,
+  resolvePaymentLinkForCheckout,
 } from "@/lib/products/checkout";
 import { getAppUrl, getStripe } from "@/lib/stripe/server";
 import { createClient } from "@/lib/supabase/server";
@@ -55,8 +55,8 @@ export async function createCheckoutSession({
     throw new Error("Unknown product.");
   }
 
-  const priceId = getPriceIdForCheckout(checkoutKey);
-  const paymentLink = getPaymentLinkForCheckout(checkoutKey);
+  const priceId = resolveCheckoutPriceId(checkoutKey);
+  const paymentLink = resolvePaymentLinkForCheckout(checkoutKey);
 
   if (!priceId && !paymentLink) {
     throw new Error("Checkout is not configured for this product.");

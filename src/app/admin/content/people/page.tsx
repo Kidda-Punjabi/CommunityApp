@@ -1,5 +1,11 @@
 import { AdminPeopleSection } from "@/components/admin/sections/admin-people-section";
 
-export default function AdminPeoplePage() {
-  return <AdminPeopleSection />;
+type AdminPeoplePageProps = {
+  searchParams: Promise<{ tab?: string }>;
+};
+
+export default async function AdminPeoplePage({ searchParams }: AdminPeoplePageProps) {
+  const { tab } = await searchParams;
+
+  return <AdminPeopleSection initialTab={tab} />;
 }

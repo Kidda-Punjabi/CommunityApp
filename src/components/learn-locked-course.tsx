@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BOOK_CALL_PATH } from "@/lib/booking/constants";
 import type { LearnTrack } from "@/lib/learning/learn-catalog";
 
 type LearnLockedCourseProps = {
@@ -49,8 +50,14 @@ export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps
           </a>
         )}
         <Link
-          href="/dashboard/profile/billing"
+          href={BOOK_CALL_PATH}
           className="mt-3 text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
+          Book a call with our team
+        </Link>
+        <Link
+          href="/dashboard/profile/billing"
+          className="mt-2 text-sm font-medium text-zinc-500 hover:text-violet-600"
         >
           View billing & purchases
         </Link>

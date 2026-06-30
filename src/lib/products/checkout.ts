@@ -4,6 +4,8 @@ export type CheckoutKey =
   | "foundational-refresher"
   | "foundational-full"
   | "beginners"
+  | "beginners-group"
+  | "beginners-one-to-one"
   | "community";
 
 export type CheckoutConfig = {
@@ -37,7 +39,23 @@ export const CHECKOUT_CONFIGS: CheckoutConfig[] = [
     priceIdEnv: "STRIPE_CHECKOUT_PRICE_BEGINNERS",
     paymentLinkEnv: "STRIPE_PAYMENT_LINK_BEGINNERS",
     mode: "payment",
-    label: "Beginners Course",
+    label: "Beginners Course (Group)",
+    productSlug: "beginners",
+  },
+  {
+    key: "beginners-group",
+    priceIdEnv: "STRIPE_CHECKOUT_PRICE_BEGINNERS_GROUP",
+    paymentLinkEnv: "STRIPE_PAYMENT_LINK_BEGINNERS_GROUP",
+    mode: "payment",
+    label: "Beginners Course (Group)",
+    productSlug: "beginners",
+  },
+  {
+    key: "beginners-one-to-one",
+    priceIdEnv: "STRIPE_CHECKOUT_PRICE_BEGINNERS_ONE_TO_ONE",
+    paymentLinkEnv: "STRIPE_PAYMENT_LINK_BEGINNERS_ONE_TO_ONE",
+    mode: "payment",
+    label: "Beginners Course (1-to-1)",
     productSlug: "beginners",
   },
   {
@@ -62,6 +80,13 @@ export function getPriceIdForCheckout(key: string): string | null {
   return priceId;
 }
 
+export function resolveCheckoutPriceId(key: string): string | null {
+  const direct = getPriceIdForCheckout(key);
+  if (direct) return direct;
+  if (key === "beginners-group") return getPriceIdForCheckout("beginners");
+  return null;
+}
+
 export function getPaymentLinkForCheckout(key: string): string | null {
   const config = getCheckoutConfig(key);
   if (!config) return null;
@@ -70,12 +95,19 @@ export function getPaymentLinkForCheckout(key: string): string | null {
   return url;
 }
 
+export function resolvePaymentLinkForCheckout(key: string): string | null {
+  const direct = getPaymentLinkForCheckout(key);
+  if (direct) return direct;
+  if (key === "beginners-group") return getPaymentLinkForCheckout("beginners");
+  return null;
+}
+
 export function isCheckoutConfigured(key: string): boolean {
-  return Boolean(getPriceIdForCheckout(key) || getPaymentLinkForCheckout(key));
+  return Boolean(resolveCheckoutPriceId(key) || resolvePaymentLinkForCheckout(key));
 }
 
 export function isEmbeddedCheckoutConfigured(key: string): boolean {
-  return Boolean(getPriceIdForCheckout(key) && getStripePublishableKey());
+  return Boolean(resolveCheckoutPriceId(key) && getStripePublishableKey());
 }
 
 export function getStripePublishableKey(): string | null {

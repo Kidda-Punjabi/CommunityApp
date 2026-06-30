@@ -1,3 +1,4 @@
+import { BookCallCard } from "@/components/booking/book-call-card";
 import { TIER_LABELS } from "@/lib/membership/tiers";
 import { courseIdsForTiers } from "@/lib/membership/courses";
 import {
@@ -62,6 +63,10 @@ export default async function MembershipPage() {
         >
           Billing & purchases →
         </Link>
+      </div>
+
+      <div className="mb-6">
+        <BookCallCard />
       </div>
 
       <div className="space-y-4">

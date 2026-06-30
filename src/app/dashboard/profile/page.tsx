@@ -1,5 +1,7 @@
 import { LogoutButton } from "@/app/dashboard/logout-button";
+import { BookCallWidget } from "@/components/booking/book-call-widget";
 import { ViewAsPanel } from "@/app/dashboard/profile/view-as-panel";
+import { HelpArticlesLink } from "@/components/help/help-articles-link";
 import { TestOnboardingButton } from "@/components/onboarding/test-onboarding-button";
 import { FriendsSection } from "@/components/profile/friends-section";
 import { InviteFriendsCard } from "@/components/profile/invite-friends-card";
@@ -87,7 +89,24 @@ export default async function ProfilePage() {
         </div>
       </div>
 
-      <div className={`mt-10 ${ui.stackLoose}`}>
+      <section className="mt-8" id="book-call">
+        <div className={ui.card}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            Talk to us
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+            Book a free call with the Kidda team. We&apos;ll help you choose the right course or
+            answer any questions.
+          </p>
+          <BookCallWidget className="mt-4 rounded-2xl border border-zinc-200/60 bg-white" />
+        </div>
+      </section>
+
+      <div className="mt-8">
+        <HelpArticlesLink href="/dashboard/profile/help" />
+      </div>
+
+      <div className={`mt-8 ${ui.stackLoose}`}>
         <FriendsSection
           friends={friendsData.friends}
           requests={friendsData.requests}
@@ -118,6 +137,12 @@ export default async function ProfilePage() {
               className="text-sm font-semibold text-violet-600 hover:text-violet-500"
             >
               {access.isFreeOnly ? "Browse courses →" : "Buy another course →"}
+            </Link>
+            <Link
+              href="#book-call"
+              className="text-sm font-semibold text-violet-600 hover:text-violet-500"
+            >
+              Book a call with our team →
             </Link>
           </div>
         </div>
@@ -157,6 +182,12 @@ export default async function ProfilePage() {
             </p>
             <Link href="/admin/content" className={`mt-4 ${ui.btnPrimary}`}>
               Open admin panel
+            </Link>
+            <Link
+              href="/admin/content/help"
+              className="mt-3 block text-center text-sm font-semibold text-violet-600 hover:text-violet-500"
+            >
+              Admin help articles →
             </Link>
             <TestOnboardingButton />
           </div>

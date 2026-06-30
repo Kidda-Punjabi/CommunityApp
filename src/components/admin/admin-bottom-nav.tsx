@@ -31,7 +31,7 @@ function PeopleIcon({ active }: { active: boolean }) {
   );
 }
 
-function CurriculumIcon({ active }: { active: boolean }) {
+function ContentIcon({ active }: { active: boolean }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
@@ -39,10 +39,10 @@ function CurriculumIcon({ active }: { active: boolean }) {
   );
 }
 
-function GamesIcon({ active }: { active: boolean }) {
+function PackagesIcon({ active }: { active: boolean }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M14.25 6.087c0-.355.186-.676.401-.959.221-.29.349-.634.349-1.003 0-1.036-1.007-1.875-2.25-1.875s-2.25.84-2.25 1.875c0 .369.128.713.349 1.003.215.283.401.604.401.959v0M14.25 6.087c0 .355-.186.676-.401.959a1.32 1.32 0 0 0-.349 1.003c0 1.036 1.007 1.875 2.25 1.875s2.25-.84 2.25-1.875a1.32 1.32 0 0 0-.349-1.003 1.32 1.32 0 0 1-.401-.959v0M14.25 6.087H9m5.25 9.75h3.375c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9m9 9.75v1.5c0 .621-.504 1.125-1.125 1.125H9.75m0 0H6.375c-.621 0-1.125-.504-1.125-1.125V11.25a9 9 0 0 1 9-9m0 9.75v1.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
     </svg>
   );
 }
@@ -68,14 +68,16 @@ const navItems: NavItem[] = [
     match: (pathname) => pathname.startsWith("/admin/content/people"),
   },
   {
-    href: "/admin/content/curriculum",
-    label: "Learn",
-    match: (pathname) => pathname.startsWith("/admin/content/curriculum"),
+    href: "/admin/packages",
+    label: "Packages",
+    match: (pathname) => pathname.startsWith("/admin/packages"),
   },
   {
-    href: "/admin/content/games",
-    label: "Games",
-    match: (pathname) => pathname.startsWith("/admin/content/games"),
+    href: "/admin/content/curriculum",
+    label: "Content",
+    match: (pathname) =>
+      pathname.startsWith("/admin/content/curriculum") ||
+      pathname.startsWith("/admin/content/games"),
   },
   {
     href: "/admin/content/site",
@@ -90,10 +92,10 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
       return <HomeIcon active={active} />;
     case "People":
       return <PeopleIcon active={active} />;
-    case "Learn":
-      return <CurriculumIcon active={active} />;
-    case "Games":
-      return <GamesIcon active={active} />;
+    case "Packages":
+      return <PackagesIcon active={active} />;
+    case "Content":
+      return <ContentIcon active={active} />;
     case "Site":
       return <SiteIcon active={active} />;
     default:

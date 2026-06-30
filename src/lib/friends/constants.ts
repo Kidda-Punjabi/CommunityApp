@@ -6,7 +6,9 @@ export type NotificationType =
   | "announcement"
   | "friend_game_challenge"
   | "friend_game_challenge_result"
-  | "homework_reviewed";
+  | "homework_reviewed"
+  | "student_discount_approved"
+  | "student_discount_rejected";
 
 export type FriendRequestStatus = "pending" | "accepted" | "declined";
 

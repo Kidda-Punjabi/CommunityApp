@@ -1,3 +1,4 @@
+import { BookCallWidget } from "@/components/booking/book-call-widget";
 import { KiddaLogo } from "@/components/branding/kidda-logo";
 import { BuyButton } from "@/components/products/buy-button";
 import { ProductCheckoutSection } from "@/components/products/product-checkout-section";
@@ -7,6 +8,8 @@ import {
   isEmbeddedCheckoutConfigured,
 } from "@/lib/products/checkout";
 import type { ProductPageContent } from "@/lib/products/content";
+import { StudentDiscountSection } from "@/components/products/student-discount-section";
+import type { StudentDiscountRequestView } from "@/lib/student-discounts/types";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
@@ -14,7 +17,7 @@ type ProductLandingProps = {
   content: ProductPageContent;
   isLoggedIn: boolean;
   owned?: boolean;
-  fallbackCheckoutUrl?: string | null;
+  studentDiscountRequests?: StudentDiscountRequestView[];
 };
 
 function checkoutOptionsForContent(content: ProductPageContent) {
@@ -49,7 +52,7 @@ export function ProductLanding({
   content,
   isLoggedIn,
   owned = false,
-  fallbackCheckoutUrl,
+  studentDiscountRequests = [],
 }: ProductLandingProps) {
   const checkoutOptions = checkoutOptionsForContent(content);
   const showEmbeddedCheckout = checkoutOptions.some((option) =>
@@ -63,7 +66,6 @@ export function ProductLanding({
         checkoutKey={checkoutKey}
         label={label}
         configured={isCheckoutConfigured(checkoutKey)}
-        fallbackUrl={fallbackCheckoutUrl}
       />
     );
   }
@@ -75,7 +77,6 @@ export function ProductLanding({
           checkoutKey={primaryKey}
           label={content.heroCta}
           configured={isCheckoutConfigured(primaryKey)}
-          fallbackUrl={fallbackCheckoutUrl}
           className={ui.btnPrimaryBlock}
         />
       );
@@ -135,9 +136,9 @@ export function ProductLanding({
                 Go to Learn →
               </Link>
             </div>
-          ) : (
+          ) : content.slug !== "beginners" ? (
             <div className="mt-8">{heroCta()}</div>
-          )}
+          ) : null}
         </section>
 
         {content.features.length > 0 && (
@@ -306,6 +307,26 @@ export function ProductLanding({
           </section>
         )}
 
+        {!owned && content.slug === "beginners" && (
+          <StudentDiscountSection
+            isLoggedIn={isLoggedIn}
+            requests={studentDiscountRequests}
+          />
+        )}
+
+        {!owned && (
+          <section className="mt-14" id="book-call">
+            <h2 className="text-center font-heading text-xl font-bold text-zinc-900">
+              Not sure which option is right for you?
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-center text-sm text-zinc-600">
+              Book a free call with our team — we&apos;ll help you pick the course that fits your
+              goals.
+            </p>
+            <BookCallWidget className="mt-6 overflow-hidden rounded-3xl border border-zinc-200/60 bg-white shadow-[0_4px_24px_-6px_rgba(24,24,27,0.08)]" />
+          </section>
+        )}
+
         {content.faq.length > 0 && (
           <section className="mt-14">
             <h2 className="mb-6 text-center font-heading text-xl font-bold text-zinc-900">
@@ -315,7 +336,7 @@ export function ProductLanding({
           </section>
         )}
 
-        {!owned && (
+        {!owned && content.slug !== "beginners" && (
           <section className="mt-14 text-center">
             {primaryKey && heroCta()}
           </section>

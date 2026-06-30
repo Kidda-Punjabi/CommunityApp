@@ -7,7 +7,6 @@ type BuyButtonProps = {
   label?: string;
   className?: string;
   configured: boolean;
-  fallbackUrl?: string | null;
 };
 
 export function BuyButton({
@@ -15,18 +14,15 @@ export function BuyButton({
   label = "Buy Now",
   className,
   configured,
-  fallbackUrl,
 }: BuyButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleClick() {
     if (!configured) {
-      if (fallbackUrl) {
-        window.location.href = fallbackUrl;
-        return;
-      }
-      setError("Checkout is not configured yet. Please contact support.");
+      setError(
+        "Checkout is not set up for this option yet. Please contact support or try the other course format."
+      );
       return;
     }
 

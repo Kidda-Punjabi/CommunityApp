@@ -1,8 +1,8 @@
 import { AuthCard } from "@/components/auth-card";
 import { ContinueAsUserCard } from "@/components/auth/continue-as-user-card";
+import { UseAnotherAccountButton } from "@/components/auth/use-another-account-button";
 import { getContinueAsUser } from "@/lib/auth/continue-as-user";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "./login-form";
 
@@ -62,9 +62,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           {showRememberedLogin ? (
             <p className="mt-4 text-center text-sm text-zinc-500">
-              <Link href="/login/switch" className="font-medium text-violet-600 hover:text-violet-500">
-                Use another account
-              </Link>
+              <UseAnotherAccountButton className="font-medium text-violet-600 hover:text-violet-500" />
             </p>
           ) : null}
         </>

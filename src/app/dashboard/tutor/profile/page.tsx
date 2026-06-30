@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
+import { HelpArticlesLink } from "@/components/help/help-articles-link";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { loadTutorDashboard } from "@/lib/tutoring/load-tutor-dashboard";
 import { getDisplayName } from "@/lib/profile/display-name";
@@ -76,6 +77,8 @@ export default async function TutorProfilePage() {
           </p>
           <p className="mt-2 text-sm font-semibold text-violet-600">Open learner profile →</p>
         </Link>
+
+        <HelpArticlesLink href="/dashboard/tutor/profile/help" />
 
         <Link
           href="/dashboard/profile/notifications"

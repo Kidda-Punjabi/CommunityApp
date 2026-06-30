@@ -223,6 +223,14 @@ export function notificationSummary(item: NotificationItem): string {
       }
       return `${name} left feedback on your homework for ${lessonTitle}`;
     }
+    case "student_discount_approved": {
+      const requestLabel = String(item.payload.request_label ?? "your discount application");
+      return `Your ${requestLabel} discount was approved`;
+    }
+    case "student_discount_rejected": {
+      const requestLabel = String(item.payload.request_label ?? "your discount application");
+      return `Your ${requestLabel} discount was not approved`;
+    }
     default:
       return "New notification";
   }

@@ -17,22 +17,28 @@ export function AdminHomeContent() {
 
   const links: HubLink[] = [
     {
+      href: "/admin/content/help",
+      title: "Help articles",
+      description: "FAQs and SOPs for cohorts, members, curriculum, and payments",
+      stat: "Admin guides",
+    },
+    {
       href: "/admin/content/people",
       title: "People",
       description: "Members, Stripe payments, tutors, and staff",
       stat: `${data.enrollments.length} enrollments`,
     },
     {
-      href: "/admin/content/curriculum",
-      title: "Learn content",
-      description: "Courses, lessons, quizzes, and flashcards",
-      stat: `${data.lessons.length} lessons`,
+      href: "/admin/packages",
+      title: "Packages",
+      description: "Group cohorts and 1-1 runs — roster, schedule, and status",
+      stat: `${data.cohorts.length} cohorts`,
     },
     {
-      href: "/admin/content/games",
-      title: "Games",
-      description: "Sentence builder, conjugation, and gender sort",
-      stat: `${data.grammarSentences.length + data.verbConjugations.length + data.genderedNouns.length} items`,
+      href: "/admin/content/curriculum",
+      title: "Content",
+      description: "Learn curriculum and practice games",
+      stat: `${data.lessons.length} lessons`,
     },
     {
       href: "/admin/content/site",

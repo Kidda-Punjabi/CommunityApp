@@ -5,6 +5,7 @@ import { useAdminData } from "@/app/admin/content/admin-data-provider";
 import { SentenceBuilderTab } from "@/app/admin/content/components/sentence-builder-tab";
 import { ConjugationTab } from "@/app/admin/content/components/conjugation-tab";
 import { GenderSortTab } from "@/app/admin/content/components/gender-sort-tab";
+import { AdminContentSubNav } from "@/components/admin/admin-content-sub-nav";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
 import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
 import { ui } from "@/lib/ui/styles";
@@ -23,6 +24,7 @@ export function AdminGamesSection() {
 
   return (
     <div className={ui.page}>
+      <AdminContentSubNav />
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Games</h1>
         <p className="mt-1 text-sm text-zinc-500">

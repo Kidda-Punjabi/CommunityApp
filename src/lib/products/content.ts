@@ -180,7 +180,7 @@ const BEGINNERS_CONTENT: ProductPageContent = {
   heroTitle: "Speak Punjabi Confidently",
   heroHighlight: "In Just 12 Weeks!",
   heroSubtitle:
-    "A 12-week live group course to help you speak, understand, and connect with Punjabi culture — guided by real instructors.",
+    "A 12-week live course to help you speak, understand, and connect with Punjabi culture — choose group lessons or private 1-to-1 tutoring with real instructors.",
   heroCta: "I WANT TO LEARN PUNJABI!",
   scheduleNote: "Next cohort starts: June 20th 2026",
   featuresSectionTitle: "How you'll learn",
@@ -243,9 +243,9 @@ const BEGINNERS_CONTENT: ProductPageContent = {
   pricingTiers: [
     {
       id: "group",
-      name: "12-Week Beginners Course",
+      name: "12-Week Group Course",
       price: "£400",
-      priceNote: "Live group course · 12 weeks · completion certificate",
+      priceNote: "Live group lessons · 12 weeks · completion certificate",
       highlight: true,
       features: [
         "1 live group lesson per week with real instructors",
@@ -253,7 +253,20 @@ const BEGINNERS_CONTENT: ProductPageContent = {
         "Homework, quizzes, and printable resources",
         "Accountability community and completion certificate",
       ],
-      checkoutKey: "beginners",
+      checkoutKey: "beginners-group",
+    },
+    {
+      id: "one-to-one",
+      name: "12-Week 1-to-1 Course",
+      price: "£480",
+      priceNote: "Private lessons with your tutor · flexible pacing · completion certificate",
+      features: [
+        "Private 1-to-1 lessons tailored to your pace",
+        "Personalised feedback and speaking practice",
+        "Homework, quizzes, and printable resources",
+        "Completion certificate when you finish",
+      ],
+      checkoutKey: "beginners-one-to-one",
     },
   ],
   faq: [

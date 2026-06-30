@@ -6,7 +6,7 @@ import {
   PRODUCT_SLUGS,
   type ProductSlug,
 } from "@/lib/products/content";
-import { getCourseCatalog } from "@/lib/stripe/products";
+import { loadUserStudentDiscountRequests } from "@/lib/student-discounts/load-requests";
 import { createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -53,16 +53,17 @@ export default async function CoursePage({ params }: CoursePageProps) {
     owned = [...ids].some((id) => access.unlockedCourseIds.has(id));
   }
 
-  const catalog = getCourseCatalog();
-  const catalogItem = catalog.find((item) => item.tier === content.tier);
-  const fallbackCheckoutUrl = catalogItem?.learnMoreUrl ?? null;
+  let studentDiscountRequests: Awaited<ReturnType<typeof loadUserStudentDiscountRequests>> = [];
+  if (user && slug === "beginners") {
+    studentDiscountRequests = await loadUserStudentDiscountRequests(supabase, user.id);
+  }
 
   return (
     <ProductLanding
       content={content}
       isLoggedIn={Boolean(user)}
       owned={owned}
-      fallbackCheckoutUrl={fallbackCheckoutUrl}
+      studentDiscountRequests={studentDiscountRequests}
     />
   );
 }
