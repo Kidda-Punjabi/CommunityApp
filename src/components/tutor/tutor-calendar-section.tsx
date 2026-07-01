@@ -173,9 +173,11 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
     if (result.success) window.location.reload();
   };
 
-  const who =
-    session.studentName ??
-    (session.cohortName ? `Group · ${session.cohortName}` : "Unmatched event");
+  const who = session.cohort_id
+    ? `Group · ${session.cohortName ?? "Cohort"}`
+    : session.studentName
+      ? `1-to-1 · ${session.studentName}`
+      : "Unmatched event";
 
   return (
     <li className={ui.cardBordered}>
@@ -206,14 +208,21 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
         ) : null}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => void toggleRescheduling()}
-          className={ui.btnGhost}
-        >
-          {session.rescheduling_allowed ? "Lock rescheduling" : "Allow rescheduling"}
-        </button>
+        {!session.cohort_id ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void toggleRescheduling()}
+            className={ui.btnGhost}
+          >
+            {session.rescheduling_allowed ? "Lock rescheduling" : "Allow rescheduling"}
+          </button>
+        ) : (
+          <p className="text-xs text-zinc-500">
+            Group lesson — students can request a different cohort (3 days notice), not a
+            reschedule.
+          </p>
+        )}
         <button
           type="button"
           disabled={pending}

@@ -10,7 +10,8 @@ import {
 } from "@/app/dashboard/tutor/calendar-actions";
 import { LessonsViewToggle, type LessonsViewMode } from "@/components/schedule/lessons-view-toggle";
 import { MonthLessonsCalendar } from "@/components/schedule/month-lessons-calendar";
-import { COHORT_SWITCH_WARNING } from "@/lib/calendar/cohort-switch-policy";
+import { COHORT_SWITCH_CUTOFF_MS, RESCHEDULE_CUTOFF_MS } from "@/lib/calendar/constants";
+import { COHORT_SWITCH_WARNING, GROUP_LESSON_POLICY_NOTE } from "@/lib/calendar/cohort-switch-policy";
 import { formatSessionWhen, hoursUntilSession } from "@/lib/calendar/reschedule-policy";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { ui } from "@/lib/ui/styles";
@@ -67,6 +68,12 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
   const [showCohortSwitchForm, setShowCohortSwitchForm] = useState(false);
   const hoursLeft = hoursUntilSession(session.starts_at);
   const isGroupLesson = Boolean(session.cohort_id);
+  const cohortSwitchCutoffHours = COHORT_SWITCH_CUTOFF_MS / (60 * 60 * 1000);
+  const rescheduleCutoffHours = RESCHEDULE_CUTOFF_MS / (60 * 60 * 1000);
+  const cohortSwitchLocked =
+    isGroupLesson && hoursLeft < cohortSwitchCutoffHours && hoursLeft > 0;
+  const rescheduleLocked =
+    !isGroupLesson && hoursLeft < rescheduleCutoffHours && hoursLeft > 0;
 
   return (
     <li className={ui.cardBordered}>
@@ -77,15 +84,26 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
           </p>
           {isGroupLesson && session.cohortName ? (
             <p className="mt-1 text-xs font-medium text-zinc-500">Group · {session.cohortName}</p>
+          ) : !isGroupLesson ? (
+            <p className="mt-1 text-xs font-medium text-zinc-500">1-to-1</p>
           ) : null}
           <p className="mt-1 font-semibold text-zinc-900">{session.title}</p>
           <p className="mt-1 text-sm text-zinc-500">
             {formatSessionWhen(session.starts_at, session.ends_at)}
           </p>
-          {hoursLeft <= 24 && hoursLeft > 0 ? (
+          {cohortSwitchLocked ? (
+            <p className="mt-2 text-xs font-medium text-amber-700">
+              Starts in {Math.max(1, Math.round(hoursLeft))}h — alternate cohort requests are
+              closed (need 3 days notice)
+            </p>
+          ) : null}
+          {rescheduleLocked ? (
             <p className="mt-2 text-xs font-medium text-amber-700">
               Starts in {Math.max(1, Math.round(hoursLeft))}h — rescheduling is locked
             </p>
+          ) : null}
+          {isGroupLesson && !session.cohortSwitchRequest ? (
+            <p className="mt-2 text-xs text-zinc-500">{GROUP_LESSON_POLICY_NOTE}</p>
           ) : null}
         </div>
         {session.meet_link ? (
@@ -164,7 +182,7 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
         </button>
       ) : null}
 
-      {!session.canRequestReschedule && session.rescheduleLockedReason ? (
+      {!session.canRequestReschedule && session.rescheduleLockedReason && !isGroupLesson ? (
         <p className="mt-3 text-sm text-zinc-500">{session.rescheduleLockedReason}</p>
       ) : null}
 
@@ -353,7 +371,7 @@ function CohortSwitchRequestForm({
       </div>
       <p className="rounded-2xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{COHORT_SWITCH_WARNING}</p>
       <p className="text-xs text-zinc-500">
-        Requests must be made at least 3 days before the lesson.
+        You need to let us know at least 3 days before the lesson.
       </p>
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
       <div className="flex gap-2">

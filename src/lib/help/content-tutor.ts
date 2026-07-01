@@ -114,7 +114,7 @@ export const TUTOR_HELP: HelpContent = {
           id: "student-requests",
           question: "How do I handle reschedule or cohort switch requests?",
           answer:
-            "Students may request changes from their side. Open Calendar or Requests to see pending items — approve, decline, or follow up in admin if it's a cohort allocation issue.",
+            "1-to-1 students can request reschedules (24 hours notice). Group cohort students cannot reschedule — they can only request to join a different cohort, and only if they give at least 3 days notice. Open Calendar or Requests to approve or decline pending items.",
           links: [
             { label: "Calendar", href: "/dashboard/tutor/calendar" },
             { label: "Requests", href: "/dashboard/tutor/requests" },

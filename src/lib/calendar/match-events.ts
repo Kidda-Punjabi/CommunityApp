@@ -6,6 +6,7 @@ export type TutorStudentMatchCandidate = {
   displayName: string;
   cohortId: string | null;
   courseId: string;
+  deliveryMode: "one_to_one" | "group" | null;
 };
 
 export type TutorCohortMatchCandidate = {
@@ -51,7 +52,15 @@ function uniqueStudentsById(
   const byId = new Map<string, TutorStudentMatchCandidate>();
   for (const student of students) {
     const existing = byId.get(student.studentId);
-    if (!existing || (!existing.email && student.email)) {
+    if (!existing) {
+      byId.set(student.studentId, student);
+      continue;
+    }
+
+    const preferNew =
+      (!existing.email && student.email) ||
+      (student.deliveryMode === "group" && existing.deliveryMode !== "group");
+    if (preferNew) {
       byId.set(student.studentId, student);
     }
   }
@@ -76,6 +85,45 @@ function matchStudentsByAttendeeEmails(
   return matched;
 }
 
+function sessionForStudent(
+  student: TutorStudentMatchCandidate,
+  matchMethod: SessionMatchResult["matchMethod"]
+): SessionMatchResult {
+  if (student.deliveryMode === "group" && student.cohortId) {
+    return {
+      studentId: null,
+      cohortId: student.cohortId,
+      courseId: student.courseId,
+      matchMethod,
+    };
+  }
+
+  return {
+    studentId: student.studentId,
+    cohortId: null,
+    courseId: student.courseId,
+    matchMethod,
+  };
+}
+
+function cohortSessionFromStudents(
+  groupStudents: TutorStudentMatchCandidate[],
+  cohorts: TutorCohortMatchCandidate[],
+  matchMethod: SessionMatchResult["matchMethod"]
+): SessionMatchResult | null {
+  const cohortIds = [...new Set(groupStudents.map((student) => student.cohortId).filter(Boolean))];
+  if (cohortIds.length !== 1) return null;
+
+  const cohortId = cohortIds[0]!;
+  const cohort = cohorts.find((entry) => entry.cohortId === cohortId);
+  return {
+    studentId: null,
+    cohortId,
+    courseId: cohort?.courseId ?? groupStudents[0]?.courseId ?? null,
+    matchMethod,
+  };
+}
+
 export function matchEventToStudents(
   event: GoogleCalendarEvent,
   students: TutorStudentMatchCandidate[],
@@ -86,26 +134,24 @@ export function matchEventToStudents(
   const matchedByEmail = matchStudentsByAttendeeEmails(dedupedStudents, attendeeSet);
 
   if (matchedByEmail.length === 1) {
-    const student = matchedByEmail[0];
-    return {
-      studentId: student.studentId,
-      cohortId: null,
-      courseId: student.courseId,
-      matchMethod: "attendee_email",
-    };
+    return sessionForStudent(matchedByEmail[0], "attendee_email");
   }
 
   if (matchedByEmail.length > 1) {
-    const cohortIds = [...new Set(matchedByEmail.map((s) => s.cohortId).filter(Boolean))];
-    if (cohortIds.length === 1) {
-      const cohortId = cohortIds[0]!;
-      const cohort = cohorts.find((c) => c.cohortId === cohortId);
-      return {
-        studentId: null,
-        cohortId,
-        courseId: cohort?.courseId ?? matchedByEmail[0].courseId,
-        matchMethod: "attendee_email",
-      };
+    const groupStudents = matchedByEmail.filter(
+      (student) => student.deliveryMode === "group" && student.cohortId
+    );
+    const oneToOneStudents = matchedByEmail.filter(
+      (student) => student.deliveryMode !== "group"
+    );
+
+    const cohortFromGroup = cohortSessionFromStudents(groupStudents, cohorts, "attendee_email");
+    if (cohortFromGroup && oneToOneStudents.length === 0) {
+      return cohortFromGroup;
+    }
+
+    if (oneToOneStudents.length === 1 && groupStudents.length === 0) {
+      return sessionForStudent(oneToOneStudents[0], "attendee_email");
     }
   }
 
@@ -128,13 +174,7 @@ export function matchEventToStudents(
   );
 
   if (titleMatches.length === 1) {
-    const student = titleMatches[0];
-    return {
-      studentId: student.studentId,
-      cohortId: null,
-      courseId: student.courseId,
-      matchMethod: "title_name",
-    };
+    return sessionForStudent(titleMatches[0], "title_name");
   }
 
   for (const cohort of cohorts) {

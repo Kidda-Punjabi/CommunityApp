@@ -96,6 +96,13 @@ export const STUDENT_HELP: HelpContent = {
           links: [{ label: "Upcoming lessons", href: "/dashboard/schedule" }],
         },
         {
+          id: "group-lesson-changes",
+          question: "Can I reschedule a group lesson?",
+          answer:
+            "No — group cohort sessions can't be rescheduled to a different time. If you can't make your usual group, you can request to join a different cohort for that lesson, but only if you let us know at least 3 days before the session. Open Schedule on the lesson and use “Request to join alternate cohort”. 1-to-1 lessons can still be rescheduled with at least 24 hours notice.",
+          links: [{ label: "Upcoming lessons", href: "/dashboard/schedule" }],
+        },
+        {
           id: "events",
           question: "What are Events?",
           answer:

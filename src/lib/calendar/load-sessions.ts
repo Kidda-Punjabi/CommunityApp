@@ -11,7 +11,7 @@ import type {
 } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isCalendarSchemaMissingError } from "@/lib/calendar/schema";
-import { isSessionVisibleToStudent } from "@/lib/calendar/session-visibility";
+import { isSessionVisibleToStudent, type StudentEnrollmentContext } from "@/lib/calendar/session-visibility";
 
 const IN_FILTER_CHUNK_SIZE = 80;
 
@@ -62,7 +62,7 @@ export async function loadStudentUpcomingSessions(
 
   const { data: enrollments, error: enrollmentsError } = await supabase
     .from("course_enrollments")
-    .select("tutor_id")
+    .select("tutor_id, cohort_id, delivery_mode")
     .eq("user_id", studentId);
 
   if (enrollmentsError) {
@@ -97,9 +97,15 @@ export async function loadStudentUpcomingSessions(
     throw error;
   }
 
+  const enrollmentContext = (enrollments ?? []).map((enrollment) => ({
+    tutorId: enrollment.tutor_id,
+    cohortId: enrollment.cohort_id,
+    deliveryMode: enrollment.delivery_mode as StudentEnrollmentContext["deliveryMode"],
+  }));
+
   const normalizedEmail = studentEmail?.trim().toLowerCase() ?? "";
   const visible = ((sessions ?? []) as ScheduledSessionRow[]).filter((session) =>
-    isSessionVisibleToStudent(session, studentId, normalizedEmail)
+    isSessionVisibleToStudent(session, studentId, normalizedEmail, enrollmentContext)
   );
   if (visible.length === 0) {
     return { sessions: [], schemaReady: true };

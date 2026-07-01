@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { COHORT_SWITCH_CUTOFF_MS } from "@/lib/calendar/constants";
 import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy";
-import { getRescheduleEligibility } from "@/lib/calendar/reschedule-policy";
+import { getRescheduleEligibility, GROUP_LESSON_NO_RESCHEDULE_REASON } from "@/lib/calendar/reschedule-policy";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,6 +41,10 @@ export async function requestLessonReschedule(
     .maybeSingle();
 
   if (sessionError || !session) return { error: "Lesson not found." };
+
+  if (session.cohort_id) {
+    return { error: GROUP_LESSON_NO_RESCHEDULE_REASON };
+  }
 
   const { data: existing } = await supabase
     .from("lesson_reschedule_requests")
@@ -150,7 +154,7 @@ export async function requestCohortSwitch(
   const msUntilStart = new Date(session.starts_at).getTime() - Date.now();
   if (msUntilStart < COHORT_SWITCH_CUTOFF_MS) {
     return {
-      error: "Alternate cohort requests must be made at least 3 days before the lesson.",
+      error: "You need to let us know at least 3 days before the lesson to request a different cohort.",
     };
   }
 
@@ -278,6 +282,17 @@ export async function setSessionReschedulingAllowed(
   allowed: boolean
 ): Promise<CalendarActionResult> {
   const supabase = await createClient();
+  const { data: session, error: sessionError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("cohort_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (sessionError || !session) return { error: "Lesson not found." };
+  if (session.cohort_id) {
+    return { error: "Group lessons can't be rescheduled — students can only request a different cohort." };
+  }
+
   const { error } = await supabase
     .from("tutor_scheduled_sessions")
     .update({ rescheduling_allowed: allowed, updated_at: new Date().toISOString() })

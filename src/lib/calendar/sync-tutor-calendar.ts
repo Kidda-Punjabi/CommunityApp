@@ -50,6 +50,7 @@ type SessionUpsertRow = {
   google_updated_at: string | null;
   updated_at: string;
   status: "scheduled";
+  rescheduling_allowed?: boolean;
 };
 
 async function getValidAccessToken(
@@ -100,12 +101,13 @@ function buildSessionRow(
   match: ReturnType<typeof matchEventToStudents>,
   updatedAt: string
 ): SessionUpsertRow {
+  const cohortId = match.studentId ? null : match.cohortId;
   return {
     tutor_id: tutorId,
     google_event_id: event.id,
     google_recurring_event_id: event.recurringEventId ?? null,
     student_id: match.studentId,
-    cohort_id: match.studentId ? null : match.cohortId,
+    cohort_id: cohortId,
     course_id: match.courseId,
     title: event.summary,
     starts_at: event.start,
@@ -117,6 +119,7 @@ function buildSessionRow(
     google_updated_at: event.updated ?? null,
     updated_at: updatedAt,
     status: "scheduled",
+    ...(cohortId ? { rescheduling_allowed: false } : {}),
   };
 }
 

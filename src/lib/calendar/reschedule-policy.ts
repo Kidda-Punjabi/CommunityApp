@@ -6,14 +6,21 @@ export type RescheduleEligibility = {
   lockedReason: string | null;
 };
 
+export const GROUP_LESSON_NO_RESCHEDULE_REASON =
+  "Group lessons can't be rescheduled. If you can't attend, request to join a different cohort at least 3 days before the lesson.";
+
 export function getRescheduleEligibility(
   session: Pick<
     ScheduledSessionRow,
-    "starts_at" | "rescheduling_allowed" | "status"
+    "starts_at" | "rescheduling_allowed" | "status" | "cohort_id"
   >,
   existingRequest: Pick<RescheduleRequestRow, "status"> | null,
   nowMs = Date.now()
 ): RescheduleEligibility {
+  if (session.cohort_id) {
+    return { canRequest: false, lockedReason: null };
+  }
+
   if (session.status !== "scheduled") {
     return { canRequest: false, lockedReason: "This lesson is no longer scheduled." };
   }

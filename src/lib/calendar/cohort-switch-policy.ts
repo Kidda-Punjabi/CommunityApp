@@ -25,7 +25,7 @@ export function getCohortSwitchEligibility(
     return {
       canRequest: false,
       lockedReason:
-        "Alternate cohort requests must be made at least 3 days before the lesson.",
+        "You need to let us know at least 3 days before the lesson to request a different cohort.",
     };
   }
 
@@ -54,4 +54,7 @@ export function getCohortSwitchEligibility(
 }
 
 export const COHORT_SWITCH_WARNING =
-  "Switching group cohorts is very difficult to accommodate. Your tutor may not be able to approve this request, especially at short notice. Please only request if you genuinely cannot attend your usual group.";
+  "Group lessons can't be rescheduled — this is the only way to change your session if you can't make your usual group. Your tutor may not be able to approve the request. Please only ask if you genuinely cannot attend.";
+
+export const GROUP_LESSON_POLICY_NOTE =
+  "Group sessions can't be rescheduled. If you can't attend, request a different cohort at least 3 days before the lesson.";

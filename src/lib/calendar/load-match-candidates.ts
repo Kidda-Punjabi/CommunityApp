@@ -39,7 +39,7 @@ export async function loadTutorMatchCandidates(
 ): Promise<{ students: TutorStudentMatchCandidate[]; cohorts: TutorCohortMatchCandidate[] }> {
   const { data: enrollments, error } = await adminClient
     .from("course_enrollments")
-    .select("user_id, course_id, cohort_id")
+    .select("user_id, course_id, cohort_id, delivery_mode")
     .eq("tutor_id", tutorId);
 
   if (error) throw error;
@@ -97,6 +97,7 @@ export async function loadTutorMatchCandidates(
       displayName: getDisplayName(profile ?? null) ?? "Student",
       cohortId: enrollment.cohort_id,
       courseId: enrollment.course_id,
+      deliveryMode: enrollment.delivery_mode as TutorStudentMatchCandidate["deliveryMode"],
     };
   });
 
@@ -128,7 +129,15 @@ function dedupeStudentsById(
   const byId = new Map<string, TutorStudentMatchCandidate>();
   for (const student of students) {
     const existing = byId.get(student.studentId);
-    if (!existing || (!existing.email && student.email)) {
+    if (!existing) {
+      byId.set(student.studentId, student);
+      continue;
+    }
+
+    const preferNew =
+      (!existing.email && student.email) ||
+      (student.deliveryMode === "group" && existing.deliveryMode !== "group");
+    if (preferNew) {
       byId.set(student.studentId, student);
     }
   }
