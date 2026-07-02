@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
+import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import { loadTutorPendingRequestCounts } from "@/lib/calendar/load-sessions";
-import { loadTutorDashboard } from "@/lib/tutoring/load-tutor-dashboard";
+import {
+  loadTutorAssignedPackages,
+  loadTutorDashboard,
+  loadTutorTodayLessons,
+  type TutorAssignedPackageRow,
+  type TutorTodayLessonRow,
+} from "@/lib/tutoring/load-tutor-dashboard";
 import { loadPendingHomeworkReviews } from "@/lib/tutoring/homework-submissions";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
@@ -18,13 +25,16 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [params, data, pendingHomework, profile, pendingRequests] = await Promise.all([
+  const [params, data, pendingHomework, profile, pendingRequests, todayLessons, assignedPackages] =
+    await Promise.all([
     searchParams,
     loadTutorDashboard(supabase, user!.id),
     loadPendingHomeworkReviews(supabase),
     loadEditableProfile(supabase, user!.id),
     loadTutorPendingRequestCounts(supabase, user!.id),
-  ]);
+      loadTutorTodayLessons(supabase, user!.id),
+      loadTutorAssignedPackages(supabase, user!.id),
+    ]);
 
   const displayName = getDisplayName(profile);
   const studentCount =
@@ -107,6 +117,30 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
           description="Unlock lessons and add session recordings"
         />
       </ul>
+
+      <section className="mt-10">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+            Today&apos;s lessons
+          </h2>
+          <Link href="/dashboard/tutor/calendar" className="text-sm font-medium text-violet-600 hover:text-violet-500">
+            Open calendar →
+          </Link>
+        </div>
+        <TutorTodayLessonsList lessons={todayLessons} />
+      </section>
+
+      <section className="mt-10">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+            My packages
+          </h2>
+          <Link href="/dashboard/tutor/lessons" className="text-sm font-medium text-violet-600 hover:text-violet-500">
+            Manage lessons →
+          </Link>
+        </div>
+        <TutorAssignedPackagesList packages={assignedPackages} />
+      </section>
     </div>
   );
 }
@@ -160,5 +194,66 @@ function QuickTaskLink({
         </span>
       </Link>
     </li>
+  );
+}
+
+function TutorTodayLessonsList({ lessons }: { lessons: TutorTodayLessonRow[] }) {
+  if (lessons.length === 0) {
+    return (
+      <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500">
+        No lessons scheduled for today.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {lessons.map((lesson) => (
+        <li key={lesson.id} className={`${ui.cardBordered} flex items-start justify-between gap-3`}>
+          <div className="min-w-0">
+            <p className="font-semibold text-zinc-900">{lesson.title}</p>
+            <p className="mt-1 text-sm text-zinc-600">
+              {lesson.cohortName ? `Group · ${lesson.cohortName}` : `1-1 · ${lesson.studentName ?? "Student"}`}
+            </p>
+            <p className="mt-1 text-sm text-zinc-500">{formatSessionWhen(lesson.startsAt, lesson.endsAt)}</p>
+          </div>
+          {lesson.meetLink ? (
+            <a href={lesson.meetLink} target="_blank" rel="noopener noreferrer" className={ui.btnPrimary}>
+              Join
+            </a>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function TutorAssignedPackagesList({ packages }: { packages: TutorAssignedPackageRow[] }) {
+  if (packages.length === 0) {
+    return (
+      <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500">
+        No packages are assigned to you yet.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {packages.map((pkg) => (
+        <li key={`${pkg.kind}-${pkg.id}`}>
+          <Link href={pkg.href} className={`${ui.cardInteractive} block`}>
+            <p className="font-semibold text-zinc-900">{pkg.name}</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              {pkg.courseName} · {pkg.kind === "cohort" ? "Group cohort" : "1-1 package run"}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              {pkg.memberCount} student{pkg.memberCount === 1 ? "" : "s"}
+              {pkg.capacity ? ` / ${pkg.capacity} capacity` : ""}
+              {pkg.status ? ` · ${pkg.status.replace(/_/g, " ")}` : ""}
+            </p>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }

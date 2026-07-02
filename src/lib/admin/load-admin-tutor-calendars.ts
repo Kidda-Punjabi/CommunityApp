@@ -45,6 +45,10 @@ export type AdminTutorCalendarSession = {
   attendeeEmails: string[];
   attendees: AttendeeAccountStatus[];
   inviteeDot: "red" | "yellow" | null;
+  linkedPackageName: string | null;
+  completed: boolean;
+  attendanceMarked: boolean;
+  homeworkMarked: boolean;
 };
 
 export type AdminTutorCalendarsData = {
@@ -429,6 +433,55 @@ export async function loadAdminTutorCalendars(
     enrollmentsByUserId.set(row.user_id, list);
   }
 
+  const sessionIds = sessionRows.map((session) => session.id);
+  const [{ data: packageLinkRows }, { data: logRows }] = await Promise.all([
+    sessionIds.length > 0
+      ? supabase
+          .from("tutor_session_package_links")
+          .select("session_id, student_package_id")
+          .in("session_id", sessionIds)
+      : Promise.resolve({ data: [] }),
+    sessionIds.length > 0
+      ? supabase
+          .from("tutor_session_logs")
+          .select("session_id, completed, attendance_marked, homework_marked")
+          .in("session_id", sessionIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const packageIds = [
+    ...new Set((packageLinkRows ?? []).map((row) => row.student_package_id).filter(Boolean)),
+  ] as string[];
+  const { data: linkedPackageRows } =
+    packageIds.length > 0
+      ? await supabase
+          .from("student_packages")
+          .select("id, package:packages(name)")
+          .in("id", packageIds)
+      : { data: [] };
+
+  const packageNameById = new Map(
+    (linkedPackageRows ?? []).map((row) => {
+      const rel = row.package as { name?: string } | Array<{ name?: string }> | null;
+      const name = Array.isArray(rel) ? rel[0]?.name ?? null : rel?.name ?? null;
+      return [row.id as string, name] as const;
+    })
+  );
+
+  const packageBySession = new Map(
+    (packageLinkRows ?? []).map((row) => [row.session_id as string, row.student_package_id as string] as const)
+  );
+  const logBySession = new Map(
+    (logRows ?? []).map((row) => [
+      row.session_id as string,
+      {
+        completed: Boolean(row.completed),
+        attendanceMarked: Boolean(row.attendance_marked),
+        homeworkMarked: Boolean(row.homework_marked),
+      },
+    ] as const)
+  );
+
   const sessions: AdminTutorCalendarSession[] = sessionRows.map((session) => {
     const excludedByTutor = isSessionExcluded(session, exclusionsByTutor.get(session.tutor_id) ?? []);
     const attendees = resolveAttendees(
@@ -475,6 +528,10 @@ export async function loadAdminTutorCalendars(
         matchedStudent,
         enrollmentsByUserId
       ),
+      linkedPackageName: packageNameById.get(packageBySession.get(session.id) ?? "") ?? null,
+      completed: logBySession.get(session.id)?.completed ?? false,
+      attendanceMarked: logBySession.get(session.id)?.attendanceMarked ?? false,
+      homeworkMarked: logBySession.get(session.id)?.homeworkMarked ?? false,
     };
   });
 

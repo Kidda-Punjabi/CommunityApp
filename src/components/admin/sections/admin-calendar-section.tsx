@@ -508,6 +508,14 @@ export function AdminCalendarSection() {
                             <p className="mt-1 text-sm text-zinc-500">
                               {formatSessionWhen(session.starts_at, session.ends_at)}
                             </p>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              Package: {session.linkedPackageName ?? "Not linked"}
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              Log: {session.completed ? "Completed" : "Not completed"} · Attendance{" "}
+                              {session.attendanceMarked ? "marked" : "not marked"} · Homework{" "}
+                              {session.homeworkMarked ? "marked" : "not marked"}
+                            </p>
                             <SessionAttendeeList attendees={session.attendees} />
                           </div>
                           {session.meet_link ? (

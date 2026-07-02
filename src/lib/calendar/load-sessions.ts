@@ -302,6 +302,10 @@ export async function loadTutorUpcomingSessions(
   const cohortIds = [
     ...new Set(rows.map((row) => row.cohort_id).filter((id): id is string => Boolean(id))),
   ];
+  const courseIds = [
+    ...new Set(rows.map((row) => row.course_id).filter((id): id is string => Boolean(id))),
+  ];
+  const sessionIds = rows.map((row) => row.id);
 
   const [students, cohorts, { data: pendingRows, error: pendingError }] = await Promise.all([
     fetchRowsInChunks(studentIds, (chunk) =>
@@ -332,6 +336,121 @@ export async function loadTutorUpcomingSessions(
     );
   }
 
+  const linkedPackageBySession = new Map<
+    string,
+    { packageId: string; packageName: string | null; bySeries: boolean }
+  >();
+  const packageLinkCountByPackageId = new Map<string, number>();
+  const suggestedPackageBySession = new Map<string, { id: string; name: string | null }>();
+  const logBySession = new Map<
+    string,
+    {
+      completed: boolean;
+      attendanceMarked: boolean;
+      attendanceStatus: "present" | "absent_notified" | "absent_unnotified" | null;
+      homeworkMarked: boolean;
+    }
+  >();
+
+  if (sessionIds.length > 0) {
+    const [{ data: linkRows }, { data: logRows }, { data: enrollmentRows }] = await Promise.all([
+      supabase
+        .from("tutor_session_package_links")
+        .select("session_id, student_package_id, link_scope")
+        .in("session_id", sessionIds),
+      supabase
+        .from("tutor_session_logs")
+        .select("session_id, completed, attendance_marked, attendance_status, homework_marked")
+        .in("session_id", sessionIds),
+      supabase
+        .from("course_enrollments")
+        .select("id, user_id, cohort_id, course_id, student_package_id")
+        .eq("tutor_id", tutorId)
+        .in("course_id", courseIds.length > 0 ? courseIds : ["00000000-0000-0000-0000-000000000000"]),
+    ]);
+
+    const linkedPackageIds = [
+      ...new Set((linkRows ?? []).map((row) => row.student_package_id).filter(Boolean)),
+    ] as string[];
+    const suggestedPackageIds = [
+      ...new Set((enrollmentRows ?? []).map((row) => row.student_package_id).filter(Boolean)),
+    ] as string[];
+    const allPackageIds = [...new Set([...linkedPackageIds, ...suggestedPackageIds])];
+
+    let packageNameById = new Map<string, string | null>();
+    if (allPackageIds.length > 0) {
+      const { data: packageRows } = await supabase
+        .from("student_packages")
+        .select("id, package:packages(name)")
+        .in("id", allPackageIds);
+
+      packageNameById = new Map(
+        (packageRows ?? []).map((row) => {
+          const rel = row.package as { name?: string } | Array<{ name?: string }> | null;
+          const name = Array.isArray(rel) ? rel[0]?.name ?? null : rel?.name ?? null;
+          return [row.id as string, name] as const;
+        })
+      );
+
+      const { data: countRows } = await supabase
+        .from("tutor_session_package_links")
+        .select("student_package_id")
+        .in("student_package_id", allPackageIds);
+      for (const row of countRows ?? []) {
+        const key = row.student_package_id as string;
+        packageLinkCountByPackageId.set(key, (packageLinkCountByPackageId.get(key) ?? 0) + 1);
+      }
+    }
+
+    for (const row of linkRows ?? []) {
+      linkedPackageBySession.set(row.session_id as string, {
+        packageId: row.student_package_id as string,
+        packageName: packageNameById.get(row.student_package_id as string) ?? null,
+        bySeries: (row.link_scope as string) === "series",
+      });
+    }
+
+    const enrollmentByStudentAndCourse = new Map<string, { id: string; name: string | null }>();
+    const enrollmentByCohortAndCourse = new Map<string, { id: string; name: string | null }>();
+    for (const row of enrollmentRows ?? []) {
+      if (row.student_package_id) {
+        const pkg = {
+          id: row.student_package_id as string,
+          name: packageNameById.get(row.student_package_id as string) ?? null,
+        };
+        if (row.user_id) {
+          enrollmentByStudentAndCourse.set(`${row.user_id}:${row.course_id}`, pkg);
+        }
+        if (row.cohort_id) {
+          enrollmentByCohortAndCourse.set(`${row.cohort_id}:${row.course_id}`, pkg);
+        }
+      }
+    }
+    for (const session of rows) {
+      if (session.student_id && session.course_id) {
+        const pkg = enrollmentByStudentAndCourse.get(`${session.student_id}:${session.course_id}`);
+        if (pkg) suggestedPackageBySession.set(session.id, pkg);
+      } else if (session.cohort_id && session.course_id) {
+        const pkg = enrollmentByCohortAndCourse.get(`${session.cohort_id}:${session.course_id}`);
+        if (pkg) suggestedPackageBySession.set(session.id, pkg);
+      }
+    }
+
+    for (const row of logRows ?? []) {
+      logBySession.set(row.session_id as string, {
+        completed: Boolean(row.completed),
+        attendanceMarked: Boolean(row.attendance_marked),
+        attendanceStatus:
+          row.attendance_status === "present" ||
+          row.attendance_status === "absent_notified" ||
+          row.attendance_status === "absent_unnotified"
+            ? row.attendance_status
+            : null,
+        homeworkMarked: Boolean(row.homework_marked),
+      });
+    }
+  }
+
   return {
     schemaReady: true,
     sessions: rows.map((session) => ({
@@ -339,6 +458,19 @@ export async function loadTutorUpcomingSessions(
       studentName: session.student_id ? (studentNameById.get(session.student_id) ?? null) : null,
       cohortName: session.cohort_id ? (cohortNameById.get(session.cohort_id) ?? null) : null,
       pendingRescheduleCount: pendingCountBySession.get(session.id) ?? 0,
+      linkedPackageId: linkedPackageBySession.get(session.id)?.packageId ?? null,
+      linkedPackageName: linkedPackageBySession.get(session.id)?.packageName ?? null,
+      linkedBySeries: linkedPackageBySession.get(session.id)?.bySeries ?? false,
+      linkedLessonCountInPackage:
+        linkedPackageBySession.get(session.id)?.packageId
+          ? packageLinkCountByPackageId.get(linkedPackageBySession.get(session.id)!.packageId) ?? 0
+          : 0,
+      suggestedPackageId: suggestedPackageBySession.get(session.id)?.id ?? null,
+      suggestedPackageName: suggestedPackageBySession.get(session.id)?.name ?? null,
+      completed: logBySession.get(session.id)?.completed ?? false,
+      attendanceMarked: logBySession.get(session.id)?.attendanceMarked ?? false,
+      attendanceStatus: logBySession.get(session.id)?.attendanceStatus ?? null,
+      homeworkMarked: logBySession.get(session.id)?.homeworkMarked ?? false,
     })),
   };
 }

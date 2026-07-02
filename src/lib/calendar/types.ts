@@ -7,6 +7,7 @@ export type TutorCalendarConnectionStatus = {
 };
 
 export type ScheduledSessionStatus = "scheduled" | "cancelled" | "completed";
+export type SessionAttendanceStatus = "present" | "absent_notified" | "absent_unnotified";
 
 export type ScheduledSessionRow = {
   id: string;
@@ -77,6 +78,16 @@ export type TutorScheduledSession = ScheduledSessionRow & {
   studentName: string | null;
   cohortName: string | null;
   pendingRescheduleCount: number;
+  linkedPackageId: string | null;
+  linkedPackageName: string | null;
+  linkedBySeries: boolean;
+  linkedLessonCountInPackage: number;
+  suggestedPackageId: string | null;
+  suggestedPackageName: string | null;
+  completed: boolean;
+  attendanceMarked: boolean;
+  attendanceStatus: SessionAttendanceStatus | null;
+  homeworkMarked: boolean;
 };
 
 export type GoogleCalendarEvent = {

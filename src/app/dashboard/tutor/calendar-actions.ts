@@ -383,3 +383,215 @@ export async function excludeCalendarSession(
         : "Hidden from lesson views — still visible in admin calendar.",
   };
 }
+
+export async function linkSessionToPackage(
+  sessionId: string,
+  studentPackageId: string,
+  scope: "event" | "series" = "event"
+): Promise<CalendarActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: session, error: sessionError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, tutor_id, course_id, google_recurring_event_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (sessionError || !session) return { error: "Lesson not found." };
+  if (session.tutor_id !== user.id) return { error: "Not allowed." };
+
+  const { data: pkg, error: pkgError } = await supabase
+    .from("student_packages")
+    .select("id, course_id")
+    .eq("id", studentPackageId)
+    .maybeSingle();
+  if (pkgError || !pkg) return { error: "Package not found." };
+  if (pkg.course_id !== session.course_id) return { error: "Package is from a different course." };
+
+  if (scope === "series" && !session.google_recurring_event_id) {
+    return { error: "This event is not part of a recurring series." };
+  }
+
+  const { client: adminClient, error: configError } = tryCreateServiceRoleClient();
+  if (!adminClient) return { error: configError };
+
+  let sessionIds = [session.id];
+  if (scope === "series" && session.google_recurring_event_id) {
+    const { data: seriesRows } = await adminClient
+      .from("tutor_scheduled_sessions")
+      .select("id")
+      .eq("tutor_id", user.id)
+      .eq("google_recurring_event_id", session.google_recurring_event_id)
+      .eq("status", "scheduled");
+    sessionIds = [...new Set((seriesRows ?? []).map((row) => row.id))];
+  }
+
+  const payload = sessionIds.map((id) => ({
+    session_id: id,
+    tutor_id: user.id,
+    student_package_id: studentPackageId,
+    link_scope: scope,
+    linked_by: user.id,
+    linked_at: new Date().toISOString(),
+  }));
+
+  const { error } = await adminClient
+    .from("tutor_session_package_links")
+    .upsert(payload, { onConflict: "session_id" });
+
+  if (error) {
+    if (error.code === "PGRST205" || error.message?.includes("tutor_session_package_links")) {
+      return { error: "Package linking tables are not set up yet. Run supabase/tutor-session-package-tracking.sql." };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard/tutor/calendar");
+  revalidatePath("/admin/content/calendar");
+  return {
+    success:
+      scope === "series"
+        ? `Package linked to ${sessionIds.length} lessons in this recurring series.`
+        : "Package linked to this lesson.",
+  };
+}
+
+export async function updateTutorSessionLog(
+  _prev: CalendarActionResult,
+  formData: FormData
+): Promise<CalendarActionResult> {
+  const sessionId = String(formData.get("session_id") ?? "").trim();
+  const completed = formData.get("completed") === "on";
+  const attendanceStatusRaw = String(formData.get("attendance_status") ?? "").trim();
+  const attendanceStatus =
+    attendanceStatusRaw === "present" ||
+    attendanceStatusRaw === "absent_notified" ||
+    attendanceStatusRaw === "absent_unnotified"
+      ? attendanceStatusRaw
+      : null;
+  const attendanceMarked = attendanceStatus !== null;
+  const homeworkMarked = formData.get("homework_marked") === "on";
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  if (!sessionId) return { error: "Session id is required." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: session, error: sessionError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, tutor_id, student_id, starts_at")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (sessionError || !session) return { error: "Lesson not found." };
+  if (session.tutor_id !== user.id) return { error: "Not allowed." };
+
+  const { client: adminClient, error: configError } = tryCreateServiceRoleClient();
+  if (!adminClient) return { error: configError };
+
+  const { data: previousLog } = await adminClient
+    .from("tutor_session_logs")
+    .select("attendance_status")
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  const now = new Date().toISOString();
+  const { error } = await adminClient.from("tutor_session_logs").upsert(
+    {
+      session_id: sessionId,
+      tutor_id: user.id,
+      completed,
+      attendance_marked: attendanceMarked,
+      attendance_status: attendanceStatus,
+      homework_marked: homeworkMarked,
+      notes,
+      completed_at: completed ? now : null,
+      attendance_marked_at: attendanceMarked ? now : null,
+      homework_marked_at: homeworkMarked ? now : null,
+      updated_by: user.id,
+      updated_at: now,
+    },
+    { onConflict: "session_id" }
+  );
+
+  if (error) {
+    if (error.code === "PGRST205" || error.message?.includes("tutor_session_logs")) {
+      return { error: "Lesson logging tables are not set up yet. Run supabase/tutor-session-package-tracking.sql." };
+    }
+    return { error: error.message };
+  }
+
+  const becameUnnotifiedAbsence =
+    attendanceStatus === "absent_unnotified" && previousLog?.attendance_status !== "absent_unnotified";
+
+  if (becameUnnotifiedAbsence && session.student_id) {
+    const firstBody =
+      "Hey, we didn't see you at the session today. Hope everything's all right. Please, in the future, do let us know that you won't be able to make sessions, and also please catch up on the session recording in your Learn section.";
+    await adminClient.rpc("_create_notification", {
+      p_user_id: session.student_id,
+      p_type: "announcement",
+      p_actor_user_id: null,
+      p_payload: {
+        title: "We missed you today",
+        body: firstBody,
+        category: "attendance_absent_unnotified",
+        session_id: sessionId,
+      },
+    });
+
+    const { data: recentSessions } = await adminClient
+      .from("tutor_scheduled_sessions")
+      .select("id, starts_at")
+      .eq("tutor_id", user.id)
+      .eq("student_id", session.student_id)
+      .eq("status", "scheduled")
+      .lte("starts_at", session.starts_at)
+      .order("starts_at", { ascending: false })
+      .limit(12);
+
+    const recentSessionIds = (recentSessions ?? []).map((row) => row.id as string);
+    if (recentSessionIds.length > 0) {
+      const { data: recentLogs } = await adminClient
+        .from("tutor_session_logs")
+        .select("session_id, attendance_status")
+        .in("session_id", recentSessionIds);
+
+      const logBySessionId = new Map(
+        (recentLogs ?? []).map((row) => [row.session_id as string, row.attendance_status as string | null])
+      );
+      const statuses = recentSessionIds
+        .map((id) => logBySessionId.get(id) ?? null)
+        .filter((value): value is string => Boolean(value));
+
+      if (
+        statuses.length >= 2 &&
+        statuses[0] === "absent_unnotified" &&
+        statuses[1] === "absent_unnotified" &&
+        statuses[2] !== "absent_unnotified"
+      ) {
+        const warningBody =
+          "Hey, we've noticed that you haven't attended two sessions and you haven't let the tutor know. Moving forward, please let us know otherwise, to keep the experience fair for all students. Please let us know if you're unable to make it. If something serious has happened, please inform your tutor, as we want to support you. You may be removed from the course if you are not actively participating.";
+        await adminClient.rpc("_create_notification", {
+          p_user_id: session.student_id,
+          p_type: "announcement",
+          p_actor_user_id: null,
+          p_payload: {
+            title: "Attendance warning",
+            body: warningBody,
+            category: "attendance_consecutive_absent_unnotified",
+            session_id: sessionId,
+          },
+        });
+      }
+    }
+  }
+
+  revalidatePath("/dashboard/tutor/calendar");
+  revalidatePath("/admin/content/calendar");
+  return { success: "Lesson log saved." };
+}

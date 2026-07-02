@@ -3,11 +3,6 @@ import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import { LessonAudioPlayer } from "@/components/lesson-audio-player";
 import { LessonPdfViewer } from "@/components/lesson-pdf-viewer";
 import { LessonRecordingPlayer } from "@/components/lesson-recording-player";
-import {
-  LessonCompletionRing,
-  LessonRequirementStatus,
-  PracticeCompleteBadge,
-} from "@/components/lesson-completion-indicator";
 import { deckPracticeHref } from "@/lib/flashcards/utils";
 import {
   SHOW_LESSON_AUDIO,
@@ -18,7 +13,7 @@ import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import type { FlashcardProgressRow } from "@/lib/progress/flashcard-progress";
-import { ui } from "@/lib/ui/styles";
+import { cn, ui } from "@/lib/ui/styles";
 
 type LessonProgress = {
   audioCompleted: boolean;
@@ -29,6 +24,8 @@ type LessonProgress = {
 
 type LessonCardProps = {
   lesson: LessonWithCourse;
+  accordionName?: string;
+  defaultExpanded?: boolean;
   canBrowse: boolean;
   contentUnlocked: boolean;
   requiredCourseLabel?: string;
@@ -44,6 +41,8 @@ type LessonCardProps = {
 
 export function LessonCard({
   lesson,
+  accordionName = "learn-lessons",
+  defaultExpanded = false,
   canBrowse,
   contentUnlocked,
   requiredCourseLabel,
@@ -74,145 +73,311 @@ export function LessonCard({
   const hasLessonContent =
     hasPresentation || hasPdf || hasAudio || Boolean(recording);
 
+  const flashcardsDone = hasFlashcards && flashcardSets.every((set) => isSetComplete(set.cardIds));
+  const rowButtonClass =
+    "inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50";
+  const primaryButtonClass =
+    "inline-flex items-center justify-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500";
+
+  const isTutorLocked = canBrowse && !contentUnlocked;
+
   return (
-    <div id={`lesson-${lesson.id}`} className={`scroll-mt-6 ${ui.cardBordered}`}>
-      <div className="flex items-start justify-between gap-3">
+    <div
+      id={`lesson-${lesson.id}`}
+      className={cn(
+        "scroll-mt-6",
+        ui.cardBordered,
+        isTutorLocked && "border-zinc-200/70 bg-zinc-100/60 opacity-80"
+      )}
+    >
+      {!canBrowse ? (
+        <>
+          <LessonCardHeader
+            lesson={lesson}
+            unitLabel={unitLabel}
+            completion={completion}
+            flashcardsDone={flashcardsDone}
+            quizDone={quizDone}
+          />
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-zinc-500">
+              Unlock with{" "}
+              <span className="font-medium text-zinc-700">
+                {requiredCourseLabel ?? "this course"}
+              </span>
+              .
+            </p>
+            <Link href="/dashboard/membership" className={rowButtonClass}>
+              View plans
+            </Link>
+          </div>
+        </>
+      ) : isTutorLocked ? (
+        <LessonCardHeader
+          lesson={lesson}
+          unitLabel={unitLabel}
+          locked
+          muted
+          ariaLabel={`${unitLabel} ${lesson.lesson_number}: ${lesson.title}. Locked until your tutor unlocks it.`}
+        />
+      ) : (
+        <details name={accordionName} open={defaultExpanded} className="group">
+          <summary className="flex cursor-pointer list-none items-start [&::-webkit-details-marker]:hidden">
+            <LessonCardHeader
+              lesson={lesson}
+              unitLabel={unitLabel}
+              completion={completion}
+              flashcardsDone={flashcardsDone}
+              quizDone={quizDone}
+              chevron
+            />
+          </summary>
+
+          <div className="mt-4 border-t border-zinc-100 pt-2">
+            <ContentRow
+              label="Presentation"
+              subtitle={hasPresentation ? "Slides for this lesson" : "Not available yet"}
+              actionLabel="Open"
+              disabled={!hasPresentation}
+              href={hasPresentation ? lesson.presentation_url! : undefined}
+            />
+            <ContentRow
+              label="Session recording"
+              subtitle={recording ? (recording.title ?? "Watch your replay") : "Not available yet"}
+              actionLabel="Open"
+              disabled={!recording}
+              href={recording ? recording.url : undefined}
+            />
+            {showHomework ? (
+              <ContentRow
+                label="Homework"
+                subtitle={
+                  homework?.status === "reviewed"
+                    ? homework.approved
+                      ? "Reviewed and approved"
+                      : "Reviewed with feedback"
+                    : homework?.status === "pending_review"
+                      ? "Submitted, awaiting review"
+                      : "Not submitted yet"
+                }
+                actionLabel="Open"
+              />
+            ) : null}
+          </div>
+
+          {showHomework ? (
+            <div className="mt-3">
+              <HomeworkSubmissionSection lessonId={lesson.id} submission={homework ?? null} />
+            </div>
+          ) : null}
+
+          {(hasQuiz || hasFlashcards) && (
+            <div className="mt-4 border-t border-zinc-100 pt-4">
+              <p className="text-sm font-medium text-zinc-900">Practice this lesson</p>
+              {hasQuiz ? (
+                <div className="mt-3">
+                  <Link href={`/dashboard/practice/quiz/${quizId}`} className={primaryButtonClass}>
+                    Start quiz{quizTitle ? `: ${quizTitle}` : ""}
+                  </Link>
+                </div>
+              ) : null}
+              {hasFlashcards ? (
+                <div className="mt-3">
+                  {flashcardSets.map((set) => (
+                    <div key={set.deckId} className="mt-2 first:mt-0">
+                      <Link href={deckPracticeHref(lesson.id, set.deckId)} className={rowButtonClass}>
+                        {set.name} ({set.cardCount}) {isSetComplete(set.cardIds) ? "reviewed" : ""}
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {contentUnlocked && !hasLessonContent && (
+            <p className="mt-3 text-sm text-zinc-500">Lesson content coming soon.</p>
+          )}
+
+          {contentUnlocked && hasPdf && (
+            <div className="mt-4 border-t border-zinc-100 pt-4">
+              <p className="mb-1.5 text-sm text-zinc-500">Lesson PDF</p>
+              <LessonPdfViewer
+                lessonId={lesson.id}
+                pdfUrl={lesson.pdf_url!}
+                initialLastPage={progress?.lastPageViewed ?? 0}
+                initialPdfCompleted={progress?.pdfCompleted ?? false}
+              />
+            </div>
+          )}
+
+          {contentUnlocked && hasAudio && (
+            <div className="mt-4 border-t border-zinc-100 pt-4">
+              <p className="mb-1.5 text-sm text-zinc-500">Audio</p>
+              <LessonAudioPlayer
+                lessonId={lesson.id}
+                audioUrl={lesson.audio_url!}
+                initialLastPosition={progress?.lastPosition ?? 0}
+                initialCompleted={progress?.audioCompleted ?? false}
+              />
+            </div>
+          )}
+
+          {contentUnlocked && recording ? <LessonRecordingPlayer recording={recording} /> : null}
+        </details>
+      )}
+    </div>
+  );
+}
+
+function LockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+      className={cn("h-4 w-4 shrink-0", className)}
+    >
+      <path
+        fillRule="evenodd"
+        d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function LessonCardHeader({
+  lesson,
+  unitLabel,
+  completion,
+  flashcardsDone = false,
+  quizDone = false,
+  locked = false,
+  muted = false,
+  chevron = false,
+  ariaLabel,
+}: {
+  lesson: LessonWithCourse;
+  unitLabel: string;
+  completion?: LessonCompletionStatus;
+  flashcardsDone?: boolean;
+  quizDone?: boolean;
+  locked?: boolean;
+  muted?: boolean;
+  chevron?: boolean;
+  ariaLabel?: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-3" aria-label={ariaLabel}>
+      {locked ? (
+        <LockIcon className="mt-1 text-zinc-400" />
+      ) : null}
+      <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+          <p
+            className={cn(
+              "text-xs font-medium",
+              muted ? "text-zinc-400" : "text-violet-600"
+            )}
+          >
             {unitLabel} {lesson.lesson_number}
           </p>
-          <h3 className="mt-1 font-semibold text-zinc-900">{lesson.title}</h3>
-          {contentUnlocked && completion && <LessonRequirementStatus status={completion} />}
-        </div>
-        <div className="flex shrink-0 items-start gap-2">
-          {contentUnlocked && completion && <LessonCompletionRing status={completion} />}
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-              lesson.is_free
-                ? "bg-green-50 text-green-700"
-                : "bg-violet-50 text-violet-700"
-            }`}
+          <h3
+            className={cn(
+              "mt-1 text-lg font-medium",
+              muted ? "text-zinc-500" : "text-zinc-900"
+            )}
           >
-            {lesson.is_free ? "Free" : "Member"}
-          </span>
-        </div>
-      </div>
-
-      {!canBrowse && (
-        <div className="mt-3 space-y-2">
-          <p className="text-sm text-zinc-500">
-            Unlock with{" "}
-            <span className="font-medium text-zinc-700">
-              {requiredCourseLabel ?? "this course"}
-            </span>
-            .
-          </p>
-          <Link
-            href="/dashboard/membership"
-            className="inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
-          >
-            View plans →
-          </Link>
-        </div>
-      )}
-
-      {canBrowse && !contentUnlocked && (
-        <div className="mt-3 rounded-xl bg-amber-50 px-4 py-3">
-          <p className="text-sm text-amber-900">
-            Your tutor will unlock this lesson after your session. Check back here once it is
-            ready.
-          </p>
-        </div>
-      )}
-
-      {contentUnlocked && hasPresentation && (
-        <div className="mt-3">
-          <p className="mb-2 text-xs font-medium text-zinc-500">Presentation</p>
-          <a
-            href={lesson.presentation_url!}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`inline-flex w-full items-center justify-center gap-2 ${ui.btnSecondary}`}
-          >
-            Open presentation
-            <span aria-hidden="true">↗</span>
-          </a>
-        </div>
-      )}
-
-      {contentUnlocked && hasPdf && (
-        <div className="mt-3">
-          <p className="mb-1.5 text-xs font-medium text-zinc-500">Lesson PDF</p>
-          <LessonPdfViewer
-            lessonId={lesson.id}
-            pdfUrl={lesson.pdf_url!}
-            initialLastPage={progress?.lastPageViewed ?? 0}
-            initialPdfCompleted={progress?.pdfCompleted ?? false}
-          />
-        </div>
-      )}
-
-      {contentUnlocked && hasAudio && (
-        <div className={hasPresentation || hasPdf ? "mt-4 border-t border-zinc-100 pt-4" : "mt-3"}>
-          <p className="mb-1.5 text-xs font-medium text-zinc-500">Audio</p>
-          <LessonAudioPlayer
-            lessonId={lesson.id}
-            audioUrl={lesson.audio_url!}
-            initialLastPosition={progress?.lastPosition ?? 0}
-            initialCompleted={progress?.audioCompleted ?? false}
-          />
-        </div>
-      )}
-
-      {contentUnlocked && recording && <LessonRecordingPlayer recording={recording} />}
-
-      {contentUnlocked && showHomework && (
-        <HomeworkSubmissionSection lessonId={lesson.id} submission={homework ?? null} />
-      )}
-
-      {contentUnlocked && !hasLessonContent && (
-        <p className="mt-3 text-sm text-zinc-500">Lesson content coming soon.</p>
-      )}
-
-      {contentUnlocked && (hasQuiz || hasFlashcards) && (
-        <div className="mt-4 space-y-2 border-t border-zinc-100 pt-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Practice this lesson
-          </p>
-          <div className="flex flex-col gap-2">
-            {hasQuiz && (
-              <Link
-                href={`/dashboard/practice/quiz/${quizId}`}
-                className="flex items-center justify-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
-              >
-                <span className="min-w-0 truncate">
-                  Go to quiz{quizTitle ? `: ${quizTitle}` : ""}
+            {lesson.title}
+          </h3>
+          {!locked ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              {completion ? (
+                <span>
+                  {completion.partsDone} of {completion.partsTotal} complete
                 </span>
-                {quizDone && <PracticeCompleteBadge />}
-              </Link>
-            )}
-            {hasFlashcards && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                {flashcardSets.map((set) => {
-                  const setComplete = isSetComplete(set.cardIds);
-
-                  return (
-                    <Link
-                      key={set.deckId}
-                      href={deckPracticeHref(lesson.id, set.deckId)}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 sm:min-w-[12rem]"
-                    >
-                      <span className="min-w-0 truncate">
-                        {set.name} ({set.cardCount})
-                      </span>
-                      {setComplete && <PracticeCompleteBadge />}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+              ) : null}
+              {lesson.is_free ? (
+                <span className="rounded-full border border-zinc-200 px-2 py-0.5">Free</span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
+        {!locked ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <StateBadge label="Flashcards" done={flashcardsDone} muted={muted} />
+            <StateBadge label="Quiz" done={quizDone} muted={muted} />
+            {chevron ? (
+              <span className="text-zinc-400 transition-transform duration-200 group-open:rotate-180">
+                ⌄
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function StateBadge({
+  label,
+  done,
+  muted = false,
+}: {
+  label: string;
+  done: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium",
+        done
+          ? muted
+            ? "border-zinc-200 bg-zinc-100 text-zinc-500"
+            : "border-green-200 bg-green-50 text-green-700"
+          : "border-zinc-200 bg-white text-zinc-600"
+      )}
+    >
+      {done ? "✓" : ""}
+      {label}
+    </span>
+  );
+}
+
+function ContentRow({
+  label,
+  subtitle,
+  actionLabel,
+  href,
+  disabled = false,
+}: {
+  label: string;
+  subtitle?: string;
+  actionLabel: string;
+  href?: string;
+  disabled?: boolean;
+}) {
+  const buttonClass = cn(
+    "inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors",
+    disabled ? "cursor-not-allowed opacity-50" : "hover:bg-zinc-50"
+  );
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-zinc-100 py-3 last:border-b-0">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-zinc-900">{label}</p>
+        {subtitle ? <p className="mt-0.5 text-sm text-zinc-500">{subtitle}</p> : null}
+      </div>
+      {href && !disabled ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className={buttonClass}>
+          {actionLabel}
+        </a>
+      ) : (
+        <button type="button" className={buttonClass} disabled={disabled}>
+          {actionLabel}
+        </button>
       )}
     </div>
   );

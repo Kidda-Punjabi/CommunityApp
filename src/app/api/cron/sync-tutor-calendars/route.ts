@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { syncTutorGoogleCalendar } from "@/lib/calendar/sync-tutor-calendar";
+import { sendHomeworkDueReminders } from "@/lib/tutoring/homework-reminders";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 
 export const maxDuration = 300;
@@ -46,8 +47,11 @@ export async function GET(request: Request) {
     }
   }
 
+  const reminders = await sendHomeworkDueReminders(client);
+
   return NextResponse.json({
     tutors: results.length,
     results,
+    homeworkDueReminders: reminders,
   });
 }

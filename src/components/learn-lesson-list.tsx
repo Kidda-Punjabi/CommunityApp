@@ -54,6 +54,26 @@ export function LearnLessonList({
   unitLabel,
 }: LearnLessonListProps) {
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
+  const defaultExpandedLessonId =
+    lessons.find((lesson) => {
+      const canBrowse = canAccessLessonInContext(access, lesson);
+      const contentUnlocked = isLessonContentUnlockedForUser(
+        access,
+        lesson,
+        unlockedMap.get(lesson.id)
+      );
+      const completion = completionMap.get(lesson.id);
+      return canBrowse && contentUnlocked && completion && !completion.fullyComplete;
+    })?.id ??
+    lessons.find((lesson) => {
+      const canBrowse = canAccessLessonInContext(access, lesson);
+      const contentUnlocked = isLessonContentUnlockedForUser(
+        access,
+        lesson,
+        unlockedMap.get(lesson.id)
+      );
+      return canBrowse && contentUnlocked;
+    })?.id;
 
   const accessibleLessons = lessons.filter((lesson) => {
     const canBrowse = canAccessLessonInContext(access, lesson);
@@ -63,6 +83,16 @@ export function LearnLessonList({
       unlockedMap.get(lesson.id)
     );
     return canBrowse && contentUnlocked;
+  });
+
+  const hasTutorLockedLessons = lessons.some((lesson) => {
+    const canBrowse = canAccessLessonInContext(access, lesson);
+    const contentUnlocked = isLessonContentUnlockedForUser(
+      access,
+      lesson,
+      unlockedMap.get(lesson.id)
+    );
+    return canBrowse && !contentUnlocked;
   });
 
   const progressSummary = courseProgress ?? {
@@ -120,6 +150,8 @@ export function LearnLessonList({
               <LessonCard
                 key={lesson.id}
                 lesson={lesson}
+                accordionName="learn-lessons"
+                defaultExpanded={lesson.id === defaultExpandedLessonId}
                 canBrowse={canBrowse}
                 contentUnlocked={contentUnlocked}
                 requiredCourseLabel={tierLabelForCourse(access.courses, lesson.course_id)}
@@ -142,6 +174,12 @@ export function LearnLessonList({
               />
             );
           })}
+          {hasTutorLockedLessons ? (
+            <p className="pt-2 text-sm text-zinc-500">
+              If a lesson is greyed out or shows a lock, your tutor will unlock it once you have
+              completed that session.
+            </p>
+          ) : null}
         </div>
       )}
     </div>

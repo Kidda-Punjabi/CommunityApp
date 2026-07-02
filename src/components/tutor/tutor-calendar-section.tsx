@@ -3,8 +3,10 @@
 import { useActionState, useState } from "react";
 import {
   excludeCalendarSession,
+  linkSessionToPackage,
   resolveRescheduleRequest,
   setSessionReschedulingAllowed,
+  updateTutorSessionLog,
   type CalendarActionResult,
 } from "@/app/dashboard/tutor/calendar-actions";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
@@ -151,6 +153,7 @@ export function TutorUpcomingSessionsList({ sessions }: TutorUpcomingSessionsLis
 function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [logState, logAction, logPending] = useActionState(updateTutorSessionLog, initial);
 
   const toggleRescheduling = async () => {
     setPending(true);
@@ -168,6 +171,16 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
     setPending(true);
     setMessage(null);
     const result = await excludeCalendarSession(session.id, scope);
+    setMessage(result.success ?? result.error ?? null);
+    setPending(false);
+    if (result.success) window.location.reload();
+  };
+
+  const linkSuggestedPackage = async (scope: "event" | "series") => {
+    if (!session.suggestedPackageId) return;
+    setPending(true);
+    setMessage(null);
+    const result = await linkSessionToPackage(session.id, session.suggestedPackageId, scope);
     setMessage(result.success ?? result.error ?? null);
     setPending(false);
     if (result.success) window.location.reload();
@@ -200,6 +213,35 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
               {session.pendingRescheduleCount === 1 ? "" : "s"}
             </p>
           ) : null}
+          {session.linkedPackageName ? (
+            <p className="mt-2 text-xs font-medium text-emerald-700">
+              Linked package: {session.linkedPackageName}
+              {session.linkedBySeries ? " (series)" : ""}
+              {session.linkedLessonCountInPackage > 0
+                ? ` · ${session.linkedLessonCountInPackage} linked lessons`
+                : ""}
+            </p>
+          ) : session.suggestedPackageName ? (
+            <p className="mt-2 text-xs font-medium text-amber-700">
+              Not linked yet — suggested package: {session.suggestedPackageName}
+            </p>
+          ) : (
+            <p className="mt-2 text-xs font-medium text-rose-700">
+              Not linked to any package yet.
+            </p>
+          )}
+          <p className="mt-2 text-xs text-zinc-500">
+            Log: {session.completed ? "Completed" : "Not completed"} · Attendance{" "}
+            {session.attendanceStatus === "present"
+              ? "present"
+              : session.attendanceStatus === "absent_notified"
+                ? "absent (notified)"
+                : session.attendanceStatus === "absent_unnotified"
+                  ? "absent (didn't tell us)"
+                  : "not marked"}{" "}
+            · Homework{" "}
+            {session.homeworkMarked ? "marked" : "not marked"}
+          </p>
         </div>
         {session.meet_link ? (
           <a href={session.meet_link} target="_blank" rel="noopener noreferrer" className={ui.btnPrimary}>
@@ -231,18 +273,81 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
         >
           Not a lesson
         </button>
-        {session.google_recurring_event_id ? (
+        {session.suggestedPackageId && !session.linkedPackageId ? (
           <button
             type="button"
             disabled={pending}
-            onClick={() => void markNotALesson("series")}
+            onClick={() => void linkSuggestedPackage("event")}
             className={ui.btnGhost}
           >
-            Not a lesson (whole series)
+            Link package
           </button>
+        ) : null}
+        {session.google_recurring_event_id ? (
+          <>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void markNotALesson("series")}
+              className={ui.btnGhost}
+            >
+              Not a lesson (whole series)
+            </button>
+            {session.suggestedPackageId && !session.linkedPackageId ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void linkSuggestedPackage("series")}
+                className={ui.btnGhost}
+              >
+                Link package (whole series)
+              </button>
+            ) : null}
+          </>
         ) : null}
         {message ? <span className="text-xs text-zinc-500">{message}</span> : null}
       </div>
+      <form action={logAction} className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
+        <input type="hidden" name="session_id" value={session.id} />
+        <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
+          <label className="inline-flex items-center gap-1.5">
+            <input type="checkbox" name="completed" defaultChecked={session.completed} />
+            Lesson complete
+          </label>
+          <label className="inline-flex items-center gap-2">
+            Attendance
+            <select
+              name="attendance_status"
+              defaultValue={session.attendanceStatus ?? ""}
+              className="rounded-xl border border-zinc-200 bg-white px-2 py-1 text-xs"
+            >
+              <option value="">Not marked</option>
+              <option value="present">Present</option>
+              <option value="absent_notified">Absent (notified us beforehand)</option>
+              <option value="absent_unnotified">Absent (didn&apos;t tell us)</option>
+            </select>
+          </label>
+          <label className="inline-flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              name="homework_marked"
+              defaultChecked={session.homeworkMarked}
+            />
+            Homework marked
+          </label>
+        </div>
+        <textarea
+          name="notes"
+          rows={2}
+          placeholder="Optional lesson notes"
+          className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-xs"
+        />
+        {logState.error ? <p className="text-xs text-rose-600">{logState.error}</p> : null}
+        {logState.success ? <p className="text-xs text-emerald-700">{logState.success}</p> : null}
+        <button type="submit" disabled={logPending} className={ui.btnGhost}>
+          {logPending ? "Saving log…" : "Save lesson log"}
+        </button>
+      </form>
     </li>
   );
 }

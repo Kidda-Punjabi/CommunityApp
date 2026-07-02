@@ -27,6 +27,27 @@ export type TutorDashboardData = {
   beginnersGroups: TutorCohortRow[];
 };
 
+export type TutorTodayLessonRow = {
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  meetLink: string | null;
+  studentName: string | null;
+  cohortName: string | null;
+};
+
+export type TutorAssignedPackageRow = {
+  id: string;
+  kind: "cohort" | "package_instance";
+  name: string;
+  courseName: string;
+  memberCount: number;
+  capacity: number | null;
+  status: string | null;
+  href: string;
+};
+
 export async function loadTutorDashboard(
   supabase: SupabaseClient,
   tutorId: string
@@ -180,6 +201,152 @@ export async function loadTutorDashboard(
       a.cohortName.localeCompare(b.cohortName)
     ),
   };
+}
+
+function startOfTodayLocal(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfTodayLocal(): Date {
+  const d = startOfTodayLocal();
+  d.setDate(d.getDate() + 1);
+  return d;
+}
+
+export async function loadTutorTodayLessons(
+  supabase: SupabaseClient,
+  tutorId: string
+): Promise<TutorTodayLessonRow[]> {
+  const from = startOfTodayLocal().toISOString();
+  const to = endOfTodayLocal().toISOString();
+
+  const { data: rows } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, title, starts_at, ends_at, meet_link, student_id, cohort_id")
+    .eq("tutor_id", tutorId)
+    .eq("status", "scheduled")
+    .gte("starts_at", from)
+    .lt("starts_at", to)
+    .order("starts_at", { ascending: true });
+
+  const sessions = rows ?? [];
+  if (sessions.length === 0) return [];
+
+  const studentIds = [
+    ...new Set(sessions.map((row) => row.student_id).filter((id): id is string => Boolean(id))),
+  ];
+  const cohortIds = [
+    ...new Set(sessions.map((row) => row.cohort_id).filter((id): id is string => Boolean(id))),
+  ];
+
+  const [{ data: profiles }, { data: cohorts }] = await Promise.all([
+    studentIds.length > 0
+      ? supabase.from("profiles").select("id, full_name, preferred_name").in("id", studentIds)
+      : Promise.resolve({ data: [] }),
+    cohortIds.length > 0
+      ? supabase.from("cohorts").select("id, name").in("id", cohortIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const studentNameById = new Map(
+    (profiles ?? []).map((profile) => [profile.id, getDisplayName(profile) ?? "Student"] as const)
+  );
+  const cohortNameById = new Map((cohorts ?? []).map((cohort) => [cohort.id, cohort.name] as const));
+
+  return sessions.map((row) => ({
+    id: row.id,
+    title: row.title,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    meetLink: row.meet_link,
+    studentName: row.student_id ? (studentNameById.get(row.student_id) ?? null) : null,
+    cohortName: row.cohort_id ? (cohortNameById.get(row.cohort_id) ?? null) : null,
+  }));
+}
+
+export async function loadTutorAssignedPackages(
+  supabase: SupabaseClient,
+  tutorId: string
+): Promise<TutorAssignedPackageRow[]> {
+  const [{ data: cohorts }, { data: instances }] = await Promise.all([
+    supabase
+      .from("cohorts")
+      .select("id, name, course_id, courses(name), capacity, status")
+      .eq("tutor_id", tutorId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("package_instances")
+      .select("id, name, course_id, courses(name), capacity, status")
+      .eq("tutor_id", tutorId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const cohortIds = (cohorts ?? []).map((row) => row.id);
+  const instanceIds = (instances ?? []).map((row) => row.id);
+
+  const [{ data: cohortMembers }, { data: instancePackages }] = await Promise.all([
+    cohortIds.length > 0
+      ? supabase
+          .from("cohort_members")
+          .select("cohort_id")
+          .in("cohort_id", cohortIds)
+          .is("left_at", null)
+      : Promise.resolve({ data: [] }),
+    instanceIds.length > 0
+      ? supabase
+          .from("student_packages")
+          .select("package_instance_id")
+          .in("package_instance_id", instanceIds)
+          .neq("status", "cancelled")
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const cohortCount = new Map<string, number>();
+  for (const row of cohortMembers ?? []) {
+    cohortCount.set(row.cohort_id, (cohortCount.get(row.cohort_id) ?? 0) + 1);
+  }
+  const instanceCount = new Map<string, number>();
+  for (const row of instancePackages ?? []) {
+    if (!row.package_instance_id) continue;
+    instanceCount.set(
+      row.package_instance_id,
+      (instanceCount.get(row.package_instance_id) ?? 0) + 1
+    );
+  }
+
+  const result: TutorAssignedPackageRow[] = [];
+
+  for (const row of cohorts ?? []) {
+    const courseRel = Array.isArray(row.courses) ? row.courses[0] : row.courses;
+    result.push({
+      id: row.id,
+      kind: "cohort",
+      name: row.name,
+      courseName: courseRel?.name ?? "Course",
+      memberCount: cohortCount.get(row.id) ?? 0,
+      capacity: row.capacity ?? null,
+      status: row.status ?? null,
+      href: `/dashboard/tutor/cohort/${row.id}`,
+    });
+  }
+
+  for (const row of instances ?? []) {
+    const courseRel = Array.isArray(row.courses) ? row.courses[0] : row.courses;
+    result.push({
+      id: row.id,
+      kind: "package_instance",
+      name: row.name,
+      courseName: courseRel?.name ?? "Course",
+      memberCount: instanceCount.get(row.id) ?? 0,
+      capacity: row.capacity ?? null,
+      status: row.status ?? null,
+      href: "/dashboard/tutor/lessons",
+    });
+  }
+
+  return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export type TutorLessonRow = {
