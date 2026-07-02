@@ -29,6 +29,12 @@ export function AdminHomeContent() {
       stat: `${data.enrollments.length} enrollments`,
     },
     {
+      href: "/admin/content/calendar",
+      title: "Tutor calendars",
+      description: "View synced lessons and remind tutors to connect Google Calendar",
+      stat: `${data.staffMembers.length} staff`,
+    },
+    {
       href: "/admin/packages",
       title: "Packages",
       description: "Group cohorts and 1-1 runs — roster, schedule, and status",

@@ -1,3 +1,4 @@
+import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import type { GoogleCalendarEvent } from "@/lib/calendar/types";
 
 export type CalendarExclusionRow = {
@@ -25,4 +26,17 @@ export function isCalendarEventExcluded(
   }
 
   return false;
+}
+
+export function isStoredSessionExcluded(
+  session: Pick<ScheduledSessionRow, "google_event_id" | "google_recurring_event_id">,
+  exclusions: CalendarExclusionRow[]
+): boolean {
+  return isCalendarEventExcluded(
+    {
+      id: session.google_event_id,
+      recurringEventId: session.google_recurring_event_id,
+    },
+    exclusions
+  );
 }

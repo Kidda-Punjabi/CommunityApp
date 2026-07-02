@@ -1,4 +1,4 @@
-import { CALENDAR_SYNC_LOOKAHEAD_DAYS } from "@/lib/calendar/constants";
+import { calendarSyncRangeEnd, calendarSyncRangeStart } from "@/lib/calendar/constants";
 import type { GoogleCalendarEvent } from "@/lib/calendar/types";
 
 type GoogleEventsListResponse = {
@@ -63,7 +63,7 @@ function mapGoogleEvent(event: GoogleApiEvent): GoogleCalendarEvent | null {
 async function fetchEventPages(
   accessToken: string,
   calendarId: string,
-  options?: { syncToken?: string | null }
+  options?: { syncToken?: string | null; timeMin?: string; timeMax?: string }
 ): Promise<{
   events: GoogleCalendarEvent[];
   nextSyncToken: string | null;
@@ -74,10 +74,8 @@ async function fetchEventPages(
   let pageToken: string | undefined;
   let nextSyncToken: string | null = null;
 
-  const timeMin = new Date().toISOString();
-  const timeMax = new Date(
-    Date.now() + CALENDAR_SYNC_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000
-  ).toISOString();
+  const timeMin = options?.timeMin ?? calendarSyncRangeStart();
+  const timeMax = options?.timeMax ?? calendarSyncRangeEnd();
   const useIncremental = Boolean(options?.syncToken);
 
   do {
@@ -133,7 +131,7 @@ async function fetchEventPages(
 export async function listGoogleCalendarEvents(
   accessToken: string,
   calendarId: string,
-  options?: { syncToken?: string | null }
+  options?: { syncToken?: string | null; timeMin?: string; timeMax?: string }
 ): Promise<{
   events: GoogleCalendarEvent[];
   nextSyncToken: string | null;

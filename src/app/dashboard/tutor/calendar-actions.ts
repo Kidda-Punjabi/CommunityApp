@@ -373,27 +373,13 @@ export async function excludeCalendarSession(
     return { error: exclusionError.message };
   }
 
-  if (scope === "series" && session.google_recurring_event_id) {
-    const { error: deleteError } = await adminClient
-      .from("tutor_scheduled_sessions")
-      .delete()
-      .eq("tutor_id", user.id)
-      .eq("google_recurring_event_id", session.google_recurring_event_id);
-    if (deleteError) return { error: deleteError.message };
-  } else {
-    const { error: deleteError } = await adminClient
-      .from("tutor_scheduled_sessions")
-      .delete()
-      .eq("id", sessionId);
-    if (deleteError) return { error: deleteError.message };
-  }
-
   revalidatePath("/dashboard/tutor/calendar");
   revalidatePath("/dashboard/schedule");
+  revalidatePath("/admin/content/calendar");
   return {
     success:
       scope === "series"
-        ? "Recurring series hidden — future occurrences will not sync as lessons."
-        : "Removed from upcoming lessons.",
+        ? "Recurring series hidden from lesson views — still visible in admin calendar."
+        : "Hidden from lesson views — still visible in admin calendar.",
   };
 }

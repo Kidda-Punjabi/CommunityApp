@@ -11,6 +11,7 @@ import type {
 } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isCalendarSchemaMissingError } from "@/lib/calendar/schema";
+import { isStoredSessionExcluded, type CalendarExclusionRow } from "@/lib/calendar/exclusions";
 import { isSessionVisibleToStudent, type StudentEnrollmentContext } from "@/lib/calendar/session-visibility";
 
 const IN_FILTER_CHUNK_SIZE = 80;
@@ -29,6 +30,43 @@ async function fetchRowsInChunks<T>(
     if (data) rows.push(...data);
   }
   return rows;
+}
+
+async function loadExclusionsForTutors(
+  supabase: SupabaseClient,
+  tutorIds: string[]
+): Promise<Map<string, CalendarExclusionRow[]>> {
+  const byTutor = new Map<string, CalendarExclusionRow[]>();
+  if (tutorIds.length === 0) return byTutor;
+
+  const rows = await fetchRowsInChunks(tutorIds, (chunk) =>
+    supabase
+      .from("tutor_calendar_event_exclusions")
+      .select("tutor_id, google_event_id, google_recurring_event_id, scope")
+      .in("tutor_id", chunk)
+  );
+
+  for (const row of rows) {
+    const list = byTutor.get(row.tutor_id) ?? [];
+    list.push({
+      google_event_id: row.google_event_id,
+      google_recurring_event_id: row.google_recurring_event_id,
+      scope: row.scope,
+    });
+    byTutor.set(row.tutor_id, list);
+  }
+
+  return byTutor;
+}
+
+function filterExcludedSessions<T extends ScheduledSessionRow>(
+  sessions: T[],
+  exclusionsByTutor: Map<string, CalendarExclusionRow[]>
+): T[] {
+  return sessions.filter(
+    (session) =>
+      !isStoredSessionExcluded(session, exclusionsByTutor.get(session.tutor_id) ?? [])
+  );
 }
 
 export type StudentSessionsLoadResult = {
@@ -97,6 +135,12 @@ export async function loadStudentUpcomingSessions(
     throw error;
   }
 
+  const exclusionsByTutor = await loadExclusionsForTutors(supabase, tutorIds);
+  const withoutExcluded = filterExcludedSessions(
+    (sessions ?? []) as ScheduledSessionRow[],
+    exclusionsByTutor
+  );
+
   const enrollmentContext = (enrollments ?? []).map((enrollment) => ({
     tutorId: enrollment.tutor_id,
     cohortId: enrollment.cohort_id,
@@ -104,7 +148,7 @@ export async function loadStudentUpcomingSessions(
   }));
 
   const normalizedEmail = studentEmail?.trim().toLowerCase() ?? "";
-  const visible = ((sessions ?? []) as ScheduledSessionRow[]).filter((session) =>
+  const visible = withoutExcluded.filter((session) =>
     isSessionVisibleToStudent(session, studentId, normalizedEmail, enrollmentContext)
   );
   if (visible.length === 0) {
@@ -246,7 +290,8 @@ export async function loadTutorUpcomingSessions(
     throw error;
   }
 
-  const rows = (sessions ?? []) as ScheduledSessionRow[];
+  const exclusionsByTutor = await loadExclusionsForTutors(supabase, [tutorId]);
+  const rows = filterExcludedSessions((sessions ?? []) as ScheduledSessionRow[], exclusionsByTutor);
   if (rows.length === 0) {
     return { sessions: [], schemaReady: true };
   }
