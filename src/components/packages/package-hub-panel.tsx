@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { BuyButton } from "@/components/products/buy-button";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { learnTrackPath } from "@/lib/learning/learn-catalog";
+import { ONE_TO_ONE_SESSION_CHECKOUT_KEY, isCheckoutConfigured } from "@/lib/products/checkout";
 import type { StudentPackage } from "@/lib/packages/load-student-packages";
 import { ui } from "@/lib/ui/styles";
 
@@ -33,6 +35,9 @@ function statusClass(status: StudentPackage["status"]): string {
 
 export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps) {
   const learnHref = learnTrackPath(pkg.learnTrackId);
+  const oneToOneCheckoutConfigured = isCheckoutConfigured(ONE_TO_ONE_SESSION_CHECKOUT_KEY);
+  const showBuyExtraLesson =
+    variant === "full" && pkg.status === "active" && Boolean(pkg.tutorName);
 
   return (
     <div className={`${ui.cardBordered} ${variant === "compact" ? "" : "mb-6"} space-y-4`}>
@@ -126,6 +131,23 @@ export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps)
           Community content and events — no personal tutor calendar for this package.
         </p>
       )}
+
+      {showBuyExtraLesson ? (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50/70 px-4 py-3">
+          <p className="text-sm font-semibold text-violet-900">Need an extra 1-to-1 lesson?</p>
+          <p className="mt-1 text-sm text-violet-800">
+            Buy an additional session with your tutor and then choose your time on the schedule page.
+          </p>
+          <div className="mt-3 max-w-xs">
+            <BuyButton
+              checkoutKey={ONE_TO_ONE_SESSION_CHECKOUT_KEY}
+              label="Buy extra 1-to-1 lesson"
+              configured={oneToOneCheckoutConfigured}
+              className={ui.btnPrimary}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {variant === "compact" ? (
         <Link href={learnHref} className={`${ui.btnSecondary} w-full text-center`}>
