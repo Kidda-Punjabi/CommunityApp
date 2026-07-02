@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   getCheckoutConfig,
+  ONE_TO_ONE_SESSION_CHECKOUT_KEY,
   resolveCheckoutPriceId,
   resolvePaymentLinkForCheckout,
 } from "@/lib/products/checkout";
@@ -62,18 +63,32 @@ export async function createCheckoutSession({
     throw new Error("Checkout is not configured for this product.");
   }
 
-  if (!priceId && paymentLink) {
-    return { type: "payment_link" as const, url: paymentLink };
-  }
-
-  const stripe = getStripe();
-  const appUrl = getAppUrl();
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const successPath = `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+  if (!priceId && paymentLink) {
+    return {
+      type: "payment_link" as const,
+      url: appendPaymentLinkParams(paymentLink, {
+        email: user?.email,
+        clientReferenceId: user?.id,
+      }),
+    };
+  }
+
+  const stripe = getStripe();
+  const appUrl = getAppUrl();
+
+  const successPath =
+    checkoutKey === ONE_TO_ONE_SESSION_CHECKOUT_KEY
+      ? `${appUrl}/dashboard/schedule?session_id={CHECKOUT_SESSION_ID}`
+      : `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+  const cancelPath =
+    checkoutKey === ONE_TO_ONE_SESSION_CHECKOUT_KEY
+      ? `${appUrl}/dashboard/schedule`
+      : `${appUrl}/courses/${config.productSlug}`;
   const customerId = user?.email ? await resolveStripeCustomerId(user.id, user.email) : undefined;
 
   const baseParams = {
@@ -96,7 +111,7 @@ export async function createCheckoutSession({
     : await stripe.checkout.sessions.create({
         ...baseParams,
         success_url: successPath,
-        cancel_url: `${appUrl}/courses/${config.productSlug}`,
+        cancel_url: cancelPath,
       });
 
   if (embedded) {
@@ -114,8 +129,19 @@ export async function createCheckoutSession({
 }
 
 export function appendPaymentLinkEmail(url: string, email: string | null | undefined): string {
-  if (!email?.trim()) return url;
+  return appendPaymentLinkParams(url, { email });
+}
+
+export function appendPaymentLinkParams(
+  url: string,
+  params: { email?: string | null; clientReferenceId?: string | null }
+): string {
   const parsed = new URL(url);
-  parsed.searchParams.set("prefilled_email", email.trim());
+  if (params.email?.trim()) {
+    parsed.searchParams.set("prefilled_email", params.email.trim());
+  }
+  if (params.clientReferenceId?.trim()) {
+    parsed.searchParams.set("client_reference_id", params.clientReferenceId.trim());
+  }
   return parsed.toString();
 }

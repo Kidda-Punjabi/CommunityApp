@@ -13,6 +13,8 @@ export type TimeGridSession = {
   subtitle?: string | null;
   detail?: string | null;
   colorIndex?: number;
+  personal?: boolean;
+  inviteeDot?: "red" | "yellow" | null;
 };
 
 export type LayoutedEvent<T extends TimeGridSession = TimeGridSession> = {

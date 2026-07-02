@@ -6,7 +6,10 @@ export type CheckoutKey =
   | "beginners"
   | "beginners-group"
   | "beginners-one-to-one"
+  | "one-to-one-session"
   | "community";
+
+export const ONE_TO_ONE_SESSION_CHECKOUT_KEY = "one-to-one-session" as const;
 
 export type CheckoutConfig = {
   key: CheckoutKey;
@@ -59,6 +62,14 @@ export const CHECKOUT_CONFIGS: CheckoutConfig[] = [
     productSlug: "beginners",
   },
   {
+    key: "one-to-one-session",
+    priceIdEnv: "STRIPE_CHECKOUT_PRICE_ONE_TO_ONE_SESSION",
+    paymentLinkEnv: "STRIPE_PAYMENT_LINK_ONE_TO_ONE_SESSION",
+    mode: "payment",
+    label: "1-to-1 tutoring session",
+    productSlug: "beginners",
+  },
+  {
     key: "community",
     priceIdEnv: "STRIPE_CHECKOUT_PRICE_COMMUNITY",
     paymentLinkEnv: "STRIPE_PAYMENT_LINK_COMMUNITY",
@@ -99,6 +110,9 @@ export function resolvePaymentLinkForCheckout(key: string): string | null {
   const direct = getPaymentLinkForCheckout(key);
   if (direct) return direct;
   if (key === "beginners-group") return getPaymentLinkForCheckout("beginners");
+  if (key === ONE_TO_ONE_SESSION_CHECKOUT_KEY) {
+    return "https://buy.stripe.com/8x2cN62KV3oeeBncA34ZG0C";
+  }
   return null;
 }
 

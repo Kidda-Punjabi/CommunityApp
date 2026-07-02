@@ -237,6 +237,8 @@ function TimeGridEventBlock({ event }: { event: LayoutedEvent }) {
   const leftPercent = (event.column / event.columnCount) * 100;
   const timeLabel = formatTimeRange(event.session.starts_at, event.session.ends_at);
   const isCompact = event.height < 44;
+  const isPersonal = event.session.personal;
+  const inviteeDot = event.session.inviteeDot;
 
   const content = (
     <div
@@ -245,6 +247,7 @@ function TimeGridEventBlock({ event }: { event: LayoutedEvent }) {
         color.bg,
         color.border,
         color.text,
+        isPersonal && "opacity-45 saturate-[0.65]",
         event.session.meet_link && "cursor-pointer hover:brightness-95"
       )}
       style={{
@@ -255,8 +258,22 @@ function TimeGridEventBlock({ event }: { event: LayoutedEvent }) {
       }}
       title={`${event.session.title} · ${timeLabel}`}
     >
-      <p className={cn("truncate font-semibold leading-tight", isCompact ? "text-[11px]" : "text-xs")}>
-        {event.session.title}
+      <p
+        className={cn(
+          "flex min-w-0 items-center gap-1 truncate font-semibold leading-tight",
+          isCompact ? "text-[11px]" : "text-xs"
+        )}
+      >
+        {inviteeDot ? (
+          <span
+            className={cn(
+              "inline-block h-2 w-2 shrink-0 rounded-full",
+              inviteeDot === "red" ? "bg-rose-500" : "bg-amber-400"
+            )}
+            aria-hidden
+          />
+        ) : null}
+        <span className="truncate">{event.session.title}</span>
       </p>
       {!isCompact ? (
         <>

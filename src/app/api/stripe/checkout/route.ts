@@ -1,5 +1,5 @@
 import {
-  appendPaymentLinkEmail,
+  appendPaymentLinkParams,
   createCheckoutSession,
 } from "@/lib/stripe/create-checkout-session";
 import { createClient } from "@/lib/supabase/server";
@@ -31,7 +31,10 @@ export async function POST(request: Request) {
       } = await supabase.auth.getUser();
 
       return NextResponse.json({
-        url: appendPaymentLinkEmail(result.url, user?.email),
+        url: appendPaymentLinkParams(result.url, {
+          email: user?.email,
+          clientReferenceId: user?.id,
+        }),
       });
     }
 

@@ -1,22 +1,29 @@
 import { GoogleCalendarSetupNotice } from "@/components/tutor/google-calendar-setup-notice";
 import { CalendarSchemaNotice } from "@/components/schedule/calendar-schema-notice";
-import Link from "next/link";
+import { TutorAvailabilitySection } from "@/components/tutor/tutor-availability-section";
 import { TutorCalendarAutoSync } from "@/components/tutor/tutor-calendar-auto-sync";
 import { TutorCalendarSyncButton } from "@/components/tutor/tutor-calendar-sync-button";
-import { TutorUpcomingSessionsList } from "@/components/tutor/tutor-calendar-section";
+import { TutorCalendarView } from "@/components/tutor/tutor-calendar-view";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
 import { disconnectGoogleCalendar } from "@/app/dashboard/tutor/calendar-actions";
+import { loadTutorSelfCalendarSessions } from "@/lib/calendar/load-tutor-self-calendar";
 import {
   loadTutorCalendarStatus,
   loadTutorPendingRequestCounts,
-  loadTutorUpcomingSessions,
 } from "@/lib/calendar/load-sessions";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { formatGoogleCalendarError } from "@/lib/calendar/format-google-error";
 import { isGoogleOAuthConfigured } from "@/lib/calendar/google-oauth";
 import { formatCalendarLoadError } from "@/lib/calendar/schema";
+import { TutorPendingBookings } from "@/components/tutor/tutor-pending-bookings";
+import { buildCapacitySummary, computeWeeklyCapacityUsed } from "@/lib/tutoring/availability/capacity";
+import {
+  loadTutorAvailability,
+  loadTutorPendingBookings,
+} from "@/lib/tutoring/availability/load-availability";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
+import Link from "next/link";
 
 type TutorCalendarPageProps = {
   searchParams: Promise<{ connected?: string; error?: string }>;
@@ -31,24 +38,35 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
   const params = await searchParams;
   const status = await loadTutorCalendarStatus(supabase);
 
-  let sessionLoad: Awaited<ReturnType<typeof loadTutorUpcomingSessions>> = {
+  let selfCalendarLoad: Awaited<ReturnType<typeof loadTutorSelfCalendarSessions>> = {
     sessions: [],
     schemaReady: status.schemaReady,
   };
   let pendingRequests = { total: 0, rescheduleCount: 0, cohortSwitchCount: 0 };
   let loadError: string | null = null;
+  let availabilityLoad = await loadTutorAvailability(supabase, user!.id);
+
+  let pendingBookingsLoad = { bookings: [] as Awaited<ReturnType<typeof loadTutorPendingBookings>>["bookings"], schemaReady: true };
 
   try {
-    [sessionLoad, pendingRequests] = await Promise.all([
-      loadTutorUpcomingSessions(supabase, user!.id),
+    [selfCalendarLoad, pendingRequests, availabilityLoad, pendingBookingsLoad] = await Promise.all([
+      loadTutorSelfCalendarSessions(supabase, user!.id),
       loadTutorPendingRequestCounts(supabase, user!.id),
+      loadTutorAvailability(supabase, user!.id),
+      loadTutorPendingBookings(supabase, user!.id),
     ]);
   } catch (error) {
     loadError = formatCalendarLoadError(error);
   }
 
-  const schemaReady = status.schemaReady && sessionLoad.schemaReady;
-  const sessions = sessionLoad.sessions;
+  const schemaReady = status.schemaReady && selfCalendarLoad.schemaReady;
+  const sessions = selfCalendarLoad.sessions;
+
+  const kidRelatedSessions = sessions
+    .filter((session) => !session.excludedByTutor)
+    .map((session) => ({ starts_at: session.starts_at, ends_at: session.ends_at }));
+  const usedHours = computeWeeklyCapacityUsed(kidRelatedSessions);
+  const capacity = buildCapacitySummary(availabilityLoad.settings.weeklyCapacityHours, usedHours);
 
   const oauthConfigured = isGoogleOAuthConfigured();
   const showAdminSetup =
@@ -63,7 +81,7 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
     <div className={ui.page}>
       <TutorPageHeader
         title="Calendar"
-        subtitle="Connect Google Calendar to show upcoming lessons and join links to your students."
+        subtitle="Connect Google Calendar, set your capacity, and review your schedule."
       />
 
       {justConnected ? (
@@ -140,10 +158,20 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
         </Link>
       ) : null}
 
-      <section className="mt-8">
-        <h2 className={ui.sectionTitle}>Upcoming lessons</h2>
-        <TutorUpcomingSessionsList sessions={sessions} />
-      </section>
+      <div className="mb-8">
+        <TutorAvailabilitySection
+          settings={availabilityLoad.settings}
+          windows={availabilityLoad.windows}
+          capacity={capacity}
+          schemaReady={availabilityLoad.schemaReady}
+        />
+      </div>
+
+      {pendingBookingsLoad.schemaReady ? (
+        <TutorPendingBookings bookings={pendingBookingsLoad.bookings} />
+      ) : null}
+
+      {schemaReady ? <TutorCalendarView sessions={sessions} /> : null}
     </div>
   );
 }

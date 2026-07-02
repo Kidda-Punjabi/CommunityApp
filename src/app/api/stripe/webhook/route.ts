@@ -1,3 +1,4 @@
+import { syncBookingCreditFromStripeEvent } from "@/lib/stripe/sync-booking-credit";
 import { syncMembershipFromStripeEvent } from "@/lib/stripe/sync-membership";
 import { getStripe } from "@/lib/stripe/server";
 import { NextResponse } from "next/server";
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await syncBookingCreditFromStripeEvent(event);
     await syncMembershipFromStripeEvent(event);
     return NextResponse.json({ received: true });
   } catch (error) {

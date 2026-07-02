@@ -1,8 +1,10 @@
 import type { AppRole } from "@/lib/auth/admin-access";
 import { ASSIGNABLE_STAFF_ROLES } from "@/lib/auth/admin-access";
 import { hasAnyRole } from "@/lib/auth/profile-roles";
+import { computeInviteeDot } from "@/lib/admin/calendar-session-display";
 import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
 import { isCalendarEventExcluded } from "@/lib/calendar/exclusions";
+import type { StudentEnrollmentContext } from "@/lib/calendar/session-visibility";
 import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import { calendarSyncRangeStart } from "@/lib/calendar/constants";
 import { getDisplayName } from "@/lib/profile/display-name";
@@ -42,6 +44,7 @@ export type AdminTutorCalendarSession = {
   excludedByTutor: boolean;
   attendeeEmails: string[];
   attendees: AttendeeAccountStatus[];
+  inviteeDot: "red" | "yellow" | null;
 };
 
 export type AdminTutorCalendarsData = {
@@ -63,26 +66,55 @@ async function fetchAdminSessions(
   supabase: SupabaseClient,
   tutorIds: string[]
 ): Promise<ScheduledSessionRow[]> {
+  if (tutorIds.length === 0) return [];
+
   const rangeStart = adminCalendarRangeStart();
-  const rows: ScheduledSessionRow[] = [];
+  const { data, error } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("*")
+    .in("tutor_id", tutorIds)
+    .eq("status", "scheduled")
+    .gte("starts_at", rangeStart)
+    .order("starts_at", { ascending: true })
+    .limit(10000);
 
-  for (const tutorId of tutorIds) {
-    const { data, error } = await supabase
-      .from("tutor_scheduled_sessions")
-      .select("*")
-      .eq("tutor_id", tutorId)
-      .eq("status", "scheduled")
-      .gte("starts_at", rangeStart)
-      .order("starts_at", { ascending: true })
-      .limit(10000);
+  if (error) throw error;
+  return (data ?? []) as ScheduledSessionRow[];
+}
 
+async function listAuthUsersForLookup(
+  supabase: SupabaseClient,
+  emails: string[],
+  userIds: string[]
+): Promise<Array<{ id: string; email?: string | null }>> {
+  const normalizedEmails = new Set(emails.map((email) => normalizeEmail(email)).filter(Boolean));
+  const userIdSet = new Set(userIds);
+  if (normalizedEmails.size === 0 && userIdSet.size === 0) return [];
+
+  const matched = new Map<string, { id: string; email?: string | null }>();
+
+  for (let page = 1; page <= 15; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
     if (error) throw error;
-    if (data) rows.push(...(data as ScheduledSessionRow[]));
+    if (!data.users.length) break;
+
+    for (const user of data.users) {
+      const email = user.email ? normalizeEmail(user.email) : "";
+      if (userIdSet.has(user.id) || (email && normalizedEmails.has(email))) {
+        matched.set(user.id, user);
+      }
+    }
+
+    const allTutorsFound = [...userIdSet].every((id) => matched.has(id));
+    const allEmailsFound = [...normalizedEmails].every((lookupEmail) =>
+      [...matched.values()].some(
+        (user) => user.email && normalizeEmail(user.email) === lookupEmail
+      )
+    );
+    if ((allTutorsFound && allEmailsFound) || data.users.length < 200) break;
   }
 
-  return rows.sort(
-    (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
-  );
+  return [...matched.values()];
 }
 
 function buildAccountLookup(
@@ -179,8 +211,6 @@ export async function loadAdminTutorCalendars(
 
   const [
     { data: profiles, error: profilesError },
-    { data: allProfiles, error: allProfilesError },
-    { data: authData, error: authError },
     { data: connections, error: connectionsError },
     { data: exclusionRows, error: exclusionsError },
   ] = await Promise.all([
@@ -188,8 +218,6 @@ export async function loadAdminTutorCalendars(
       .from("profiles")
       .select("id, full_name, preferred_name")
       .in("id", tutorUserIds),
-    supabase.from("profiles").select("id, full_name, preferred_name"),
-    supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     supabase
       .from("tutor_google_calendar_connections")
       .select("tutor_id, google_account_email, connected_at, last_synced_at")
@@ -201,41 +229,100 @@ export async function loadAdminTutorCalendars(
   ]);
 
   let sessionRows: ScheduledSessionRow[] = [];
-  let sessionsError: { message: string } | null = null;
+  let sessionsError: string | null = null;
   try {
     sessionRows = await fetchAdminSessions(supabase, tutorUserIds);
   } catch (e) {
-    sessionsError = { message: e instanceof Error ? e.message : "Failed to load sessions." };
+    sessionsError = e instanceof Error ? e.message : "Failed to load sessions.";
   }
 
   if (profilesError) {
     return { tutors: [], sessions: [], schemaReady: true, error: profilesError.message };
-  }
-  if (authError) {
-    return { tutors: [], sessions: [], schemaReady: true, error: authError.message };
-  }
-  if (allProfilesError) {
-    return { tutors: [], sessions: [], schemaReady: true, error: allProfilesError.message };
   }
 
   const schemaReady = !connectionsError && !sessionsError;
   if (connectionsError?.message?.includes("tutor_google_calendar_connections")) {
     return { tutors: [], sessions: [], schemaReady: false };
   }
-  if (sessionsError?.message?.includes("tutor_scheduled_sessions")) {
+  if (sessionsError?.includes("tutor_scheduled_sessions")) {
     return { tutors: [], sessions: [], schemaReady: false };
   }
   if (connectionsError) {
     return { tutors: [], sessions: [], schemaReady: true, error: connectionsError.message };
   }
-  if (sessionsError) {
-    return { tutors: [], sessions: [], schemaReady: true, error: sessionsError.message };
+
+  const studentIds = [
+    ...new Set(sessionRows.map((row) => row.student_id).filter((id): id is string => Boolean(id))),
+  ];
+  const cohortIds = [
+    ...new Set(sessionRows.map((row) => row.cohort_id).filter((id): id is string => Boolean(id))),
+  ];
+  const attendeeEmails = sessionRows.flatMap((row) => row.attendee_emails ?? []);
+
+  let authUsers: Array<{ id: string; email?: string | null }> = [];
+  let authErrorMessage: string | null = null;
+  try {
+    authUsers = await listAuthUsersForLookup(
+      supabase,
+      [
+        ...attendeeEmails,
+        ...tutorUserIds.flatMap((tutorId) => {
+          const connection = (connections ?? []).find((row) => row.tutor_id === tutorId);
+          return connection?.google_account_email ? [connection.google_account_email] : [];
+        }),
+      ],
+      [...tutorUserIds, ...studentIds]
+    );
+  } catch (e) {
+    authErrorMessage = e instanceof Error ? e.message : "Failed to load user accounts.";
   }
 
-  const authUsers = authData?.users ?? [];
-  const { profileById, userIdByEmail } = buildAccountLookup(authUsers, allProfiles ?? []);
+  const authUserIds = authUsers.map((user) => user.id);
+  const extraProfileIds = authUserIds.filter((id) => !tutorUserIds.includes(id) && !studentIds.includes(id));
+
+  const [{ data: extraProfiles, error: extraProfilesError }, { data: students }, { data: cohorts }] =
+    await Promise.all([
+      extraProfileIds.length > 0
+        ? supabase
+            .from("profiles")
+            .select("id, full_name, preferred_name")
+            .in("id", extraProfileIds)
+        : Promise.resolve({ data: [], error: null }),
+      studentIds.length > 0
+        ? supabase
+            .from("profiles")
+            .select("id, full_name, preferred_name")
+            .in("id", studentIds)
+        : Promise.resolve({ data: [] }),
+      cohortIds.length > 0
+        ? supabase.from("cohorts").select("id, name").in("id", cohortIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+  if (extraProfilesError) {
+    return { tutors: [], sessions: [], schemaReady: true, error: extraProfilesError.message };
+  }
+
+  const allProfiles = [
+    ...new Map(
+      [...(profiles ?? []), ...(extraProfiles ?? []), ...(students ?? [])].map((profile) => [
+        profile.id,
+        profile,
+      ])
+    ).values(),
+  ];
+  const { profileById, userIdByEmail } = buildAccountLookup(authUsers, allProfiles);
 
   const emailById = new Map(authUsers.map((user) => [user.id, user.email ?? null] as const));
+  for (const tutorId of tutorUserIds) {
+    if (!emailById.has(tutorId)) {
+      const connection = (connections ?? []).find((row) => row.tutor_id === tutorId);
+      if (connection?.google_account_email) {
+        emailById.set(tutorId, connection.google_account_email);
+      }
+    }
+  }
+
   const profileByTutorId = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
 
   const connectionByTutor = new Map(
@@ -307,51 +394,95 @@ export async function loadAdminTutorCalendars(
     })
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-  const studentIds = [
-    ...new Set(sessionRows.map((row) => row.student_id).filter((id): id is string => Boolean(id))),
-  ];
-  const cohortIds = [
-    ...new Set(sessionRows.map((row) => row.cohort_id).filter((id): id is string => Boolean(id))),
-  ];
-
-  const [{ data: students }, { data: cohorts }] = await Promise.all([
-    studentIds.length > 0
-      ? supabase
-          .from("profiles")
-          .select("id, full_name, preferred_name")
-          .in("id", studentIds)
-      : Promise.resolve({ data: [] }),
-    cohortIds.length > 0
-      ? supabase.from("cohorts").select("id, name").in("id", cohortIds)
-      : Promise.resolve({ data: [] }),
-  ]);
-
   const studentNameById = new Map(
     (students ?? []).map((student) => [student.id, getDisplayName(student) ?? "Student"])
   );
   const cohortNameById = new Map((cohorts ?? []).map((cohort) => [cohort.id, cohort.name]));
   const tutorNameById = new Map(tutors.map((tutor) => [tutor.tutorId, tutor.displayName]));
 
-  const sessions: AdminTutorCalendarSession[] = sessionRows.map((session) => ({
-    id: session.id,
-    tutorId: session.tutor_id,
-    tutorName: tutorNameById.get(session.tutor_id) ?? "Tutor",
-    title: session.title,
-    starts_at: session.starts_at,
-    ends_at: session.ends_at,
-    meet_link: session.meet_link,
-    studentName: session.student_id ? (studentNameById.get(session.student_id) ?? null) : null,
-    cohortName: session.cohort_id ? (cohortNameById.get(session.cohort_id) ?? null) : null,
-    matchMethod: session.match_method,
-    excludedByTutor: isSessionExcluded(session, exclusionsByTutor.get(session.tutor_id) ?? []),
-    attendeeEmails: session.attendee_emails ?? [],
-    attendees: resolveAttendees(
+  const enrollmentUserIds = [
+    ...new Set([
+      ...studentIds,
+      ...sessionRows.flatMap((row) => row.attendee_emails ?? []).flatMap((email) => {
+        const userId = userIdByEmail.get(normalizeEmail(email));
+        return userId ? [userId] : [];
+      }),
+    ]),
+  ];
+
+  const { data: enrollmentRows } =
+    enrollmentUserIds.length > 0
+      ? await supabase
+          .from("course_enrollments")
+          .select("user_id, tutor_id, cohort_id, delivery_mode")
+          .in("user_id", enrollmentUserIds)
+      : { data: [] };
+
+  const enrollmentsByUserId = new Map<string, StudentEnrollmentContext[]>();
+  for (const row of enrollmentRows ?? []) {
+    const list = enrollmentsByUserId.get(row.user_id) ?? [];
+    list.push({
+      tutorId: row.tutor_id,
+      cohortId: row.cohort_id,
+      deliveryMode: row.delivery_mode as StudentEnrollmentContext["deliveryMode"],
+    });
+    enrollmentsByUserId.set(row.user_id, list);
+  }
+
+  const sessions: AdminTutorCalendarSession[] = sessionRows.map((session) => {
+    const excludedByTutor = isSessionExcluded(session, exclusionsByTutor.get(session.tutor_id) ?? []);
+    const attendees = resolveAttendees(
       session.attendee_emails ?? [],
       tutorEmailsByTutorId.get(session.tutor_id) ?? new Set(),
       userIdByEmail,
       profileById
-    ),
-  }));
+    );
+    const matchedStudent =
+      session.student_id && emailById.has(session.student_id)
+        ? {
+            email: emailById.get(session.student_id) ?? "",
+            hasAccount: true,
+            userId: session.student_id,
+            displayName: studentNameById.get(session.student_id) ?? null,
+          }
+        : session.student_id
+          ? {
+              email: "",
+              hasAccount: true,
+              userId: session.student_id,
+              displayName: studentNameById.get(session.student_id) ?? null,
+            }
+          : null;
 
-  return { tutors, sessions, schemaReady: true };
+    return {
+      id: session.id,
+      tutorId: session.tutor_id,
+      tutorName: tutorNameById.get(session.tutor_id) ?? "Tutor",
+      title: session.title,
+      starts_at: session.starts_at,
+      ends_at: session.ends_at,
+      meet_link: session.meet_link,
+      studentName: session.student_id ? (studentNameById.get(session.student_id) ?? null) : null,
+      cohortName: session.cohort_id ? (cohortNameById.get(session.cohort_id) ?? null) : null,
+      matchMethod: session.match_method,
+      excludedByTutor,
+      attendeeEmails: session.attendee_emails ?? [],
+      attendees,
+      inviteeDot: computeInviteeDot(
+        session,
+        excludedByTutor,
+        attendees,
+        matchedStudent,
+        enrollmentsByUserId
+      ),
+    };
+  });
+
+  const warnings = [sessionsError, authErrorMessage].filter(Boolean);
+  return {
+    tutors,
+    sessions,
+    schemaReady: true,
+    error: warnings.length > 0 ? warnings.join(" ") : undefined,
+  };
 }

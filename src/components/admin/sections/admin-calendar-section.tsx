@@ -7,15 +7,24 @@ import {
   resyncTutorCalendarForAdmin,
 } from "@/app/admin/content/calendar-actions";
 import { AdminFilterPill, AdminStatusPill } from "@/components/admin/admin-filter-pills";
+import {
+  CalendarSessionLegend,
+  SessionTitleWithInviteeDot,
+} from "@/components/admin/calendar-session-legend";
 import { CalendarSchemaNotice } from "@/components/schedule/calendar-schema-notice";
 import { ScheduleViewToggle, type ScheduleViewMode } from "@/components/schedule/schedule-view-toggle";
 import { TimeGridCalendar } from "@/components/schedule/time-grid-calendar";
+import {
+  formatAttendeeAccountSummary,
+  formatInviteeDotSummary,
+  isAdminSessionPersonal,
+} from "@/lib/admin/calendar-session-display";
 import type { AdminTutorCalendarRow, AdminTutorCalendarSession, AttendeeAccountStatus } from "@/lib/admin/load-admin-tutor-calendars";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type { TimeGridSession } from "@/lib/calendar/time-grid-calendar";
 import { cn, ui } from "@/lib/ui/styles";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 function formatSyncTime(iso: string | null): string {
   if (!iso) return "Never synced";
@@ -37,20 +46,10 @@ function formatMatchLabel(session: AdminTutorCalendarSession): string | null {
     case "manual":
       return "Manually matched";
     case "unmatched":
-      return "Unmatched to a student";
+      return null;
     default:
       return null;
   }
-}
-
-function formatAttendeeSummary(attendees: AttendeeAccountStatus[]): string {
-  if (attendees.length === 0) return "No other attendees on invite";
-  return attendees
-    .map((attendee) => {
-      const label = attendee.displayName ?? attendee.email;
-      return attendee.hasAccount ? `${label} · has account` : `${attendee.email} · no account`;
-    })
-    .join(", ");
 }
 
 function sessionSubtitle(session: AdminTutorCalendarSession): string {
@@ -97,13 +96,17 @@ function toTimeGridSessions(
     ends_at: session.ends_at,
     meet_link: session.meet_link,
     subtitle: sessionSubtitle(session),
-    detail: formatAttendeeSummary(session.attendees),
+    detail: formatAttendeeAccountSummary(session.attendees),
     colorIndex: tutorColorIndex.get(session.tutorId) ?? 0,
+    personal: isAdminSessionPersonal(session),
+    inviteeDot: session.inviteeDot,
   }));
 }
 
 export function AdminCalendarSection() {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [schemaReady, setSchemaReady] = useState(true);
   const [tutors, setTutors] = useState<AdminTutorCalendarRow[]>([]);
@@ -115,33 +118,55 @@ export function AdminCalendarSection() {
   const [pendingResync, startResync] = useTransition();
   const [syncingTutorId, setSyncingTutorId] = useState<string | null>(null);
 
-  const reloadCalendars = () => {
-    void fetchAdminTutorCalendars().then((result) => {
-      setTutors(result.tutors);
-      setSessions(result.sessions);
-      setSchemaReady(result.schemaReady);
-      setError(result.error ?? null);
-      setVisibleTutorIds(new Set(result.tutors.map((tutor) => tutor.tutorId)));
+  const applyCalendarResult = useCallback((result: Awaited<ReturnType<typeof fetchAdminTutorCalendars>>) => {
+    setTutors(result.tutors);
+    setSessions(result.sessions);
+    setSchemaReady(result.schemaReady);
+    setError(result.error ?? null);
+    setLoadFailed(false);
+    setVisibleTutorIds((current) => {
+      if (current.size === 0) {
+        return new Set(result.tutors.map((tutor) => tutor.tutorId));
+      }
+      const next = new Set<string>();
+      for (const tutorId of current) {
+        if (result.tutors.some((tutor) => tutor.tutorId === tutorId)) {
+          next.add(tutorId);
+        }
+      }
+      return next.size > 0 ? next : new Set(result.tutors.map((tutor) => tutor.tutorId));
     });
-  };
+  }, []);
+
+  const loadCalendars = useCallback(
+    async (mode: "initial" | "refresh" = "refresh") => {
+      if (mode === "initial") {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+      setLoadFailed(false);
+
+      try {
+        const result = await fetchAdminTutorCalendars();
+        applyCalendarResult(result);
+      } catch (e) {
+        setLoadFailed(true);
+        setError(e instanceof Error ? e.message : "Failed to load tutor calendars.");
+      } finally {
+        if (mode === "initial") {
+          setLoading(false);
+        } else {
+          setRefreshing(false);
+        }
+      }
+    },
+    [applyCalendarResult]
+  );
 
   useEffect(() => {
-    let cancelled = false;
-
-    void fetchAdminTutorCalendars().then((result) => {
-      if (cancelled) return;
-      setTutors(result.tutors);
-      setSessions(result.sessions);
-      setSchemaReady(result.schemaReady);
-      setError(result.error ?? null);
-      setVisibleTutorIds(new Set(result.tutors.map((tutor) => tutor.tutorId)));
-      setLoading(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void loadCalendars("initial");
+  }, [loadCalendars]);
 
   const unsyncedTutors = useMemo(
     () => tutors.filter((tutor) => !tutor.connected),
@@ -199,7 +224,7 @@ export function AdminCalendarSection() {
     startResync(async () => {
       const result = await resyncAllTutorCalendarsForAdmin();
       setNotifyMessage(result.success ?? result.error ?? null);
-      if (result.success) reloadCalendars();
+      if (result.success) void loadCalendars("refresh");
     });
   };
 
@@ -209,14 +234,45 @@ export function AdminCalendarSection() {
     void resyncTutorCalendarForAdmin(tutorId).then((result) => {
       setSyncingTutorId(null);
       setNotifyMessage(result.success ?? result.error ?? null);
-      if (result.success) reloadCalendars();
+      if (result.success) void loadCalendars("refresh");
     });
   };
 
   const connectedTutors = useMemo(() => tutors.filter((tutor) => tutor.connected), [tutors]);
 
   if (loading) {
-    return <p className="text-sm text-zinc-500">Loading tutor calendars…</p>;
+    return (
+      <div className={ui.page}>
+        <p className="text-sm text-zinc-500">Loading tutor calendars…</p>
+      </div>
+    );
+  }
+
+  if (loadFailed && tutors.length === 0) {
+    return (
+      <div className={ui.page}>
+        <div className="mb-6">
+          <Link href="/admin/content" className="text-sm font-medium text-violet-600 hover:text-violet-500">
+            ← Admin home
+          </Link>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">Tutor calendars</h1>
+        </div>
+        <div className={`${ui.cardBordered} space-y-3 p-5`}>
+          <p className="font-semibold text-zinc-900">Couldn&apos;t load tutor calendars</p>
+          <p className="text-sm text-zinc-600">
+            {error ?? "The request failed or timed out. Try refreshing — your data is still in Google Calendar."}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadCalendars("refresh")}
+            disabled={refreshing}
+            className={ui.btnPrimary}
+          >
+            {refreshing ? "Refreshing…" : "Refresh calendars"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!schemaReady) {
@@ -225,21 +281,41 @@ export function AdminCalendarSection() {
 
   return (
     <div className={ui.page}>
-      <div className="mb-6">
-        <Link href="/admin/content" className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Admin home
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">Tutor calendars</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          View tutor calendars, sync everyone from Google, and nudge tutors who haven&apos;t connected
-          yet.
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Link href="/admin/content" className="text-sm font-medium text-violet-600 hover:text-violet-500">
+            ← Admin home
+          </Link>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">Tutor calendars</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            View tutor calendars, sync everyone from Google, and nudge tutors who haven&apos;t connected
+            yet.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void loadCalendars("refresh")}
+          disabled={refreshing}
+          className={ui.btnSecondary}
+        >
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
       </div>
 
       {error ? (
-        <p className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-          {error}
-        </p>
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={() => void loadCalendars("refresh")}
+              disabled={refreshing}
+              className={ui.btnGhost}
+            >
+              {refreshing ? "Refreshing…" : "Try again"}
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {notifyMessage ? (
@@ -361,12 +437,15 @@ export function AdminCalendarSection() {
           </div>
         </div>
 
+        <CalendarSessionLegend sampleColorIndex={0} />
+
         <div className="flex flex-wrap gap-2">
           {tutors.map((tutor) => (
             <AdminFilterPill
               key={tutor.tutorId}
               label={tutor.displayName}
               active={visibleTutorIds.has(tutor.tutorId)}
+              colorIndex={tutorColorIndex.get(tutor.tutorId)}
               onClick={() => toggleTutor(tutor.tutorId)}
             />
           ))}
@@ -390,8 +469,16 @@ export function AdminCalendarSection() {
                 <ul className="space-y-3">
                   {visibleSessions.map((session) => {
                     const matchLabel = formatMatchLabel(session);
+                    const personal = isAdminSessionPersonal(session);
+                    const inviteeDotSummary = formatInviteeDotSummary(session.inviteeDot, session.attendees);
                     return (
-                      <li key={session.id} className={ui.cardBordered}>
+                      <li
+                        key={session.id}
+                        className={cn(
+                          ui.cardBordered,
+                          personal && "bg-zinc-50/80 opacity-80"
+                        )}
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
@@ -401,11 +488,16 @@ export function AdminCalendarSection() {
                               {matchLabel ? (
                                 <AdminStatusPill tone="zinc">{matchLabel}</AdminStatusPill>
                               ) : null}
-                              {session.excludedByTutor ? (
-                                <AdminStatusPill tone="amber">Not a lesson</AdminStatusPill>
-                              ) : null}
                             </div>
-                            <p className="font-semibold text-zinc-900">{session.title}</p>
+                            <p className="font-semibold text-zinc-900">
+                              <SessionTitleWithInviteeDot
+                                title={session.title}
+                                inviteeDot={session.inviteeDot}
+                              />
+                            </p>
+                            {inviteeDotSummary ? (
+                              <p className="mt-1 text-xs text-zinc-500">{inviteeDotSummary}</p>
+                            ) : null}
                             <p className="mt-1 text-sm text-zinc-600">
                               {session.cohortName
                                 ? `Group · ${session.cohortName}`
