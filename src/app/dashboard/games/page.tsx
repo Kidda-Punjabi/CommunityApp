@@ -28,6 +28,26 @@ export default async function GamesPage() {
 
       <div className="space-y-10">
         <section>
+          <h2 className={ui.sectionTitle}>Group games</h2>
+          <Link href="/dashboard/group-games" className={ui.cardInteractive}>
+            <div className="flex items-center gap-4">
+              <span className={ui.listRowIcon} aria-hidden="true">
+                👥
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+                  Live classroom
+                </p>
+                <p className="mt-0.5 font-heading font-semibold text-zinc-900">Group games</p>
+                <p className="mt-0.5 text-sm text-zinc-500">
+                  Host or join a room — Buzz-in, Jeopardy, Chado Pauri, and more
+                </p>
+              </div>
+            </div>
+          </Link>
+        </section>
+
+        <section>
           <h2 className={ui.sectionTitle}>Live PvP</h2>
           <Link href="/dashboard/battle" className={ui.cardInteractive}>
             <div className="flex items-center gap-4">

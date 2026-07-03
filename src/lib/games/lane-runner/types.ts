@@ -27,8 +27,27 @@ export type LaneRunnerGateResult = {
   hit: boolean;
 };
 
+export type CollectibleStatus = "falling" | "caught" | "missed";
+
 export type ActiveCoin = {
   id: string;
   targetLane: LaneIndex;
-  status: "falling" | "holding" | "caught" | "missed";
+  status: CollectibleStatus;
+  /** Ms after mount before this coin begins falling (stagger within a gate round). */
+  startDelayMs: number;
+};
+
+export type ActiveLetter = {
+  id: string;
+  letter: string;
+  targetLane: LaneIndex;
+  status: CollectibleStatus;
+};
+
+export type LaneRunnerRoundSummary = {
+  finalStreak: number;
+  bestStreak: number;
+  coinsEarnedRound: number;
+  gatesAnswered: number;
+  gatesCorrect: number;
 };

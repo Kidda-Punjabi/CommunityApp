@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
   DASH_CYCLE_PX,
   DASH_SCROLL_SPEED,
-  ROAD_DIVIDER_ROTATE_DEG,
+  laneBoundarySegment,
+  laneY,
 } from "@/lib/games/lane-runner/config";
 
 type LaneRunnerRoadProps = {
@@ -12,24 +13,8 @@ type LaneRunnerRoadProps = {
   children: React.ReactNode;
 };
 
-function DashStrip({ stripRef }: { stripRef: React.RefObject<HTMLDivElement | null> }) {
-  return (
-    <div className="absolute inset-0 overflow-hidden" aria-hidden>
-      <div ref={stripRef} className="flex flex-col items-stretch">
-        {Array.from({ length: 24 }).map((_, index) => (
-          <div
-            key={index}
-            className="mx-auto mb-2 h-3 w-1 shrink-0 bg-amber-100"
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function LaneRunnerRoad({ flash, children }: LaneRunnerRoadProps) {
-  const stripLeftRef = useRef<HTMLDivElement>(null);
-  const stripRightRef = useRef<HTMLDivElement>(null);
+  const [dashOffset, setDashOffset] = useState(0);
 
   useEffect(() => {
     let offset = 0;
@@ -38,9 +23,7 @@ export function LaneRunnerRoad({ flash, children }: LaneRunnerRoadProps) {
     const tick = () => {
       offset += DASH_SCROLL_SPEED;
       if (offset >= DASH_CYCLE_PX) offset -= DASH_CYCLE_PX;
-      const transform = `translateY(${offset}px)`;
-      if (stripLeftRef.current) stripLeftRef.current.style.transform = transform;
-      if (stripRightRef.current) stripRightRef.current.style.transform = transform;
+      setDashOffset(offset);
       raf = requestAnimationFrame(tick);
     };
 
@@ -48,29 +31,40 @@ export function LaneRunnerRoad({ flash, children }: LaneRunnerRoadProps) {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  const dividers = ([0, 1] as const).map((boundary) => laneBoundarySegment(boundary));
+
   return (
-    <div className="relative flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-xl border border-zinc-200">
-      <div className="relative h-[28%] shrink-0 bg-violet-100">
-        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-zinc-700" aria-hidden />
+    <div className="relative grid min-h-[28rem] flex-1 grid-rows-[minmax(5.5rem,32%)_minmax(18rem,1fr)] overflow-hidden rounded-xl border border-zinc-300">
+      <div className="relative min-h-[5.5rem] bg-sky-200">
+        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-zinc-800" aria-hidden />
       </div>
 
-      <div className="relative flex-1 bg-zinc-500">
-        <div
-          className="pointer-events-none absolute bottom-0 left-1/3 top-0 w-0.5 origin-bottom bg-zinc-300"
-          style={{ transform: `translateX(-50%) rotate(-${ROAD_DIVIDER_ROTATE_DEG}deg)` }}
+      <div className="relative min-h-0 bg-zinc-500">
+        <svg
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden
         >
-          <DashStrip stripRef={stripLeftRef} />
-        </div>
-        <div
-          className="pointer-events-none absolute bottom-0 left-2/3 top-0 w-0.5 origin-bottom bg-zinc-300"
-          style={{ transform: `translateX(-50%) rotate(${ROAD_DIVIDER_ROTATE_DEG}deg)` }}
-        >
-          <DashStrip stripRef={stripRightRef} />
-        </div>
+          {dividers.map((segment, index) => (
+            <line
+              key={index}
+              x1={segment.x1}
+              y1={segment.y1}
+              x2={segment.x2}
+              y2={segment.y2}
+              stroke="#d4d4d8"
+              strokeWidth={0.35}
+              vectorEffect="non-scaling-stroke"
+              strokeDasharray="1.2 1.2"
+              strokeDashoffset={dashOffset / 8}
+            />
+          ))}
+        </svg>
 
         <div
           className="pointer-events-none absolute inset-x-[8%] border-t-2 border-dashed border-zinc-400"
-          style={{ top: "78%" }}
+          style={{ top: `${laneY(1)}%` }}
           aria-hidden
         />
 

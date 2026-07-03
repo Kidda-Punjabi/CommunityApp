@@ -1,6 +1,6 @@
 "use client";
 
-import { LANE_CENTER_PERCENT, SPRING_EASING } from "@/lib/games/lane-runner/config";
+import { laneX, laneY, SPRING_EASING } from "@/lib/games/lane-runner/config";
 import type { LaneIndex } from "@/lib/games/lane-runner/types";
 
 type LaneRunnerRunnerProps = {
@@ -12,13 +12,14 @@ type LaneRunnerRunnerProps = {
 export function LaneRunnerRunner({ lane, lean, landing }: LaneRunnerRunnerProps) {
   const leanDeg = lean === "left" ? -14 : lean === "right" ? 14 : 0;
   const bounceClass = lean ? "" : "lane-runner-idle";
+  const contactProgress = 1;
 
   return (
     <div
       className="pointer-events-none absolute z-20"
       style={{
-        left: `${LANE_CENTER_PERCENT[lane]}%`,
-        top: "82%",
+        left: `${laneX(lane, contactProgress)}%`,
+        top: `${laneY(contactProgress)}%`,
         transform: "translate(-50%, -50%)",
         transition: `left 0.38s ${SPRING_EASING}`,
       }}

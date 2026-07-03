@@ -1,23 +1,23 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
+import { shuffleArray } from "@/lib/flashcards/utils";
 import {
-  COIN_CONTACT_HOLD_MS,
+  COLLECTIBLE_CONTACT_HOLD_MS,
   COIN_END_SCALE,
-  COIN_FALL_MS,
   COIN_START_SCALE,
-  CONTACT_TOP_PERCENT,
-  HORIZON_TOP_PERCENT,
-  LANE_CENTER_PERCENT,
+  laneX,
+  laneY,
 } from "@/lib/games/lane-runner/config";
 import type { ActiveCoin, LaneIndex } from "@/lib/games/lane-runner/types";
 
 type LaneRunnerCoinProps = {
   coin: ActiveCoin;
+  fallDurationMs: number;
   onArrive: (coinId: string) => void;
 };
 
-export function LaneRunnerCoin({ coin, onArrive }: LaneRunnerCoinProps) {
+export function LaneRunnerCoin({ coin, fallDurationMs, onArrive }: LaneRunnerCoinProps) {
   const [fallen, setFallen] = useState(false);
   const arrivedRef = useRef(false);
   const holdTimerRef = useRef<number | null>(null);
@@ -30,21 +30,22 @@ export function LaneRunnerCoin({ coin, onArrive }: LaneRunnerCoinProps) {
       holdTimerRef.current = null;
     }
 
-    const frame = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setFallen(true));
-    });
+    const delayTimer = window.setTimeout(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setFallen(true));
+      });
+    }, coin.startDelayMs);
+
     return () => {
-      cancelAnimationFrame(frame);
+      window.clearTimeout(delayTimer);
       if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
     };
-  }, [coin.id]);
+  }, [coin.id, coin.startDelayMs]);
 
   const isFalling = coin.status === "falling";
-  const isHolding = coin.status === "holding";
-  const atContact = fallen || isHolding || coin.status === "caught" || coin.status === "missed";
-
-  const top = atContact ? CONTACT_TOP_PERCENT : HORIZON_TOP_PERCENT;
-  const left = atContact ? LANE_CENTER_PERCENT[coin.targetLane] : 50;
+  const progress = fallen ? 1 : 0;
+  const left = laneX(coin.targetLane, progress);
+  const top = laneY(progress);
   const scale = isFalling
     ? fallen
       ? COIN_END_SCALE
@@ -54,25 +55,22 @@ export function LaneRunnerCoin({ coin, onArrive }: LaneRunnerCoinProps) {
       : 0.45;
 
   const statusClass =
-    coin.status === "caught"
-      ? "lane-runner-coin-caught"
-      : coin.status === "missed"
-        ? "lane-runner-coin-missed"
-        : "";
+    coin.status === "missed" ? "lane-runner-coin-missed" : "";
+
+  const bodyClass =
+    coin.status === "caught" ? "lane-runner-coin-caught-inner" : "";
 
   return (
     <div
       className={`pointer-events-none absolute z-[15] ${statusClass}`}
       style={{
-        top: `${top}%`,
         left: `${left}%`,
+        top: `${top}%`,
         transform: `translate(-50%, -50%) scale(${scale})`,
         transition:
-          isFalling && !fallen
-            ? `top ${COIN_FALL_MS}ms linear, left ${COIN_FALL_MS}ms linear, transform ${COIN_FALL_MS}ms linear`
-            : isFalling && fallen
-              ? "none"
-              : undefined,
+          fallen && isFalling
+            ? `left ${fallDurationMs}ms linear, top ${fallDurationMs}ms linear, transform ${fallDurationMs}ms linear`
+            : "none",
       }}
       onTransitionEnd={(event) => {
         if (
@@ -86,10 +84,20 @@ export function LaneRunnerCoin({ coin, onArrive }: LaneRunnerCoinProps) {
         arrivedRef.current = true;
         holdTimerRef.current = window.setTimeout(() => {
           onArrive(coin.id);
-        }, COIN_CONTACT_HOLD_MS);
+        }, COLLECTIBLE_CONTACT_HOLD_MS);
       }}
     >
-      <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-amber-700 bg-amber-400 text-lg font-bold text-amber-900">
+      {coin.status === "caught" ? (
+        <>
+          <span className="lane-runner-coin-catch-ring" aria-hidden />
+          <span className="lane-runner-coin-reward-pop" aria-hidden>
+            +1
+          </span>
+        </>
+      ) : null}
+      <div
+        className={`lane-runner-coin-body flex h-9 w-9 items-center justify-center rounded-full border-2 border-amber-700 bg-amber-400 text-lg font-bold text-amber-900 ${bodyClass}`}
+      >
         ○
       </div>
     </div>
@@ -98,4 +106,13 @@ export function LaneRunnerCoin({ coin, onArrive }: LaneRunnerCoinProps) {
 
 export function randomCoinLane(): LaneIndex {
   return Math.floor(Math.random() * 3) as LaneIndex;
+}
+
+/** One coin per lane when count ≥ 3; otherwise random lanes. */
+export function coinLanesForRound(count: number): LaneIndex[] {
+  const lanes: LaneIndex[] = [0, 1, 2];
+  if (count >= lanes.length) {
+    return shuffleArray(lanes) as LaneIndex[];
+  }
+  return Array.from({ length: count }, () => randomCoinLane());
 }

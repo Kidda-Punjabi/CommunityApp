@@ -85,6 +85,18 @@ export function buildLaneRunnerGate(
   };
 }
 
+export function buildNextLaneRunnerGate(
+  allCards: LaneRunnerFlashcard[],
+  usedIds: Set<string>
+): LaneRunnerGate | null {
+  if (allCards.length < 3) return null;
+
+  const fresh = allCards.filter((card) => !usedIds.has(card.id));
+  const pool = fresh.length >= 3 ? fresh : allCards;
+  const card = pool[Math.floor(Math.random() * pool.length)];
+  return buildLaneRunnerGate(card, allCards);
+}
+
 export function buildLaneRunnerRound(
   allCards: LaneRunnerFlashcard[],
   gateCount: number

@@ -73,12 +73,93 @@ h6 {
   animation: lane-runner-land-pulse 0.2s ease-out forwards;
 }
 
-.lane-runner-coin-caught {
-  transition:
-    transform 0.22s ease-out,
-    opacity 0.22s ease-out !important;
-  transform: translate(-50%, -70%) scale(1.75) !important;
-  opacity: 0 !important;
+.lane-runner-coin-caught-inner {
+  animation: lane-runner-coin-body-pop 0.35s ease-out forwards;
+}
+
+@keyframes lane-runner-coin-body-pop {
+  0% {
+    transform: scale(1);
+    background-color: #fbbf24;
+  }
+  45% {
+    transform: scale(1.35);
+    background-color: #fde68a;
+    box-shadow: 0 0 0 4px rgb(251 191 36 / 0.45);
+  }
+  100% {
+    transform: scale(1.05);
+    background-color: #fbbf24;
+    opacity: 0;
+  }
+}
+
+@keyframes lane-runner-coin-catch-ring {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.4);
+    opacity: 0;
+  }
+}
+
+.lane-runner-coin-catch-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 2.25rem;
+  width: 2.25rem;
+  border-radius: 9999px;
+  border: 3px solid #fbbf24;
+  pointer-events: none;
+  animation: lane-runner-coin-catch-ring 0.4s ease-out forwards;
+}
+
+@keyframes lane-runner-coin-reward-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(0.7);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -6px) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -28px) scale(1);
+  }
+}
+
+.lane-runner-coin-reward-pop {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  z-index: 1;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: #b45309;
+  text-shadow: 0 1px 0 #fff;
+  pointer-events: none;
+  animation: lane-runner-coin-reward-pop 0.55s ease-out forwards;
+}
+
+@keyframes lane-runner-coin-counter-pulse {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.14);
+    background-color: #fde68a;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.lane-runner-coin-counter-pulse {
+  animation: lane-runner-coin-counter-pulse 0.45s ease-out;
 }
 
 .lane-runner-coin-missed {
@@ -102,4 +183,42 @@ h6 {
 
 .lane-runner-coin-pop {
   animation: lane-runner-coin-pop 0.55s ease-out forwards;
+}
+
+.lane-runner-letter-caught {
+  transition:
+    transform 0.22s ease-out,
+    opacity 0.22s ease-out !important;
+  transform: translate(-50%, -70%) scale(1.6) !important;
+  opacity: 0 !important;
+}
+
+.lane-runner-letter-missed {
+  transition:
+    transform 0.45s ease-in,
+    opacity 0.45s ease-in !important;
+  transform: translate(-50%, 30%) scale(0.35) !important;
+  opacity: 0 !important;
+}
+
+@keyframes lane-runner-kidda-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(1.02);
+  }
+}
+
+.lane-runner-kidda-celebration {
+  animation: lane-runner-kidda-pop 2.2s ease-out forwards;
 }

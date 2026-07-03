@@ -2,22 +2,78 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import {
-  CONTACT_TOP_PERCENT,
+  COLLECTIBLE_CONTACT_HOLD_MS,
+  COIN_END_SCALE,
+  COIN_START_SCALE,
   GATE_END_SCALE,
-  GATE_FALL_MS,
   GATE_START_DELAY_MS,
   GATE_START_SCALE,
-  HORIZON_TOP_PERCENT,
+  laneX,
+  laneY,
 } from "@/lib/games/lane-runner/config";
-import type { LaneRunnerGate } from "@/lib/games/lane-runner/types";
+import type { LaneIndex, LaneRunnerGate } from "@/lib/games/lane-runner/types";
 
 type LaneRunnerGateViewProps = {
   gate: LaneRunnerGate;
   gateKey: number;
+  fallDurationMs: number;
+  startDelayMs?: number;
   onArrive: () => void;
 };
 
-export function LaneRunnerGateView({ gate, gateKey, onArrive }: LaneRunnerGateViewProps) {
+function GateTile({
+  lane,
+  fallen,
+  fallDurationMs,
+  gurmukhi,
+  romanised,
+  onFallComplete,
+}: {
+  lane: LaneIndex;
+  fallen: boolean;
+  fallDurationMs: number;
+  gurmukhi: string;
+  romanised: string;
+  onFallComplete?: () => void;
+}) {
+  const progress = fallen ? 1 : 0;
+  const left = laneX(lane, progress);
+  const top = laneY(progress);
+  const scale = fallen ? GATE_END_SCALE : GATE_START_SCALE;
+
+  return (
+    <div
+      className="pointer-events-none absolute z-10 w-[30%] max-w-[7.5rem]"
+      style={{
+        left: `${left}%`,
+        top: `${top}%`,
+        transform: `translate(-50%, -50%) scale(${scale})`,
+        transition: fallen
+          ? `left ${fallDurationMs}ms linear, top ${fallDurationMs}ms linear, transform ${fallDurationMs}ms linear`
+          : "none",
+      }}
+      onTransitionEnd={(event) => {
+        if (event.propertyName !== "top" || !fallen || !onFallComplete) return;
+        onFallComplete();
+      }}
+    >
+      <div className="flex min-h-[5rem] flex-col items-center justify-center rounded-xl border border-zinc-200 bg-white px-2 py-3 text-center shadow-sm">
+        <p className="text-base font-semibold leading-snug text-zinc-900 sm:text-lg">{gurmukhi}</p>
+        <p className="mt-1.5 text-xs font-medium leading-snug text-violet-600 sm:text-sm">
+          {romanised}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function LaneRunnerGateView({
+  gate,
+  gateKey,
+  fallDurationMs,
+  startDelayMs = GATE_START_DELAY_MS,
+  onArrive,
+}: LaneRunnerGateViewProps) {
   const [fallen, setFallen] = useState(false);
   const arrivedRef = useRef(false);
 
@@ -29,46 +85,32 @@ export function LaneRunnerGateView({ gate, gateKey, onArrive }: LaneRunnerGateVi
       requestAnimationFrame(() => {
         requestAnimationFrame(() => setFallen(true));
       });
-    }, GATE_START_DELAY_MS);
+    }, startDelayMs);
 
     return () => window.clearTimeout(delayTimer);
-  }, [gateKey, gate.flashcard_id]);
-
-  const top = fallen ? CONTACT_TOP_PERCENT : HORIZON_TOP_PERCENT;
-  const scale = fallen ? GATE_END_SCALE : GATE_START_SCALE;
+  }, [gateKey, gate.flashcard_id, startDelayMs]);
 
   return (
-    <div
-      key={gateKey}
-      className="pointer-events-none absolute left-1/2 z-10 w-[96%] max-w-lg"
-      style={{
-        top: `${top}%`,
-        transform: `translate(-50%, -50%) scale(${scale})`,
-        transition: fallen
-          ? `top ${GATE_FALL_MS}ms linear, transform ${GATE_FALL_MS}ms linear`
-          : "none",
-      }}
-      onTransitionEnd={(event) => {
-        if (event.propertyName !== "top" || arrivedRef.current || !fallen) return;
-        arrivedRef.current = true;
-        onArrive();
-      }}
-    >
-      <div className="grid grid-cols-3 gap-2">
-        {gate.laneAnswers.map((answer, lane) => (
-          <div
-            key={`${gateKey}-${lane}`}
-            className="flex min-h-[5rem] flex-col items-center justify-center rounded-xl border border-zinc-200 bg-white px-2 py-3 text-center shadow-sm"
-          >
-            <p className="text-base font-semibold leading-snug text-zinc-900 sm:text-lg">
-              {answer.gurmukhi}
-            </p>
-            <p className="mt-1.5 text-xs font-medium leading-snug text-violet-600 sm:text-sm">
-              {answer.romanised}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
+    <>
+      {gate.laneAnswers.map((answer, lane) => (
+        <GateTile
+          key={`${gateKey}-${lane}`}
+          lane={lane as LaneIndex}
+          fallen={fallen}
+          fallDurationMs={fallDurationMs}
+          gurmukhi={answer.gurmukhi}
+          romanised={answer.romanised}
+          onFallComplete={
+            lane === 0
+              ? () => {
+                  if (arrivedRef.current) return;
+                  arrivedRef.current = true;
+                  onArrive();
+                }
+              : undefined
+          }
+        />
+      ))}
+    </>
   );
 }

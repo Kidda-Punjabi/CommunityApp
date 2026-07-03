@@ -137,7 +137,7 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
   {
     type: "lane_runner",
     title: LANE_RUNNER_DISPLAY_NAME,
-    description: "Sprint the road — pick the right lane before each gate hits, and snag coins on the way",
+    description: "Endless lane sprint — three lives, spell KIDDA, and grab coins as speed ramps up",
     emoji: "🏃",
     section: "vocabulary",
     href: "/dashboard/games/lane-runner",
