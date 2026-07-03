@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { KiddaLogo } from "@/components/branding/kidda-logo";
 import { HomeGreetingHeading } from "@/components/home/home-greeting-heading";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { UserAvatar } from "@/components/profile/user-avatar";
@@ -19,15 +18,11 @@ export async function HomeGreetingHeader({
   unreadNotificationCount,
 }: HomeGreetingHeaderProps) {
   return (
-    <header className="mb-4 flex items-center gap-4">
-      <Link href="/dashboard/profile/edit" className="shrink-0" aria-label="Edit profile">
+    <header className="mb-6 flex items-center gap-4">
+      <Link href="/dashboard/profile" className="shrink-0" aria-label="Profile">
         <UserAvatar profile={profile} level={learnerLevel} size="md" />
       </Link>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <KiddaLogo variant="icon" size="xs" href="/dashboard/home" />
-          <p className="text-sm font-medium text-violet-600">Welcome back to Kidda</p>
-        </div>
         <HomeGreetingHeading displayName={displayName} />
       </div>
       <NotificationBell unreadCount={unreadNotificationCount} />

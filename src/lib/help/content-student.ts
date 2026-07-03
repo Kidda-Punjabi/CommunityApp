@@ -14,7 +14,7 @@ export const STUDENT_HELP: HelpContent = {
           id: "nav",
           question: "How do I find my way around the app?",
           answer:
-            "Use the bottom navigation: Home for your dashboard, Learn for course lessons, Events for live community sessions, Games for practice, and Profile for account settings. Your Home screen shows what to do next based on your courses.",
+            "Use the bottom navigation: Home for your dashboard, Learn for course lessons, Games for practice, Community for the leaderboard and live sessions, and Profile for account settings. Your Home screen shows what to do next based on your courses.",
           links: [
             { label: "Go to Home", href: "/dashboard/home" },
             { label: "Open Learn", href: "/dashboard/learn" },
@@ -35,7 +35,7 @@ export const STUDENT_HELP: HelpContent = {
           id: "locked-lessons",
           question: "Why is a lesson locked?",
           answer:
-            "For live courses (Foundational and Beginners), your tutor unlocks lessons as you progress. Group cohort lessons unlock for the whole class when your tutor is ready. Community content follows the schedule on the Events page.",
+            "For live courses (Foundational and Beginners), your tutor unlocks lessons as you progress. Group cohort lessons unlock for the whole class when your tutor is ready. Community content follows the schedule on the Community tab.",
           links: [{ label: "Open Learn", href: "/dashboard/learn" }],
         },
       ],
@@ -104,10 +104,10 @@ export const STUDENT_HELP: HelpContent = {
         },
         {
           id: "events",
-          question: "What are Events?",
+          question: "What are Community events?",
           answer:
-            "Events are live community sessions and meetups — especially for Kidda Community members. Open Events to see what's on and join when a session is live.",
-          links: [{ label: "Events", href: "/dashboard/events" }],
+            "Community events are live sessions and meetups — especially for Kidda Community members. Open the Community tab to see what's on and join when a session is live.",
+          links: [{ label: "Community", href: "/dashboard/community" }],
         },
         {
           id: "miss-class",

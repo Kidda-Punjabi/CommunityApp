@@ -10,7 +10,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
 const ADMIN_PATH = "/admin/content";
-const EVENTS_PATH = "/dashboard/events";
+const COMMUNITY_PATH = "/dashboard/community";
+const COMMUNITY_EVENTS_PATH = "/dashboard/community/events";
 
 export async function ensureStorageBucketsAction(): Promise<ActionResult> {
   try {
@@ -819,7 +820,8 @@ export async function createEvent(
     if (error) return { error: withDbHint(error.message) };
 
     revalidatePath(ADMIN_PATH);
-    revalidatePath(EVENTS_PATH);
+    revalidatePath(COMMUNITY_PATH);
+    revalidatePath(COMMUNITY_EVENTS_PATH);
     return { success: "Event created." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create event." };
@@ -843,7 +845,8 @@ export async function updateEvent(
     if (error) return { error: withDbHint(error.message) };
 
     revalidatePath(ADMIN_PATH);
-    revalidatePath(EVENTS_PATH);
+    revalidatePath(COMMUNITY_PATH);
+    revalidatePath(COMMUNITY_EVENTS_PATH);
     return { success: "Event updated." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update event." };
@@ -856,7 +859,8 @@ export async function deleteEvent(id: string): Promise<ActionResult> {
     const { error } = await supabase.from("events").delete().eq("id", id);
     if (error) return { error: withDbHint(error.message) };
     revalidatePath(ADMIN_PATH);
-    revalidatePath(EVENTS_PATH);
+    revalidatePath(COMMUNITY_PATH);
+    revalidatePath(COMMUNITY_EVENTS_PATH);
     return { success: "Event deleted." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to delete event." };

@@ -80,6 +80,14 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     section: "grammar",
     href: "/dashboard/games/gender-sort",
   },
+  {
+    type: "voice_practice",
+    title: "Speak It",
+    description: "Read a Punjabi sentence aloud and get instant pronunciation feedback",
+    emoji: "🎙️",
+    section: "grammar",
+    href: "/dashboard/games/voice-practice",
+  },
 ];
 
 export function gameDeckPlayHref(

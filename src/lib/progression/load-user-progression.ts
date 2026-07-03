@@ -39,6 +39,19 @@ export type OnboardingProfile = {
   learnerLevel: number | null;
 };
 
+/** User finished level picks in onboarding but has not completed placement yet. */
+export function needsPlacementTestReminder(profile: {
+  placementCompleted: boolean;
+  selfAssessedStartingTier: number | null;
+  targetTier: number | null;
+}): boolean {
+  return (
+    !profile.placementCompleted &&
+    profile.selfAssessedStartingTier != null &&
+    profile.targetTier != null
+  );
+}
+
 export async function loadOnboardingProfile(
   supabase: SupabaseClient,
   userId: string

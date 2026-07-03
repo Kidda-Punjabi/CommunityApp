@@ -7,6 +7,7 @@ export const GAME_TYPES = [
   "conjugation_challenge",
   "gender_sort",
   "picture_match",
+  "voice_practice",
 ] as const;
 
 export type GameType = (typeof GAME_TYPES)[number];

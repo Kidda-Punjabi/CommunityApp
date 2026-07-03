@@ -14,7 +14,7 @@ const VIEW_AS_PATHS = [
   "/dashboard/practice",
   "/dashboard/profile",
   "/dashboard/membership",
-  "/dashboard/events",
+  "/dashboard/community",
 ];
 
 function revalidateDashboard() {

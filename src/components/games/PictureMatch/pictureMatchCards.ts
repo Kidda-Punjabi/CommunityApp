@@ -1,4 +1,8 @@
 import { deriveIconFromEnglish, hasEmojiIcon } from "./emojiMap";
+import {
+  applyPictureMatchTextFixes,
+  resolvePictureMatchIcon,
+} from "./pictureMatchCorrections";
 
 const GURMUKHI = /[\u0A00-\u0A7F]/;
 
@@ -43,15 +47,21 @@ export function normalizePictureMatchCard(
     return null;
   }
 
-  const iconName = row.icon_name?.trim() || deriveIconFromEnglish(english);
-  if (!hasEmojiIcon(iconName)) return null;
+  const fixed = applyPictureMatchTextFixes(english, punjabi, row.romanised?.trim() || null);
+  punjabi = fixed.punjabi;
+  const romanised = fixed.romanised;
+
+  const iconName =
+    resolvePictureMatchIcon(english, punjabi, row.icon_name) ||
+    deriveIconFromEnglish(english);
+  if (!iconName || !hasEmojiIcon(iconName)) return null;
 
   return {
     id: row.id,
     english,
     punjabi,
-    romanised: row.romanised?.trim() || null,
-    icon_name: iconName!,
+    romanised,
+    icon_name: iconName,
     difficulty: row.difficulty ?? 1,
   };
 }

@@ -20,6 +20,7 @@ export async function sendFriendRequestByCode(
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/profile");
+  revalidatePath("/dashboard/profile/friends");
   revalidatePath("/dashboard/friends");
   return { success: "Friend request sent!" };
 }
@@ -37,6 +38,7 @@ export async function respondFriendRequest(
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/profile");
+  revalidatePath("/dashboard/profile/friends");
   revalidatePath("/dashboard/friends");
   revalidatePath("/dashboard/notifications");
   return { success: accept ? "Friend added!" : "Request declined." };
@@ -51,6 +53,7 @@ export async function removeFriend(friendUserId: string): Promise<ActionResult> 
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/profile");
+  revalidatePath("/dashboard/profile/friends");
   revalidatePath("/dashboard/friends");
   return { success: "Friend removed." };
 }

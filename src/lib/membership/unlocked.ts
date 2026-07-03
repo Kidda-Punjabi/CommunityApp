@@ -107,6 +107,32 @@ export function formatUnlockedCourseNames(
   return names.length > 0 ? names.join(", ") : TIER_LABELS.free;
 }
 
+/** Human-readable membership line for profile Account card. */
+export function formatMembershipPlanLabel(
+  courses: CourseRecord[],
+  unlockedCourseIds: Set<string>
+): string {
+  if (unlockedCourseIds.size === 0) {
+    return "Free plan";
+  }
+
+  const names = courseNamesForIds(courses, unlockedCourseIds);
+  if (names.length === 0) return "Free plan";
+
+  const shortNames = names.map((name) =>
+    name
+      .replace(/\s+course$/i, "")
+      .replace(/\s+plan$/i, "")
+      .trim()
+  );
+
+  if (shortNames.length === 1) {
+    return `${shortNames[0]} plan`;
+  }
+
+  return `${shortNames.join(" · ")} plan`;
+}
+
 /** @deprecated Use formatUnlockedCourseNames with course IDs */
 export function formatUnlockedCourses(unlockedTiers: Set<PaidCourseTier>): string {
   if (unlockedTiers.size === 0) {

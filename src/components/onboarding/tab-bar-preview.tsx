@@ -4,7 +4,7 @@ const TABS = [
   { label: "Home", description: "Your dashboard and what to do next" },
   { label: "Learn", description: "Structured weekly courses, in order" },
   { label: "Games", description: "Practice what you've learned" },
-  { label: "Events", description: "Live sessions and community meetups" },
+  { label: "Community", description: "Leaderboard, events, and friends" },
   { label: "Profile", description: "Your progress, streak, and level" },
 ] as const;
 

@@ -1,25 +1,24 @@
 import { LogoutButton } from "@/app/dashboard/logout-button";
-import { BookCallWidget } from "@/components/booking/book-call-widget";
 import { ViewAsPanel } from "@/app/dashboard/profile/view-as-panel";
-import { HelpArticlesLink } from "@/components/help/help-articles-link";
 import { TestOnboardingButton } from "@/components/onboarding/test-onboarding-button";
-import { FriendsSection } from "@/components/profile/friends-section";
-import { InviteFriendsCard } from "@/components/profile/invite-friends-card";
-import { ProgressionCard } from "@/components/profile/progression-card";
+import { AccountCard } from "@/components/profile/account-card";
+import { FriendsSummaryRow } from "@/components/profile/friends-summary-row";
+import { PlacementReminderBanner } from "@/components/profile/placement-reminder-banner";
+import { ProgressSummaryRow } from "@/components/profile/progress-summary-row";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { isAdmin } from "@/lib/auth/admin";
 import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
 import {
-  formatUnlockedCourseNames,
+  formatMembershipPlanLabel,
   getCourseAccessContext,
+  getUserUnlockedCourseIds,
   tiersFromUnlockedCourses,
 } from "@/lib/membership/unlocked";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
-import { loadReferralProfileData } from "@/lib/referrals/load-referrals";
 import { loadFriendsProfileData } from "@/lib/friends/load-friends";
-import { loadUserProgression } from "@/lib/progression/load-user-progression";
+import { loadUserProgression, needsPlacementTestReminder } from "@/lib/progression/load-user-progression";
 import { createClient } from "@/lib/supabase/server";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 import { ui } from "@/lib/ui/styles";
@@ -33,7 +32,6 @@ export default async function ProfilePage() {
   } = await supabase.auth.getUser();
 
   const profile = await loadEditableProfile(supabase, user!.id);
-
   const displayName = getDisplayName(profile);
 
   if (user?.email) {
@@ -46,106 +44,56 @@ export default async function ProfilePage() {
 
   const access = await getCourseAccessContext(supabase, user!);
   const progression = await loadUserProgression(supabase, user!.id);
-  const referralData = await loadReferralProfileData(supabase, user!.id);
   const friendsData = await loadFriendsProfileData(supabase, user!.id);
 
-  const membershipLabel = access.viewAs?.active
-    ? `Testing: ${access.viewAs.label}`
-    : formatUnlockedCourseNames(access.courses, access.unlockedCourseIds);
+  const realUnlockedCourseIds = access.viewAs?.active
+    ? await getUserUnlockedCourseIds(supabase, user!.id)
+    : access.unlockedCourseIds;
+  const membershipLabel = formatMembershipPlanLabel(access.courses, realUnlockedCourseIds);
 
   const showAdminPanel = await canAccessAdminPanel(user!, supabase);
   const showTutorDashboard = await canAccessTutorDashboard(supabase, user!.id);
 
+  const showPlacementReminder = needsPlacementTestReminder({
+    placementCompleted: progression.placementCompleted,
+    selfAssessedStartingTier: progression.selfAssessedTier,
+    targetTier: progression.targetTier,
+  });
+
   return (
     <div className={ui.page}>
-      <div className="text-center">
-        <UserAvatar
-          profile={{
-            full_name: profile?.full_name,
-            preferred_name: profile?.preferred_name,
-            avatar_url: profile?.avatar_url,
-          }}
-          level={progression.learnerLevel}
-          size="lg"
-          className="mx-auto shadow-[0_4px_20px_-4px_rgba(24,24,27,0.12)] ring-4 ring-white"
-        />
-        <h1 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900">
-          Profile
-        </h1>
-        {displayName && (
-          <p className="mt-1 text-lg font-medium text-zinc-700">{displayName}</p>
-        )}
-        <p className="mt-1 text-sm text-zinc-500">{user?.email}</p>
-        <div className="mt-5 flex flex-col items-center gap-3">
-          <Link href="/dashboard/profile/edit" className={ui.btnSecondary}>
-            Edit profile
-          </Link>
-          <Link
-            href="/dashboard/profile/notifications"
-            className="text-sm font-medium text-zinc-500 hover:text-violet-600"
-          >
-            Notification settings
-          </Link>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <UserAvatar
+            profile={{
+              full_name: profile?.full_name,
+              preferred_name: profile?.preferred_name,
+              avatar_url: profile?.avatar_url,
+            }}
+            level={progression.learnerLevel}
+            size="lg"
+            className="shrink-0 shadow-[0_4px_20px_-4px_rgba(24,24,27,0.12)] ring-4 ring-white"
+          />
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-medium text-zinc-900">
+              {displayName || "Your profile"}
+            </h1>
+            <p className="mt-0.5 truncate text-sm text-zinc-500">{user?.email}</p>
+          </div>
         </div>
-      </div>
-
-      <section className="mt-8" id="book-call">
-        <div className={ui.card}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Talk to us
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-            Book a free call with the Kidda team. We&apos;ll help you choose the right course or
-            answer any questions.
-          </p>
-          <BookCallWidget className="mt-4 rounded-2xl border border-zinc-200/60 bg-white" />
-        </div>
-      </section>
-
-      <div className="mt-8">
-        <HelpArticlesLink href="/dashboard/profile/help" />
+        <Link
+          href="/dashboard/profile/edit"
+          className="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+        >
+          Edit
+        </Link>
       </div>
 
       <div className={`mt-8 ${ui.stackLoose}`}>
-        <FriendsSection
-          friends={friendsData.friends}
-          requests={friendsData.requests}
-          unavailable={friendsData.unavailable}
-        />
-        <InviteFriendsCard
-          shareUrl={referralData.shareUrl}
-          referralCode={referralData.referralCode}
-          referrals={referralData.referrals}
-          unavailableReason={referralData.unavailableReason}
-        />
-        <ProgressionCard progression={progression} variant="full" />
-
-        <div className={ui.card}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Membership
-          </p>
-          <p className="mt-1 text-lg font-semibold text-violet-600">{membershipLabel}</p>
-          <div className="mt-3 flex flex-col gap-1">
-            <Link
-              href="/dashboard/profile/billing"
-              className="text-sm font-semibold text-violet-600 hover:text-violet-500"
-            >
-              Billing & purchases →
-            </Link>
-            <Link
-              href="/courses"
-              className="text-sm font-semibold text-violet-600 hover:text-violet-500"
-            >
-              {access.isFreeOnly ? "Browse courses →" : "Buy another course →"}
-            </Link>
-            <Link
-              href="#book-call"
-              className="text-sm font-semibold text-violet-600 hover:text-violet-500"
-            >
-              Book a call with our team →
-            </Link>
-          </div>
-        </div>
+        {showPlacementReminder && <PlacementReminderBanner />}
+        <ProgressSummaryRow progression={progression} />
+        <FriendsSummaryRow friends={friendsData.friends} />
+        <AccountCard membershipLabel={membershipLabel} isFreeOnly={access.isFreeOnly} />
 
         {isAdmin(user) && (
           <ViewAsPanel
@@ -159,35 +107,37 @@ export default async function ProfilePage() {
         )}
 
         {showTutorDashboard && (
-          <div className="rounded-3xl bg-violet-50 p-5 shadow-[0_4px_24px_-6px_rgba(124,58,237,0.1)]">
-            <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-              Tutor
-            </p>
+          <div className="rounded-xl border border-zinc-200 bg-white px-6 py-5">
+            <p className="text-xs font-medium text-zinc-500">Tutor</p>
             <p className="mt-2 text-sm text-zinc-600">
               Mark attendance, review homework, unlock lessons, and manage your students.
             </p>
-            <Link href="/dashboard/tutor" className={`mt-4 ${ui.btnPrimary}`}>
+            <Link
+              href="/dashboard/tutor"
+              className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500"
+            >
               Open tutor dashboard
             </Link>
           </div>
         )}
 
         {showAdminPanel && (
-          <div className="rounded-3xl bg-violet-50 p-5 shadow-[0_4px_24px_-6px_rgba(124,58,237,0.1)]">
-            <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-              Admin
-            </p>
+          <div className="rounded-xl border border-zinc-200 bg-white px-6 py-5">
+            <p className="text-xs font-medium text-zinc-500">Admin</p>
             <p className="mt-2 text-sm text-zinc-600">
               Manage courses, lessons, quizzes, and tutors.
             </p>
-            <Link href="/admin/content" className={`mt-4 ${ui.btnPrimary}`}>
+            <Link
+              href="/admin/content"
+              className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500"
+            >
               Open admin panel
             </Link>
             <Link
               href="/admin/content/help"
-              className="mt-3 block text-center text-sm font-semibold text-violet-600 hover:text-violet-500"
+              className="mt-3 block text-sm font-medium text-violet-600 hover:text-violet-500"
             >
-              Admin help articles →
+              Admin help articles
             </Link>
             <TestOnboardingButton />
           </div>

@@ -25,7 +25,7 @@ export function WeeklyPointsCard({ points, weekStart }: WeeklyPointsCardProps) {
         </span>
       </div>
       <Link
-        href="/dashboard/leaderboard"
+        href="/dashboard/community#leaderboard"
         className="mt-4 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
       >
         View leaderboard →
