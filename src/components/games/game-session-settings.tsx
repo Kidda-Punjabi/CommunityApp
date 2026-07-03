@@ -29,6 +29,8 @@ type GameSessionSettingsProps = {
   tenseFilterValues?: string[];
   poolSizeForFilter: (filterIds: string[]) => number;
   repeatUnit?: "sentence" | "noun";
+  /** When `cap`, fewer questions are played instead of repeating content. */
+  repeatPolicy?: "cycle" | "cap";
   canStart: boolean;
   unavailableMessage?: React.ReactNode;
   extraSettings?: React.ReactNode;
@@ -45,6 +47,7 @@ export function GameSessionSettings({
   tenseFilterValues,
   poolSizeForFilter,
   repeatUnit = "sentence",
+  repeatPolicy = "cycle",
   canStart,
   unavailableMessage,
   extraSettings,
@@ -67,7 +70,12 @@ export function GameSessionSettings({
     () => poolSizeForFilter(activeFilterIds),
     [activeFilterIds, poolSizeForFilter]
   );
-  const repeatWarning = repeatPoolWarning(poolSize, questionCount, repeatUnit);
+  const repeatWarning =
+    repeatPolicy === "cycle"
+      ? repeatPoolWarning(poolSize, questionCount, repeatUnit)
+      : poolSize > 0 && questionCount > poolSize
+        ? `Only ${poolSize} ${repeatUnit === "noun" ? (poolSize === 1 ? "noun" : "nouns") : poolSize === 1 ? "sentence" : "sentences"} match — you'll play ${poolSize}.`
+        : null;
   const startDisabled =
     !canStart ||
     poolSize === 0 ||
