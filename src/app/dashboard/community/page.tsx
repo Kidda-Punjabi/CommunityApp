@@ -15,7 +15,6 @@ export default async function CommunityPage() {
   if (!session) redirect("/login");
 
   const { friendsData, leaderboard, testimonial, preparedUpcoming } =
-    await getCachedCommunityTabData(session.user.id);
     await getCommunityTabData(session.user.id);
 
   const previewEvents = preparedUpcoming.slice(0, PREVIEW_EVENT_COUNT);
