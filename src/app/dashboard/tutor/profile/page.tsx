@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
+import { TutorAdminPanelCard } from "@/components/tutor/tutor-admin-panel-link";
 import { HelpArticlesLink } from "@/components/help/help-articles-link";
 import { UserAvatar } from "@/components/profile/user-avatar";
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { loadTutorDashboard } from "@/lib/tutoring/load-tutor-dashboard";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
@@ -14,9 +16,10 @@ export default async function TutorProfilePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [profile, data] = await Promise.all([
+  const [profile, data, showAdminPanel] = await Promise.all([
     loadEditableProfile(supabase, user!.id),
     loadTutorDashboard(supabase, user!.id),
+    canAccessAdminPanel(user, supabase),
   ]);
 
   const displayName = getDisplayName(profile);
@@ -77,6 +80,8 @@ export default async function TutorProfilePage() {
           </p>
           <p className="mt-2 text-sm font-semibold text-violet-600">Open learner profile →</p>
         </Link>
+
+        {showAdminPanel ? <TutorAdminPanelCard /> : null}
 
         <HelpArticlesLink href="/dashboard/tutor/profile/help" />
 
