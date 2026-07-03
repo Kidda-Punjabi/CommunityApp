@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { BuyButton } from "@/components/products/buy-button";
 import { UserAvatar } from "@/components/profile/user-avatar";
-import { learnTrackPath } from "@/lib/learning/learn-catalog";
 import { ONE_TO_ONE_SESSION_CHECKOUT_KEY, isCheckoutConfigured } from "@/lib/products/checkout";
 import type { StudentPackage } from "@/lib/packages/load-student-packages";
 import { ui } from "@/lib/ui/styles";
 
 type PackageHubPanelProps = {
   pkg: StudentPackage;
-  variant?: "full" | "compact";
+  variant?: "full" | "embedded";
 };
 
 function statusLabel(status: StudentPackage["status"]): string {
@@ -34,29 +33,41 @@ function statusClass(status: StudentPackage["status"]): string {
 }
 
 export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps) {
-  const learnHref = learnTrackPath(pkg.learnTrackId);
   const oneToOneCheckoutConfigured = isCheckoutConfigured(ONE_TO_ONE_SESSION_CHECKOUT_KEY);
   const showBuyExtraLesson =
-    variant === "full" && pkg.status === "active" && Boolean(pkg.tutorName);
+    (variant === "full" || variant === "embedded") &&
+    pkg.status === "active" &&
+    Boolean(pkg.tutorName);
 
-  return (
-    <div className={`${ui.cardBordered} ${variant === "compact" ? "" : "mb-6"} space-y-4`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+  const body = (
+    <>
+      {variant === "full" ? (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+              Your package
+            </p>
+            <p className="mt-1 font-semibold text-zinc-900">{pkg.name}</p>
+            <p className="mt-1 text-sm text-zinc-500">{pkg.description}</p>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusClass(pkg.status)}`}
+          >
+            {statusLabel(pkg.status)}
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Your package
           </p>
-          <p className="mt-1 font-semibold text-zinc-900">{pkg.name}</p>
-          {variant === "full" ? (
-            <p className="mt-1 text-sm text-zinc-500">{pkg.description}</p>
-          ) : null}
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusClass(pkg.status)}`}
+          >
+            {statusLabel(pkg.status)}
+          </span>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusClass(pkg.status)}`}
-        >
-          {statusLabel(pkg.status)}
-        </span>
-      </div>
+      )}
 
       {pkg.includesLiveSessions ? (
         <div className="rounded-2xl bg-zinc-50 px-4 py-3">
@@ -122,7 +133,10 @@ export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps)
             </p>
           ) : null}
 
-          <Link href="/dashboard/schedule" className="text-sm font-medium text-violet-600 hover:text-violet-500">
+          <Link
+            href="/dashboard/schedule"
+            className="text-sm font-medium text-violet-600 hover:text-violet-500"
+          >
             View full schedule →
           </Link>
         </div>
@@ -148,33 +162,12 @@ export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps)
           </div>
         </div>
       ) : null}
-
-      {variant === "compact" ? (
-        <Link href={learnHref} className={`${ui.btnSecondary} w-full text-center`}>
-          Open package
-        </Link>
-      ) : null}
-    </div>
+    </>
   );
-}
 
-type MyPackagesSectionProps = {
-  packages: StudentPackage[];
-};
+  if (variant === "embedded") {
+    return <div className="space-y-4 border-t border-zinc-100 pt-4">{body}</div>;
+  }
 
-export function MyPackagesSection({ packages }: MyPackagesSectionProps) {
-  if (packages.length === 0) return null;
-
-  return (
-    <section className="mb-8">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
-        My packages
-      </h2>
-      <div className={ui.stack}>
-        {packages.map((pkg) => (
-          <PackageHubPanel key={pkg.slug} pkg={pkg} variant="compact" />
-        ))}
-      </div>
-    </section>
-  );
+  return <div className={`${ui.cardBordered} mb-6 space-y-4`}>{body}</div>;
 }

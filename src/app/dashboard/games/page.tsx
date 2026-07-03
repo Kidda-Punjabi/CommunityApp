@@ -1,7 +1,6 @@
 import { GamesHub } from "@/components/games/games-hub";
 import { GAME_CATALOG } from "@/lib/games/catalog";
 import { fetchPersonalBestsByGame } from "@/lib/games/game-scores";
-import { ui } from "@/lib/ui/styles";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function GamesPage() {
@@ -20,7 +19,7 @@ export default async function GamesPage() {
   const grammarGames = GAME_CATALOG.filter((g) => g.section === "grammar");
 
   return (
-    <div className={ui.page}>
+    <div className="flex flex-col px-5 py-7">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Games</h1>
         <p className="mt-1 text-sm text-zinc-500">

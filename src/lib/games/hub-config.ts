@@ -1,14 +1,13 @@
 import { GAME_CATALOG, type GameCatalogEntry } from "@/lib/games/catalog";
 import type { GameType } from "@/lib/games/types";
 
-export type GamesFilter = "all" | "vocabulary" | "grammar" | "multiplayer" | "resources";
+export type GamesFilter = "all" | "vocabulary" | "grammar" | "multiplayer";
 
 export const GAMES_FILTERS: { id: GamesFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "vocabulary", label: "Vocabulary" },
   { id: "grammar", label: "Grammar" },
   { id: "multiplayer", label: "Multiplayer" },
-  { id: "resources", label: "Resources" },
 ];
 
 export type PlayableGameId = GameType | "group_games" | "battle";

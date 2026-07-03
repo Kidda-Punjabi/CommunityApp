@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { GamesCategoryGrid } from "@/components/games/games-category-grid";
 import { GamesFilterChips } from "@/components/games/games-filter-chips";
 import { GamesPlayAgainCard } from "@/components/games/games-play-again-card";
-import { GamesResourceRows } from "@/components/games/games-resource-rows";
 import { MultiplayerGridTile } from "@/components/games/multiplayer-grid-tile";
 import type { GameCatalogEntry } from "@/lib/games/catalog";
 import { MULTIPLAYER_HUB_ENTRIES, type GamesFilter } from "@/lib/games/hub-config";
@@ -16,37 +15,40 @@ type GamesHubProps = {
   personalBests: Record<string, number>;
 };
 
-function showSection(filter: GamesFilter, section: GamesFilter): boolean {
-  return filter === "all" || filter === section;
+function sectionVisible(active: GamesFilter, section: GamesFilter): boolean {
+  return active === "all" || active === section;
 }
 
 export function GamesHub({ vocabularyGames, grammarGames, personalBests }: GamesHubProps) {
   const [activeFilter, setActiveFilter] = useState<GamesFilter>("all");
 
+  const handleFilterChange = useCallback((filter: GamesFilter) => {
+    setActiveFilter(filter);
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
-    <div className="space-y-8">
-      <GamesFilterChips active={activeFilter} onChange={setActiveFilter} />
+    <div className="space-y-6">
+      <GamesFilterChips active={activeFilter} onChange={handleFilterChange} />
 
-      <section>
-        <GamesPlayAgainCard />
-      </section>
+      {activeFilter === "all" ? (
+        <section>
+          <GamesPlayAgainCard />
+        </section>
+      ) : null}
 
-      {showSection(activeFilter, "multiplayer") ? (
+      {sectionVisible(activeFilter, "multiplayer") ? (
         <section>
           <h2 className={ui.sectionTitle}>Multiplayer</h2>
           <div className="grid grid-cols-2 gap-3">
             {MULTIPLAYER_HUB_ENTRIES.map((entry) => (
-              <MultiplayerGridTile
-                key={entry.id}
-                entry={entry}
-                personalBest={null}
-              />
+              <MultiplayerGridTile key={entry.id} entry={entry} personalBest={null} />
             ))}
           </div>
         </section>
       ) : null}
 
-      {showSection(activeFilter, "vocabulary") ? (
+      {sectionVisible(activeFilter, "vocabulary") ? (
         <GamesCategoryGrid
           title="Vocabulary games"
           games={vocabularyGames}
@@ -55,7 +57,7 @@ export function GamesHub({ vocabularyGames, grammarGames, personalBests }: Games
         />
       ) : null}
 
-      {showSection(activeFilter, "grammar") ? (
+      {sectionVisible(activeFilter, "grammar") ? (
         <GamesCategoryGrid
           title="Grammar games"
           games={grammarGames}
@@ -63,8 +65,6 @@ export function GamesHub({ vocabularyGames, grammarGames, personalBests }: Games
           categoryLabel="grammar"
         />
       ) : null}
-
-      {showSection(activeFilter, "resources") ? <GamesResourceRows /> : null}
     </div>
   );
 }

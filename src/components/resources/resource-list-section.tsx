@@ -12,7 +12,7 @@ function ChevronRight() {
   );
 }
 
-export function GamesResourceRows() {
+export function ResourceListSection() {
   return (
     <section>
       <div className="mb-4">
