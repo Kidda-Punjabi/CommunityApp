@@ -122,3 +122,55 @@ export function fillEasyBlank(
   if (!selectedWord) return template;
   return template.replace("___", selectedWord);
 }
+
+function replaceFirstOccurrence(
+  text: string,
+  needle: string,
+  replacement: string
+): string {
+  const index = text.indexOf(needle);
+  if (index === -1) return text;
+  return text.slice(0, index) + replacement + text.slice(index + needle.length);
+}
+
+/** Derive a romanised fill-in-the-blank line from the full response + correct word. */
+export function buildEasyRomanisedBlankTemplate(
+  exchange: ConversationExchange
+): string | null {
+  const full = exchange.target_response_romanised?.trim();
+  if (!full) return null;
+
+  const word = exchange.easy_correct_word_romanised?.trim();
+  if (word) {
+    const withBlank = replaceFirstOccurrence(full, word, "___");
+    if (withBlank !== full) return withBlank;
+  }
+
+  const blankIndex = exchange.easy_blank_template_gurmukhi.indexOf("___");
+  if (blankIndex === -1) return null;
+
+  const wordsBeforeBlank = (exchange.easy_blank_template_gurmukhi.slice(0, blankIndex).match(/\S+/g) ?? [])
+    .length;
+  const romanisedWords = full.split(/\s+/).filter(Boolean);
+  if (wordsBeforeBlank >= romanisedWords.length) return null;
+
+  return [
+    ...romanisedWords.slice(0, wordsBeforeBlank),
+    "___",
+    ...romanisedWords.slice(wordsBeforeBlank + 1),
+  ].join(" ");
+}
+
+export function easyRomanisedWordForDisplay(
+  exchange: ConversationExchange,
+  selected: EasyWordOption | null,
+  exchangeStep: "question" | "feedback" | "reply"
+): string | null {
+  if (exchangeStep === "question") {
+    return selected?.romanised ?? null;
+  }
+  if (selected?.isCorrect) {
+    return selected.romanised;
+  }
+  return exchange.easy_correct_word_romanised;
+}

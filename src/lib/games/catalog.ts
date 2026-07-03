@@ -1,3 +1,7 @@
+import { COMPREHENSION_PRACTICE_DISPLAY_NAME } from "@/lib/comprehension/config";
+import { LANE_RUNNER_DISPLAY_NAME } from "@/lib/games/lane-runner/config";
+import { SPOT_THE_MISTAKE_DISPLAY_NAME } from "@/lib/spot-the-mistake/config";
+import { KIHDA_DISPLAY_NAME } from "@/lib/possessive-practice/config";
 import { CONVERSATION_PRACTICE_DISPLAY_NAME } from "@/lib/conversation/config";
 import { CHADO_PAURI_DISPLAY_NAME } from "@/lib/games/chado-pauri/config";
 import type { GameType } from "./types";
@@ -105,6 +109,38 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     emoji: "💬",
     section: "grammar",
     href: "/dashboard/games/conversation-practice",
+  },
+  {
+    type: "possessive_practice",
+    title: KIHDA_DISPLAY_NAME,
+    description: "Pick mera, meri, or mere — possessive forms matched to each noun",
+    emoji: "🤔",
+    section: "grammar",
+    href: "/dashboard/games/possessive-practice",
+  },
+  {
+    type: "spot_the_mistake",
+    title: SPOT_THE_MISTAKE_DISPLAY_NAME,
+    description: "Find the wrong verb, then pick the correct conjugation to fix it",
+    emoji: "🔍",
+    section: "grammar",
+    href: "/dashboard/games/spot-the-mistake",
+  },
+  {
+    type: "comprehension_practice",
+    title: COMPREHENSION_PRACTICE_DISPLAY_NAME,
+    description: "Read or listen to a script, then answer comprehension questions",
+    emoji: "📖",
+    section: "vocabulary",
+    href: "/dashboard/games/comprehension-practice",
+  },
+  {
+    type: "lane_runner",
+    title: LANE_RUNNER_DISPLAY_NAME,
+    description: "Sprint the road — pick the right lane before each gate hits, and snag coins on the way",
+    emoji: "🏃",
+    section: "vocabulary",
+    href: "/dashboard/games/lane-runner",
   },
 ];
 

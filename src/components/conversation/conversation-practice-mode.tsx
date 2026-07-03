@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ConversationBubble } from "@/components/conversation/conversation-bubble";
+import {
+  ConversationTranscript,
+  type TranscriptEntry,
+} from "@/components/conversation/conversation-transcript";
 import { GameSessionReview } from "@/components/games/game-session-review";
-import { SessionProgressBar } from "@/components/session-progress-bar";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
 import {
@@ -16,9 +18,10 @@ import {
 } from "@/lib/conversation/config";
 import {
   buildEasyOptions,
+  buildEasyRomanisedBlankTemplate,
   buildHardTileBank,
   buildMediumOptions,
-  correctHardTileSequence,
+  easyRomanisedWordForDisplay,
   fillEasyBlank,
   hardAnswerMatches,
   type EasyWordOption,
@@ -32,6 +35,12 @@ import type {
   ConversationScenario,
 } from "@/lib/conversation/types";
 import type { SentenceTile } from "@/lib/conjugation/sentence-builder";
+import {
+  appendTranscriptEntry,
+  npcReplyEntry,
+  npcSetupEntry,
+  studentAnswerEntry,
+} from "@/lib/conversation/transcript";
 import { createClient } from "@/lib/supabase/client";
 
 const ADVANCE_MS = 1400;
@@ -66,8 +75,10 @@ export function ConversationPracticeMode({
   const [mediumOptions, setMediumOptions] = useState<MediumSentenceOption[]>([]);
   const [hardBank, setHardBank] = useState<SentenceTile[]>([]);
   const [hardBuilt, setHardBuilt] = useState<SentenceTile[]>([]);
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
 
   const advanceTimerRef = useRef<number | null>(null);
+  const answeringRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
 
@@ -135,6 +146,7 @@ export function ConversationPracticeMode({
   }, [playPhase, results, exchanges.length, selectedCharacter, selectedScenario, difficulty]);
 
   function resetQuestionState(exchange: ConversationExchange) {
+    answeringRef.current = false;
     setExchangeStep("question");
     setEasySelected(null);
     setHardBuilt([]);
@@ -153,6 +165,7 @@ export function ConversationPracticeMode({
     setExchanges(scenarioExchanges);
     setExchangeIndex(0);
     setResults([]);
+    setTranscript([npcSetupEntry(scenarioExchanges[0])]);
     setPlayPhase("playing");
     resetQuestionState(scenarioExchanges[0]);
   }
@@ -173,9 +186,14 @@ export function ConversationPracticeMode({
 
     setExchangeIndex(nextIndex);
     resetQuestionState(exchanges[nextIndex]);
+    setTranscript((prev) => appendTranscriptEntry(prev, npcSetupEntry(exchanges[nextIndex])));
   }
 
   function recordResult(exchange: ConversationExchange, correct: boolean) {
+    if (answeringRef.current) return;
+    answeringRef.current = true;
+
+    setTranscript((prev) => appendTranscriptEntry(prev, studentAnswerEntry(exchange)));
     setResults((prev) => [
       ...prev,
       {
@@ -189,12 +207,11 @@ export function ConversationPracticeMode({
   }
 
   function afterFeedback(exchange: ConversationExchange) {
-    const hasReply =
-      exchange.npc_reply_gurmukhi?.trim() ||
-      exchange.npc_reply_english?.trim();
+    const reply = npcReplyEntry(exchange);
 
-    if (hasReply) {
+    if (reply) {
       setExchangeStep("reply");
+      setTranscript((prev) => appendTranscriptEntry(prev, reply));
       scheduleAdvance(() => goToNextExchange());
       return;
     }
@@ -244,6 +261,7 @@ export function ConversationPracticeMode({
     setSelectedCharacterId(null);
     setSelectedScenarioId(null);
     setDifficulty(null);
+    setTranscript([]);
   }
 
   if (!tableReady) {
@@ -278,29 +296,30 @@ export function ConversationPracticeMode({
   }
 
   if (playPhase === "playing" && selectedCharacter && currentExchange && difficulty) {
-    const hardCorrectSequence = correctHardTileSequence(currentExchange.hard_word_tiles);
+    const hardCorrectTiles = currentExchange.hard_word_tiles
+      .filter((tile) => !tile.is_distractor)
+      .sort((a, b) => a.correct_position - b.correct_position);
+    const easyRomanisedTemplate =
+      difficulty === "easy" ? buildEasyRomanisedBlankTemplate(currentExchange) : null;
+    const easyRomanisedFilled =
+      easyRomanisedTemplate && difficulty === "easy"
+        ? fillEasyBlank(
+            easyRomanisedTemplate,
+            easyRomanisedWordForDisplay(currentExchange, easySelected, exchangeStep)
+          )
+        : null;
 
     return (
-      <div className="space-y-5">
-        <SessionProgressBar current={exchangeIndex + 1} total={exchanges.length} />
-
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            href={GAMES_HUB_HREF}
-            className="text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            ← Exit
-          </Link>
-          <p className="text-sm font-semibold text-zinc-900">{correctCount} correct</p>
-        </div>
-
-        <ConversationBubble
-          character={selectedCharacter}
-          gurmukhi={currentExchange.npc_setup_gurmukhi}
-          romanised={currentExchange.npc_setup_romanised}
-          english={currentExchange.npc_setup_english}
+      <div className="flex min-h-[calc(100dvh-7rem)] flex-col">
+        <ConversationPlayHeader
+          exchangeIndex={exchangeIndex}
+          totalExchanges={exchanges.length}
+          correctCount={correctCount}
         />
 
+        <ConversationTranscript entries={transcript} character={selectedCharacter} />
+
+        <div className="mt-3 shrink-0 space-y-4 border-t border-zinc-200 bg-white pt-4">
         <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
             Your task
@@ -312,14 +331,23 @@ export function ConversationPracticeMode({
 
         {difficulty === "easy" && (
           <div className="space-y-3">
-            <p className="text-center text-lg font-semibold leading-relaxed text-zinc-900">
-              {fillEasyBlank(
-                currentExchange.easy_blank_template_gurmukhi,
-                exchangeStep === "question" ? easySelected?.gurmukhi ?? null : easySelected?.isCorrect
-                  ? easySelected.gurmukhi
-                  : currentExchange.easy_correct_word_gurmukhi
-              )}
-            </p>
+            <div className="text-center">
+              <p className="text-lg font-semibold leading-relaxed text-zinc-900">
+                {fillEasyBlank(
+                  currentExchange.easy_blank_template_gurmukhi,
+                  exchangeStep === "question"
+                    ? easySelected?.gurmukhi ?? null
+                    : easySelected?.isCorrect
+                      ? easySelected.gurmukhi
+                      : currentExchange.easy_correct_word_gurmukhi
+                )}
+              </p>
+              {easyRomanisedFilled ? (
+                <p className="mt-2 text-base leading-relaxed text-violet-600">
+                  {easyRomanisedFilled}
+                </p>
+              ) : null}
+            </div>
             {exchangeStep === "question" ? (
               <div className="grid grid-cols-2 gap-2">
                 {easyOptions.map((option) => (
@@ -353,7 +381,6 @@ export function ConversationPracticeMode({
                 {option.romanised ? (
                   <p className="text-sm text-violet-600">{option.romanised}</p>
                 ) : null}
-                <p className="text-sm text-zinc-500">{option.english}</p>
               </button>
             ))}
           </div>
@@ -372,12 +399,17 @@ export function ConversationPracticeMode({
             >
               <div className="flex flex-wrap gap-2">
                 {exchangeStep === "feedback" && !lastCorrect
-                  ? hardCorrectSequence.map((word, index) => (
+                  ? hardCorrectTiles.map((tile) => (
                       <span
-                        key={`${word}-${index}`}
+                        key={`${tile.gurmukhi}-${tile.correct_position}`}
                         className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
                       >
-                        {word}
+                        <span>{tile.gurmukhi}</span>
+                        {tile.romanised ? (
+                          <span className="mt-0.5 block text-xs font-normal text-violet-200">
+                            {tile.romanised}
+                          </span>
+                        ) : null}
                       </span>
                     ))
                   : hardBuilt.map((tile) => (
@@ -388,7 +420,12 @@ export function ConversationPracticeMode({
                         disabled={exchangeStep !== "question"}
                         className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-80"
                       >
-                        {tile.word}
+                        <span>{tile.word}</span>
+                        {tile.romanised ? (
+                          <span className="mt-0.5 block text-xs font-normal text-violet-200">
+                            {tile.romanised}
+                          </span>
+                        ) : null}
                       </button>
                     ))}
               </div>
@@ -404,7 +441,12 @@ export function ConversationPracticeMode({
                       onClick={() => moveHardToBuilt(tile)}
                       className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300"
                     >
-                      {tile.word}
+                      <span>{tile.word}</span>
+                      {tile.romanised ? (
+                        <span className="mt-0.5 block text-xs font-normal text-violet-600">
+                          {tile.romanised}
+                        </span>
+                      ) : null}
                     </button>
                   ))}
                 </div>
@@ -441,15 +483,7 @@ export function ConversationPracticeMode({
           </div>
         )}
 
-        {exchangeStep === "reply" &&
-          (currentExchange.npc_reply_gurmukhi || currentExchange.npc_reply_english) && (
-            <ConversationBubble
-              character={selectedCharacter}
-              gurmukhi={currentExchange.npc_reply_gurmukhi ?? ""}
-              romanised={currentExchange.npc_reply_romanised}
-              english={currentExchange.npc_reply_english}
-            />
-          )}
+        </div>
       </div>
     );
   }
@@ -559,6 +593,52 @@ export function ConversationPracticeMode({
         </div>
       )}
     </div>
+  );
+}
+
+function ConversationPlayHeader({
+  exchangeIndex,
+  totalExchanges,
+  correctCount,
+}: {
+  exchangeIndex: number;
+  totalExchanges: number;
+  correctCount: number;
+}) {
+  const progressPct =
+    totalExchanges > 0 ? Math.min(100, ((exchangeIndex + 1) / totalExchanges) * 100) : 0;
+
+  return (
+    <header className="mb-3 shrink-0 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href={GAMES_HUB_HREF}
+          className="text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
+          ← Exit
+        </Link>
+        <p className="text-right text-xs font-medium text-zinc-600 sm:text-sm">
+          Exchange {exchangeIndex + 1} of {totalExchanges}
+          <span className="mx-1.5 text-zinc-300" aria-hidden="true">
+            ·
+          </span>
+          <span className="text-violet-700">{correctCount} correct</span>
+        </p>
+      </div>
+      <div
+        className="h-1.5 overflow-hidden rounded-full bg-zinc-100"
+        role="progressbar"
+        aria-valuenow={exchangeIndex + 1}
+        aria-valuemin={1}
+        aria-valuemax={totalExchanges}
+        aria-label={`Exchange ${exchangeIndex + 1} of ${totalExchanges}`}
+      >
+        <div
+          className="h-full rounded-full bg-violet-600 transition-all duration-300 ease-out"
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+    </header>
   );
 }
 

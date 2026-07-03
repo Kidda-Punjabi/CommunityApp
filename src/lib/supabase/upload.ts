@@ -4,7 +4,8 @@ export type StorageBucket =
   | "audio-files"
   | "profile-photos"
   | "lesson-pdfs"
-  | "site-branding";
+  | "site-branding"
+  | "comprehension-audio";
 
 export async function uploadToStorage(bucket: StorageBucket, file: File) {
   const supabase = createClient();

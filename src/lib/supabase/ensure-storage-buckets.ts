@@ -6,6 +6,7 @@ const REQUIRED_BUCKETS: StorageBucket[] = [
   "profile-photos",
   "lesson-pdfs",
   "site-branding",
+  "comprehension-audio",
 ];
 
 export async function ensureStorageBuckets(supabase: SupabaseClient) {

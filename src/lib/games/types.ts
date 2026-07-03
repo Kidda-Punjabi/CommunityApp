@@ -10,6 +10,10 @@ export const GAME_TYPES = [
   "voice_practice",
   "chado_pauri",
   "conversation_practice",
+  "possessive_practice",
+  "spot_the_mistake",
+  "comprehension_practice",
+  "lane_runner",
 ] as const;
 
 export type GameType = (typeof GAME_TYPES)[number];
