@@ -112,8 +112,8 @@ function ProfileIcon({ active }: { active: boolean }) {
 const navItems: NavItem[] = [
   { href: "/dashboard/home", label: "Home" },
   { href: "/dashboard/learn", label: "Learn" },
-  { href: "/dashboard/games", label: "Games" },
   { href: "/dashboard/community", label: "Community" },
+  { href: "/dashboard/games", label: "Games" },
   { href: "/dashboard/profile", label: "Profile" },
 ];
 
