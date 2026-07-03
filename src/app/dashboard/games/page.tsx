@@ -1,5 +1,5 @@
 import { GamesHub } from "@/components/games/games-hub";
-import { getCachedGamesTabData } from "@/lib/cache/tab-page-cache";
+import { getGamesTabData } from "@/lib/cache/tab-page-cache";
 import { GAME_CATALOG } from "@/lib/games/catalog";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { redirect } from "next/navigation";
@@ -8,7 +8,7 @@ export default async function GamesPage() {
   const session = await getCachedAuthSession();
   if (!session) redirect("/login");
 
-  const personalBests = await getCachedGamesTabData(session.user.id);
+  const personalBests = await getGamesTabData(session.user.id);
 
   const vocabularyGames = GAME_CATALOG.filter((g) => g.section === "vocabulary");
   const grammarGames = GAME_CATALOG.filter((g) => g.section === "grammar");

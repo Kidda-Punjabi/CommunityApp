@@ -2,7 +2,7 @@ import { EventCard } from "@/components/event-card";
 import { FeaturedTestimonialCard } from "@/components/community/featured-testimonial-card";
 import { WeeklyLeaderboardCard } from "@/components/community/weekly-leaderboard-card";
 import { FriendsSummaryRow } from "@/components/profile/friends-summary-row";
-import { getCachedCommunityTabData } from "@/lib/cache/tab-page-cache";
+import { getCommunityTabData } from "@/lib/cache/tab-page-cache";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -16,6 +16,7 @@ export default async function CommunityPage() {
 
   const { friendsData, leaderboard, testimonial, preparedUpcoming } =
     await getCachedCommunityTabData(session.user.id);
+    await getCommunityTabData(session.user.id);
 
   const previewEvents = preparedUpcoming.slice(0, PREVIEW_EVENT_COUNT);
 

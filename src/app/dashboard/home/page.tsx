@@ -6,7 +6,7 @@ import {
   HomeStreakProvider,
 } from "@/components/home-streak-stats";
 import { HubCard } from "@/components/ui/hub-primitives";
-import { getCachedHomeTabData } from "@/lib/cache/tab-page-cache";
+import { getHomeTabData } from "@/lib/cache/tab-page-cache";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -17,7 +17,7 @@ export default async function HomePage() {
   if (!session) redirect("/login");
 
   const { dashboard, profile, onboarding, unreadNotificationCount, weeklyPoints } =
-    await getCachedHomeTabData(session.user.id);
+    await getHomeTabData(session.user.id);
 
   return (
     <div className={ui.page}>

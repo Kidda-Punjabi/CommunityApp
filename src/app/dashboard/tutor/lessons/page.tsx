@@ -1,6 +1,6 @@
 import { TutorDashboardOverview } from "@/components/tutor/tutor-dashboard-overview";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
-import { getCachedTutorDashboard } from "@/lib/cache/tab-page-cache";
+import { getTutorDashboardData } from "@/lib/cache/tab-page-cache";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import { redirect } from "next/navigation";
@@ -9,7 +9,7 @@ export default async function TutorLessonsPage() {
   const session = await getCachedAuthSession();
   if (!session) redirect("/login");
 
-  const data = await getCachedTutorDashboard(session.user.id);
+  const data = await getTutorDashboardData(session.user.id);
 
   return (
     <div className={ui.page}>
