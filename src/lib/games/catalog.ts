@@ -1,3 +1,4 @@
+import { CHADO_PAURI_DISPLAY_NAME } from "@/lib/games/chado-pauri/config";
 import type { GameType } from "./types";
 
 export const GAMES_HUB_HREF = "/dashboard/games";
@@ -87,6 +88,14 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     emoji: "🎙️",
     section: "grammar",
     href: "/dashboard/games/voice-practice",
+  },
+  {
+    type: "chado_pauri",
+    title: CHADO_PAURI_DISPLAY_NAME,
+    description: "Climb nine rungs — one wrong answer ends the run",
+    emoji: "🪜",
+    section: "vocabulary",
+    href: "/dashboard/games/chado-pauri",
   },
 ];
 

@@ -23,11 +23,13 @@ import {
 } from "@/lib/games/voice-practice";
 import { formatPunjabiForDisplay } from "@/lib/conjugation/format";
 import {
-  createPunjabiSpeechRecognition,
   isSpeechRecognitionSupported,
   SPEECH_UNSUPPORTED_MESSAGE,
-  type SpeechRecognitionInstance,
 } from "@/lib/speech/speech-recognition";
+import {
+  startPunjabiRecognitionSession,
+  type PunjabiRecognitionSession,
+} from "@/lib/speech/punjabi-recognition-session";
 import { createClient } from "@/lib/supabase/client";
 
 const ADVANCE_MS = 1400;
@@ -62,7 +64,7 @@ export function VoicePracticeMode({
   const [micError, setMicError] = useState<string | null>(null);
   const [pointsEarned, setPointsEarned] = useState(0);
 
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const sessionRef = useRef<PunjabiRecognitionSession | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
@@ -130,13 +132,13 @@ export function VoicePracticeMode({
       if (advanceTimerRef.current) {
         window.clearTimeout(advanceTimerRef.current);
       }
-      recognitionRef.current?.abort();
+      sessionRef.current?.stop();
     };
   }, []);
 
   function stopRecognition() {
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
+    sessionRef.current?.stop();
+    sessionRef.current = null;
     setListening(false);
   }
 
@@ -244,48 +246,21 @@ export function VoicePracticeMode({
       setLastTranscript(null);
     }
 
-    const recognition = createPunjabiSpeechRecognition();
-    if (!recognition) {
-      setMicError(SPEECH_UNSUPPORTED_MESSAGE);
-      return;
-    }
+    sessionRef.current?.stop();
 
-    recognitionRef.current = recognition;
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      if (transcript.trim()) {
-        handleTranscript(transcript);
-      } else {
-        setMicError("We didn't catch that — try speaking a little louder.");
-      }
-    };
-
-    recognition.onerror = (event) => {
-      if (event.error === "aborted") return;
-      if (event.error === "no-speech") {
-        setMicError("No speech detected — tap record and try again.");
-        return;
-      }
-      if (event.error === "not-allowed") {
-        setMicError("Microphone access is blocked — allow the mic in your browser settings.");
-        return;
-      }
-      setMicError("Couldn't hear you — try again.");
-    };
-
-    recognition.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-    };
-
-    try {
-      recognition.start();
-      setListening(true);
-    } catch {
-      setMicError("Couldn't start listening — try again.");
-      setListening(false);
-    }
+    sessionRef.current = startPunjabiRecognitionSession({
+      onTranscript: handleTranscript,
+      onError: (message) => {
+        setMicError(message);
+        sessionRef.current = null;
+      },
+      onListeningChange: (active) => {
+        setListening(active);
+        if (!active) {
+          sessionRef.current = null;
+        }
+      },
+    });
   }
 
   if (phase === "ready") {
