@@ -5,6 +5,7 @@ import { ASSIGNABLE_STAFF_ROLES, type AppRole } from "@/lib/auth/admin-access";
 import { hasAnyRole } from "@/lib/auth/profile-roles";
 import { findCoursesForTier } from "@/lib/membership/courses";
 import type { PaidCourseTier } from "@/lib/membership/access";
+import { loadAccessTiersByUserId } from "@/lib/admin/member-access-tiers";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { revalidatePath } from "next/cache";
 import type { AdminMemberDetail, AdminMemberListItem } from "./types";
@@ -78,22 +79,7 @@ export async function listAdminMembers(
       const userIds = [...byId.keys()];
       if (userIds.length === 0) return { members: [] };
 
-      const [{ data: accessRows }, { data: courses }] = await Promise.all([
-        supabase.from("course_access").select("user_id, course_id").in("user_id", userIds),
-        supabase.from("courses").select("id, required_tier"),
-      ]);
-
-      const tierByCourseId = new Map(
-        (courses ?? []).map((course) => [course.id, course.required_tier ?? ""] as const)
-      );
-      const tiersByUser = new Map<string, Set<string>>();
-      for (const row of accessRows ?? []) {
-        const tier = tierByCourseId.get(row.course_id);
-        if (!tier) continue;
-        const set = tiersByUser.get(row.user_id) ?? new Set();
-        set.add(tier);
-        tiersByUser.set(row.user_id, set);
-      }
+      const tiersByUser = await loadAccessTiersByUserId(supabase, userIds);
 
       for (const member of byId.values()) {
         member.accessTiers = [...(tiersByUser.get(member.userId) ?? [])];
@@ -113,28 +99,15 @@ export async function listAdminMembers(
     const userIds = users.map((user) => user.id);
     if (userIds.length === 0) return { members: [] };
 
-    const [{ data: profiles }, { data: accessRows }, { data: courses }] = await Promise.all([
+    const [{ data: profiles }, tiersByUser] = await Promise.all([
       supabase
         .from("profiles")
         .select("id, full_name, preferred_name, avatar_url")
         .in("id", userIds),
-      supabase.from("course_access").select("user_id, course_id").in("user_id", userIds),
-      supabase.from("courses").select("id, required_tier"),
+      loadAccessTiersByUserId(supabase, userIds),
     ]);
 
     const profileById = new Map((profiles ?? []).map((row) => [row.id, row] as const));
-    const tierByCourseId = new Map(
-      (courses ?? []).map((course) => [course.id, course.required_tier ?? ""] as const)
-    );
-
-    const tiersByUser = new Map<string, Set<string>>();
-    for (const row of accessRows ?? []) {
-      const tier = tierByCourseId.get(row.course_id);
-      if (!tier) continue;
-      const set = tiersByUser.get(row.user_id) ?? new Set();
-      set.add(tier);
-      tiersByUser.set(row.user_id, set);
-    }
 
     const members: AdminMemberListItem[] = users.map((user) => {
       const profile = profileById.get(user.id);

@@ -9,9 +9,11 @@ import type {
 } from "./types";
 import { getDisplayName } from "@/lib/profile/display-name";
 
+import { DEFAULT_WEEKLY_CAPACITY_HOURS } from "./constants";
+
 const DEFAULT_SETTINGS: Omit<TutorAvailabilitySettings, "tutorId" | "updatedAt"> = {
   timezone: "Europe/London",
-  weeklyCapacityHours: 20,
+  weeklyCapacityHours: DEFAULT_WEEKLY_CAPACITY_HOURS,
   defaultSessionMinutes: 60,
   bookingBufferHours: 24,
   bufferBetweenSessionsMinutes: 15,

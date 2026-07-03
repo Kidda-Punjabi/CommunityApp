@@ -25,7 +25,7 @@ export const ADMIN_HELP: HelpContent = {
           question: "Who can access admin?",
           answer:
             "Only users listed under People → Staff & tutors with admin or staff roles. Tutors without staff access use the tutor dashboard only.",
-          links: [{ label: "Staff & tutors", href: "/admin/content/people?tab=staff" }],
+          links: [{ label: "Staff & tutors", href: "/admin/content/people/staff" }],
         },
       ],
     },
@@ -38,7 +38,7 @@ export const ADMIN_HELP: HelpContent = {
           question: "How do I see all cohorts and member counts?",
           answer:
             "People → Cohorts lists active cohorts, how many students are in each, setup status, and expandable member lists. Use this to spot empty or full groups.",
-          links: [{ label: "Cohorts tab", href: "/admin/content/people?tab=cohorts" }],
+          links: [{ label: "Cohorts tab", href: "/admin/content/people/cohorts" }],
         },
         {
           id: "create-cohort",
@@ -46,8 +46,8 @@ export const ADMIN_HELP: HelpContent = {
           answer:
             "People → Staff & tutors → create or edit a cohort: set name, course, tutor, schedule, and capacity. New group buyers appear as unallocated until you assign them on the Cohorts tab or Members setup.",
           links: [
-            { label: "Staff & tutors", href: "/admin/content/people?tab=staff" },
-            { label: "Cohorts", href: "/admin/content/people?tab=cohorts" },
+            { label: "Staff & tutors", href: "/admin/content/people/staff" },
+            { label: "Cohorts", href: "/admin/content/people/cohorts" },
           ],
         },
         {
@@ -55,14 +55,14 @@ export const ADMIN_HELP: HelpContent = {
           question: "How do I allocate group purchasers to a cohort?",
           answer:
             "People → Cohorts shows unallocated group buyers at the bottom. Assign each student to the right cohort so their tutor sees them in Lessons and they get the correct schedule.",
-          links: [{ label: "Cohorts tab", href: "/admin/content/people?tab=cohorts" }],
+          links: [{ label: "Cohorts tab", href: "/admin/content/people/cohorts" }],
         },
         {
           id: "members-setup",
           question: "What is Members setup?",
           answer:
             "Members setup is where you link enrollments to cohorts, fix access issues, and confirm a member is ready for their tutor. Use it when someone paid but doesn't appear in the right place.",
-          links: [{ label: "Members setup", href: "/admin/content/people?tab=members" }],
+          links: [{ label: "Members setup", href: "/admin/content/people/members" }],
         },
       ],
     },
@@ -76,8 +76,8 @@ export const ADMIN_HELP: HelpContent = {
           answer:
             "People → Members setup and the home stats show enrollment counts. Cross-check with Stripe on the Payments tab for paid access.",
           links: [
-            { label: "Members setup", href: "/admin/content/people?tab=members" },
-            { label: "Payments", href: "/admin/content/people?tab=payments" },
+            { label: "Members setup", href: "/admin/content/people/members" },
+            { label: "Payments", href: "/admin/content/people/payments" },
           ],
         },
         {
@@ -85,21 +85,21 @@ export const ADMIN_HELP: HelpContent = {
           question: "How do I add a tutor or staff member?",
           answer:
             "People → Staff & tutors → add the user (they must have signed up first). Set role to tutor, staff, or admin and assign cohorts they teach.",
-          links: [{ label: "Staff & tutors", href: "/admin/content/people?tab=staff" }],
+          links: [{ label: "Staff & tutors", href: "/admin/content/people/staff" }],
         },
         {
           id: "payments",
           question: "How do I review Stripe payments?",
           answer:
             "People → Payments lists recent checkouts and subscriptions. Use this to verify a student paid before manually fixing access.",
-          links: [{ label: "Payments", href: "/admin/content/people?tab=payments" }],
+          links: [{ label: "Payments", href: "/admin/content/people/payments" }],
         },
         {
           id: "discounts",
           question: "How do I approve student or Blue Light discounts?",
           answer:
             "People → Discounts shows pending applications with uploaded ID. Approve to send the correct promo code email, or reject with a reason. Codes are separate for student vs Blue Light and group vs 1-to-1.",
-          links: [{ label: "Discounts", href: "/admin/content/people?tab=student-discounts" }],
+          links: [{ label: "Discounts", href: "/admin/content/people/discounts" }],
         },
       ],
     },
@@ -166,8 +166,8 @@ export const ADMIN_HELP: HelpContent = {
           answer:
             "1) Confirm payment in Payments. 2) Check Cohorts for unallocated buyer. 3) Assign to cohort with capacity. 4) Confirm tutor sees them in Lessons. 5) Student opens Learn after tutor unlocks first lesson.",
           links: [
-            { label: "Payments", href: "/admin/content/people?tab=payments" },
-            { label: "Cohorts", href: "/admin/content/people?tab=cohorts" },
+            { label: "Payments", href: "/admin/content/people/payments" },
+            { label: "Cohorts", href: "/admin/content/people/cohorts" },
           ],
         },
         {
@@ -175,7 +175,7 @@ export const ADMIN_HELP: HelpContent = {
           question: "SOP: New 1-to-1 student",
           answer:
             "1) Verify 1-to-1 purchase in Payments. 2) Members setup — ensure enrollment and tutor assignment. 3) Tutor unlocks lessons individually. 4) Student submits homework from Learn.",
-          links: [{ label: "Members setup", href: "/admin/content/people?tab=members" }],
+          links: [{ label: "Members setup", href: "/admin/content/people/members" }],
         },
         {
           id: "sop-access-issue",
@@ -183,8 +183,8 @@ export const ADMIN_HELP: HelpContent = {
           answer:
             "1) Check Payments for successful checkout. 2) Members setup for enrollment row. 3) Group: confirm cohort allocation. 4) Ask student to log out and back in. 5) Escalate to dev if Stripe shows paid but no enrollment.",
           links: [
-            { label: "Payments", href: "/admin/content/people?tab=payments" },
-            { label: "Members setup", href: "/admin/content/people?tab=members" },
+            { label: "Payments", href: "/admin/content/people/payments" },
+            { label: "Members setup", href: "/admin/content/people/members" },
           ],
         },
         {
@@ -193,7 +193,7 @@ export const ADMIN_HELP: HelpContent = {
           answer:
             "1) Open Discounts tab. 2) Verify ID image and format (group vs 1-to-1). 3) Approve — system emails promo code. 4) Student applies code at Stripe checkout on Beginners page.",
           links: [
-            { label: "Discounts", href: "/admin/content/people?tab=student-discounts" },
+            { label: "Discounts", href: "/admin/content/people/discounts" },
             { label: "Beginners course page", href: "/courses/beginners" },
           ],
         },

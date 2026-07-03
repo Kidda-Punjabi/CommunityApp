@@ -75,12 +75,38 @@ function checklistProgress(checklist: OnboardingChecklistRow | null): {
   return { done, total };
 }
 
-function isOverdue(checklist: OnboardingChecklistRow | null): boolean {
-  if (!checklist?.paymentDate || checklist.onboardingCompleted) return false;
-  const due = new Date(`${checklist.paymentDate}T12:00:00`);
+const ONBOARDING_STALL_DAYS = 7;
+
+function isOverdue(params: {
+  checklist: OnboardingChecklistRow | null;
+  membershipStatus: PackageMembershipStatus;
+  packageRunId: string | null;
+  purchasedAt: string;
+  progressDone: number;
+  progressTotal: number;
+}): boolean {
+  const { checklist, membershipStatus, packageRunId, purchasedAt, progressDone, progressTotal } =
+    params;
+
+  if (checklist?.onboardingCompleted) return false;
+  if (membershipStatus === "withdrawn") return false;
+  if (membershipStatus !== "confirmed" && membershipStatus !== "waiting_for_payment") {
+    return false;
+  }
+
+  const referenceDate = checklist?.paymentDate ?? purchasedAt?.slice(0, 10);
+  if (!referenceDate) return false;
+
+  const stallAfter = new Date(`${referenceDate}T12:00:00`);
+  stallAfter.setDate(stallAfter.getDate() + ONBOARDING_STALL_DAYS);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  return due < today;
+  if (stallAfter >= today) return false;
+
+  const setupIncomplete = progressDone < progressTotal;
+  const packageUnassigned = !packageRunId;
+
+  return setupIncomplete || packageUnassigned;
 }
 
 function classifyQueue(
@@ -364,7 +390,16 @@ export async function loadAdminOnboardingQueue(
     if (!queue) continue;
 
     const { done, total } = checklistProgress(checklist);
-    const overdue = queue === "onboarding" && isOverdue(checklist);
+    const overdue =
+      queue === "onboarding" &&
+      isOverdue({
+        checklist,
+        membershipStatus,
+        packageRunId: run.packageRunId,
+        purchasedAt: sp.purchased_at,
+        progressDone: done,
+        progressTotal: total,
+      });
 
     rows.push({
       studentPackageId: sp.id,

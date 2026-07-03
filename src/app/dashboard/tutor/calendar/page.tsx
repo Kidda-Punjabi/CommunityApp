@@ -104,6 +104,38 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
 
       {!schemaReady ? <CalendarSchemaNotice className="mb-6" /> : null}
 
+      {pendingRequests.total > 0 ? (
+        <Link
+          href="/dashboard/tutor/requests"
+          className="mb-8 block rounded-2xl bg-violet-50 px-4 py-3 text-sm text-violet-900 transition-colors hover:bg-violet-100"
+        >
+          <span className="font-semibold">
+            {pendingRequests.total} student request{pendingRequests.total === 1 ? "" : "s"} waiting
+          </span>
+          {" — "}
+          Review reschedules and alternate cohort requests →
+        </Link>
+      ) : null}
+
+      {schemaReady ? (
+        <div className="mb-8">
+          <TutorCalendarView sessions={sessions} />
+        </div>
+      ) : null}
+
+      <div className="mb-8">
+        <TutorAvailabilitySection
+          settings={availabilityLoad.settings}
+          windows={availabilityLoad.windows}
+          capacity={capacity}
+          schemaReady={availabilityLoad.schemaReady}
+        />
+      </div>
+
+      {pendingBookingsLoad.schemaReady ? (
+        <TutorPendingBookings bookings={pendingBookingsLoad.bookings} />
+      ) : null}
+
       <section className={`${ui.card} mb-8 space-y-4`}>
         <h2 className="font-heading text-lg font-semibold text-zinc-900">Google Calendar</h2>
 
@@ -144,34 +176,6 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
           </>
         ) : null}
       </section>
-
-      {pendingRequests.total > 0 ? (
-        <Link
-          href="/dashboard/tutor/requests"
-          className="mb-8 block rounded-2xl bg-violet-50 px-4 py-3 text-sm text-violet-900 transition-colors hover:bg-violet-100"
-        >
-          <span className="font-semibold">
-            {pendingRequests.total} student request{pendingRequests.total === 1 ? "" : "s"} waiting
-          </span>
-          {" — "}
-          Review reschedules and alternate cohort requests →
-        </Link>
-      ) : null}
-
-      <div className="mb-8">
-        <TutorAvailabilitySection
-          settings={availabilityLoad.settings}
-          windows={availabilityLoad.windows}
-          capacity={capacity}
-          schemaReady={availabilityLoad.schemaReady}
-        />
-      </div>
-
-      {pendingBookingsLoad.schemaReady ? (
-        <TutorPendingBookings bookings={pendingBookingsLoad.bookings} />
-      ) : null}
-
-      {schemaReady ? <TutorCalendarView sessions={sessions} /> : null}
     </div>
   );
 }

@@ -26,7 +26,7 @@ const tierOptions = [
   { value: "", label: "All members (no course required)" },
   { value: "foundational", label: "Foundational Course" },
   { value: "beginners", label: "Beginner Course" },
-  { value: "community", label: "Community Course" },
+  { value: "community", label: "Kidda Community" },
 ];
 
 function toDatetimeLocalValue(iso: string) {

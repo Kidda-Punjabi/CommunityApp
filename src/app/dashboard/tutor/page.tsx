@@ -3,14 +3,14 @@ import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import { loadTutorPendingRequestCounts } from "@/lib/calendar/load-sessions";
 import {
-  loadTutorAssignedPackages,
+  buildTutorAssignmentRows,
   loadTutorDashboard,
   loadTutorTodayLessons,
   type TutorAssignedPackageRow,
   type TutorTodayLessonRow,
 } from "@/lib/tutoring/load-tutor-dashboard";
 import { loadPendingHomeworkReviews } from "@/lib/tutoring/homework-submissions";
-import { getDisplayName } from "@/lib/profile/display-name";
+import { getDisplayName, getGreetingHeading } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -25,7 +25,7 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [params, data, pendingHomework, profile, pendingRequests, todayLessons, assignedPackages] =
+  const [params, data, pendingHomework, profile, pendingRequests, todayLessons] =
     await Promise.all([
     searchParams,
     loadTutorDashboard(supabase, user!.id),
@@ -33,10 +33,11 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
     loadEditableProfile(supabase, user!.id),
     loadTutorPendingRequestCounts(supabase, user!.id),
       loadTutorTodayLessons(supabase, user!.id),
-      loadTutorAssignedPackages(supabase, user!.id),
     ]);
 
-  const displayName = getDisplayName(profile);
+  const assignedPackages = buildTutorAssignmentRows(data);
+  const displayName =
+    getDisplayName(profile) ?? user?.email?.split("@")[0] ?? null;
   const studentCount =
     data.foundationalStudents.length + data.beginnersOneToOne.length;
   const cohortCount = data.beginnersGroups.length;
@@ -51,7 +52,7 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
   return (
     <div className={ui.page}>
       <TutorPageHeader
-        title={displayName ? `Hi, ${displayName}` : "Tutor home"}
+        title={getGreetingHeading(displayName)}
         subtitle="Your teaching hub — pick a task below or use the bar at the bottom."
       />
 
@@ -75,48 +76,45 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
         />
       </div>
 
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
-        Quick tasks
-      </h2>
-      <ul className="space-y-3">
-        <QuickTaskLink
-          href="/dashboard/tutor/requests"
-          title="Review student requests"
-          description={
-            requestCount > 0
-              ? `${requestCount} reschedule or cohort request${requestCount === 1 ? "" : "s"} waiting`
-              : "No pending reschedule or cohort requests"
-          }
-          badge={requestCount > 0 ? String(requestCount) : undefined}
-        />
-        <QuickTaskLink
-          href="/dashboard/tutor/homework"
-          title="Review homework"
-          description={
-            homeworkCount > 0
-              ? `${homeworkCount} submission${homeworkCount === 1 ? "" : "s"} waiting`
-              : "No pending voice homework"
-          }
-          badge={homeworkCount > 0 ? String(homeworkCount) : undefined}
-        />
-        {cohortCount > 0 && (
-          <QuickTaskLink
-            href="/dashboard/tutor/attendance"
-            title="Mark attendance"
-            description="Record who attended a group live session"
-          />
-        )}
-        <QuickTaskLink
-          href="/dashboard/tutor/calendar"
-          title="Calendar & lessons"
-          description="Connect Google Calendar and manage upcoming live sessions"
-        />
-        <QuickTaskLink
-          href="/dashboard/tutor/lessons"
-          title="Manage lessons"
-          description="Unlock lessons and add session recordings"
-        />
-      </ul>
+      {(requestCount > 0 || homeworkCount > 0 || cohortCount > 0 || todayLessons.length > 0) && (
+        <>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+            Quick tasks
+          </h2>
+          <ul className="space-y-3">
+            {requestCount > 0 ? (
+              <QuickTaskLink
+                href="/dashboard/tutor/requests"
+                title="Review student requests"
+                description={`${requestCount} reschedule or cohort request${requestCount === 1 ? "" : "s"} waiting`}
+                badge={String(requestCount)}
+              />
+            ) : null}
+            {homeworkCount > 0 ? (
+              <QuickTaskLink
+                href="/dashboard/tutor/homework"
+                title="Review homework"
+                description={`${homeworkCount} submission${homeworkCount === 1 ? "" : "s"} waiting`}
+                badge={String(homeworkCount)}
+              />
+            ) : null}
+            {cohortCount > 0 ? (
+              <QuickTaskLink
+                href="/dashboard/tutor/attendance"
+                title="Mark attendance"
+                description="Record who attended a group live session"
+              />
+            ) : null}
+            {todayLessons.length > 0 ? (
+              <QuickTaskLink
+                href="/dashboard/tutor/calendar"
+                title="Today's lessons"
+                description={`${todayLessons.length} lesson${todayLessons.length === 1 ? "" : "s"} on your calendar today`}
+              />
+            ) : null}
+          </ul>
+        </>
+      )}
 
       <section className="mt-10">
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -133,7 +131,7 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
       <section className="mt-10">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-            My packages
+            My assignments
           </h2>
           <Link href="/dashboard/tutor/lessons" className="text-sm font-medium text-violet-600 hover:text-violet-500">
             Manage lessons →
@@ -232,7 +230,7 @@ function TutorAssignedPackagesList({ packages }: { packages: TutorAssignedPackag
   if (packages.length === 0) {
     return (
       <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500">
-        No packages are assigned to you yet.
+        No students or cohorts assigned to you yet.
       </p>
     );
   }

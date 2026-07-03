@@ -226,6 +226,54 @@ export async function loadAdminPackagesList(
     packagesByInstanceId.set(sp.package_instance_id, list);
   }
 
+  // 1-1 runs: also include confirmed students assigned via enrollment when
+  // package_instance_id was not set on the student_packages row.
+  if (instanceIds.length > 0) {
+    const instanceById = new Map((instanceRows ?? []).map((row) => [row.id, row] as const));
+    const instanceCourseIds = [...new Set((instanceRows ?? []).map((row) => row.course_id))];
+
+    const { data: enrollmentLinkedPackages } = await supabase
+      .from("student_packages")
+      .select("id, user_id, status, course_id, package_instance_id")
+      .in("course_id", instanceCourseIds)
+      .eq("status", "confirmed")
+      .is("package_instance_id", null);
+
+    const orphanUserIds = [...new Set((enrollmentLinkedPackages ?? []).map((row) => row.user_id))];
+    const { data: enrollments } =
+      orphanUserIds.length > 0
+        ? await supabase
+            .from("course_enrollments")
+            .select("user_id, course_id, tutor_id, delivery_mode")
+            .in("user_id", orphanUserIds)
+            .in("course_id", instanceCourseIds)
+        : { data: [] };
+
+    const enrollmentByUserCourse = new Map(
+      (enrollments ?? []).map((row) => [`${row.user_id}:${row.course_id}`, row] as const)
+    );
+
+    for (const sp of enrollmentLinkedPackages ?? []) {
+      const enrollment = enrollmentByUserCourse.get(`${sp.user_id}:${sp.course_id}`);
+      if (!enrollment || enrollment.delivery_mode === "group") continue;
+
+      for (const instanceId of instanceIds) {
+        const instance = instanceById.get(instanceId);
+        if (!instance || instance.course_id !== sp.course_id) continue;
+        if (instance.tutor_id && enrollment.tutor_id !== instance.tutor_id) continue;
+
+        const list = packagesByInstanceId.get(instanceId) ?? [];
+        if (list.some((row) => row.user_id === sp.user_id)) continue;
+        list.push({
+          id: sp.id,
+          user_id: sp.user_id,
+          status: sp.status as PackageMembershipStatus,
+        });
+        packagesByInstanceId.set(instanceId, list);
+      }
+    }
+  }
+
   const unlockStatsByCohort = new Map<string, { count: number; lastAt: string | null }>();
   for (const unlock of cohortUnlocks ?? []) {
     const current = unlockStatsByCohort.get(unlock.cohort_id) ?? { count: 0, lastAt: null };

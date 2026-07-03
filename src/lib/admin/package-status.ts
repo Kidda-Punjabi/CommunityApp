@@ -88,7 +88,7 @@ export function packageDeliveryFormatLabel(format: PackageDeliveryFormat): strin
   const labels: Record<PackageDeliveryFormat, string> = {
     group: "Group",
     one_to_one: "1-1",
-    community: "Community",
+    community: "Kidda Community",
   };
   return labels[format];
 }

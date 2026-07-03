@@ -1,5 +1,7 @@
 import type { AppRole } from "@/lib/auth/admin-access";
+import { ADMIN_UPCOMING_LESSONS_WINDOW_DAYS } from "@/lib/calendar/constants";
 import { startOfWeekMonday } from "@/lib/calendar/time-grid-calendar";
+import { DEFAULT_WEEKLY_CAPACITY_HOURS } from "@/lib/tutoring/availability/constants";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -74,6 +76,9 @@ export async function loadAdminTutorOverview(
   if (tutorIds.length === 0) return { tutors: [] };
 
   const nowIso = new Date().toISOString();
+  const upcomingHorizonIso = new Date(
+    Date.now() + ADMIN_UPCOMING_LESSONS_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
   const weekStart = startOfWeekMonday(new Date());
   weekStart.setHours(0, 0, 0, 0);
   const weekEnd = new Date(weekStart);
@@ -103,10 +108,11 @@ export async function loadAdminTutorOverview(
     supabase.from("course_enrollments").select("tutor_id, user_id").in("tutor_id", tutorIds),
     supabase
       .from("tutor_scheduled_sessions")
-      .select("tutor_id")
+      .select("tutor_id, starts_at, ends_at, google_event_id, google_recurring_event_id")
       .in("tutor_id", tutorIds)
       .eq("status", "scheduled")
-      .gte("starts_at", nowIso),
+      .gte("starts_at", nowIso)
+      .lt("starts_at", upcomingHorizonIso),
     supabase
       .from("tutor_scheduled_sessions")
       .select("tutor_id, starts_at, ends_at, google_event_id, google_recurring_event_id")
@@ -144,16 +150,21 @@ export async function loadAdminTutorOverview(
     studentIdsByTutor.set(row.tutor_id, set);
   }
 
-  const upcomingCountByTutor = new Map<string, number>();
-  for (const row of upcomingSessions ?? []) {
-    upcomingCountByTutor.set(row.tutor_id, (upcomingCountByTutor.get(row.tutor_id) ?? 0) + 1);
-  }
-
   const exclusionsByTutor = new Map<string, ExclusionRow[]>();
   for (const row of (exclusions ?? []) as ExclusionRow[]) {
     const list = exclusionsByTutor.get(row.tutor_id) ?? [];
     list.push(row);
     exclusionsByTutor.set(row.tutor_id, list);
+  }
+
+  const upcomingCountByTutor = new Map<string, number>();
+  for (const row of (upcomingSessions ?? []) as ScheduledRangeRow[]) {
+    const excluded = isExcluded(row, exclusionsByTutor.get(row.tutor_id) ?? []);
+    if (excluded) continue;
+    upcomingCountByTutor.set(
+      row.tutor_id,
+      (upcomingCountByTutor.get(row.tutor_id) ?? 0) + 1
+    );
   }
 
   const usedHoursByTutor = new Map<string, number>();
@@ -177,10 +188,10 @@ export async function loadAdminTutorOverview(
     .map((tutorId) => {
       const profile = profileById.get(tutorId) ?? null;
       const displayName = (profile ? getDisplayName(profile) : null) ?? emailById.get(tutorId) ?? "Tutor";
-      const capacity = availabilityByTutor.get(tutorId);
+      const savedCapacity = availabilityByTutor.get(tutorId);
+      const effectiveCapacity = savedCapacity ?? DEFAULT_WEEKLY_CAPACITY_HOURS;
       const used = Math.round((usedHoursByTutor.get(tutorId) ?? 0) * 10) / 10;
-      const percent =
-        capacity && capacity > 0 ? Math.min(100, Math.round((used / capacity) * 100)) : null;
+      const percent = Math.min(100, Math.round((used / effectiveCapacity) * 100));
 
       return {
         tutorId,
@@ -188,7 +199,7 @@ export async function loadAdminTutorOverview(
         email: emailById.get(tutorId) ?? null,
         connected: connectionByTutor.has(tutorId),
         lastSyncedAt: connectionByTutor.get(tutorId) ?? null,
-        weeklyCapacityHours: capacity ?? null,
+        weeklyCapacityHours: effectiveCapacity,
         usedHoursThisWeek: used,
         capacityPercent: percent,
         studentCount: studentIdsByTutor.get(tutorId)?.size ?? 0,

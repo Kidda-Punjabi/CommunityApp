@@ -19,6 +19,7 @@ import {
   fetchCommunityPackageProduct,
   syncCommunityCourseAccess,
 } from "@/lib/admin/community-package";
+import { syncPackageCourseAccess } from "@/lib/admin/package-course-access";
 import { ensureOnboardingChecklistForStudentPackage, markOnboardingPackageAssigned } from "@/lib/stripe/sync-student-packages-from-payment";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -316,15 +317,13 @@ export async function updateStudentPackageMembershipStatus(
     if (error) return { error: error.message };
 
     const pkg = Array.isArray(row.packages) ? row.packages[0] : row.packages;
-    if (pkg?.slug === "community") {
-      const sync = await syncCommunityCourseAccess(
-        supabase,
-        row.user_id,
-        row.course_id,
-        status
-      );
-      if (sync.error) return { error: sync.error };
-    }
+    const sync = await syncPackageCourseAccess(
+      supabase,
+      row.user_id,
+      row.course_id,
+      status
+    );
+    if (sync.error) return { error: sync.error };
 
     revalidatePackages();
     return { success: "Student status updated." };

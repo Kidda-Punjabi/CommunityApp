@@ -164,6 +164,14 @@ export function AdminOnboardingSection() {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    if (loading || rows.length === 0) return;
+    const hash = window.location.hash;
+    if (!hash.startsWith("#onboarding-row-")) return;
+    const target = document.querySelector(hash);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [loading, rows]);
+
   const filteredRows = useMemo(() => {
     let list = rows;
     if (queueFilter !== "all") {
@@ -180,6 +188,16 @@ export function AdminOnboardingSection() {
         (row.tutorName?.toLowerCase().includes(q) ?? false)
     );
   }, [rows, queueFilter, search]);
+
+  const groupedRows = useMemo(() => {
+    const groups = new Map<string, AdminOnboardingRow[]>();
+    for (const row of filteredRows) {
+      const list = groups.get(row.userId) ?? [];
+      list.push(row);
+      groups.set(row.userId, list);
+    }
+    return [...groups.values()];
+  }, [filteredRows]);
 
   const filteredCompletedRows = useMemo(() => {
     const q = completedSearch.trim().toLowerCase();
@@ -302,7 +320,7 @@ export function AdminOnboardingSection() {
 
       {loading ? (
         <p className="text-sm text-zinc-500">Loading…</p>
-      ) : filteredRows.length === 0 ? (
+      ) : groupedRows.length === 0 ? (
         <div className={ui.emptyState}>
           <p className="text-lg font-semibold text-zinc-900">All caught up</p>
           <p className="mt-2 text-sm text-zinc-500">
@@ -329,15 +347,31 @@ export function AdminOnboardingSection() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
-              {filteredRows.map((row) => (
-                <tr key={row.studentPackageId} className="hover:bg-zinc-50/50">
+              {groupedRows.flatMap((group) =>
+                group.map((row, indexInGroup) => (
+                <tr
+                  key={row.studentPackageId}
+                  id={`onboarding-row-${row.studentPackageId}`}
+                  className="scroll-mt-6 hover:bg-zinc-50/50"
+                >
                   <td className="sticky left-0 z-10 bg-white px-3 py-3">
-                    <p className="font-semibold text-zinc-900">{row.studentLabel}</p>
-                    {row.email && <p className="text-xs text-zinc-500">{row.email}</p>}
-                    {row.isOverdue && (
-                      <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                        Overdue
-                      </span>
+                    {indexInGroup === 0 ? (
+                      <>
+                        <p className="font-semibold text-zinc-900">{row.studentLabel}</p>
+                        {row.email && <p className="text-xs text-zinc-500">{row.email}</p>}
+                        {group.length > 1 ? (
+                          <p className="mt-1 text-xs text-violet-600">
+                            {group.length} course enrollments
+                          </p>
+                        ) : null}
+                        {row.isOverdue && (
+                          <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                            Overdue
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-zinc-400">↳ same student</p>
                     )}
                   </td>
                   <td className="px-3 py-3">
@@ -406,7 +440,8 @@ export function AdminOnboardingSection() {
                     </td>
                   ))}
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>

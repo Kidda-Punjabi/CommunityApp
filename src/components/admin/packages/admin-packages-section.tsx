@@ -499,7 +499,9 @@ export function AdminPackagesSection() {
                       <th className="px-4 py-3 lg:w-[8%]">Start</th>
                       <th className="hidden px-4 py-3 sm:table-cell lg:w-[8%]">End</th>
                       <th className="px-4 py-3 lg:w-[10%]">Status</th>
-                      <th className="hidden px-4 py-3 sm:table-cell lg:w-[5%]">Lessons</th>
+                      <th className="hidden px-4 py-3 sm:table-cell lg:w-[5%]" title="Lesson unlocks logged for this package run">
+                        Unlocks
+                      </th>
                       <th className="px-4 py-3 lg:w-[5%]" />
                     </tr>
                   </thead>

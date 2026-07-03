@@ -18,7 +18,7 @@ export const TIER_LABELS: Record<MembershipTier, string> = {
   free: "Free",
   foundational: "Foundational Course",
   beginners: "Beginner Course",
-  community: "Community Course",
+  community: "Kidda Community",
 };
 
 export function normalizeTier(value: string | null | undefined): MembershipTier {

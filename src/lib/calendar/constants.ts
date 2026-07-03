@@ -8,6 +8,9 @@ export const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ] as const;
 
+/** Admin tutor overview: cap upcoming lesson counts to a plausible window. */
+export const ADMIN_UPCOMING_LESSONS_WINDOW_DAYS = 56;
+
 const parsedLookahead = Number(process.env.GOOGLE_CALENDAR_SYNC_LOOKAHEAD_DAYS ?? 540);
 const parsedLookback = Number(process.env.GOOGLE_CALENDAR_SYNC_LOOKBACK_DAYS ?? 90);
 

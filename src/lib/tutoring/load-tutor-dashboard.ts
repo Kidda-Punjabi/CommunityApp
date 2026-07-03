@@ -1,5 +1,9 @@
 import { getDisplayName } from "@/lib/profile/display-name";
 import { canManageCohort } from "@/lib/tutoring/tutor-access";
+import { isStoredSessionExcluded } from "@/lib/calendar/exclusions";
+import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
+import { localDateKey, todayDateKey } from "@/lib/calendar/day-bounds";
+import { loadTutorAvailability } from "@/lib/tutoring/availability/load-availability";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type TutorStudentRow = {
@@ -120,6 +124,24 @@ export async function loadTutorDashboard(
     ] as const)
   );
 
+  const cohortMemberUserIds = [
+    ...new Set(membersByCohortFromDb.map((member) => member.user_id)),
+  ];
+  const missingProfileIds = cohortMemberUserIds.filter((id) => !studentIds.includes(id));
+
+  if (missingProfileIds.length > 0) {
+    const { data: memberProfiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, preferred_name")
+      .in("id", missingProfileIds);
+
+    for (const profile of memberProfiles ?? []) {
+      if (!nameById.has(profile.id)) {
+        nameById.set(profile.id, getDisplayName(profile) ?? "Student");
+      }
+    }
+  }
+
   const cohortNameById = new Map(
     [...(cohortRows ?? []), ...(assignedCohortRows ?? [])].map(
       (c) => [c.id, c.name] as const
@@ -128,7 +150,7 @@ export async function loadTutorDashboard(
   const membersByCohort = new Map<string, string[]>();
   for (const member of membersByCohortFromDb) {
     const list = membersByCohort.get(member.cohort_id) ?? [];
-    list.push(nameById.get(member.user_id) ?? "Member");
+    list.push(nameById.get(member.user_id) ?? "Student");
     membersByCohort.set(member.cohort_id, list);
   }
 
@@ -203,35 +225,46 @@ export async function loadTutorDashboard(
   };
 }
 
-function startOfTodayLocal(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function endOfTodayLocal(): Date {
-  const d = startOfTodayLocal();
-  d.setDate(d.getDate() + 1);
-  return d;
-}
-
 export async function loadTutorTodayLessons(
   supabase: SupabaseClient,
   tutorId: string
 ): Promise<TutorTodayLessonRow[]> {
-  const from = startOfTodayLocal().toISOString();
-  const to = endOfTodayLocal().toISOString();
+  const { settings } = await loadTutorAvailability(supabase, tutorId);
+  const timeZone = settings.timezone;
+  const todayKey = todayDateKey(timeZone);
 
-  const { data: rows } = await supabase
-    .from("tutor_scheduled_sessions")
-    .select("id, title, starts_at, ends_at, meet_link, student_id, cohort_id")
-    .eq("tutor_id", tutorId)
-    .eq("status", "scheduled")
-    .gte("starts_at", from)
-    .lt("starts_at", to)
-    .order("starts_at", { ascending: true });
+  const windowStart = new Date();
+  windowStart.setHours(windowStart.getHours() - 24);
+  const windowEnd = new Date();
+  windowEnd.setHours(windowEnd.getHours() + 48);
 
-  const sessions = rows ?? [];
+  const [{ data: rows }, { data: exclusions }] = await Promise.all([
+    supabase
+      .from("tutor_scheduled_sessions")
+      .select("id, title, starts_at, ends_at, meet_link, student_id, cohort_id, google_event_id, google_recurring_event_id")
+      .eq("tutor_id", tutorId)
+      .eq("status", "scheduled")
+      .gte("starts_at", windowStart.toISOString())
+      .lt("starts_at", windowEnd.toISOString())
+      .order("starts_at", { ascending: true }),
+    supabase
+      .from("tutor_calendar_event_exclusions")
+      .select("google_event_id, google_recurring_event_id, scope")
+      .eq("tutor_id", tutorId),
+  ]);
+
+  const exclusionRows = (exclusions ?? []) as CalendarExclusionRow[];
+  const sessions = (rows ?? []).filter((row) => {
+    if (localDateKey(row.starts_at, timeZone) !== todayKey) return false;
+    return !isStoredSessionExcluded(
+      {
+        google_event_id: row.google_event_id,
+        google_recurring_event_id: row.google_recurring_event_id,
+      },
+      exclusionRows
+    );
+  });
+
   if (sessions.length === 0) return [];
 
   const studentIds = [
@@ -347,6 +380,38 @@ export async function loadTutorAssignedPackages(
   }
 
   return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function buildTutorAssignmentRows(data: TutorDashboardData): TutorAssignedPackageRow[] {
+  const rows: TutorAssignedPackageRow[] = [];
+
+  for (const cohort of data.beginnersGroups) {
+    rows.push({
+      id: cohort.cohortId,
+      kind: "cohort",
+      name: cohort.cohortName,
+      courseName: cohort.courseName,
+      memberCount: cohort.memberCount,
+      capacity: null,
+      status: null,
+      href: `/dashboard/tutor/cohort/${cohort.cohortId}`,
+    });
+  }
+
+  for (const student of [...data.foundationalStudents, ...data.beginnersOneToOne]) {
+    rows.push({
+      id: student.studentId,
+      kind: "package_instance",
+      name: student.studentName,
+      courseName: student.courseName,
+      memberCount: 1,
+      capacity: 1,
+      status: null,
+      href: `/dashboard/tutor/student/${student.studentId}/${student.courseId}`,
+    });
+  }
+
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export type TutorLessonRow = {
