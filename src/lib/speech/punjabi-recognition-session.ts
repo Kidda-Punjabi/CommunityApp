@@ -4,14 +4,16 @@ import {
   logSpeechFailure,
   messageForSpeechError,
   nextPunjabiSpeechLang,
+  PUNJABI_SPEECH_AFTER_MIC_TIMEOUT_MS,
   PUNJABI_SPEECH_LANG,
-  PUNJABI_SPEECH_LANG_TAGS,
   PUNJABI_SPEECH_LISTEN_TIMEOUT_MS,
+  PUNJABI_SPEECH_RETRY_DELAY_MS,
+  speechPunjabiUnavailableMessage,
   SPEECH_EMPTY_TRANSCRIPT_MESSAGE,
-  SPEECH_PUNJABI_UNAVAILABLE_MESSAGE,
   SPEECH_START_FAILED_MESSAGE,
   SPEECH_UNSUPPORTED_MESSAGE,
   type SpeechRecognitionInstance,
+  type SpeechRecognitionResultEvent,
 } from "./speech-recognition";
 
 export type PunjabiRecognitionSessionOptions = {
@@ -28,6 +30,14 @@ export function startPunjabiRecognitionSession(
   options: PunjabiRecognitionSessionOptions
 ): PunjabiRecognitionSession {
   let activeStop: (() => void) | null = null;
+  let retryTimerId: ReturnType<typeof setTimeout> | null = null;
+
+  const clearRetryTimer = () => {
+    if (retryTimerId !== null) {
+      clearTimeout(retryTimerId);
+      retryTimerId = null;
+    }
+  };
 
   const startAttempt = (lang: string): void => {
     const recognition = createPunjabiSpeechRecognition(lang);
@@ -39,7 +49,14 @@ export function startPunjabiRecognitionSession(
 
     activeStop = bindRecognitionSession(recognition, lang, {
       ...options,
-      onRetry: (nextLang) => startAttempt(nextLang),
+      onRetry: (nextLang) => {
+        clearRetryTimer();
+        options.onListeningChange(false);
+        retryTimerId = setTimeout(() => {
+          retryTimerId = null;
+          startAttempt(nextLang);
+        }, PUNJABI_SPEECH_RETRY_DELAY_MS);
+      },
     }).stop;
   };
 
@@ -47,6 +64,7 @@ export function startPunjabiRecognitionSession(
 
   return {
     stop: () => {
+      clearRetryTimer();
       activeStop?.();
       activeStop = null;
     },
@@ -57,31 +75,88 @@ type BindOptions = PunjabiRecognitionSessionOptions & {
   onRetry: (lang: string) => void;
 };
 
+function transcriptFromResult(event: SpeechRecognitionResultEvent): string {
+  const results = event.results;
+  let transcript = "";
+
+  for (let index = results.length - 1; index >= 0; index -= 1) {
+    const result = results[index];
+    const isFinal =
+      typeof result.isFinal === "boolean" ? result.isFinal : index === results.length - 1;
+    if (!isFinal) continue;
+    transcript = result[0]?.transcript ?? "";
+    if (transcript.trim()) break;
+  }
+
+  if (transcript.trim()) return transcript;
+
+  return results[0]?.[0]?.transcript ?? "";
+}
+
 function bindRecognitionSession(
   recognition: SpeechRecognitionInstance,
   lang: string,
   options: BindOptions
 ): PunjabiRecognitionSession {
   let finished = false;
-  let heardActivity = false;
+  let heardSpeech = false;
+  let micOpened = false;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const clearListenTimeout = () => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
 
   const finish = (listening: boolean) => {
     if (finished) return;
     finished = true;
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
+    clearListenTimeout();
     options.onListeningChange(listening);
   };
 
-  const markActivity = () => {
-    heardActivity = true;
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
+  const markSpeechActivity = () => {
+    heardSpeech = true;
+    clearListenTimeout();
+  };
+
+  const scheduleTimeout = (ms: number, onTimeout: () => void) => {
+    clearListenTimeout();
+    timeoutId = setTimeout(() => {
       timeoutId = null;
+      onTimeout();
+    }, ms);
+  };
+
+  const failWithTimeout = () => {
+    if (heardSpeech || finished) return;
+
+    const nextLang = nextPunjabiSpeechLang(lang);
+    if (nextLang) {
+      logSpeechFailure("timeout", `lang=${lang} retry=${nextLang} mic=${micOpened}`);
+      finished = true;
+      try {
+        recognition.abort();
+      } catch {
+        // ignore
+      }
+      options.onRetry(nextLang);
+      return;
     }
+
+    logSpeechFailure("timeout", `lang=${lang} mic=${micOpened}`);
+    options.onError(speechPunjabiUnavailableMessage());
+    finished = true;
+
+    try {
+      recognition.abort();
+    } catch {
+      // ignore
+    }
+
+    options.onListeningChange(false);
   };
 
   const stop = () => {
@@ -94,25 +169,21 @@ function bindRecognitionSession(
     finish(false);
   };
 
+  recognition.onaudiostart = () => {
+    micOpened = true;
+    if (heardSpeech || finished) return;
+    scheduleTimeout(PUNJABI_SPEECH_AFTER_MIC_TIMEOUT_MS, failWithTimeout);
+  };
+
   recognition.onspeechstart = () => {
-    markActivity();
+    markSpeechActivity();
   };
 
   recognition.onresult = (event) => {
-    markActivity();
+    const transcript = transcriptFromResult(event);
+    if (!transcript.trim()) return;
 
-    const transcript = event.results[0]?.[0]?.transcript ?? "";
-    if (!transcript.trim()) {
-      logSpeechFailure("empty_transcript", `lang=${lang}`);
-      options.onError(SPEECH_EMPTY_TRANSCRIPT_MESSAGE);
-      try {
-        recognition.stop();
-      } catch {
-        // ignore
-      }
-      return;
-    }
-
+    markSpeechActivity();
     options.onTranscript(transcript);
     try {
       recognition.stop();
@@ -124,10 +195,7 @@ function bindRecognitionSession(
   recognition.onerror = (event) => {
     if (event.error === "aborted" || finished) return;
 
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
+    clearListenTimeout();
 
     const nextLang = nextPunjabiSpeechLang(lang);
     if (isRetryableSpeechError(event.error) && nextLang) {
@@ -155,9 +223,13 @@ function bindRecognitionSession(
   };
 
   recognition.onend = () => {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
+    clearListenTimeout();
+    if (!finished && !heardSpeech) {
+      logSpeechFailure("empty_transcript", `lang=${lang} ended-without-result`);
+      options.onError(SPEECH_EMPTY_TRANSCRIPT_MESSAGE);
+      finished = true;
+      options.onListeningChange(false);
+      return;
     }
     if (!finished) {
       finished = true;
@@ -165,43 +237,13 @@ function bindRecognitionSession(
     }
   };
 
-  timeoutId = setTimeout(() => {
-    if (heardActivity || finished) return;
-
-    const nextLang = nextPunjabiSpeechLang(lang);
-    if (nextLang) {
-      logSpeechFailure("timeout", `lang=${lang} retry=${nextLang}`);
-      finished = true;
-      try {
-        recognition.abort();
-      } catch {
-        // ignore
-      }
-      options.onRetry(nextLang);
-      return;
-    }
-
-    logSpeechFailure("timeout", `lang=${lang}`);
-    options.onError(SPEECH_PUNJABI_UNAVAILABLE_MESSAGE);
-    finished = true;
-
-    try {
-      recognition.abort();
-    } catch {
-      // ignore
-    }
-
-    options.onListeningChange(false);
-  }, PUNJABI_SPEECH_LISTEN_TIMEOUT_MS);
+  scheduleTimeout(PUNJABI_SPEECH_LISTEN_TIMEOUT_MS, failWithTimeout);
 
   try {
     recognition.start();
     options.onListeningChange(true);
   } catch (error) {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
+    clearListenTimeout();
     logSpeechFailure(
       "start_exception",
       `lang=${lang} ${error instanceof Error ? error.message : String(error)}`

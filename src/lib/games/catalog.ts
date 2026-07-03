@@ -1,3 +1,4 @@
+import { CONVERSATION_PRACTICE_DISPLAY_NAME } from "@/lib/conversation/config";
 import { CHADO_PAURI_DISPLAY_NAME } from "@/lib/games/chado-pauri/config";
 import type { GameType } from "./types";
 
@@ -96,6 +97,14 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     emoji: "🪜",
     section: "vocabulary",
     href: "/dashboard/games/chado-pauri",
+  },
+  {
+    type: "conversation_practice",
+    title: CONVERSATION_PRACTICE_DISPLAY_NAME,
+    description: "Scripted dialogues with a character — pick your difficulty",
+    emoji: "💬",
+    section: "grammar",
+    href: "/dashboard/games/conversation-practice",
   },
 ];
 

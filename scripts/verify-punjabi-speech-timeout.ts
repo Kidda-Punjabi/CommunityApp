@@ -5,7 +5,8 @@
 import {
   PUNJABI_SPEECH_LANG_TAGS,
   PUNJABI_SPEECH_LISTEN_TIMEOUT_MS,
-  SPEECH_PUNJABI_UNAVAILABLE_MESSAGE,
+  PUNJABI_SPEECH_RETRY_DELAY_MS,
+  speechPunjabiUnavailableMessage,
 } from "../src/lib/speech/speech-recognition";
 
 class SilentMockRecognition {
@@ -54,14 +55,18 @@ async function main() {
     },
   });
 
+  const expectedMessage = speechPunjabiUnavailableMessage();
+
   await new Promise((resolve) =>
     setTimeout(
       resolve,
-      PUNJABI_SPEECH_LISTEN_TIMEOUT_MS * PUNJABI_SPEECH_LANG_TAGS.length + 200
+      PUNJABI_SPEECH_LISTEN_TIMEOUT_MS * PUNJABI_SPEECH_LANG_TAGS.length +
+        PUNJABI_SPEECH_RETRY_DELAY_MS * (PUNJABI_SPEECH_LANG_TAGS.length - 1) +
+        500
     )
   );
 
-  if (!errors.includes(SPEECH_PUNJABI_UNAVAILABLE_MESSAGE)) {
+  if (!errors.includes(expectedMessage)) {
     console.error("FAIL: expected timeout message, got:", errors);
     process.exit(1);
   }

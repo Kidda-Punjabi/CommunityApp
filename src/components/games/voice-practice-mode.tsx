@@ -23,7 +23,9 @@ import {
 } from "@/lib/games/voice-practice";
 import { formatPunjabiForDisplay } from "@/lib/conjugation/format";
 import {
+  isSafariBrowser,
   isSpeechRecognitionSupported,
+  SAFARI_VOICE_WARNING,
   SPEECH_UNSUPPORTED_MESSAGE,
 } from "@/lib/speech/speech-recognition";
 import {
@@ -69,6 +71,7 @@ export function VoicePracticeMode({
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
   const speechSupported = useMemo(() => isSpeechRecognitionSupported(), []);
+  const safariBrowser = useMemo(() => isSafariBrowser(), []);
 
   const playableSentences = useMemo(
     () => sentences.filter(isPlayableVoiceSentence),
@@ -337,6 +340,11 @@ export function VoicePracticeMode({
         {shortPoolNotice ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {shortPoolNotice}
+          </p>
+        ) : null}
+        {safariBrowser ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {SAFARI_VOICE_WARNING}
           </p>
         ) : null}
       </div>
