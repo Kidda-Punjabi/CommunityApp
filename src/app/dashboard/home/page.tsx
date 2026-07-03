@@ -6,34 +6,18 @@ import {
   HomeStreakProvider,
 } from "@/components/home-streak-stats";
 import { HubCard } from "@/components/ui/hub-primitives";
-import { getHomeDashboardData } from "@/lib/dashboard/home-data";
-import { loadViewerWeeklyPoints } from "@/lib/leaderboard/load-viewer-weekly-points";
-import { getCurrentWeekStart } from "@/lib/leaderboard/week";
-import { loadUnreadNotificationCount } from "@/lib/notifications/load-notifications";
-import { loadOnboardingProfile } from "@/lib/progression/load-user-progression";
-import { getUserActivityDate } from "@/lib/progress/server-activity-date";
-import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
+import { getCachedHomeTabData } from "@/lib/cache/tab-page-cache";
+import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
-import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default async function HomePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getCachedAuthSession();
+  if (!session) redirect("/login");
 
-  const activityDate = await getUserActivityDate();
-  const currentWeekStart = getCurrentWeekStart(activityDate);
-
-  const [dashboard, profile, onboarding, unreadNotificationCount, weeklyPoints] =
-    await Promise.all([
-      getHomeDashboardData(supabase, user!),
-      loadEditableProfile(supabase, user!.id),
-      loadOnboardingProfile(supabase, user!.id),
-      loadUnreadNotificationCount(supabase, user!.id),
-      loadViewerWeeklyPoints(supabase, user!.id, currentWeekStart),
-    ]);
+  const { dashboard, profile, onboarding, unreadNotificationCount, weeklyPoints } =
+    await getCachedHomeTabData(session.user.id);
 
   return (
     <div className={ui.page}>

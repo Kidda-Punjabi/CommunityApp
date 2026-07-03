@@ -15,36 +15,37 @@ import {
   findStudentPackageForTrack,
   loadStudentPackages,
 } from "@/lib/packages/load-student-packages";
-import { getCourseAccessContext } from "@/lib/membership/unlocked";
+import {
+  getCachedAuthSession,
+  getCachedCourseAccess,
+} from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import {
   fetchLessonCompletionMap,
   summarizeCourseProgress,
 } from "@/lib/progress/lesson-completion";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
-import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
 export default async function LearnPage() {
-  const supabase = await createClient();
+  const session = await getCachedAuthSession();
+  if (!session) redirect("/login");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = session;
 
-  if (user?.email) {
-    try {
-      await syncStripePurchasesForUser(user.id, user.email);
-    } catch {
-      // Best-effort Stripe sync before loading lesson access.
-    }
+  if (user.email) {
+    void syncStripePurchasesForUser(user.id, user.email).catch(() => {
+      // Best-effort Stripe sync — do not block tab render.
+    });
   }
 
-  const access = await getCourseAccessContext(supabase, user!);
-  const [allLessons, studentPackages] = await Promise.all([
-    fetchLearnContent(supabase),
-    loadStudentPackages(supabase, user!),
+  const lessonsPromise = fetchLearnContent(supabase);
+  const [access, allLessons, studentPackages, completionMap] = await Promise.all([
+    getCachedCourseAccess(supabase, user),
+    lessonsPromise,
+    loadStudentPackages(supabase, user),
+    lessonsPromise.then((lessons) => fetchLessonCompletionMap(supabase, user.id, lessons)),
   ]);
-  const completionMap = await fetchLessonCompletionMap(supabase, user!.id, allLessons);
 
   const tracks = LEARN_TRACKS.map((track) => {
     if (track.alwaysUnlocked) {

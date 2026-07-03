@@ -133,6 +133,7 @@ export function TutorBottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={true}
               className={`group flex min-w-0 flex-1 flex-col items-center gap-1 px-0.5 py-1 transition-colors ${
                 active ? "text-violet-700" : "text-violet-500"
               }`}

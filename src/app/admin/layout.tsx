@@ -1,5 +1,5 @@
 import { AdminShell } from "@/components/admin/admin-shell";
-import { loadAdminData } from "@/lib/admin/load-admin-data";
+import { loadAdminCoreData } from "@/lib/admin/load-admin-data";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -18,13 +18,13 @@ export default async function AdminLayout({
   if (!user) redirect("/login");
   if (!(await canAccessAdminPanel(user, supabase))) redirect("/dashboard/home");
 
-  const result = await loadAdminData();
+  const result = await loadAdminCoreData();
   if (!result.ok) {
     return <AdminServerError message={result.error} />;
   }
 
   return (
-    <AdminShell data={result.data} branding={result.branding}>
+    <AdminShell data={result.data} branding={result.branding} dataSlice="core">
       {children}
     </AdminShell>
   );

@@ -2,39 +2,21 @@ import { EventCard } from "@/components/event-card";
 import { FeaturedTestimonialCard } from "@/components/community/featured-testimonial-card";
 import { WeeklyLeaderboardCard } from "@/components/community/weekly-leaderboard-card";
 import { FriendsSummaryRow } from "@/components/profile/friends-summary-row";
-import { loadFeaturedTestimonial } from "@/lib/community/load-featured-testimonial";
-import { prepareCommunityEvents } from "@/lib/community/prepare-events";
-import { loadFriendsProfileData } from "@/lib/friends/load-friends";
-import { loadLeaderboard } from "@/lib/leaderboard/load-leaderboard";
-import { getCurrentWeekStart } from "@/lib/leaderboard/week";
-import { splitExpandedEvents, type StoredEvent } from "@/lib/events/recurrence";
-import { getCourseAccessContext } from "@/lib/membership/unlocked";
-import { getUserActivityDate } from "@/lib/progress/server-activity-date";
+import { getCachedCommunityTabData } from "@/lib/cache/tab-page-cache";
+import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
-import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 const PREVIEW_EVENT_COUNT = 2;
 
 export default async function CommunityPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getCachedAuthSession();
+  if (!session) redirect("/login");
 
-  const activityDate = await getUserActivityDate();
-  const currentWeekStart = getCurrentWeekStart(activityDate);
+  const { friendsData, leaderboard, testimonial, preparedUpcoming } =
+    await getCachedCommunityTabData(session.user.id);
 
-  const [access, friendsData, leaderboard, testimonial, eventsResult] = await Promise.all([
-    getCourseAccessContext(supabase, user!),
-    loadFriendsProfileData(supabase, user!.id),
-    loadLeaderboard(supabase, currentWeekStart, user!.id),
-    loadFeaturedTestimonial(supabase),
-    supabase.from("events").select("*").order("starts_at", { ascending: true }),
-  ]);
-
-  const { upcoming } = splitExpandedEvents((eventsResult.data ?? []) as StoredEvent[]);
-  const preparedUpcoming = prepareCommunityEvents(upcoming, access);
   const previewEvents = preparedUpcoming.slice(0, PREVIEW_EVENT_COUNT);
 
   return (

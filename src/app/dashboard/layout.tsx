@@ -6,8 +6,11 @@ import { ActivityDateSync } from "@/components/activity-date-sync";
 import { ViewAsBanner } from "@/components/view-as-banner";
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
 import { PointsToastProvider } from "@/components/points/points-toast-provider";
-import { loadOnboardingProfile } from "@/lib/progression/load-user-progression";
-import { getCourseAccessContext } from "@/lib/membership/unlocked";
+import {
+  getCachedAuthSession,
+  getCachedCourseAccess,
+  getCachedOnboardingProfile,
+} from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 
 export default async function DashboardLayout({
@@ -15,18 +18,17 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
+  const session = await getCachedAuthSession();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session) {
     redirect("/login");
   }
 
-  const access = await getCourseAccessContext(supabase, user);
-  const onboarding = await loadOnboardingProfile(supabase, user.id);
+  const { supabase, user } = session;
+  const [access, onboarding] = await Promise.all([
+    getCachedCourseAccess(supabase, user),
+    getCachedOnboardingProfile(supabase, user.id),
+  ]);
 
   return (
     <OnboardingProvider showOnFirstVisit={!onboarding.hasSeenOnboarding}>

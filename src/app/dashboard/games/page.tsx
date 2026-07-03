@@ -1,19 +1,14 @@
 import { GamesHub } from "@/components/games/games-hub";
+import { getCachedGamesTabData } from "@/lib/cache/tab-page-cache";
 import { GAME_CATALOG } from "@/lib/games/catalog";
-import { fetchPersonalBestsByGame } from "@/lib/games/game-scores";
-import { createClient } from "@/lib/supabase/server";
+import { getCachedAuthSession } from "@/lib/supabase/cached-session";
+import { redirect } from "next/navigation";
 
 export default async function GamesPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getCachedAuthSession();
+  if (!session) redirect("/login");
 
-  const personalBestsMap = await fetchPersonalBestsByGame(supabase, user!.id);
-  const personalBests: Record<string, number> = {};
-  for (const [type, score] of personalBestsMap.entries()) {
-    personalBests[type] = score;
-  }
+  const personalBests = await getCachedGamesTabData(session.user.id);
 
   const vocabularyGames = GAME_CATALOG.filter((g) => g.section === "vocabulary");
   const grammarGames = GAME_CATALOG.filter((g) => g.section === "grammar");

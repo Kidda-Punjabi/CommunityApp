@@ -2,6 +2,7 @@ import { AdminBottomNav } from "@/components/admin/admin-bottom-nav";
 import { AdminDataShell } from "@/components/admin/admin-data-shell";
 import { AdminWidthContainer } from "@/components/admin/admin-width-container";
 import { KiddaLogo } from "@/components/branding/kidda-logo";
+import type { AdminDataSlice } from "@/lib/admin/merge-admin-data-slice";
 import type { AdminData } from "@/app/admin/content/types";
 import type { SiteBranding } from "@/lib/branding/types";
 import Link from "next/link";
@@ -9,10 +10,11 @@ import Link from "next/link";
 type AdminShellProps = {
   data: AdminData;
   branding: SiteBranding;
+  dataSlice?: AdminDataSlice;
   children: React.ReactNode;
 };
 
-export function AdminShell({ data, branding, children }: AdminShellProps) {
+export function AdminShell({ data, branding, dataSlice = "full", children }: AdminShellProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-zinc-50">
       <header className="border-b border-zinc-200/80 bg-white">
@@ -35,7 +37,7 @@ export function AdminShell({ data, branding, children }: AdminShellProps) {
         </AdminWidthContainer>
       </header>
 
-      <AdminDataShell data={data} branding={branding}>
+      <AdminDataShell data={data} branding={branding} dataSlice={dataSlice}>
         {children}
       </AdminDataShell>
 

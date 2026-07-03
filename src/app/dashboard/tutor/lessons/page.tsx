@@ -1,16 +1,15 @@
 import { TutorDashboardOverview } from "@/components/tutor/tutor-dashboard-overview";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
-import { loadTutorDashboard } from "@/lib/tutoring/load-tutor-dashboard";
-import { createClient } from "@/lib/supabase/server";
+import { getCachedTutorDashboard } from "@/lib/cache/tab-page-cache";
+import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
+import { redirect } from "next/navigation";
 
 export default async function TutorLessonsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getCachedAuthSession();
+  if (!session) redirect("/login");
 
-  const data = await loadTutorDashboard(supabase, user!.id);
+  const data = await getCachedTutorDashboard(session.user.id);
 
   return (
     <div className={ui.page}>
