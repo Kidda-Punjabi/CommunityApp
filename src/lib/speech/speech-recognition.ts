@@ -48,23 +48,42 @@ export function isSpeechRecognitionSupported(): boolean {
   return getSpeechRecognitionConstructor() !== null;
 }
 
-export function createPunjabiSpeechRecognition(): SpeechRecognitionInstance | null {
+export function createPunjabiSpeechRecognition(
+  lang: string = PUNJABI_SPEECH_LANG
+): SpeechRecognitionInstance | null {
   const Ctor = getSpeechRecognitionConstructor();
   if (!Ctor) return null;
 
   const recognition = new Ctor();
-  recognition.lang = PUNJABI_SPEECH_LANG;
+  recognition.lang = lang;
   recognition.continuous = false;
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
   return recognition;
 }
 
+const RETRYABLE_SPEECH_ERRORS = new Set(["network", "language-not-supported"]);
+
+export function isRetryableSpeechError(errorCode: string): boolean {
+  return RETRYABLE_SPEECH_ERRORS.has(errorCode);
+}
+
+export function nextPunjabiSpeechLang(currentLang: string): string | null {
+  const index = PUNJABI_SPEECH_LANG_TAGS.indexOf(
+    currentLang as (typeof PUNJABI_SPEECH_LANG_TAGS)[number]
+  );
+  const nextIndex = index < 0 ? 1 : index + 1;
+  return PUNJABI_SPEECH_LANG_TAGS[nextIndex] ?? null;
+}
+
 export const SPEECH_UNSUPPORTED_MESSAGE =
   "Speak It needs a browser with speech recognition (Firefox doesn't include it). On Safari you can start a session, but Punjabi input often fails silently — Chrome or Edge on desktop or Android works best.";
 
-export const SPEECH_TIMEOUT_MESSAGE =
-  "We couldn't detect your microphone for Punjabi voice input on this browser. Try Chrome on desktop or Android for the best experience.";
+export const SPEECH_PUNJABI_UNAVAILABLE_MESSAGE =
+  "Punjabi voice input didn't work in this browser. Safari often can't handle it — try Chrome on desktop or Android. On Chrome, check you're online and try again.";
+
+/** @deprecated alias — use SPEECH_PUNJABI_UNAVAILABLE_MESSAGE */
+export const SPEECH_TIMEOUT_MESSAGE = SPEECH_PUNJABI_UNAVAILABLE_MESSAGE;
 
 export const SPEECH_NOT_ALLOWED_MESSAGE =
   "Microphone access is blocked — check your browser's site settings.";
@@ -74,9 +93,6 @@ export const SPEECH_NO_SPEECH_MESSAGE =
 
 export const SPEECH_AUDIO_CAPTURE_MESSAGE =
   "We couldn't access your microphone — check that no other app is using it.";
-
-export const SPEECH_NETWORK_MESSAGE =
-  "Speech recognition needs a network connection in this browser — check your connection and try again.";
 
 export const SPEECH_GENERIC_ERROR_MESSAGE = "Couldn't hear you — try again.";
 
@@ -93,6 +109,7 @@ export type SpeechFailurePath =
   | "error_no_speech"
   | "error_audio_capture"
   | "error_network"
+  | "error_language_not_supported"
   | "error_other"
   | "empty_transcript";
 
@@ -113,7 +130,12 @@ export function messageForSpeechError(errorCode: string): {
     case "audio-capture":
       return { message: SPEECH_AUDIO_CAPTURE_MESSAGE, path: "error_audio_capture" };
     case "network":
-      return { message: SPEECH_NETWORK_MESSAGE, path: "error_network" };
+      return { message: SPEECH_PUNJABI_UNAVAILABLE_MESSAGE, path: "error_network" };
+    case "language-not-supported":
+      return {
+        message: SPEECH_PUNJABI_UNAVAILABLE_MESSAGE,
+        path: "error_language_not_supported",
+      };
     default:
       return { message: SPEECH_GENERIC_ERROR_MESSAGE, path: "error_other" };
   }

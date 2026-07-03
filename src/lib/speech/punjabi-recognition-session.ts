@@ -1,11 +1,15 @@
 import {
   createPunjabiSpeechRecognition,
+  isRetryableSpeechError,
   logSpeechFailure,
   messageForSpeechError,
+  nextPunjabiSpeechLang,
+  PUNJABI_SPEECH_LANG,
+  PUNJABI_SPEECH_LANG_TAGS,
   PUNJABI_SPEECH_LISTEN_TIMEOUT_MS,
   SPEECH_EMPTY_TRANSCRIPT_MESSAGE,
+  SPEECH_PUNJABI_UNAVAILABLE_MESSAGE,
   SPEECH_START_FAILED_MESSAGE,
-  SPEECH_TIMEOUT_MESSAGE,
   SPEECH_UNSUPPORTED_MESSAGE,
   type SpeechRecognitionInstance,
 } from "./speech-recognition";
@@ -23,19 +27,40 @@ export type PunjabiRecognitionSession = {
 export function startPunjabiRecognitionSession(
   options: PunjabiRecognitionSessionOptions
 ): PunjabiRecognitionSession {
-  const recognition = createPunjabiSpeechRecognition();
-  if (!recognition) {
-    logSpeechFailure("unsupported_browser");
-    options.onError(SPEECH_UNSUPPORTED_MESSAGE);
-    return { stop: () => {} };
-  }
+  let activeStop: (() => void) | null = null;
 
-  return bindRecognitionSession(recognition, options);
+  const startAttempt = (lang: string): void => {
+    const recognition = createPunjabiSpeechRecognition(lang);
+    if (!recognition) {
+      logSpeechFailure("unsupported_browser");
+      options.onError(SPEECH_UNSUPPORTED_MESSAGE);
+      return;
+    }
+
+    activeStop = bindRecognitionSession(recognition, lang, {
+      ...options,
+      onRetry: (nextLang) => startAttempt(nextLang),
+    }).stop;
+  };
+
+  startAttempt(PUNJABI_SPEECH_LANG);
+
+  return {
+    stop: () => {
+      activeStop?.();
+      activeStop = null;
+    },
+  };
 }
+
+type BindOptions = PunjabiRecognitionSessionOptions & {
+  onRetry: (lang: string) => void;
+};
 
 function bindRecognitionSession(
   recognition: SpeechRecognitionInstance,
-  options: PunjabiRecognitionSessionOptions
+  lang: string,
+  options: BindOptions
 ): PunjabiRecognitionSession {
   let finished = false;
   let heardActivity = false;
@@ -78,7 +103,7 @@ function bindRecognitionSession(
 
     const transcript = event.results[0]?.[0]?.transcript ?? "";
     if (!transcript.trim()) {
-      logSpeechFailure("empty_transcript");
+      logSpeechFailure("empty_transcript", `lang=${lang}`);
       options.onError(SPEECH_EMPTY_TRANSCRIPT_MESSAGE);
       try {
         recognition.stop();
@@ -104,8 +129,26 @@ function bindRecognitionSession(
       timeoutId = null;
     }
 
+    const nextLang = nextPunjabiSpeechLang(lang);
+    if (isRetryableSpeechError(event.error) && nextLang) {
+      logSpeechFailure(
+        event.error === "language-not-supported"
+          ? "error_language_not_supported"
+          : "error_network",
+        `lang=${lang} retry=${nextLang} ${event.message ?? ""}`.trim()
+      );
+      finished = true;
+      try {
+        recognition.abort();
+      } catch {
+        // ignore
+      }
+      options.onRetry(nextLang);
+      return;
+    }
+
     const { message, path } = messageForSpeechError(event.error);
-    logSpeechFailure(path, event.message ?? event.error);
+    logSpeechFailure(path, `lang=${lang} ${event.message ?? event.error}`.trim());
     options.onError(message);
     finished = true;
     options.onListeningChange(false);
@@ -125,8 +168,21 @@ function bindRecognitionSession(
   timeoutId = setTimeout(() => {
     if (heardActivity || finished) return;
 
-    logSpeechFailure("timeout");
-    options.onError(SPEECH_TIMEOUT_MESSAGE);
+    const nextLang = nextPunjabiSpeechLang(lang);
+    if (nextLang) {
+      logSpeechFailure("timeout", `lang=${lang} retry=${nextLang}`);
+      finished = true;
+      try {
+        recognition.abort();
+      } catch {
+        // ignore
+      }
+      options.onRetry(nextLang);
+      return;
+    }
+
+    logSpeechFailure("timeout", `lang=${lang}`);
+    options.onError(SPEECH_PUNJABI_UNAVAILABLE_MESSAGE);
     finished = true;
 
     try {
@@ -146,7 +202,10 @@ function bindRecognitionSession(
       clearTimeout(timeoutId);
       timeoutId = null;
     }
-    logSpeechFailure("start_exception", error instanceof Error ? error.message : String(error));
+    logSpeechFailure(
+      "start_exception",
+      `lang=${lang} ${error instanceof Error ? error.message : String(error)}`
+    );
     options.onError(SPEECH_START_FAILED_MESSAGE);
     finish(false);
   }

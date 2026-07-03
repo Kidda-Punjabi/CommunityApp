@@ -3,8 +3,9 @@
  * onspeechstart/onresult). Run: npx tsx scripts/verify-punjabi-speech-timeout.ts
  */
 import {
+  PUNJABI_SPEECH_LANG_TAGS,
   PUNJABI_SPEECH_LISTEN_TIMEOUT_MS,
-  SPEECH_TIMEOUT_MESSAGE,
+  SPEECH_PUNJABI_UNAVAILABLE_MESSAGE,
 } from "../src/lib/speech/speech-recognition";
 
 class SilentMockRecognition {
@@ -32,8 +33,8 @@ class SilentMockRecognition {
   }
 }
 
-(globalThis as typeof globalThis & { window?: typeof globalThis; webkitSpeechRecognition?: unknown }).window =
-  globalThis;
+// @ts-expect-error Node test polyfill for getSpeechRecognitionConstructor()
+(globalThis as typeof globalThis & { window?: typeof globalThis }).window = globalThis;
 (globalThis as typeof globalThis & { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition =
   SilentMockRecognition;
 
@@ -53,9 +54,14 @@ async function main() {
     },
   });
 
-  await new Promise((resolve) => setTimeout(resolve, PUNJABI_SPEECH_LISTEN_TIMEOUT_MS + 200));
+  await new Promise((resolve) =>
+    setTimeout(
+      resolve,
+      PUNJABI_SPEECH_LISTEN_TIMEOUT_MS * PUNJABI_SPEECH_LANG_TAGS.length + 200
+    )
+  );
 
-  if (!errors.includes(SPEECH_TIMEOUT_MESSAGE)) {
+  if (!errors.includes(SPEECH_PUNJABI_UNAVAILABLE_MESSAGE)) {
     console.error("FAIL: expected timeout message, got:", errors);
     process.exit(1);
   }
