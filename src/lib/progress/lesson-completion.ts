@@ -193,7 +193,9 @@ export async function fetchLessonCompletionMap(
   for (const link of (setLinks ?? []) as SetCourseLinkRow[]) {
     if (!link.lesson_id) continue;
     const list = decksByLesson.get(link.lesson_id) ?? [];
-    list.push(link.deck_id);
+    if (!list.includes(link.deck_id)) {
+      list.push(link.deck_id);
+    }
     decksByLesson.set(link.lesson_id, list);
   }
 

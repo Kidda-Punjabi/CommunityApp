@@ -41,7 +41,15 @@ export function filterLessonsForTrack(
 
   if (courseIds.size === 0) return [];
 
-  return lessons.filter((lesson) => courseIds.has(lesson.course_id));
+  const byLessonId = new Map<string, LessonWithCourse>();
+  for (const lesson of lessons) {
+    if (!courseIds.has(lesson.course_id)) continue;
+    if (!byLessonId.has(lesson.id)) {
+      byLessonId.set(lesson.id, lesson);
+    }
+  }
+
+  return [...byLessonId.values()].sort((a, b) => a.lesson_number - b.lesson_number);
 }
 
 export function lessonCountForTrack(

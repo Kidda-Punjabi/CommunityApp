@@ -10,6 +10,7 @@ import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
 import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
 import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
+import type { QuizProgressRow } from "@/lib/progress/quiz-progress";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import Link from "next/link";
 import { ui } from "@/lib/ui/styles";
@@ -22,6 +23,7 @@ type LearnLessonListProps = {
   access: Awaited<ReturnType<typeof getCourseAccessContext>>;
   progressMap: Awaited<ReturnType<typeof fetchLessonProgressMap>>;
   flashcardProgressMap: Awaited<ReturnType<typeof fetchFlashcardProgressMap>>;
+  quizProgressMap?: Map<string, QuizProgressRow>;
   completionMap: Map<string, LessonCompletionStatus>;
   courseProgress?: {
     completed: number;
@@ -29,6 +31,7 @@ type LearnLessonListProps = {
   };
   backHref?: string;
   staffSection?: ReactNode;
+  footerSection?: ReactNode;
   contentUnlockedMap?: Map<string, boolean>;
   recordingMap?: Map<string, LessonRecordingView>;
   homeworkMap?: Map<string, HomeworkSubmissionView>;
@@ -43,10 +46,12 @@ export function LearnLessonList({
   access,
   progressMap,
   flashcardProgressMap,
+  quizProgressMap,
   completionMap,
   courseProgress,
   backHref = "/dashboard/learn",
   staffSection,
+  footerSection,
   contentUnlockedMap,
   recordingMap,
   homeworkMap,
@@ -95,11 +100,11 @@ export function LearnLessonList({
     return canBrowse && !contentUnlocked;
   });
 
-  const progressSummary = courseProgress ?? {
-    completed: accessibleLessons.filter(
-      (lesson) => completionMap.get(lesson.id)?.fullyComplete
-    ).length,
-    total: accessibleLessons.length,
+  const progressSummary = {
+    completed:
+      courseProgress?.completed ??
+      lessons.filter((lesson) => completionMap.get(lesson.id)?.fullyComplete).length,
+    total: lessons.length,
   };
 
   return (
@@ -167,6 +172,7 @@ export function LearnLessonList({
                 }
                 completion={contentUnlocked ? completionMap.get(lesson.id) : undefined}
                 flashcardProgressMap={flashcardProgressMap}
+                quizProgressMap={quizProgressMap}
                 recording={recordingMap?.get(lesson.id) ?? null}
                 homework={homeworkMap?.get(lesson.id) ?? null}
                 showHomework={showHomework}
@@ -182,6 +188,8 @@ export function LearnLessonList({
           ) : null}
         </div>
       )}
+
+      {footerSection ? <div className="mt-8">{footerSection}</div> : null}
     </div>
   );
 }

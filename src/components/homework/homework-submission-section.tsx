@@ -12,12 +12,26 @@ import {
   useAudioRecorder,
 } from "@/lib/audio/use-audio-recorder";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
-import { ui } from "@/lib/ui/styles";
+import { lessonContentRowButtonClass } from "@/components/lesson-card";
+import { cn, ui } from "@/lib/ui/styles";
 
 type HomeworkSubmissionSectionProps = {
   lessonId: string;
   submission: HomeworkSubmissionView | null;
+  variant?: "standalone" | "integrated";
 };
+
+function homeworkSubtitle(submission: HomeworkSubmissionView | null): string {
+  if (submission?.status === "reviewed") {
+    return submission.approved
+      ? "Reviewed and approved"
+      : "Reviewed with feedback";
+  }
+  if (submission?.status === "pending_review") {
+    return "Submitted, awaiting review";
+  }
+  return "Not submitted yet · Record a short voice note for your tutor after your session";
+}
 
 function HomeworkAudioPlayback({ storagePath }: { storagePath: string }) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -51,20 +65,20 @@ function HomeworkAudioPlayback({ storagePath }: { storagePath: string }) {
   return <audio controls src={audioUrl} className="w-full" preload="metadata" />;
 }
 
-export function HomeworkSubmissionSection({
+function HomeworkRecorderBody({
   lessonId,
-  submission,
-}: HomeworkSubmissionSectionProps) {
+  localSubmission,
+  variant,
+}: {
+  lessonId: string;
+  localSubmission: HomeworkSubmissionView | null;
+  variant: "standalone" | "integrated";
+}) {
   const router = useRouter();
   const recorder = useAudioRecorder();
   const [pending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-  const [localSubmission, setLocalSubmission] = useState(submission);
-
-  useEffect(() => {
-    setLocalSubmission(submission);
-  }, [submission]);
 
   function handleSubmit() {
     if (!recorder.blob) {
@@ -100,12 +114,9 @@ export function HomeworkSubmissionSection({
 
   if (localSubmission?.status === "reviewed") {
     return (
-      <div className="mt-4 border-t border-zinc-100 pt-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          Homework
-        </p>
+      <div className={variant === "integrated" ? "pt-2" : "mt-3"}>
         <div
-          className={`mt-3 rounded-2xl px-4 py-3 ${
+          className={`rounded-2xl px-4 py-3 ${
             localSubmission.approved ? "bg-green-50" : "bg-amber-50"
           }`}
         >
@@ -118,9 +129,9 @@ export function HomeworkSubmissionSection({
               ? "Great work — approved!"
               : "Keep going — your tutor left some tips"}
           </p>
-          {localSubmission.tutorComment && (
+          {localSubmission.tutorComment ? (
             <p className="mt-2 text-sm text-zinc-700">{localSubmission.tutorComment}</p>
-          )}
+          ) : null}
         </div>
         <div className="mt-3">
           <HomeworkAudioPlayback storagePath={localSubmission.storagePath} />
@@ -131,46 +142,42 @@ export function HomeworkSubmissionSection({
 
   if (localSubmission?.status === "pending_review") {
     return (
-      <div className="mt-4 border-t border-zinc-100 pt-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          Homework
-        </p>
-        <div className="mt-3 rounded-2xl bg-violet-50 px-4 py-3">
+      <div className={variant === "integrated" ? "pt-2" : "mt-3"}>
+        <div className="rounded-2xl bg-violet-50 px-4 py-3">
           <p className="text-sm font-semibold text-violet-800">In review</p>
           <p className="mt-1 text-sm text-violet-700">
             Your tutor is listening. You will get a notification when they have feedback.
           </p>
         </div>
-        {localSubmission.storagePath && (
+        {localSubmission.storagePath ? (
           <div className="mt-3">
             <HomeworkAudioPlayback storagePath={localSubmission.storagePath} />
           </div>
-        )}
+        ) : null}
       </div>
     );
   }
 
   return (
-    <div className="mt-4 border-t border-zinc-100 pt-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-        Homework
-      </p>
-      <p className="mt-1 text-sm text-zinc-600">
-        Record a short voice note for your tutor to review after your session.
-      </p>
+    <div className={variant === "integrated" ? "pt-2" : "mt-3"}>
+      {variant === "standalone" ? (
+        <p className="text-sm text-zinc-600">
+          Record a short voice note for your tutor to review after your session.
+        </p>
+      ) : null}
 
-      {recorder.state === "idle" && (
+      {recorder.state === "idle" ? (
         <button
           type="button"
           onClick={() => void recorder.startRecording()}
-          className={`mt-3 ${ui.btnSecondary}`}
+          className={variant === "integrated" ? ui.btnSecondary : `mt-3 ${ui.btnSecondary}`}
         >
           Record homework
         </button>
-      )}
+      ) : null}
 
-      {recorder.state === "recording" && (
-        <div className="mt-3 space-y-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4">
+      {recorder.state === "recording" ? (
+        <div className="space-y-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-red-800">Recording…</p>
             <p className="font-mono text-sm text-red-700">
@@ -185,10 +192,10 @@ export function HomeworkSubmissionSection({
             Stop
           </button>
         </div>
-      )}
+      ) : null}
 
-      {recorder.state === "recorded" && recorder.previewUrl && (
-        <div className="mt-3 space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+      {recorder.state === "recorded" && recorder.previewUrl ? (
+        <div className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
           <audio controls src={recorder.previewUrl} className="w-full" preload="metadata" />
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
@@ -209,12 +216,63 @@ export function HomeworkSubmissionSection({
             </button>
           </div>
         </div>
-      )}
+      ) : null}
 
       {(recorder.error || actionError) && (
         <p className="mt-3 text-sm text-red-600">{recorder.error ?? actionError}</p>
       )}
-      {actionSuccess && <p className="mt-3 text-sm text-green-700">{actionSuccess}</p>}
+      {actionSuccess ? <p className="mt-3 text-sm text-green-700">{actionSuccess}</p> : null}
+    </div>
+  );
+}
+
+export function HomeworkSubmissionSection({
+  lessonId,
+  submission,
+  variant = "standalone",
+}: HomeworkSubmissionSectionProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [localSubmission, setLocalSubmission] = useState(submission);
+
+  useEffect(() => {
+    setLocalSubmission(submission);
+  }, [submission]);
+
+  if (variant === "integrated") {
+    return (
+      <>
+        <div className="flex items-center justify-between gap-3 border-b border-zinc-100 py-3 last:border-b-0">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-zinc-900">Homework</p>
+            <p className="mt-0.5 text-sm text-zinc-500">{homeworkSubtitle(localSubmission)}</p>
+          </div>
+          <button
+            type="button"
+            className={lessonContentRowButtonClass}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? "Close" : "Open"}
+          </button>
+        </div>
+        {expanded ? (
+          <HomeworkRecorderBody
+            lessonId={lessonId}
+            localSubmission={localSubmission}
+            variant="integrated"
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-100 pt-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Homework</p>
+      <HomeworkRecorderBody
+        lessonId={lessonId}
+        localSubmission={localSubmission}
+        variant="standalone"
+      />
     </div>
   );
 }

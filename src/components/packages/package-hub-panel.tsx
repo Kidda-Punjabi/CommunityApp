@@ -32,13 +32,34 @@ function statusClass(status: StudentPackage["status"]): string {
   }
 }
 
-export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps) {
-  const oneToOneCheckoutConfigured = isCheckoutConfigured(ONE_TO_ONE_SESSION_CHECKOUT_KEY);
-  const showBuyExtraLesson =
-    (variant === "full" || variant === "embedded") &&
-    pkg.status === "active" &&
-    Boolean(pkg.tutorName);
+export function shouldShowBuyExtraOneToOneLesson(pkg: StudentPackage): boolean {
+  return pkg.status === "active" && Boolean(pkg.tutorName);
+}
 
+export function BuyExtraOneToOneCard({ pkg }: { pkg: StudentPackage }) {
+  const configured = isCheckoutConfigured(ONE_TO_ONE_SESSION_CHECKOUT_KEY);
+
+  if (!shouldShowBuyExtraOneToOneLesson(pkg)) return null;
+
+  return (
+    <div className={`${ui.cardBordered} space-y-3`}>
+      <p className="text-sm font-semibold text-violet-900">Need an extra 1-to-1 lesson?</p>
+      <p className="text-sm text-violet-800">
+        Buy an additional session with your tutor and then choose your time on the schedule page.
+      </p>
+      <div className="max-w-xs">
+        <BuyButton
+          checkoutKey={ONE_TO_ONE_SESSION_CHECKOUT_KEY}
+          label="Buy extra 1-to-1 lesson"
+          configured={configured}
+          className={ui.btnPrimary}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps) {
   const body = (
     <>
       {variant === "full" ? (
@@ -47,7 +68,6 @@ export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps)
             <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
               Your package
             </p>
-            <p className="mt-1 font-semibold text-zinc-900">{pkg.name}</p>
             <p className="mt-1 text-sm text-zinc-500">{pkg.description}</p>
           </div>
           <span
@@ -145,23 +165,6 @@ export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps)
           Community content and events — no personal tutor calendar for this package.
         </p>
       )}
-
-      {showBuyExtraLesson ? (
-        <div className="rounded-2xl border border-violet-200 bg-violet-50/70 px-4 py-3">
-          <p className="text-sm font-semibold text-violet-900">Need an extra 1-to-1 lesson?</p>
-          <p className="mt-1 text-sm text-violet-800">
-            Buy an additional session with your tutor and then choose your time on the schedule page.
-          </p>
-          <div className="mt-3 max-w-xs">
-            <BuyButton
-              checkoutKey={ONE_TO_ONE_SESSION_CHECKOUT_KEY}
-              label="Buy extra 1-to-1 lesson"
-              configured={oneToOneCheckoutConfigured}
-              className={ui.btnPrimary}
-            />
-          </div>
-        </div>
-      ) : null}
     </>
   );
 

@@ -1,5 +1,8 @@
 import { LearnLessonList } from "@/components/learn-lesson-list";
-import { PackageHubPanel } from "@/components/packages/package-hub-panel";
+import {
+  BuyExtraOneToOneCard,
+  PackageHubPanel,
+} from "@/components/packages/package-hub-panel";
 import {
   findStudentPackageForTrack,
   loadStudentPackages,
@@ -22,6 +25,7 @@ import {
 } from "@/lib/progress/lesson-completion";
 import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
 import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
+import { fetchQuizProgressMap } from "@/lib/progress/quiz-progress";
 import { CommunityLeadSection } from "@/components/learn/course-staff-section";
 import {
   loadCommunityLeads,
@@ -49,12 +53,13 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [access, allLessons, lessonProgressMap, flashcardProgressMap, studentPackages] =
+  const [access, allLessons, lessonProgressMap, flashcardProgressMap, quizProgressMap, studentPackages] =
     await Promise.all([
       getCourseAccessContext(supabase, user!),
       fetchLearnContent(supabase),
       fetchLessonProgressMap(supabase, user!.id),
       fetchFlashcardProgressMap(supabase, user!.id),
+      fetchQuizProgressMap(supabase, user!.id),
       loadStudentPackages(supabase, user!),
     ]);
 
@@ -74,7 +79,7 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
       );
       return canBrowse && contentUnlocked;
     });
-    const courseProgress = summarizeCourseProgress(accessibleLessons, completionMap);
+    const courseProgress = summarizeCourseProgress(lessons, completionMap);
 
     return (
       <LearnLessonList
@@ -84,6 +89,7 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
         access={access}
         progressMap={lessonProgressMap}
         flashcardProgressMap={flashcardProgressMap}
+        quizProgressMap={quizProgressMap}
         completionMap={completionMap}
         contentUnlockedMap={contentUnlockedMap}
         recordingMap={recordingMap}
@@ -123,7 +129,7 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
     );
     return canBrowse && contentUnlocked;
   });
-  const courseProgress = summarizeCourseProgress(accessibleLessons, completionMap);
+  const courseProgress = summarizeCourseProgress(lessons, completionMap);
   const studentPackage = findStudentPackageForTrack(studentPackages, track.id);
 
   let staffSection = null;
@@ -158,12 +164,16 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
       access={access}
       progressMap={lessonProgressMap}
       flashcardProgressMap={flashcardProgressMap}
+      quizProgressMap={quizProgressMap}
       completionMap={completionMap}
       courseProgress={{
         completed: courseProgress.completedLessons,
         total: courseProgress.totalLessons,
       }}
       staffSection={staffSection}
+      footerSection={
+        studentPackage ? <BuyExtraOneToOneCard pkg={studentPackage} /> : null
+      }
       contentUnlockedMap={contentUnlockedMap}
       recordingMap={recordingMap}
       homeworkMap={homeworkMap}

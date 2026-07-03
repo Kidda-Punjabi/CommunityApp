@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import { LessonAudioPlayer } from "@/components/lesson-audio-player";
 import { LessonPdfViewer } from "@/components/lesson-pdf-viewer";
-import { LessonRecordingPlayer } from "@/components/lesson-recording-player";
 import { deckPracticeHref } from "@/lib/flashcards/utils";
 import {
   SHOW_LESSON_AUDIO,
@@ -13,7 +12,12 @@ import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import type { FlashcardProgressRow } from "@/lib/progress/flashcard-progress";
+import type { QuizProgressRow } from "@/lib/progress/quiz-progress";
+import type { FlashcardSetInfo } from "@/lib/learning/match-lesson-content";
 import { cn, ui } from "@/lib/ui/styles";
+
+export const lessonContentRowButtonClass =
+  "inline-flex shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50";
 
 type LessonProgress = {
   audioCompleted: boolean;
@@ -32,6 +36,7 @@ type LessonCardProps = {
   progress?: LessonProgress;
   completion?: LessonCompletionStatus;
   flashcardProgressMap?: Map<string, FlashcardProgressRow>;
+  quizProgressMap?: Map<string, QuizProgressRow>;
   recording?: LessonRecordingView | null;
   homework?: HomeworkSubmissionView | null;
   showHomework?: boolean;
@@ -49,6 +54,7 @@ export function LessonCard({
   progress,
   completion,
   flashcardProgressMap,
+  quizProgressMap,
   recording,
   homework,
   showHomework = false,
@@ -68,16 +74,15 @@ export function LessonCard({
     );
   }
 
-  const quizDone = Boolean(completion?.quizRequired && completion.quizComplete);
+  const quizProgress = quizId ? quizProgressMap?.get(quizId) : undefined;
+  const quizRow = hasQuiz
+    ? getQuizRowState(quizTitle, quizProgress, Boolean(completion?.quizComplete))
+    : null;
+  const flashcardsRow = hasFlashcards
+    ? getFlashcardsRowState(lesson.id, flashcardSets, isSetComplete)
+    : null;
 
-  const hasLessonContent =
-    hasPresentation || hasPdf || hasAudio || Boolean(recording);
-
-  const flashcardsDone = hasFlashcards && flashcardSets.every((set) => isSetComplete(set.cardIds));
-  const rowButtonClass =
-    "inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50";
-  const primaryButtonClass =
-    "inline-flex items-center justify-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500";
+  const hasLessonContent = hasPresentation || hasPdf || hasAudio || Boolean(recording);
 
   const isTutorLocked = canBrowse && !contentUnlocked;
 
@@ -92,13 +97,7 @@ export function LessonCard({
     >
       {!canBrowse ? (
         <>
-          <LessonCardHeader
-            lesson={lesson}
-            unitLabel={unitLabel}
-            completion={completion}
-            flashcardsDone={flashcardsDone}
-            quizDone={quizDone}
-          />
+          <LessonCardHeader lesson={lesson} unitLabel={unitLabel} completion={completion} />
           <div className="mt-3 space-y-2">
             <p className="text-sm text-zinc-500">
               Unlock with{" "}
@@ -107,7 +106,7 @@ export function LessonCard({
               </span>
               .
             </p>
-            <Link href="/dashboard/membership" className={rowButtonClass}>
+            <Link href="/dashboard/membership" className={lessonContentRowButtonClass}>
               View plans
             </Link>
           </div>
@@ -122,13 +121,11 @@ export function LessonCard({
         />
       ) : (
         <details name={accordionName} open={defaultExpanded} className="group">
-          <summary className="flex cursor-pointer list-none items-start [&::-webkit-details-marker]:hidden">
+          <summary className="flex w-full cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden">
             <LessonCardHeader
               lesson={lesson}
               unitLabel={unitLabel}
               completion={completion}
-              flashcardsDone={flashcardsDone}
-              quizDone={quizDone}
               chevron
             />
           </summary>
@@ -140,6 +137,7 @@ export function LessonCard({
               actionLabel="Open"
               disabled={!hasPresentation}
               href={hasPresentation ? lesson.presentation_url! : undefined}
+              external
             />
             <ContentRow
               label="Session recording"
@@ -147,53 +145,32 @@ export function LessonCard({
               actionLabel="Open"
               disabled={!recording}
               href={recording ? recording.url : undefined}
+              external
             />
             {showHomework ? (
+              <HomeworkSubmissionSection
+                lessonId={lesson.id}
+                submission={homework ?? null}
+                variant="integrated"
+              />
+            ) : null}
+            {hasQuiz && quizRow ? (
               <ContentRow
-                label="Homework"
-                subtitle={
-                  homework?.status === "reviewed"
-                    ? homework.approved
-                      ? "Reviewed and approved"
-                      : "Reviewed with feedback"
-                    : homework?.status === "pending_review"
-                      ? "Submitted, awaiting review"
-                      : "Not submitted yet"
-                }
-                actionLabel="Open"
+                label="Quiz"
+                subtitle={quizRow.subtitle}
+                actionLabel={quizRow.actionLabel}
+                href={`/dashboard/practice/quiz/${quizId}`}
+              />
+            ) : null}
+            {hasFlashcards && flashcardsRow ? (
+              <ContentRow
+                label="Flashcards"
+                subtitle={flashcardsRow.subtitle}
+                actionLabel={flashcardsRow.actionLabel}
+                href={flashcardsRow.href}
               />
             ) : null}
           </div>
-
-          {showHomework ? (
-            <div className="mt-3">
-              <HomeworkSubmissionSection lessonId={lesson.id} submission={homework ?? null} />
-            </div>
-          ) : null}
-
-          {(hasQuiz || hasFlashcards) && (
-            <div className="mt-4 border-t border-zinc-100 pt-4">
-              <p className="text-sm font-medium text-zinc-900">Practice this lesson</p>
-              {hasQuiz ? (
-                <div className="mt-3">
-                  <Link href={`/dashboard/practice/quiz/${quizId}`} className={primaryButtonClass}>
-                    Start quiz{quizTitle ? `: ${quizTitle}` : ""}
-                  </Link>
-                </div>
-              ) : null}
-              {hasFlashcards ? (
-                <div className="mt-3">
-                  {flashcardSets.map((set) => (
-                    <div key={set.deckId} className="mt-2 first:mt-0">
-                      <Link href={deckPracticeHref(lesson.id, set.deckId)} className={rowButtonClass}>
-                        {set.name} ({set.cardCount}) {isSetComplete(set.cardIds) ? "reviewed" : ""}
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          )}
 
           {contentUnlocked && !hasLessonContent && (
             <p className="mt-3 text-sm text-zinc-500">Lesson content coming soon.</p>
@@ -222,12 +199,51 @@ export function LessonCard({
               />
             </div>
           )}
-
-          {contentUnlocked && recording ? <LessonRecordingPlayer recording={recording} /> : null}
         </details>
       )}
     </div>
   );
+}
+
+function getQuizRowState(
+  quizTitle: string | null,
+  progress: QuizProgressRow | undefined,
+  passed: boolean
+): { subtitle: string; actionLabel: string } {
+  const title = quizTitle?.trim() || "Quiz";
+
+  if (!progress?.completed) {
+    return { subtitle: `${title} — not started`, actionLabel: "Start" };
+  }
+
+  if (passed) {
+    return { subtitle: `${title} — passed`, actionLabel: "Review" };
+  }
+
+  return { subtitle: `${title} — not passed`, actionLabel: "Retry" };
+}
+
+function getFlashcardsRowState(
+  lessonId: string,
+  flashcardSets: FlashcardSetInfo[],
+  isSetComplete: (cardIds: string[]) => boolean
+): { subtitle: string; actionLabel: string; href: string } {
+  const allComplete = flashcardSets.every((set) => isSetComplete(set.cardIds));
+  const targetSet =
+    flashcardSets.find((set) => !isSetComplete(set.cardIds)) ?? flashcardSets[0];
+
+  const subtitle = flashcardSets
+    .map((set) => {
+      const reviewed = isSetComplete(set.cardIds);
+      return `${set.name} (${set.cardCount})${reviewed ? " · reviewed" : ""}`;
+    })
+    .join(" · ");
+
+  return {
+    subtitle,
+    actionLabel: allComplete ? "Review" : "Start",
+    href: deckPracticeHref(lessonId, targetSet.deckId),
+  };
 }
 
 function LockIcon({ className }: { className?: string }) {
@@ -247,12 +263,31 @@ function LockIcon({ className }: { className?: string }) {
   );
 }
 
+function ChevronToggleIcon() {
+  return (
+    <span
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-violet-600 shadow-sm transition-colors group-hover:border-violet-200"
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        className="h-5 w-5 transition-transform duration-200 group-open:rotate-180"
+      >
+        <path
+          fillRule="evenodd"
+          d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+          clipRule="evenodd"
+        />
+      </svg>
+    </span>
+  );
+}
+
 function LessonCardHeader({
   lesson,
   unitLabel,
   completion,
-  flashcardsDone = false,
-  quizDone = false,
   locked = false,
   muted = false,
   chevron = false,
@@ -261,20 +296,16 @@ function LessonCardHeader({
   lesson: LessonWithCourse;
   unitLabel: string;
   completion?: LessonCompletionStatus;
-  flashcardsDone?: boolean;
-  quizDone?: boolean;
   locked?: boolean;
   muted?: boolean;
   chevron?: boolean;
   ariaLabel?: string;
 }) {
   return (
-    <div className="flex min-w-0 items-start gap-3" aria-label={ariaLabel}>
-      {locked ? (
-        <LockIcon className="mt-1 text-zinc-400" />
-      ) : null}
-      <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+    <div className="flex min-w-0 flex-1 items-center gap-3" aria-label={ariaLabel}>
+      {locked ? <LockIcon className="text-zinc-400" /> : null}
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+        <div className="min-w-0 flex-1 py-1">
           <p
             className={cn(
               "text-xs font-medium",
@@ -304,45 +335,9 @@ function LessonCardHeader({
             </div>
           ) : null}
         </div>
-        {!locked ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <StateBadge label="Flashcards" done={flashcardsDone} muted={muted} />
-            <StateBadge label="Quiz" done={quizDone} muted={muted} />
-            {chevron ? (
-              <span className="text-zinc-400 transition-transform duration-200 group-open:rotate-180">
-                ⌄
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+        {!locked && chevron ? <ChevronToggleIcon /> : null}
       </div>
     </div>
-  );
-}
-
-function StateBadge({
-  label,
-  done,
-  muted = false,
-}: {
-  label: string;
-  done: boolean;
-  muted?: boolean;
-}) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium",
-        done
-          ? muted
-            ? "border-zinc-200 bg-zinc-100 text-zinc-500"
-            : "border-green-200 bg-green-50 text-green-700"
-          : "border-zinc-200 bg-white text-zinc-600"
-      )}
-    >
-      {done ? "✓" : ""}
-      {label}
-    </span>
   );
 }
 
@@ -352,17 +347,36 @@ function ContentRow({
   actionLabel,
   href,
   disabled = false,
+  external = false,
 }: {
   label: string;
   subtitle?: string;
   actionLabel: string;
   href?: string;
   disabled?: boolean;
+  external?: boolean;
 }) {
   const buttonClass = cn(
-    "inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors",
-    disabled ? "cursor-not-allowed opacity-50" : "hover:bg-zinc-50"
+    lessonContentRowButtonClass,
+    disabled && "cursor-not-allowed opacity-50 hover:bg-white"
   );
+
+  const action =
+    href && !disabled ? (
+      external ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className={buttonClass}>
+          {actionLabel}
+        </a>
+      ) : (
+        <Link href={href} className={buttonClass}>
+          {actionLabel}
+        </Link>
+      )
+    ) : (
+      <button type="button" className={buttonClass} disabled={disabled}>
+        {actionLabel}
+      </button>
+    );
 
   return (
     <div className="flex items-center justify-between gap-3 border-b border-zinc-100 py-3 last:border-b-0">
@@ -370,15 +384,7 @@ function ContentRow({
         <p className="text-sm font-medium text-zinc-900">{label}</p>
         {subtitle ? <p className="mt-0.5 text-sm text-zinc-500">{subtitle}</p> : null}
       </div>
-      {href && !disabled ? (
-        <a href={href} target="_blank" rel="noopener noreferrer" className={buttonClass}>
-          {actionLabel}
-        </a>
-      ) : (
-        <button type="button" className={buttonClass} disabled={disabled}>
-          {actionLabel}
-        </button>
-      )}
+      {action}
     </div>
   );
 }
