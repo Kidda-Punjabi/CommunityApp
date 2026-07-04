@@ -29,7 +29,7 @@ import {
   COMPREHENSION_TIER_LABELS,
 } from "@/lib/comprehension/tiers";
 import type { AudioAssetStatus } from "@/lib/audio/types";
-import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
   FormMessage,
   buttonClass,
@@ -90,6 +90,19 @@ export function ComprehensionTab() {
   const [expandedSentenceId, setExpandedSentenceId] = useState<string | null>(null);
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
   const [showNewScript, setShowNewScript] = useState(false);
+
+  const patchAudioStatus = useCallback((sentenceId: string, status: AudioAssetStatus) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        audioStatusBySentenceId: {
+          ...prev.audioStatusBySentenceId,
+          [sentenceId]: status,
+        },
+      };
+    });
+  }, []);
 
   async function refresh() {
     setLoading(true);
@@ -182,6 +195,7 @@ export function ComprehensionTab() {
                   setExpandedQuestionId((current) => (current === id ? null : id))
                 }
                 onUpdated={() => void refresh()}
+                onAudioStatusChange={patchAudioStatus}
               />
             );
           })}
@@ -270,6 +284,7 @@ function ScriptAccordion({
   onToggleSentence,
   onToggleQuestion,
   onUpdated,
+  onAudioStatusChange,
 }: {
   script: AdminComprehensionScript;
   paragraphs: AdminComprehensionParagraph[];
@@ -283,6 +298,7 @@ function ScriptAccordion({
   onToggleSentence: (id: string) => void;
   onToggleQuestion: (id: string) => void;
   onUpdated: () => void;
+  onAudioStatusChange: (sentenceId: string, status: AudioAssetStatus) => void;
 }) {
   const orderedSentences = useMemo(
     () => orderSentencesForScript(paragraphs, sentences),
@@ -361,6 +377,7 @@ function ScriptAccordion({
                     expandedSentenceId={expandedSentenceId}
                     onToggleSentence={onToggleSentence}
                     onUpdated={onUpdated}
+                    onAudioStatusChange={onAudioStatusChange}
                   />
                 ))
             )}
@@ -383,6 +400,7 @@ function ScriptAccordion({
                       expanded={expandedSentenceId === sentence.id}
                       onToggle={() => onToggleSentence(sentence.id)}
                       onUpdated={onUpdated}
+                      onAudioStatusChange={onAudioStatusChange}
                     />
                   ))}
                 </ul>
@@ -532,6 +550,7 @@ function ParagraphGroup({
   expandedSentenceId,
   onToggleSentence,
   onUpdated,
+  onAudioStatusChange,
 }: {
   scriptId: string;
   paragraph: AdminComprehensionParagraph;
@@ -541,6 +560,7 @@ function ParagraphGroup({
   expandedSentenceId: string | null;
   onToggleSentence: (id: string) => void;
   onUpdated: () => void;
+  onAudioStatusChange: (sentenceId: string, status: AudioAssetStatus) => void;
 }) {
   const [deletePending, startDelete] = useTransition();
 
@@ -577,6 +597,7 @@ function ParagraphGroup({
               expanded={expandedSentenceId === sentence.id}
               onToggle={() => onToggleSentence(sentence.id)}
               onUpdated={onUpdated}
+              onAudioStatusChange={onAudioStatusChange}
             />
           ))}
         </ul>
@@ -599,6 +620,7 @@ function SentenceAccordionRow({
   expanded,
   onToggle,
   onUpdated,
+  onAudioStatusChange,
 }: {
   sentence: AdminComprehensionSentence;
   paragraphs: AdminComprehensionParagraph[];
@@ -606,6 +628,7 @@ function SentenceAccordionRow({
   expanded: boolean;
   onToggle: () => void;
   onUpdated: () => void;
+  onAudioStatusChange: (sentenceId: string, status: AudioAssetStatus) => void;
 }) {
   return (
     <li>
@@ -626,7 +649,12 @@ function SentenceAccordionRow({
 
       {expanded ? (
         <div className="border-t border-zinc-100 bg-zinc-50/60 px-3 py-4">
-          <SentenceEditor sentence={sentence} paragraphs={paragraphs} onUpdated={onUpdated} />
+          <SentenceEditor
+            sentence={sentence}
+            paragraphs={paragraphs}
+            onUpdated={onUpdated}
+            onAudioStatusChange={onAudioStatusChange}
+          />
         </div>
       ) : null}
     </li>
@@ -637,10 +665,12 @@ function SentenceEditor({
   sentence,
   paragraphs,
   onUpdated,
+  onAudioStatusChange,
 }: {
   sentence: AdminComprehensionSentence;
   paragraphs: AdminComprehensionParagraph[];
   onUpdated: () => void;
+  onAudioStatusChange: (sentenceId: string, status: AudioAssetStatus) => void;
 }) {
   const [state, action, pending] = useActionState(updateComprehensionSentence, initial);
   const [deletePending, startDelete] = useTransition();
@@ -742,7 +772,7 @@ function SentenceEditor({
         contentId={sentence.id}
         defaultScript={gurmukhi}
         scriptHint="Gurmukhi text for this sentence — used for listening mode playback."
-        onUpdated={onUpdated}
+        onStatusChange={(status) => onAudioStatusChange(sentence.id, status)}
       />
     </div>
   );

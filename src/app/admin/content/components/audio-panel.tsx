@@ -27,8 +27,7 @@ import {
   type AudioAssetStatus,
   type AudioContentType,
 } from "@/lib/audio/types";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { buttonClass, labelClass, secondaryButtonClass } from "./ui";
 
 type AudioPanelProps = {
@@ -37,6 +36,8 @@ type AudioPanelProps = {
   defaultScript?: string | null;
   scriptHint?: string;
   onUpdated?: () => void;
+  /** Updates list badges without reloading the whole admin view. */
+  onStatusChange?: (status: AudioAssetStatus) => void;
   /** Pre-select voice when generating (e.g. character default). */
   defaultVoiceId?: string | null;
 };
@@ -52,9 +53,9 @@ export function AudioPanel({
   defaultScript = "",
   scriptHint = "Enter the Punjabi text to be read aloud (Gurmukhi).",
   onUpdated,
+  onStatusChange,
   defaultVoiceId,
 }: AudioPanelProps) {
-  const router = useRouter();
   const [script, setScript] = useState(defaultScript ?? "");
   const [voiceId, setVoiceId] = useState(DEFAULT_VETTED_VOICE_ID);
   const [status, setStatus] = useState<AudioAssetStatus>("none");
@@ -72,6 +73,11 @@ export function AudioPanel({
   const [message, setMessage] = useState<AudioActionResult | null>(null);
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
+  const onStatusChangeRef = useRef(onStatusChange);
+
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -98,6 +104,8 @@ export function AudioPanel({
       } else if (defaultVoiceId) {
         setVoiceId(defaultVoiceId);
       }
+
+      onStatusChangeRef.current?.(asset.status);
     } else {
       setStatus("none");
       setApprovedUrl(null);
@@ -106,6 +114,7 @@ export function AudioPanel({
       setPendingAudioUrl(null);
       setStoredVoiceLabel(null);
       setScript(defaultScript ?? "");
+      onStatusChangeRef.current?.("none");
     }
 
     setLoading(false);
@@ -123,8 +132,9 @@ export function AudioPanel({
     setMessage(result);
     if (!result.error) {
       void reload();
-      onUpdated?.();
-      router.refresh();
+      if (!onStatusChange) {
+        onUpdated?.();
+      }
     }
   }
 

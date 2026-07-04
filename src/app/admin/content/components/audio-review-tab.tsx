@@ -4,6 +4,7 @@ import {
   addPronunciationRuleAndRegenerateAction,
   approveContentAudioAction,
   loadAudioReviewQueue,
+  loadContentAudioAsset,
   loadPronunciationRulesAction,
   regenerateContentAudioAction,
   rejectContentAudioAction,
@@ -99,7 +100,19 @@ function PronunciationRulesSection({ refreshKey }: { refreshKey: number }) {
   );
 }
 
-function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () => void }) {
+type ReviewResolution =
+  | { action: "approved" }
+  | { action: "rejected" }
+  | { action: "regenerated" }
+  | { action: "pronunciation_rule" };
+
+function ReviewCard({
+  item,
+  onResolved,
+}: {
+  item: AudioReviewItem;
+  onResolved: (result: ReviewResolution) => void;
+}) {
   const [script, setScript] = useState(item.scriptText ?? "");
   const [notes, setNotes] = useState(item.reviewNotes ?? "");
   const [mispronouncedWord, setMispronouncedWord] = useState("");
@@ -111,6 +124,19 @@ function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () 
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setScript(item.scriptText ?? "");
+    setNotes(item.reviewNotes ?? "");
+    setSelectedVariationId(item.pendingVariations[0]?.id ?? null);
+  }, [
+    item.contentId,
+    item.contentType,
+    item.scriptText,
+    item.reviewNotes,
+    item.pendingVariations,
+    item.status,
+  ]);
 
   const history = item.generations.filter((g) => g.status !== "pending_review");
   const hasMultipleVariations = item.pendingVariations.length > 1;
@@ -136,7 +162,7 @@ function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () 
         setError(result.error);
         return;
       }
-      onUpdated();
+      onResolved({ action: "approved" });
     });
   }
 
@@ -148,7 +174,7 @@ function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () 
         setError(result.error);
         return;
       }
-      onUpdated();
+      onResolved({ action: "rejected" });
     });
   }
 
@@ -165,7 +191,7 @@ function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () 
         setError(result.error);
         return;
       }
-      onUpdated();
+      onResolved({ action: "regenerated" });
     });
   }
 
@@ -186,7 +212,7 @@ function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () 
         setError(result.error);
         return;
       }
-      onUpdated();
+      onResolved({ action: "pronunciation_rule" });
     });
   }
 
@@ -202,7 +228,6 @@ function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () 
         setError(result.error);
         return;
       }
-      onUpdated();
     });
   }
 
@@ -406,9 +431,44 @@ export function AudioReviewTab() {
     setLoading(false);
   }
 
-  function handleUpdated() {
-    setRulesRefreshKey((key) => key + 1);
-    void refresh();
+  function handleResolved(item: AudioReviewItem, result: ReviewResolution) {
+    if (result.action === "approved") {
+      setItems((current) =>
+        current.filter(
+          (entry) =>
+            !(entry.contentType === item.contentType && entry.contentId === item.contentId)
+        )
+      );
+      return;
+    }
+
+    if (result.action === "pronunciation_rule") {
+      setRulesRefreshKey((key) => key + 1);
+    }
+
+    void patchReviewItem(item.contentType, item.contentId);
+  }
+
+  async function patchReviewItem(contentType: AudioContentType, contentId: string) {
+    const result = await loadContentAudioAsset(contentType, contentId);
+    if (result.error || !result.asset) return;
+
+    const asset = result.asset;
+    setItems((current) =>
+      current.map((entry) =>
+        entry.contentType === contentType && entry.contentId === contentId
+          ? {
+              ...entry,
+              scriptText: asset.scriptText,
+              status: asset.status,
+              reviewNotes: asset.reviewNotes,
+              pendingVariations: asset.pendingVariations,
+              pendingAudioUrl: asset.pendingAudioUrl,
+              approvedAudioUrl: asset.approvedAudioUrl,
+            }
+          : entry
+      )
+    );
   }
 
   useEffect(() => {
@@ -470,7 +530,7 @@ export function AudioReviewTab() {
                   <ReviewCard
                     key={`${item.contentType}-${item.contentId}`}
                     item={item}
-                    onUpdated={handleUpdated}
+                    onResolved={(result) => handleResolved(item, result)}
                   />
                 ))}
               </ul>
@@ -487,7 +547,7 @@ export function AudioReviewTab() {
                   <ReviewCard
                     key={`${item.contentType}-${item.contentId}`}
                     item={item}
-                    onUpdated={handleUpdated}
+                    onResolved={(result) => handleResolved(item, result)}
                   />
                 ))}
               </ul>
