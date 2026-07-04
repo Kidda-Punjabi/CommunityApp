@@ -377,23 +377,31 @@ export async function addPronunciationRuleAndRegenerateAction(input: {
   }
 }
 
+export type ContentAudioAssetDetail = {
+  scriptText: string | null;
+  status: AudioAssetStatus;
+  approvedAudioUrl: string | null;
+  reviewNotes: string | null;
+  pendingVariations: PendingVariation[];
+  pendingAudioUrl: string | null;
+  activeVoiceId: string | null;
+  activeVoiceLabel: string | null;
+};
+
 export async function loadContentAudioAsset(
   contentType: AudioContentType,
   contentId: string
-): Promise<
-  AudioActionResult & {
-    asset?: {
-      scriptText: string | null;
-      status: AudioAssetStatus;
-      approvedAudioUrl: string | null;
-    };
-  }
-> {
+): Promise<AudioActionResult & { asset?: ContentAudioAssetDetail }> {
   try {
     const { supabase } = await requireAdminUser();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!supabaseUrl) {
+      return { error: "NEXT_PUBLIC_SUPABASE_URL is not set." };
+    }
+
     const { data, error } = await supabase
       .from("audio_assets")
-      .select("script_text, status, audio_url")
+      .select("id, script_text, status, audio_url, review_notes, storage_path")
       .eq("content_type", contentType)
       .eq("content_id", contentId)
       .maybeSingle();
@@ -402,11 +410,57 @@ export async function loadContentAudioAsset(
       return { error: error.message };
     }
 
+    if (!data) {
+      return {
+        asset: {
+          scriptText: null,
+          status: "none",
+          approvedAudioUrl: null,
+          reviewNotes: null,
+          pendingVariations: [],
+          pendingAudioUrl: null,
+          activeVoiceId: null,
+          activeVoiceLabel: null,
+        },
+      };
+    }
+
+    const generations = await loadGenerationsForAsset(supabase, data.id);
+    const pendingGens = generations.filter((g) => g.status === "pending_review");
+
+    const pendingVariations: PendingVariation[] = pendingGens.map((gen) => ({
+      id: gen.id,
+      storagePath: gen.storage_path,
+      pendingAudioUrl: getPublicAudioUrl(supabaseUrl, contentType, gen.storage_path),
+      voiceId: gen.voice_id,
+      voiceLabel: getVettedVoice(gen.voice_id ?? "")?.label ?? gen.voice_id ?? "Unknown voice",
+      variationIndex: gen.variation_index ?? 0,
+    }));
+
+    const activeVoiceId =
+      pendingGens[0]?.voice_id ??
+      generations.find((g) => g.status === "approved")?.voice_id ??
+      null;
+
+    const storagePath = data.storage_path as string | null;
+
     return {
       asset: {
-        scriptText: data?.script_text ?? null,
-        status: (data?.status as AudioAssetStatus) ?? "none",
-        approvedAudioUrl: data?.audio_url ?? null,
+        scriptText: data.script_text,
+        status: (data.status as AudioAssetStatus) ?? "none",
+        approvedAudioUrl: data.audio_url,
+        reviewNotes: data.review_notes,
+        pendingVariations,
+        pendingAudioUrl:
+          pendingVariations.length === 1
+            ? pendingVariations[0].pendingAudioUrl
+            : storagePath
+              ? getPublicAudioUrl(supabaseUrl, contentType, storagePath)
+              : null,
+        activeVoiceId,
+        activeVoiceLabel: activeVoiceId
+          ? getVettedVoice(activeVoiceId)?.label ?? activeVoiceId
+          : null,
       },
     };
   } catch (e) {

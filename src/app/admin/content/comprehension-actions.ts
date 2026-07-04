@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAdminFromActions } from "@/app/admin/content/actions";
+import type { AudioAssetStatus } from "@/lib/audio/types";
 import { revalidatePath } from "next/cache";
 
 const ADMIN_GAMES_PATH = "/admin/content/games";
@@ -43,6 +44,7 @@ export type AdminComprehensionData = {
   scripts: AdminComprehensionScript[];
   sentencesByScript: Record<string, AdminComprehensionSentence[]>;
   questionsByScript: Record<string, AdminComprehensionQuestion[]>;
+  audioStatusBySentenceId: Record<string, AudioAssetStatus>;
   error?: string;
 };
 
@@ -88,13 +90,16 @@ export async function loadComprehensionAdminData(): Promise<AdminComprehensionDa
         scripts: [],
         sentencesByScript: {},
         questionsByScript: {},
+        audioStatusBySentenceId: {},
         error,
       };
     }
 
     const sentencesByScript: Record<string, AdminComprehensionSentence[]> = {};
+    const allSentenceIds: string[] = [];
     for (const row of sentencesResult.data ?? []) {
       const sentence = row as AdminComprehensionSentence;
+      allSentenceIds.push(sentence.id);
       if (!sentencesByScript[sentence.script_id]) {
         sentencesByScript[sentence.script_id] = [];
       }
@@ -110,16 +115,31 @@ export async function loadComprehensionAdminData(): Promise<AdminComprehensionDa
       questionsByScript[question.script_id].push(question);
     }
 
+    const audioStatusBySentenceId: Record<string, AudioAssetStatus> = {};
+    if (allSentenceIds.length > 0) {
+      const { data: audioAssets } = await supabase
+        .from("audio_assets")
+        .select("content_id, status")
+        .eq("content_type", "comprehension_sentence")
+        .in("content_id", allSentenceIds);
+
+      for (const asset of audioAssets ?? []) {
+        audioStatusBySentenceId[asset.content_id as string] = asset.status as AudioAssetStatus;
+      }
+    }
+
     return {
       scripts: (scriptsResult.data ?? []) as AdminComprehensionScript[],
       sentencesByScript,
       questionsByScript,
+      audioStatusBySentenceId,
     };
   } catch (e) {
     return {
       scripts: [],
       sentencesByScript: {},
       questionsByScript: {},
+      audioStatusBySentenceId: {},
       error: e instanceof Error ? e.message : "Failed to load comprehension content.",
     };
   }

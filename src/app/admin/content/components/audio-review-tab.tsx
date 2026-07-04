@@ -9,7 +9,6 @@ import {
   rejectContentAudioAction,
   saveContentAudioScriptAction,
   type AudioReviewItem,
-  type PendingVariation,
 } from "@/app/admin/content/audio-actions";
 import { formatAudioReviewTitle, getPublicAudioUrl } from "@/lib/audio/generate-audio";
 import {
@@ -17,6 +16,11 @@ import {
   AUDIO_ASSET_STATUS_LABELS,
   type AudioContentType,
 } from "@/lib/audio/types";
+import {
+  GenerateControl,
+  PronunciationFixForm,
+  VariationPicker,
+} from "@/app/admin/content/components/audio-review-controls";
 import type { PronunciationRule } from "@/lib/elevenlabs/pronunciation-dictionary";
 import { ui } from "@/lib/ui/styles";
 import { useEffect, useState, useTransition } from "react";
@@ -92,45 +96,6 @@ function PronunciationRulesSection({ refreshKey }: { refreshKey: number }) {
         </ul>
       )}
     </section>
-  );
-}
-
-function VariationPicker({
-  variations,
-  selectedId,
-  onSelect,
-}: {
-  variations: PendingVariation[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {variations.map((variation) => (
-        <button
-          key={variation.id}
-          type="button"
-          onClick={() => onSelect(variation.id)}
-          className={`rounded-xl border p-3 text-left transition-colors ${
-            selectedId === variation.id
-              ? "border-violet-500 bg-violet-50 ring-1 ring-violet-200"
-              : "border-zinc-200 bg-white hover:border-violet-200"
-          }`}
-        >
-          <p className="text-sm font-semibold text-zinc-900">
-            Take {variation.variationIndex + 1}
-          </p>
-          <p className="mt-0.5 text-xs text-zinc-500">{variation.voiceLabel}</p>
-          <audio
-            controls
-            preload="metadata"
-            className="mt-2 w-full"
-            src={variation.pendingAudioUrl}
-            onClick={(event) => event.stopPropagation()}
-          />
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -263,11 +228,13 @@ function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () 
       {hasMultipleVariations ? (
         <>
           <p className={`${labelClass} mt-4`}>Pick a variation to approve</p>
-          <VariationPicker
-            variations={item.pendingVariations}
-            selectedId={selectedVariationId}
-            onSelect={setSelectedVariationId}
-          />
+          <div className="mt-4">
+            <VariationPicker
+              variations={item.pendingVariations}
+              selectedId={selectedVariationId}
+              onSelect={setSelectedVariationId}
+            />
+          </div>
         </>
       ) : singleVariation ? (
         <div className="mt-4">
@@ -331,58 +298,21 @@ function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () 
               {showPronunciationFix ? "Hide" : "Add"} pronunciation fix &amp; regenerate
             </button>
             {showPronunciationFix ? (
-              <div className="mt-3 space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className={labelClass}>Mispronounced word</label>
-                    <input
-                      value={mispronouncedWord}
-                      onChange={(event) => setMispronouncedWord(event.target.value)}
-                      className={`${inputClass} mt-1 font-normal`}
-                      dir="auto"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Correction</label>
-                    <input
-                      value={correction}
-                      onChange={(event) => setCorrection(event.target.value)}
-                      className={`${inputClass} mt-1 font-normal`}
-                      placeholder="alias spelling or IPA"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelClass}>Rule type</label>
-                  <select
-                    value={ruleType}
-                    onChange={(event) =>
-                      setRuleType(event.target.value as "alias" | "phoneme")
-                    }
-                    className={`${inputClass} mt-1 font-normal`}
-                  >
-                    <option value="alias">Alias (works on all models)</option>
-                    <option value="phoneme">Phoneme / IPA (eleven_v3)</option>
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  disabled={
-                    pending ||
-                    !mispronouncedWord.trim() ||
-                    !correction.trim() ||
-                    !script.trim()
-                  }
-                  onClick={savePronunciationAndRegenerate}
-                  className={buttonClass}
-                >
-                  Save rule &amp; regenerate
-                </button>
-              </div>
+              <PronunciationFixForm
+                mispronouncedWord={mispronouncedWord}
+                correction={correction}
+                ruleType={ruleType}
+                pending={pending}
+                disabled={!script.trim()}
+                onWordChange={setMispronouncedWord}
+                onCorrectionChange={setCorrection}
+                onRuleTypeChange={setRuleType}
+                onSubmit={savePronunciationAndRegenerate}
+              />
             ) : null}
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
               disabled={pending || (hasMultipleVariations && !selectedVariationId)}
@@ -399,34 +329,22 @@ function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () 
             >
               Needs changes
             </button>
-            <button
-              type="button"
-              disabled={pending || !script.trim()}
-              onClick={() => regenerate(3)}
-              className={secondaryButtonClass}
-            >
-              Regenerate 3 variations
-            </button>
+            <GenerateControl
+              label="Regenerate"
+              pending={pending}
+              disabled={!script.trim()}
+              onGenerate={regenerate}
+            />
           </div>
         </>
       ) : (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={pending || !script.trim()}
-            onClick={() => regenerate(1)}
-            className={buttonClass}
-          >
-            {pending ? "Regenerating…" : "Regenerate from script"}
-          </button>
-          <button
-            type="button"
-            disabled={pending || !script.trim()}
-            onClick={() => regenerate(3)}
-            className={secondaryButtonClass}
-          >
-            Regenerate 3 variations
-          </button>
+        <div className="mt-4">
+          <GenerateControl
+            label="Regenerate from script"
+            pending={pending}
+            disabled={!script.trim()}
+            onGenerate={regenerate}
+          />
         </div>
       )}
 
