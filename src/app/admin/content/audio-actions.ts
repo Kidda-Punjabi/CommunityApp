@@ -12,6 +12,13 @@ import {
   rejectContentAudio,
   updateContentAudioScript,
 } from "@/lib/audio/generate-audio";
+import { getVettedVoice } from "@/lib/elevenlabs/constants";
+import {
+  loadPronunciationRules,
+  upsertPronunciationRule,
+  type PronunciationRule,
+  type PronunciationRuleType,
+} from "@/lib/elevenlabs/pronunciation-dictionary";
 import { loadGenerationsForAsset } from "@/lib/audio/load-audio-asset";
 import type { AudioAssetStatus, AudioContentType, AudioGeneration } from "@/lib/audio/types";
 import { revalidatePath } from "next/cache";
@@ -20,6 +27,15 @@ const ADMIN_CURRICULUM_PATH = "/admin/content/curriculum";
 const ADMIN_GAMES_PATH = "/admin/content/games";
 
 export type AudioActionResult = { error?: string; success?: string };
+
+export type PendingVariation = {
+  id: string;
+  storagePath: string;
+  pendingAudioUrl: string;
+  voiceId: string | null;
+  voiceLabel: string;
+  variationIndex: number;
+};
 
 export type AudioReviewItem = {
   contentType: AudioContentType;
@@ -33,7 +49,14 @@ export type AudioReviewItem = {
   pendingAudioUrl: string | null;
   approvedAudioUrl: string | null;
   reviewNotes: string | null;
+  pendingVariations: PendingVariation[];
   generations: AudioGeneration[];
+};
+
+export type GenerateAudioActionOptions = {
+  scriptOverride?: string | null;
+  voiceId?: string;
+  variationCount?: number;
 };
 
 async function requireAdminUser() {
@@ -92,6 +115,16 @@ export async function loadAudioReviewQueue(): Promise<
 
       const generations = await loadGenerationsForAsset(supabase, asset.id);
       const storagePath = asset.storage_path as string | null;
+      const pendingGens = generations.filter((g) => g.status === "pending_review");
+
+      const pendingVariations: PendingVariation[] = pendingGens.map((gen) => ({
+        id: gen.id,
+        storagePath: gen.storage_path,
+        pendingAudioUrl: getPublicAudioUrl(supabaseUrl, contentType, gen.storage_path),
+        voiceId: gen.voice_id,
+        voiceLabel: getVettedVoice(gen.voice_id ?? "")?.label ?? gen.voice_id ?? "Unknown voice",
+        variationIndex: gen.variation_index ?? 0,
+      }));
 
       items.push({
         contentType,
@@ -102,11 +135,15 @@ export async function loadAudioReviewQueue(): Promise<
         scriptText: asset.script_text,
         status: asset.status as AudioAssetStatus,
         storagePath,
-        pendingAudioUrl: storagePath
-          ? getPublicAudioUrl(supabaseUrl, contentType, storagePath)
-          : null,
+        pendingAudioUrl:
+          pendingVariations.length === 1
+            ? pendingVariations[0].pendingAudioUrl
+            : storagePath
+              ? getPublicAudioUrl(supabaseUrl, contentType, storagePath)
+              : null,
         approvedAudioUrl: asset.audio_url,
         reviewNotes: asset.review_notes,
+        pendingVariations,
         generations,
       });
     }
@@ -140,12 +177,14 @@ export async function loadAudioReviewQueue(): Promise<
 export async function generateContentAudioAction(
   contentType: AudioContentType,
   contentId: string,
-  scriptOverride?: string | null
+  options: GenerateAudioActionOptions = {}
 ): Promise<AudioActionResult> {
   try {
     const { supabase } = await requireAdminUser();
     const result = await generateContentAudio(supabase, contentType, contentId, {
-      scriptOverride,
+      scriptOverride: options.scriptOverride,
+      voiceId: options.voiceId,
+      variationCount: options.variationCount ?? 1,
       force: true,
     });
 
@@ -154,7 +193,13 @@ export async function generateContentAudioAction(
     }
 
     revalidateAudioPaths(contentType);
-    return { success: "Audio generated — pending review." };
+    const count = result.variationCount ?? 1;
+    return {
+      success:
+        count > 1
+          ? `${count} variations generated — pick one in the review queue.`
+          : "Audio generated — pending review.",
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Generation failed." };
   }
@@ -162,11 +207,18 @@ export async function generateContentAudioAction(
 
 export async function approveContentAudioAction(
   contentType: AudioContentType,
-  contentId: string
+  contentId: string,
+  generationId?: string
 ): Promise<AudioActionResult> {
   try {
     const { user, supabase } = await requireAdminUser();
-    const result = await approveContentAudio(supabase, contentType, contentId, user.id);
+    const result = await approveContentAudio(
+      supabase,
+      contentType,
+      contentId,
+      user.id,
+      generationId
+    );
 
     if (!result.ok) {
       return { error: result.error };
@@ -228,7 +280,8 @@ export async function saveContentAudioScriptAction(
 export async function regenerateContentAudioAction(
   contentType: AudioContentType,
   contentId: string,
-  script: string
+  script: string,
+  options: Pick<GenerateAudioActionOptions, "voiceId" | "variationCount"> = {}
 ): Promise<AudioActionResult> {
   try {
     const { supabase } = await requireAdminUser();
@@ -240,6 +293,8 @@ export async function regenerateContentAudioAction(
 
     const result = await generateContentAudio(supabase, contentType, contentId, {
       scriptOverride: script,
+      voiceId: options.voiceId,
+      variationCount: options.variationCount ?? 1,
       force: true,
     });
 
@@ -248,9 +303,77 @@ export async function regenerateContentAudioAction(
     }
 
     revalidateAudioPaths(contentType);
-    return { success: "Regenerated — back in pending review." };
+    const count = result.variationCount ?? 1;
+    return {
+      success:
+        count > 1
+          ? `${count} variations regenerated — pick one in the review queue.`
+          : "Regenerated — back in pending review.",
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Regeneration failed." };
+  }
+}
+
+export async function loadPronunciationRulesAction(): Promise<
+  AudioActionResult & { rules?: PronunciationRule[] }
+> {
+  try {
+    const { supabase } = await requireAdminUser();
+    const rules = await loadPronunciationRules(supabase);
+    return { rules };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to load pronunciation rules." };
+  }
+}
+
+export async function addPronunciationRuleAndRegenerateAction(input: {
+  contentType: AudioContentType;
+  contentId: string;
+  script: string;
+  sourceWord: string;
+  ruleType: PronunciationRuleType;
+  replacement: string;
+  reviewNotes?: string;
+  voiceId?: string;
+  variationCount?: number;
+}): Promise<AudioActionResult> {
+  try {
+    const { user, supabase } = await requireAdminUser();
+
+    const ruleResult = await upsertPronunciationRule(supabase, {
+      sourceWord: input.sourceWord,
+      ruleType: input.ruleType,
+      replacement: input.replacement,
+      notes: input.reviewNotes,
+    });
+
+    if (!ruleResult.ok) {
+      return { error: ruleResult.error };
+    }
+
+    if (input.reviewNotes?.trim()) {
+      await rejectContentAudio(
+        supabase,
+        input.contentType,
+        input.contentId,
+        user.id,
+        input.reviewNotes
+      );
+    }
+
+    return regenerateContentAudioAction(input.contentType, input.contentId, input.script, {
+      voiceId: input.voiceId,
+      variationCount: input.variationCount,
+    }).then((regen) =>
+      regen.error
+        ? regen
+        : {
+            success: `Pronunciation rule saved for “${input.sourceWord}” and audio regenerated.`,
+          }
+    );
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to save pronunciation rule." };
   }
 }
 
@@ -296,7 +419,7 @@ export const loadLessonAudioReviewQueue = loadAudioReviewQueue;
 
 /** @deprecated Use generateContentAudioAction */
 export async function generateLessonAudioAction(lessonId: string, scriptOverride?: string | null) {
-  return generateContentAudioAction("lesson", lessonId, scriptOverride);
+  return generateContentAudioAction("lesson", lessonId, { scriptOverride });
 }
 
 /** @deprecated Use approveContentAudioAction */

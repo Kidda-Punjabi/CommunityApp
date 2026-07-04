@@ -36,6 +36,9 @@ export type AudioGeneration = {
   reviewed_by: string | null;
   created_at: string;
   reviewed_at: string | null;
+  voice_id: string | null;
+  variation_index: number;
+  generation_batch_id: string | null;
 };
 
 export const AUDIO_ASSET_STATUS_LABELS: Record<AudioAssetStatus, string> = {

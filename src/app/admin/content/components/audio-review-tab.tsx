@@ -1,12 +1,15 @@
 "use client";
 
 import {
+  addPronunciationRuleAndRegenerateAction,
   approveContentAudioAction,
   loadAudioReviewQueue,
+  loadPronunciationRulesAction,
   regenerateContentAudioAction,
   rejectContentAudioAction,
   saveContentAudioScriptAction,
   type AudioReviewItem,
+  type PendingVariation,
 } from "@/app/admin/content/audio-actions";
 import { formatAudioReviewTitle, getPublicAudioUrl } from "@/lib/audio/generate-audio";
 import {
@@ -14,6 +17,7 @@ import {
   AUDIO_ASSET_STATUS_LABELS,
   type AudioContentType,
 } from "@/lib/audio/types";
+import type { PronunciationRule } from "@/lib/elevenlabs/pronunciation-dictionary";
 import { ui } from "@/lib/ui/styles";
 import { useEffect, useState, useTransition } from "react";
 import { buttonClass, inputClass, labelClass, secondaryButtonClass } from "./ui";
@@ -33,20 +37,120 @@ function generationAudioUrl(contentType: AudioContentType, storagePath: string):
   return getPublicAudioUrl(supabaseUrl, contentType, storagePath);
 }
 
-function ReviewCard({
-  item,
-  onUpdated,
+function PronunciationRulesSection({ refreshKey }: { refreshKey: number }) {
+  const [rules, setRules] = useState<PronunciationRule[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function refresh() {
+    setLoading(true);
+    const result = await loadPronunciationRulesAction();
+    if (result.error) {
+      setError(result.error);
+      setRules([]);
+    } else {
+      setError(null);
+      setRules(result.rules ?? []);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, [refreshKey]);
+
+  return (
+    <section className={`${ui.cardBordered} space-y-3`}>
+      <div>
+        <h3 className="font-semibold text-zinc-900">Pronunciation dictionary</h3>
+        <p className="mt-1 text-sm text-zinc-500">
+          Rules are synced to ElevenLabs and attached to every generation. Requires API key with
+          Pronunciation Dictionaries Read + Write access.
+        </p>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-zinc-500">Loading rules…</p>
+      ) : error ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{error}</p>
+      ) : rules.length === 0 ? (
+        <p className="text-sm text-zinc-500">No rules yet — add one when rejecting a clip below.</p>
+      ) : (
+        <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white text-sm">
+          {rules.map((rule) => (
+            <li key={rule.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2">
+              <div>
+                <span className="font-medium text-zinc-900">{rule.source_word}</span>
+                <span className="mx-2 text-zinc-400">→</span>
+                <span className="text-zinc-700">{rule.replacement}</span>
+              </div>
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                {rule.rule_type}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function VariationPicker({
+  variations,
+  selectedId,
+  onSelect,
 }: {
-  item: AudioReviewItem;
-  onUpdated: () => void;
+  variations: PendingVariation[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
 }) {
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {variations.map((variation) => (
+        <button
+          key={variation.id}
+          type="button"
+          onClick={() => onSelect(variation.id)}
+          className={`rounded-xl border p-3 text-left transition-colors ${
+            selectedId === variation.id
+              ? "border-violet-500 bg-violet-50 ring-1 ring-violet-200"
+              : "border-zinc-200 bg-white hover:border-violet-200"
+          }`}
+        >
+          <p className="text-sm font-semibold text-zinc-900">
+            Take {variation.variationIndex + 1}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">{variation.voiceLabel}</p>
+          <audio
+            controls
+            preload="metadata"
+            className="mt-2 w-full"
+            src={variation.pendingAudioUrl}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReviewCard({ item, onUpdated }: { item: AudioReviewItem; onUpdated: () => void }) {
   const [script, setScript] = useState(item.scriptText ?? "");
   const [notes, setNotes] = useState(item.reviewNotes ?? "");
+  const [mispronouncedWord, setMispronouncedWord] = useState("");
+  const [correction, setCorrection] = useState("");
+  const [ruleType, setRuleType] = useState<"alias" | "phoneme">("alias");
+  const [showPronunciationFix, setShowPronunciationFix] = useState(false);
+  const [selectedVariationId, setSelectedVariationId] = useState<string | null>(
+    item.pendingVariations[0]?.id ?? null
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const history = item.generations.filter((g) => g.status !== "pending_review");
-  const audioSrc = item.pendingAudioUrl;
+  const hasMultipleVariations = item.pendingVariations.length > 1;
+  const singleVariation = item.pendingVariations.length === 1 ? item.pendingVariations[0] : null;
+
   const reviewTitle = formatAudioReviewTitle({
     contentType: item.contentType,
     contentId: item.contentId,
@@ -58,7 +162,11 @@ function ReviewCard({
   function approve() {
     setError(null);
     startTransition(async () => {
-      const result = await approveContentAudioAction(item.contentType, item.contentId);
+      const result = await approveContentAudioAction(
+        item.contentType,
+        item.contentId,
+        hasMultipleVariations ? selectedVariationId ?? undefined : undefined
+      );
       if (result.error) {
         setError(result.error);
         return;
@@ -79,14 +187,36 @@ function ReviewCard({
     });
   }
 
-  function regenerate() {
+  function regenerate(variationCount = 1) {
     setError(null);
     startTransition(async () => {
       const result = await regenerateContentAudioAction(
         item.contentType,
         item.contentId,
-        script
+        script,
+        { variationCount }
       );
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      onUpdated();
+    });
+  }
+
+  function savePronunciationAndRegenerate() {
+    setError(null);
+    startTransition(async () => {
+      const result = await addPronunciationRuleAndRegenerateAction({
+        contentType: item.contentType,
+        contentId: item.contentId,
+        script,
+        sourceWord: mispronouncedWord,
+        ruleType,
+        replacement: correction,
+        reviewNotes: notes || undefined,
+        variationCount: 1,
+      });
       if (result.error) {
         setError(result.error);
         return;
@@ -124,13 +254,35 @@ function ReviewCard({
           >
             {AUDIO_ASSET_STATUS_LABELS[item.status]}
           </span>
+          {singleVariation ? (
+            <p className="mt-2 text-xs text-zinc-500">Voice: {singleVariation.voiceLabel}</p>
+          ) : null}
         </div>
       </div>
 
-      {audioSrc ? (
+      {hasMultipleVariations ? (
+        <>
+          <p className={`${labelClass} mt-4`}>Pick a variation to approve</p>
+          <VariationPicker
+            variations={item.pendingVariations}
+            selectedId={selectedVariationId}
+            onSelect={setSelectedVariationId}
+          />
+        </>
+      ) : singleVariation ? (
         <div className="mt-4">
           <p className={labelClass}>Generated clip</p>
-          <audio controls preload="metadata" className="mt-1 w-full" src={audioSrc} />
+          <audio
+            controls
+            preload="metadata"
+            className="mt-1 w-full"
+            src={singleVariation.pendingAudioUrl}
+          />
+        </div>
+      ) : item.pendingAudioUrl ? (
+        <div className="mt-4">
+          <p className={labelClass}>Generated clip</p>
+          <audio controls preload="metadata" className="mt-1 w-full" src={item.pendingAudioUrl} />
         </div>
       ) : (
         <p className="mt-4 text-sm text-zinc-500">
@@ -166,12 +318,78 @@ function ReviewCard({
               onChange={(event) => setNotes(event.target.value)}
               rows={2}
               className={`${inputClass} mt-1 font-normal`}
-              placeholder="e.g. Mispronounces ਪਾਣੀ — add phonetic hint or punctuation for pauses"
+              placeholder="e.g. Mispronounces ਪਾਣੀ — add alias or IPA correction below"
             />
           </div>
+
+          <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50/50 p-3">
+            <button
+              type="button"
+              onClick={() => setShowPronunciationFix((open) => !open)}
+              className="text-sm font-semibold text-violet-800"
+            >
+              {showPronunciationFix ? "Hide" : "Add"} pronunciation fix &amp; regenerate
+            </button>
+            {showPronunciationFix ? (
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Mispronounced word</label>
+                    <input
+                      value={mispronouncedWord}
+                      onChange={(event) => setMispronouncedWord(event.target.value)}
+                      className={`${inputClass} mt-1 font-normal`}
+                      dir="auto"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Correction</label>
+                    <input
+                      value={correction}
+                      onChange={(event) => setCorrection(event.target.value)}
+                      className={`${inputClass} mt-1 font-normal`}
+                      placeholder="alias spelling or IPA"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>Rule type</label>
+                  <select
+                    value={ruleType}
+                    onChange={(event) =>
+                      setRuleType(event.target.value as "alias" | "phoneme")
+                    }
+                    className={`${inputClass} mt-1 font-normal`}
+                  >
+                    <option value="alias">Alias (works on all models)</option>
+                    <option value="phoneme">Phoneme / IPA (eleven_v3)</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  disabled={
+                    pending ||
+                    !mispronouncedWord.trim() ||
+                    !correction.trim() ||
+                    !script.trim()
+                  }
+                  onClick={savePronunciationAndRegenerate}
+                  className={buttonClass}
+                >
+                  Save rule &amp; regenerate
+                </button>
+              </div>
+            ) : null}
+          </div>
+
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" disabled={pending} onClick={approve} className={buttonClass}>
-              {pending ? "Saving…" : "Approve"}
+            <button
+              type="button"
+              disabled={pending || (hasMultipleVariations && !selectedVariationId)}
+              onClick={approve}
+              className={buttonClass}
+            >
+              {pending ? "Saving…" : hasMultipleVariations ? "Approve selected take" : "Approve"}
             </button>
             <button
               type="button"
@@ -181,17 +399,33 @@ function ReviewCard({
             >
               Needs changes
             </button>
+            <button
+              type="button"
+              disabled={pending || !script.trim()}
+              onClick={() => regenerate(3)}
+              className={secondaryButtonClass}
+            >
+              Regenerate 3 variations
+            </button>
           </div>
         </>
       ) : (
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
             disabled={pending || !script.trim()}
-            onClick={regenerate}
+            onClick={() => regenerate(1)}
             className={buttonClass}
           >
             {pending ? "Regenerating…" : "Regenerate from script"}
+          </button>
+          <button
+            type="button"
+            disabled={pending || !script.trim()}
+            onClick={() => regenerate(3)}
+            className={secondaryButtonClass}
+          >
+            Regenerate 3 variations
           </button>
         </div>
       )}
@@ -212,8 +446,8 @@ function ReviewCard({
               return (
                 <li key={gen.id} className="rounded-lg border border-zinc-200 bg-white p-3 text-sm">
                   <p className="font-medium text-zinc-800">
-                    {gen.status === "approved" ? "Approved" : "Rejected"} ·{" "}
-                    {formatWhen(gen.created_at)}
+                    {gen.status === "approved" ? "Approved" : "Rejected"} · {formatWhen(gen.created_at)}
+                    {gen.voice_id ? ` · ${gen.voice_id.slice(0, 8)}…` : ""}
                   </p>
                   <p className="mt-1 whitespace-pre-wrap text-zinc-600">{gen.script_text}</p>
                   {gen.review_notes ? (
@@ -239,6 +473,7 @@ export function AudioReviewTab() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [rulesRefreshKey, setRulesRefreshKey] = useState(0);
 
   async function refresh() {
     setLoading(true);
@@ -253,15 +488,18 @@ export function AudioReviewTab() {
     setLoading(false);
   }
 
+  function handleUpdated() {
+    setRulesRefreshKey((key) => key + 1);
+    void refresh();
+  }
+
   useEffect(() => {
     void refresh();
   }, []);
 
   const typeLabels = [...new Set(items.map((item) => item.contentTypeLabel))].sort();
   const filtered =
-    typeFilter === "all"
-      ? items
-      : items.filter((item) => item.contentTypeLabel === typeFilter);
+    typeFilter === "all" ? items : items.filter((item) => item.contentTypeLabel === typeFilter);
 
   const pending = filtered.filter((i) => i.status === "pending_review");
   const needsChanges = filtered.filter((i) => i.status === "needs_changes");
@@ -271,10 +509,12 @@ export function AudioReviewTab() {
       <div>
         <h2 className="text-lg font-semibold text-zinc-900">Audio review queue</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Listen to generated clips from all content types before they go live. Nothing reaches
-          learners until you approve it here.
+          Listen to generated clips from all content types before they go live. Pipeline uses
+          Eleven v3 with dashboard-aligned settings.
         </p>
       </div>
+
+      <PronunciationRulesSection refreshKey={rulesRefreshKey} />
 
       {typeLabels.length > 1 ? (
         <div className="flex flex-wrap gap-2">
@@ -312,7 +552,7 @@ export function AudioReviewTab() {
                   <ReviewCard
                     key={`${item.contentType}-${item.contentId}`}
                     item={item}
-                    onUpdated={() => void refresh()}
+                    onUpdated={handleUpdated}
                   />
                 ))}
               </ul>
@@ -329,7 +569,7 @@ export function AudioReviewTab() {
                   <ReviewCard
                     key={`${item.contentType}-${item.contentId}`}
                     item={item}
-                    onUpdated={() => void refresh()}
+                    onUpdated={handleUpdated}
                   />
                 ))}
               </ul>
@@ -365,5 +605,4 @@ function FilterChip({
   );
 }
 
-/** @deprecated Use AudioReviewTab */
 export const LessonAudioReviewTab = AudioReviewTab;

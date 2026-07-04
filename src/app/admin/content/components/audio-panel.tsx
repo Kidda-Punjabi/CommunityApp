@@ -6,6 +6,10 @@ import {
   type AudioActionResult,
 } from "@/app/admin/content/audio-actions";
 import {
+  DEFAULT_VETTED_VOICE_ID,
+  VETTED_PUNJABI_VOICES,
+} from "@/lib/elevenlabs/constants";
+import {
   audioAssetStatusBadgeClass,
   AUDIO_ASSET_STATUS_LABELS,
   AUDIO_CONTENT_TYPE_LABELS,
@@ -19,7 +23,6 @@ import { labelClass, secondaryButtonClass } from "./ui";
 type AudioPanelProps = {
   contentType: AudioContentType;
   contentId: string;
-  /** Initial script when no audio asset exists yet */
   defaultScript?: string | null;
   scriptHint?: string;
 };
@@ -32,6 +35,7 @@ export function AudioPanel({
 }: AudioPanelProps) {
   const router = useRouter();
   const [script, setScript] = useState(defaultScript ?? "");
+  const [voiceId, setVoiceId] = useState(DEFAULT_VETTED_VOICE_ID);
   const [status, setStatus] = useState<AudioAssetStatus>("none");
   const [approvedUrl, setApprovedUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<AudioActionResult | null>(null);
@@ -69,14 +73,14 @@ export function AudioPanel({
     };
   }, [contentType, contentId, defaultScript]);
 
-  function runGenerate() {
+  function runGenerate(variationCount = 1) {
     setMessage(null);
     startTransition(async () => {
-      const result = await generateContentAudioAction(
-        contentType,
-        contentId,
-        script.trim() || null
-      );
+      const result = await generateContentAudioAction(contentType, contentId, {
+        scriptOverride: script.trim() || null,
+        voiceId,
+        variationCount,
+      });
       setMessage(result);
       if (!result.error) {
         setStatus("pending_review");
@@ -99,6 +103,25 @@ export function AudioPanel({
       </div>
 
       <p className="text-xs text-zinc-500">{scriptHint}</p>
+      <p className="text-xs text-zinc-500">
+        Uses Eleven v3 with dashboard-aligned voice settings. Dashboard “Enhance” (audio tags) is
+        not applied automatically — add tags to the script manually if needed.
+      </p>
+
+      <div>
+        <label className={labelClass}>Voice</label>
+        <select
+          value={voiceId}
+          onChange={(event) => setVoiceId(event.target.value)}
+          className="mt-1 block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
+        >
+          {VETTED_PUNJABI_VOICES.map((voice) => (
+            <option key={voice.id} value={voice.id}>
+              {voice.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div>
         <label className={labelClass}>Audio script</label>
@@ -127,14 +150,24 @@ export function AudioPanel({
         </p>
       ) : null}
 
-      <button
-        type="button"
-        disabled={pending || loading || status === "pending_review"}
-        onClick={runGenerate}
-        className={secondaryButtonClass}
-      >
-        {pending ? "Generating audio…" : "Generate audio"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending || loading || status === "pending_review"}
+          onClick={() => runGenerate(1)}
+          className={secondaryButtonClass}
+        >
+          {pending ? "Generating…" : "Generate audio"}
+        </button>
+        <button
+          type="button"
+          disabled={pending || loading || status === "pending_review"}
+          onClick={() => runGenerate(3)}
+          className={secondaryButtonClass}
+        >
+          Generate 3 variations
+        </button>
+      </div>
 
       {message?.error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{message.error}</p>

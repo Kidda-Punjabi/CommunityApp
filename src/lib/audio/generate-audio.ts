@@ -1,28 +1,45 @@
 import { synthesizeSpeech } from "@/lib/elevenlabs/server";
+import { getPronunciationDictionaryLocator } from "@/lib/elevenlabs/pronunciation-dictionary";
+import { resolveVettedVoiceId } from "@/lib/elevenlabs/constants";
 import {
   formatAudioReviewTitle,
   getAudioContentAdapter,
   type AudioContentContext,
 } from "@/lib/audio/content-adapters";
-import { loadAudioAsset } from "@/lib/audio/load-audio-asset";
+import { loadAudioAsset, loadGenerationsForAsset } from "@/lib/audio/load-audio-asset";
 import { bucketForContentType, publicUrlForAudioPath } from "@/lib/audio/storage";
 import type { AudioAssetStatus, AudioContentType } from "@/lib/audio/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type GenerateAudioResult =
-  | { ok: true; generationId: string; storagePath: string; audioAssetId: string }
+  | {
+      ok: true;
+      generationId: string;
+      storagePath: string;
+      audioAssetId: string;
+      generationIds?: string[];
+      variationCount?: number;
+    }
   | { ok: false; error: string; skipped?: boolean };
 
 type GenerateOptions = {
   scriptOverride?: string | null;
   force?: boolean;
   batchMode?: boolean;
+  voiceId?: string;
+  /** 1 = single clip (default). 2–3 = multi-take batch for reviewer to pick from. */
+  variationCount?: number;
 };
 
 function resolveScriptText(context: AudioContentContext, scriptOverride?: string | null): string {
   const fromOverride = scriptOverride?.trim();
   if (fromOverride) return fromOverride;
   return context.defaultScript.trim();
+}
+
+function storagePathForTake(basePath: string, variationIndex: number): string {
+  if (variationIndex <= 0) return basePath;
+  return basePath.replace(/\.mp3$/i, `-take-${variationIndex + 1}.mp3`);
 }
 
 async function ensureAudioAssetRow(
@@ -49,6 +66,24 @@ async function ensureAudioAssetRow(
 
   if (error || !data) return null;
   return { id: data.id, status: data.status as AudioAssetStatus };
+}
+
+async function rejectPendingGenerations(
+  supabase: SupabaseClient,
+  audioAssetId: string,
+  exceptGenerationId?: string
+): Promise<void> {
+  let query = supabase
+    .from("audio_generations")
+    .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+    .eq("audio_asset_id", audioAssetId)
+    .eq("status", "pending_review");
+
+  if (exceptGenerationId) {
+    query = query.neq("id", exceptGenerationId);
+  }
+
+  await query;
 }
 
 export async function generateContentAudio(
@@ -83,59 +118,96 @@ export async function generateContentAudio(
     return { ok: false, error: "Add a script (Punjabi text) before generating." };
   }
 
+  const voiceId = resolveVettedVoiceId(options.voiceId);
+  const variationCount = Math.min(3, Math.max(1, options.variationCount ?? 1));
+  const batchId = variationCount > 1 ? crypto.randomUUID() : null;
   const bucket = bucketForContentType(contentType);
-  const storagePath = adapter.storagePath(context);
-
-  let audioBuffer: ArrayBuffer;
-  try {
-    audioBuffer = await synthesizeSpeech({ text: scriptText });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "ElevenLabs request failed.";
-    console.error(`[audio] TTS failed for ${contentType} ${contentId}:`, message);
-    return { ok: false, error: message };
-  }
-
-  const { error: uploadError } = await supabase.storage.from(bucket).upload(storagePath, audioBuffer, {
-    contentType: "audio/mpeg",
-    upsert: true,
-  });
-
-  if (uploadError) {
-    console.error(`[audio] Upload failed for ${contentType} ${contentId}:`, uploadError.message);
-    return { ok: false, error: `Storage upload failed: ${uploadError.message}` };
-  }
+  const baseStoragePath = adapter.storagePath(context);
+  const pronunciationLocator = await getPronunciationDictionaryLocator(supabase);
+  const locators = pronunciationLocator ? [pronunciationLocator] : undefined;
 
   const asset =
-    assetRow ??
-    (await ensureAudioAssetRow(supabase, contentType, contentId, scriptText));
+    assetRow ?? (await ensureAudioAssetRow(supabase, contentType, contentId, scriptText));
   if (!asset) {
     return { ok: false, error: "Failed to create audio asset record." };
   }
 
-  const { data: generation, error: insertError } = await supabase
-    .from("audio_generations")
-    .insert({
-      audio_asset_id: asset.id,
-      script_text: scriptText,
-      storage_path: storagePath,
-      status: "pending_review",
-    })
-    .select("id")
-    .single();
+  if (options.force && status === "pending_review") {
+    await rejectPendingGenerations(supabase, asset.id);
+  }
 
-  if (insertError || !generation) {
-    return {
-      ok: false,
-      error: insertError?.message ?? "Failed to save generation record.",
-    };
+  const generationIds: string[] = [];
+  let firstGenerationId = "";
+  let firstStoragePath = "";
+  let finalScriptText = scriptText;
+
+  for (let take = 0; take < variationCount; take += 1) {
+    const storagePath = storagePathForTake(baseStoragePath, take);
+
+    let synthResult;
+    try {
+      synthResult = await synthesizeSpeech({
+        text: scriptText,
+        voiceId,
+        pronunciationDictionaryLocators: locators,
+        seed: variationCount > 1 ? Math.floor(Math.random() * 4294967295) : undefined,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ElevenLabs request failed.";
+      console.error(`[audio] TTS failed for ${contentType} ${contentId} take ${take + 1}:`, message);
+      if (generationIds.length === 0) {
+        return { ok: false, error: message };
+      }
+      break;
+    }
+
+    finalScriptText = synthResult.normalizedText;
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(storagePath, synthResult.audio, {
+        contentType: "audio/mpeg",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      return { ok: false, error: `Storage upload failed: ${uploadError.message}` };
+    }
+
+    const { data: generation, error: insertError } = await supabase
+      .from("audio_generations")
+      .insert({
+        audio_asset_id: asset.id,
+        script_text: finalScriptText,
+        storage_path: storagePath,
+        status: "pending_review",
+        voice_id: voiceId,
+        variation_index: take,
+        generation_batch_id: batchId,
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !generation) {
+      return {
+        ok: false,
+        error: insertError?.message ?? "Failed to save generation record.",
+      };
+    }
+
+    generationIds.push(generation.id);
+    if (take === 0) {
+      firstGenerationId = generation.id;
+      firstStoragePath = storagePath;
+    }
   }
 
   const now = new Date().toISOString();
   const { error: assetError } = await supabase
     .from("audio_assets")
     .update({
-      script_text: scriptText,
-      storage_path: storagePath,
+      script_text: finalScriptText,
+      storage_path: variationCount === 1 ? firstStoragePath : null,
       status: "pending_review",
       updated_at: now,
     })
@@ -145,13 +217,15 @@ export async function generateContentAudio(
     return { ok: false, error: `Audio asset update failed: ${assetError.message}` };
   }
 
-  await adapter.syncOnGenerate(supabase, context, scriptText, storagePath);
+  await adapter.syncOnGenerate(supabase, context, finalScriptText, firstStoragePath);
 
   return {
     ok: true,
-    generationId: generation.id,
-    storagePath,
+    generationId: firstGenerationId,
+    storagePath: firstStoragePath,
     audioAssetId: asset.id,
+    generationIds,
+    variationCount,
   };
 }
 
@@ -163,7 +237,6 @@ export function getPublicAudioUrl(
   return publicUrlForAudioPath(supabaseUrl, bucketForContentType(contentType), storagePath);
 }
 
-/** @deprecated Use getPublicAudioUrl */
 export function getPublicLessonAudioUrl(supabaseUrl: string, storagePath: string): string {
   return getPublicAudioUrl(supabaseUrl, "lesson", storagePath);
 }
@@ -172,7 +245,8 @@ export async function approveContentAudio(
   supabase: SupabaseClient,
   contentType: AudioContentType,
   contentId: string,
-  reviewerId: string
+  reviewerId: string,
+  generationId?: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) {
@@ -186,12 +260,32 @@ export async function approveContentAudio(
   }
 
   const asset = await loadAudioAsset(supabase, contentType, contentId);
-  if (!asset?.storage_path) {
+  if (!asset) {
+    return { ok: false, error: "No audio asset found." };
+  }
+
+  const generations = await loadGenerationsForAsset(supabase, asset.id);
+  const pending = generations.filter((g) => g.status === "pending_review");
+
+  if (pending.length === 0) {
     return { ok: false, error: "No pending audio to approve." };
   }
 
-  const publicUrl = getPublicAudioUrl(supabaseUrl, contentType, asset.storage_path);
+  const chosen =
+    (generationId ? pending.find((g) => g.id === generationId) : null) ??
+    (pending.length === 1 ? pending[0] : null);
+
+  if (!chosen) {
+    return {
+      ok: false,
+      error: "Multiple variations are pending — pick which take to approve.",
+    };
+  }
+
+  const publicUrl = getPublicAudioUrl(supabaseUrl, contentType, chosen.storage_path);
   const now = new Date().toISOString();
+
+  await rejectPendingGenerations(supabase, asset.id, chosen.id);
 
   const { error: generationError } = await supabase
     .from("audio_generations")
@@ -200,9 +294,7 @@ export async function approveContentAudio(
       reviewed_by: reviewerId,
       reviewed_at: now,
     })
-    .eq("audio_asset_id", asset.id)
-    .eq("storage_path", asset.storage_path)
-    .eq("status", "pending_review");
+    .eq("id", chosen.id);
 
   if (generationError) {
     return { ok: false, error: generationError.message };
@@ -212,6 +304,7 @@ export async function approveContentAudio(
     .from("audio_assets")
     .update({
       audio_url: publicUrl,
+      storage_path: chosen.storage_path,
       status: "approved",
       updated_at: now,
     })
@@ -245,26 +338,29 @@ export async function rejectContentAudio(
   }
 
   const asset = await loadAudioAsset(supabase, contentType, contentId);
-  if (!asset?.storage_path) {
+  if (!asset) {
+    return { ok: false, error: "No pending audio to reject." };
+  }
+
+  const generations = await loadGenerationsForAsset(supabase, asset.id);
+  const pending = generations.filter((g) => g.status === "pending_review");
+
+  if (pending.length === 0) {
     return { ok: false, error: "No pending audio to reject." };
   }
 
   const now = new Date().toISOString();
 
-  const { error: generationError } = await supabase
-    .from("audio_generations")
-    .update({
-      status: "rejected",
-      review_notes: notes,
-      reviewed_by: reviewerId,
-      reviewed_at: now,
-    })
-    .eq("audio_asset_id", asset.id)
-    .eq("storage_path", asset.storage_path)
-    .eq("status", "pending_review");
-
-  if (generationError) {
-    return { ok: false, error: generationError.message };
+  for (const generation of pending) {
+    await supabase
+      .from("audio_generations")
+      .update({
+        status: "rejected",
+        review_notes: notes,
+        reviewed_by: reviewerId,
+        reviewed_at: now,
+      })
+      .eq("id", generation.id);
   }
 
   const { error: assetError } = await supabase
@@ -274,6 +370,7 @@ export async function rejectContentAudio(
       review_notes: notes,
       reviewed_by: reviewerId,
       reviewed_at: now,
+      storage_path: null,
       updated_at: now,
     })
     .eq("id", asset.id);
@@ -336,7 +433,6 @@ export async function updateContentAudioScript(
 
 export { formatAudioReviewTitle };
 
-/** @deprecated Use generateContentAudio */
 export async function generateLessonAudio(
   supabase: SupabaseClient,
   lessonId: string,
@@ -345,16 +441,15 @@ export async function generateLessonAudio(
   return generateContentAudio(supabase, "lesson", lessonId, options);
 }
 
-/** @deprecated Use approveContentAudio */
 export async function approveLessonAudio(
   supabase: SupabaseClient,
   lessonId: string,
-  reviewerId: string
+  reviewerId: string,
+  generationId?: string
 ) {
-  return approveContentAudio(supabase, "lesson", lessonId, reviewerId);
+  return approveContentAudio(supabase, "lesson", lessonId, reviewerId, generationId);
 }
 
-/** @deprecated Use rejectContentAudio */
 export async function rejectLessonAudio(
   supabase: SupabaseClient,
   lessonId: string,
@@ -364,7 +459,6 @@ export async function rejectLessonAudio(
   return rejectContentAudio(supabase, "lesson", lessonId, reviewerId, reviewNotes);
 }
 
-/** @deprecated Use updateContentAudioScript */
 export async function updateLessonAudioScript(
   supabase: SupabaseClient,
   lessonId: string,
