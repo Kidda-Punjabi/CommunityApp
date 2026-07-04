@@ -123,7 +123,7 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
         </div>
       ) : null}
 
-      <div className="mb-8">
+      <div id="tutor-availability" className="mb-8 scroll-mt-24">
         <TutorAvailabilitySection
           settings={availabilityLoad.settings}
           windows={availabilityLoad.windows}
@@ -136,7 +136,7 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
         <TutorPendingBookings bookings={pendingBookingsLoad.bookings} />
       ) : null}
 
-      <section className={`${ui.card} mb-8 space-y-4`}>
+      <section id="google-calendar" className={`${ui.card} mb-8 scroll-mt-24 space-y-4`}>
         <h2 className="font-heading text-lg font-semibold text-zinc-900">Google Calendar</h2>
 
         {!oauthConfigured ? <GoogleCalendarSetupNotice showAdminSetup={showAdminSetup} /> : null}

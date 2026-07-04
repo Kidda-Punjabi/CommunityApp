@@ -1,7 +1,7 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { ChadoPauriLadder } from "@/components/games/chado-pauri-ladder";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
@@ -239,12 +239,7 @@ export function ChadoPauriMode({
     return (
       <div className="space-y-6">
         <div>
-          <Link
-            href={GAMES_HUB_HREF}
-            className="text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            ← Back to games
-          </Link>
+          <BackLink fallbackHref={GAMES_HUB_HREF}>← Back</BackLink>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Solo ladder
           </p>
@@ -324,12 +319,9 @@ export function ChadoPauriMode({
           >
             Play again
           </button>
-          <Link
-            href={GAMES_HUB_HREF}
-            className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            Back to games
-          </Link>
+          <BackLink fallbackHref={GAMES_HUB_HREF} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
+            ← Back
+          </BackLink>
         </div>
       </div>
     );
@@ -338,12 +330,7 @@ export function ChadoPauriMode({
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <Link
-          href={GAMES_HUB_HREF}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Exit
-        </Link>
+        <BackLink fallbackHref={GAMES_HUB_HREF}>← Back</BackLink>
         <p className="text-sm font-semibold text-zinc-900">
           Rung {rungIndex + 1} · {CHADO_PAURI_RUNG_POINTS[rungIndex]} pts
         </p>

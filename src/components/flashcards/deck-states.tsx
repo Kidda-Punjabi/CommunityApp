@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 
 export function FlashcardAccessDenied({
@@ -27,12 +28,9 @@ export function FlashcardDeckEmpty() {
         No flashcards linked to this lesson yet. In admin, assign flashcards to this
         lesson when creating them.
       </p>
-      <Link
-        href="/dashboard/practice"
-        className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        ← Back to Practice
-      </Link>
+      <BackLink fallbackHref="/dashboard/games" className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500">
+        ← Back
+      </BackLink>
     </div>
   );
 }

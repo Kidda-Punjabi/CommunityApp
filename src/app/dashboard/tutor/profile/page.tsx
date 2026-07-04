@@ -7,6 +7,7 @@ import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { loadTutorDashboard } from "@/lib/tutoring/load-tutor-dashboard";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
+import { loadTutorSetupStatus } from "@/lib/tutoring/tutor-setup-status";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 
@@ -16,10 +17,11 @@ export default async function TutorProfilePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [profile, data, showAdminPanel] = await Promise.all([
+  const [profile, data, showAdminPanel, setupStatus] = await Promise.all([
     loadEditableProfile(supabase, user!.id),
     loadTutorDashboard(supabase, user!.id),
     canAccessAdminPanel(user, supabase),
+    loadTutorSetupStatus(supabase, user!.id),
   ]);
 
   const displayName = getDisplayName(profile);
@@ -54,6 +56,25 @@ export default async function TutorProfilePage() {
       </div>
 
       <div className={`mt-8 ${ui.stack}`}>
+        <Link href="/dashboard/tutor/profile/edit" className={ui.cardInteractive}>
+          <p className="font-semibold text-zinc-900">Photo &amp; bio</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Update your profile photo and short bio for students.
+          </p>
+          <p className="mt-2 text-sm font-semibold text-violet-600">Edit tutor profile →</p>
+        </Link>
+
+        {setupStatus.showPrompt ? (
+          <Link href="/dashboard/tutor/setup" className={ui.cardInteractive}>
+            <p className="font-semibold text-zinc-900">Complete your setup</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              {setupStatus.completedCount} of {setupStatus.totalCount} steps done — finish onboarding
+              so students can book you.
+            </p>
+            <p className="mt-2 text-sm font-semibold text-violet-600">View setup checklist →</p>
+          </Link>
+        ) : null}
+
         <div className={ui.card}>
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Your students

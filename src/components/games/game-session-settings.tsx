@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/navigation/back-link";
 import { useMemo, useState } from "react";
 import { GrammarTenseFilterPicker } from "@/components/games/grammar-tense-filter-picker";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
@@ -84,12 +85,7 @@ export function GameSessionSettings({
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href={gamesHubHref}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to games
-        </Link>
+        <BackLink fallbackHref={gamesHubHref}>← Back</BackLink>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
           {gameEyebrow ?? gameTitle}
         </p>

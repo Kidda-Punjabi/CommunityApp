@@ -1,6 +1,6 @@
 import Link from "next/link";
+import { LessonInlineAudioRow } from "@/components/lesson-inline-audio-row";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
-import { LessonAudioPlayer } from "@/components/lesson-audio-player";
 import { LessonPdfViewer } from "@/components/lesson-pdf-viewer";
 import { deckPracticeHref } from "@/lib/flashcards/utils";
 import {
@@ -62,7 +62,11 @@ export function LessonCard({
 }: LessonCardProps) {
   const hasPresentation = Boolean(lesson.presentation_url);
   const hasPdf = SHOW_LESSON_PDF && Boolean(lesson.pdf_url);
-  const hasAudio = SHOW_LESSON_AUDIO && Boolean(lesson.audio_url);
+  const hasApprovedGeneratedAudio =
+    Boolean(lesson.audio_url) &&
+    (lesson.generated_audio_status === "approved" ||
+      (SHOW_LESSON_AUDIO && (lesson.generated_audio_status ?? "none") === "none"));
+  const hasLegacyAudioSection = SHOW_LESSON_AUDIO && Boolean(lesson.audio_url) && !hasApprovedGeneratedAudio;
   const { quizId, quizTitle, flashcardSets } = lesson.practice;
   const hasQuiz = Boolean(quizId);
   const hasFlashcards = flashcardSets.length > 0;
@@ -82,7 +86,8 @@ export function LessonCard({
     ? getFlashcardsRowState(lesson.id, flashcardSets, isSetComplete)
     : null;
 
-  const hasLessonContent = hasPresentation || hasPdf || hasAudio || Boolean(recording);
+  const hasLessonContent =
+    hasPresentation || hasPdf || hasApprovedGeneratedAudio || hasLegacyAudioSection || Boolean(recording);
 
   const isTutorLocked = canBrowse && !contentUnlocked;
 
@@ -154,6 +159,14 @@ export function LessonCard({
                 variant="integrated"
               />
             ) : null}
+            {contentUnlocked && hasApprovedGeneratedAudio && lesson.audio_url ? (
+              <LessonInlineAudioRow
+                lessonId={lesson.id}
+                audioUrl={lesson.audio_url}
+                initialLastPosition={progress?.lastPosition ?? 0}
+                initialCompleted={progress?.audioCompleted ?? false}
+              />
+            ) : null}
             {hasQuiz && quizRow ? (
               <ContentRow
                 label="Quiz"
@@ -188,10 +201,10 @@ export function LessonCard({
             </div>
           )}
 
-          {contentUnlocked && hasAudio && (
+          {contentUnlocked && hasLegacyAudioSection && (
             <div className="mt-4 border-t border-zinc-100 pt-4">
               <p className="mb-1.5 text-sm text-zinc-500">Audio</p>
-              <LessonAudioPlayer
+              <LessonInlineAudioRow
                 lessonId={lesson.id}
                 audioUrl={lesson.audio_url!}
                 initialLastPosition={progress?.lastPosition ?? 0}

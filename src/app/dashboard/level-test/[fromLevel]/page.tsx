@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { LevelTestClient } from "@/components/progression/level-test-client";
@@ -37,9 +38,7 @@ export default async function LevelTestPage({ params }: PageProps) {
   return (
     <div className={`${ui.page} space-y-4`}>
       <div>
-        <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600">← Profile</BackLink>
         <h1 className="mt-3 text-2xl font-bold text-zinc-900">{levelTestLabel(fromLevel)}</h1>
         {progression.nextTier && (
           <p className="mt-1 text-sm text-zinc-500">

@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import { BookCallCard } from "@/components/booking/book-call-card";
 import { getProductContent } from "@/lib/products/content";
 import { createClient } from "@/lib/supabase/server";
@@ -35,9 +36,7 @@ export default async function CoursesIndexPage() {
   return (
     <div className="min-h-dvh bg-gradient-to-b from-violet-50 via-white to-zinc-50">
       <main className={`mx-auto max-w-2xl ${ui.page}`}>
-        <Link href={backHref} className="text-sm font-medium text-violet-600">
-          ← Back
-        </Link>
+        <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600">← Back</BackLink>
         <h1 className="mt-4 font-heading text-3xl font-bold text-zinc-900">Kidda Courses</h1>
         <p className="mt-2 text-zinc-600">
           Choose the path that fits your Punjabi learning goals.

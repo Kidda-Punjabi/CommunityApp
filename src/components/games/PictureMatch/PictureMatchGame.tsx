@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -305,9 +306,7 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
     return (
       <div className="space-y-4">
         <p className="text-sm text-red-600">Could not load picture cards. Please try again.</p>
-        <Link href={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Back to games
-        </Link>
+        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
       </div>
     );
   }
@@ -315,9 +314,7 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
   if (allCards.length < 4) {
     return (
       <div className="space-y-4">
-        <Link href={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Back to games
-        </Link>
+        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
         <h1 className="text-2xl font-bold text-zinc-900">Picture Match</h1>
         <p className="text-sm text-zinc-500">
           Not enough vocabulary cards with pictures yet. Check back soon!
@@ -330,9 +327,7 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
     return (
       <div className="space-y-6">
         <div>
-          <Link href={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-            ← Back to games
-          </Link>
+          <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Vocabulary game
           </p>
@@ -415,9 +410,7 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
         <button type="button" onClick={startGame} className={ui.btnPrimaryBlock}>
           Play again
         </button>
-        <Link href={GAMES_HUB_HREF} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
-          Back to games
-        </Link>
+        <BackLink fallbackHref={GAMES_HUB_HREF} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">Back to games</BackLink>
       </div>
     );
   }

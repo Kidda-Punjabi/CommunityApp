@@ -11,6 +11,7 @@ import {
   GROUP_GAME_LABELS,
   GROUP_GAME_TYPES,
 } from "@/lib/game-rooms/constants";
+import { BackLink } from "@/components/navigation/back-link";
 import { ui } from "@/lib/ui/styles";
 
 const initial: GroupGameActionResult = {};
@@ -25,6 +26,7 @@ export function GroupGamesHub({ initialJoinCode = "" }: GroupGamesHubProps) {
 
   return (
     <div className="space-y-8">
+      <BackLink fallbackHref="/dashboard/games">← Back</BackLink>
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">Group games</h1>
         <p className="mt-1 text-sm text-zinc-500">

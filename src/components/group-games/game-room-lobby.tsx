@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
@@ -139,9 +140,7 @@ export function GameRoomLobby({ initialView }: GameRoomLobbyProps) {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/dashboard/group-games" className="text-sm font-medium text-violet-600 hover:text-violet-700">
-          ← Back to group games
-        </Link>
+        <BackLink fallbackHref="/dashboard/group-games" className="text-sm font-medium text-violet-600 hover:text-violet-700">← Back to group games</BackLink>
         <h1 className="mt-3 text-2xl font-bold text-zinc-900">
           {GROUP_GAME_LABELS[room.game_type]}
         </h1>

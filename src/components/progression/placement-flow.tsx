@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
@@ -109,9 +110,7 @@ export function PlacementFlow({ initialClaimedLevel, questionPools }: PlacementF
     return (
       <div className={`${ui.page} ${ui.stackLoose}`}>
         <div>
-          <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600">
-            ← Profile
-          </Link>
+          <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600">← Profile</BackLink>
           <h1 className="mt-4 text-2xl font-bold text-zinc-900">Which level are you at?</h1>
           <p className="mt-2 text-sm text-zinc-600">
             Pick the level that best describes you today. We&apos;ll confirm with a short test.
@@ -154,9 +153,7 @@ export function PlacementFlow({ initialClaimedLevel, questionPools }: PlacementF
     return (
       <div className={`${ui.page} ${ui.stackLoose}`}>
         <div>
-          <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600">
-            ← Profile
-          </Link>
+          <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600">← Profile</BackLink>
           <h1 className="mt-4 text-2xl font-bold text-zinc-900">Find your starting level</h1>
           <p className="mt-2 text-sm text-zinc-600">
             {introLead}. This short test helps us find the right starting point — about 30

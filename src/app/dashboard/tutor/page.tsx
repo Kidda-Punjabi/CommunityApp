@@ -12,6 +12,8 @@ import {
 import { loadPendingHomeworkReviews } from "@/lib/tutoring/homework-submissions";
 import { getDisplayName, getGreetingHeading } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
+import { TutorSetupChecklist } from "@/components/tutor/tutor-setup-checklist";
+import { loadTutorSetupStatus } from "@/lib/tutoring/tutor-setup-status";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 
@@ -25,14 +27,15 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [params, data, pendingHomework, profile, pendingRequests, todayLessons] =
+  const [params, data, pendingHomework, profile, pendingRequests, todayLessons, setupStatus] =
     await Promise.all([
-    searchParams,
-    loadTutorDashboard(supabase, user!.id),
-    loadPendingHomeworkReviews(supabase),
-    loadEditableProfile(supabase, user!.id),
-    loadTutorPendingRequestCounts(supabase, user!.id),
+      searchParams,
+      loadTutorDashboard(supabase, user!.id),
+      loadPendingHomeworkReviews(supabase),
+      loadEditableProfile(supabase, user!.id),
+      loadTutorPendingRequestCounts(supabase, user!.id),
       loadTutorTodayLessons(supabase, user!.id),
+      loadTutorSetupStatus(supabase, user!.id),
     ]);
 
   const assignedPackages = buildTutorAssignmentRows(data);
@@ -61,6 +64,12 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
           {accessError}
         </p>
       )}
+
+      {setupStatus.showPrompt ? (
+        <div className="mb-8">
+          <TutorSetupChecklist status={setupStatus} />
+        </div>
+      ) : null}
 
       <div className="mb-8 grid grid-cols-2 gap-3">
         <StatCard label="1-1 students" value={studentCount} />

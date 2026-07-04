@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
 import {
@@ -45,9 +46,7 @@ export function FriendsPageClient({ friends, requests }: FriendsPageClientProps)
   return (
     <div className={`${ui.page} ${ui.stackLoose}`}>
       <div>
-        <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600">← Profile</BackLink>
         <h1 className="mt-3 text-2xl font-bold text-zinc-900">Friends</h1>
       </div>
 

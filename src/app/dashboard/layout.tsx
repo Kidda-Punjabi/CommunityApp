@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
+import { TabNavProvider } from "@/components/navigation/tab-nav-provider";
 import { LastPlayedGameTracker } from "@/components/games/last-played-tracker";
 import { ActivityDateSync } from "@/components/activity-date-sync";
 import { ViewAsBanner } from "@/components/view-as-banner";
-import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
+import { FirstRunProvider } from "@/components/first-run/first-run-provider";
 import { PointsToastProvider } from "@/components/points/points-toast-provider";
 import {
   getCachedAuthSession,
@@ -31,19 +32,24 @@ export default async function DashboardLayout({
   ]);
 
   return (
-    <OnboardingProvider showOnFirstVisit={!onboarding.hasSeenOnboarding}>
+    <FirstRunProvider
+      hasSeenIntroPitch={onboarding.hasSeenIntroPitch}
+      hasSeenOnboarding={onboarding.hasSeenOnboarding}
+    >
       <PointsToastProvider />
-      <div className={`flex min-h-dvh flex-1 flex-col ${ui.pageBg}`}>
-        <ActivityDateSync />
-        <LastPlayedGameTracker />
-        {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
-        <div
-          className={`mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance}`}
-        >
-          {children}
+      <TabNavProvider>
+        <div className={`flex min-h-dvh flex-1 flex-col ${ui.pageBg}`}>
+          <ActivityDateSync />
+          <LastPlayedGameTracker />
+          {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
+          <div
+            className={`mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance}`}
+          >
+            {children}
+          </div>
+          <BottomNav />
         </div>
-        <BottomNav />
-      </div>
-    </OnboardingProvider>
+      </TabNavProvider>
+    </FirstRunProvider>
   );
 }

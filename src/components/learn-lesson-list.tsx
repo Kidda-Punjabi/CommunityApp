@@ -12,6 +12,7 @@ import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import type { QuizProgressRow } from "@/lib/progress/quiz-progress";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { ui } from "@/lib/ui/styles";
 import type { ReactNode } from "react";
@@ -109,12 +110,7 @@ export function LearnLessonList({
 
   return (
     <div className={ui.page}>
-      <Link
-        href={backHref}
-        className="text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        ← Back to Learn
-      </Link>
+      <BackLink fallbackHref={backHref}>← Back</BackLink>
 
       <div className="mb-8 mt-4">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>

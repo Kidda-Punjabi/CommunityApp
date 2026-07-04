@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { DialectMap } from "@/components/resources/dialects/dialect-map";
 import {
@@ -14,12 +15,7 @@ export function DialectsLanding() {
   return (
     <div className="space-y-8">
       <header className="space-y-3">
-        <Link
-          href={GAMES_HUB_HREF}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to Games
-        </Link>
+        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Games</BackLink>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Punjabi dialects</h1>
         <div className="space-y-2 text-base leading-relaxed text-zinc-600">
           {DIALECTS_INTRO.map((paragraph) => (

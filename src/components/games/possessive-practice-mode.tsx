@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
@@ -240,12 +241,7 @@ export function PossessivePracticeMode({
       <SessionProgressBar current={questionIndex + 1} total={questions.length} />
 
       <div className="flex items-center justify-between gap-3">
-        <Link
-          href={GAMES_HUB_HREF}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Exit
-        </Link>
+        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Exit</BackLink>
         <p className="text-sm font-semibold text-zinc-900">
           {questionIndex + 1} / {questions.length} · {correctCount} correct
         </p>

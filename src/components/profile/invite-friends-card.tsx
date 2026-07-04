@@ -5,8 +5,9 @@ import type {
   ReferralListItem,
   ReferralUnavailableReason,
 } from "@/lib/referrals/load-referrals";
+import { CopyButton, type CopyButtonHandle } from "@/components/ui/copy-button";
 import { ui } from "@/lib/ui/styles";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type InviteFriendsCardProps = {
   shareUrl: string | null;
@@ -43,21 +44,8 @@ export function InviteFriendsCard({
   referrals,
   unavailableReason,
 }: InviteFriendsCardProps) {
-  const [copied, setCopied] = useState(false);
+  const copyButtonRef = useRef<CopyButtonHandle>(null);
   const [shareError, setShareError] = useState<string | null>(null);
-
-  async function copyLink() {
-    if (!shareUrl) return;
-
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setShareError(null);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setShareError("Could not copy — try selecting the link manually.");
-    }
-  }
 
   async function shareLink() {
     if (!shareUrl) return;
@@ -79,7 +67,10 @@ export function InviteFriendsCard({
       }
     }
 
-    await copyLink();
+    const copied = await copyButtonRef.current?.copy();
+    if (copied === false) {
+      setShareError("Could not copy — try selecting the link manually.");
+    }
   }
 
   return (
@@ -115,14 +106,17 @@ export function InviteFriendsCard({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={copyLink}
+        <CopyButton
+          ref={copyButtonRef}
+          text={shareUrl ?? ""}
           disabled={!shareUrl}
-          className={ui.btnSecondary}
+          onCopySuccess={() => setShareError(null)}
+          onCopyError={() =>
+            setShareError("Could not copy — try selecting the link manually.")
+          }
         >
-          {copied ? "Copied!" : "Copy link"}
-        </button>
+          Copy link
+        </CopyButton>
         <button
           type="button"
           onClick={shareLink}

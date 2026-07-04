@@ -1,6 +1,12 @@
 "use client";
 
+import { AudioPanel } from "@/app/admin/content/components/audio-panel";
 import { appendAdminUploadedFileUrl } from "@/lib/supabase/admin-upload";
+import {
+  lessonAudioStatusBadgeClass,
+  LESSON_AUDIO_STATUS_LABELS,
+  type LessonAudioStatus,
+} from "@/lib/audio/types";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +28,23 @@ import {
 } from "./ui";
 
 const initialState: ActionResult = {};
+
+function lessonAudioStatus(lesson: AdminData["lessons"][0]): LessonAudioStatus {
+  return lesson.generated_audio_status ?? "none";
+}
+
+function contentTags(lesson: AdminData["lessons"][0]): string[] {
+  const tags: string[] = [];
+  if (lesson.presentation_url) tags.push("Presentation");
+  if (lesson.pdf_url) tags.push("PDF");
+  const status = lessonAudioStatus(lesson);
+  if (status === "approved" && lesson.audio_url) {
+    tags.push("Audio");
+  } else if (status !== "none") {
+    tags.push(`Audio (${LESSON_AUDIO_STATUS_LABELS[status]})`);
+  }
+  return tags;
+}
 
 function filenameFromStorageUrl(url: string | null | undefined) {
   if (!url) return null;
@@ -118,6 +141,16 @@ export function CoursesLessonsTab({ data }: { data: AdminData }) {
               Google Slides, Canva, or any shareable presentation URL.
             </p>
           </div>
+          <div>
+            <label className={labelClass}>Audio script (optional)</label>
+            <textarea
+              name="audio_script"
+              rows={3}
+              dir="auto"
+              className={inputClass}
+              placeholder="Punjabi text for ElevenLabs — generate after saving the lesson"
+            />
+          </div>
           <details className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
             <summary className="cursor-pointer text-sm font-medium text-zinc-600">
               Legacy PDF / audio (optional)
@@ -189,7 +222,13 @@ export function CoursesLessonsTab({ data }: { data: AdminData }) {
                     </p>
                     <p className="mt-1 text-sm text-zinc-500">
                       {lesson.is_free ? "Free" : "Paid"}
-                      {lesson.presentation_url && (
+                      {contentTags(lesson).length > 0 ? (
+                        <>
+                          {" · "}
+                          {contentTags(lesson).join(" · ")}
+                        </>
+                      ) : null}
+                      {lesson.presentation_url ? (
                         <>
                           {" · "}
                           <a
@@ -198,37 +237,16 @@ export function CoursesLessonsTab({ data }: { data: AdminData }) {
                             rel="noreferrer"
                             className="text-violet-600 hover:underline"
                           >
-                            Presentation
+                            Open presentation
                           </a>
                         </>
-                      )}
-                      {lesson.pdf_url && (
-                        <>
-                          {" · "}
-                          <a
-                            href={lesson.pdf_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-violet-600 hover:underline"
-                          >
-                            PDF
-                          </a>
-                        </>
-                      )}
-                      {lesson.audio_url && (
-                        <>
-                          {" · "}
-                          <a
-                            href={lesson.audio_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-violet-600 hover:underline"
-                          >
-                            Audio
-                          </a>
-                        </>
-                      )}
+                      ) : null}
                     </p>
+                    <span
+                      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${lessonAudioStatusBadgeClass(lessonAudioStatus(lesson))}`}
+                    >
+                      Audio: {LESSON_AUDIO_STATUS_LABELS[lessonAudioStatus(lesson)]}
+                    </span>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -334,6 +352,11 @@ function LessonEditRow({
           defaultValue={lesson.presentation_url ?? ""}
           placeholder="https://docs.google.com/presentation/..."
           className={inputClass}
+        />
+        <AudioPanel
+          contentType="lesson"
+          contentId={lesson.id}
+          defaultScript={lesson.audio_script ?? ""}
         />
         <details className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
           <summary className="cursor-pointer text-sm font-medium text-zinc-600">

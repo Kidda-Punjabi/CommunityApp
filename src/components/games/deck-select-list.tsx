@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import type { GameDeckSummary } from "@/lib/games/load-game-decks";
 import { gameDeckPlayHref } from "@/lib/games/catalog";
@@ -16,12 +17,12 @@ export function DeckSelectList({ gameSlug, gameTitle, decks }: DeckSelectListPro
         <p className="mt-2 text-sm text-zinc-500">
           Unlock a course with flashcard sets to play {gameTitle}.
         </p>
-        <Link
-          href="/dashboard/games"
+        <BackLink
+          fallbackHref="/dashboard/games"
           className="mt-4 inline-block text-sm font-medium text-violet-600 hover:text-violet-500"
         >
-          ← Back to games
-        </Link>
+          ← Back
+        </BackLink>
       </div>
     );
   }

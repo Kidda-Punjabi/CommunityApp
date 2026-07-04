@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import { BookCallCard } from "@/components/booking/book-call-card";
 import { TIER_LABELS } from "@/lib/membership/tiers";
 import { courseIdsForTiers } from "@/lib/membership/courses";
@@ -42,12 +43,7 @@ export default async function MembershipPage() {
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
       <div className="mb-6">
-        <Link
-          href="/dashboard/profile"
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to profile</BackLink>
         <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900">
           Courses
         </h1>
@@ -94,12 +90,7 @@ export default async function MembershipPage() {
                   </Link>
                 </div>
               ) : (
-                <Link
-                  href={productPage}
-                  className="mt-4 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
-                >
-                  View {TIER_LABELS[course.tier]} →
-                </Link>
+                <BackLink fallbackHref={productPage} className="mt-4 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500">View {TIER_LABELS[course.tier]} →</BackLink>
               )}
             </div>
           );

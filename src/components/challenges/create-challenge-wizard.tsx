@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState } from "react";
@@ -82,9 +83,7 @@ export function CreateChallengeWizard({ friends, decks }: CreateChallengeWizardP
   return (
     <div className={`${ui.page} ${ui.stackLoose}`}>
       <div>
-        <Link href="/dashboard/friends" className="text-sm font-medium text-violet-600">
-          ← Friends
-        </Link>
+        <BackLink fallbackHref="/dashboard/friends" className="text-sm font-medium text-violet-600">← Back</BackLink>
         <h1 className="mt-3 text-2xl font-bold text-zinc-900">Challenge a friend</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Play a game first — your friend gets notified with your score and can try to beat it.
@@ -94,9 +93,7 @@ export function CreateChallengeWizard({ friends, decks }: CreateChallengeWizardP
       {friends.length === 0 ? (
         <div className={ui.emptyState}>
           <p className="text-sm text-zinc-500">Add friends first to send a challenge.</p>
-          <Link href="/dashboard/friends" className="mt-3 text-sm font-semibold text-violet-600">
-            Go to friends →
-          </Link>
+          <BackLink fallbackHref="/dashboard/friends" className="mt-3 text-sm font-semibold text-violet-600">Go to friends →</BackLink>
         </div>
       ) : (
         <>

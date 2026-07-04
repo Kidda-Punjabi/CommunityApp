@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import { ManageBillingButton } from "@/components/profile/manage-billing-button";
 import {
   formatUnlockedCourseNames,
@@ -60,12 +61,7 @@ export default async function ProfileBillingPage() {
 
   return (
     <div className={ui.page}>
-      <Link
-        href="/dashboard/profile"
-        className="text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        ← Back to profile
-      </Link>
+      <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to profile</BackLink>
 
       <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900">
         Billing & purchases
@@ -183,19 +179,13 @@ export default async function ProfileBillingPage() {
           </p>
           <ul className="mt-3 space-y-2">
             <li>
-              <Link href={productPath("foundational")} className="text-sm font-medium text-violet-600">
-                Foundational Course →
-              </Link>
+              <BackLink fallbackHref={productPath("foundational")} className="text-sm font-medium text-violet-600">Foundational Course →</BackLink>
             </li>
             <li>
-              <Link href={productPath("beginners")} className="text-sm font-medium text-violet-600">
-                Beginners Course →
-              </Link>
+              <BackLink fallbackHref={productPath("beginners")} className="text-sm font-medium text-violet-600">Beginners Course →</BackLink>
             </li>
             <li>
-              <Link href={productPath("community")} className="text-sm font-medium text-violet-600">
-                Kidda Community →
-              </Link>
+              <BackLink fallbackHref={productPath("community")} className="text-sm font-medium text-violet-600">Kidda Community →</BackLink>
             </li>
           </ul>
         </div>

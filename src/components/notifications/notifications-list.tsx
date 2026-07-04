@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/navigation/back-link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
@@ -179,9 +180,7 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
     <div className={`${ui.page} ${ui.stackLoose}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <Link href="/dashboard/home" className="text-sm font-medium text-violet-600">
-            ← Home
-          </Link>
+          <BackLink fallbackHref="/dashboard/home">← Back</BackLink>
           <h1 className="mt-3 text-2xl font-bold text-zinc-900">Notifications</h1>
         </div>
         {notifications.some((n) => !isRead(n)) && (

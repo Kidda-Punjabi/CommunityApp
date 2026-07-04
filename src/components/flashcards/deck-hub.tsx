@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { DeckProgressBar } from "@/components/deck-progress-bar";
 import {
@@ -51,12 +52,7 @@ export function FlashcardDeckHub({ deck, progress, matchScore }: FlashcardDeckHu
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href={setsHref}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to flashcard sets
-        </Link>
+        <BackLink fallbackHref={setsHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to flashcard sets</BackLink>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
           {deck.courseName} · Lesson {deck.lessonNumber}
         </p>

@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { GROUP_GAME_LABELS } from "@/lib/game-rooms/constants";
 import type { GroupGameType } from "@/lib/game-rooms/types";

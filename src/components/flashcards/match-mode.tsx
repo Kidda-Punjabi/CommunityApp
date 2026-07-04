@@ -1,7 +1,7 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { gameDeckHubHref, shuffleArray } from "@/lib/flashcards/utils";
@@ -196,12 +196,7 @@ export function FlashcardMatchMode({
     return (
       <div className="space-y-6">
         <div>
-          <Link
-            href={deckHubHref}
-            className="text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            ← Back to deck
-          </Link>
+          <BackLink fallbackHref={deckHubHref}>← Back</BackLink>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Match · {deck.deckName}
           </p>
@@ -266,12 +261,9 @@ export function FlashcardMatchMode({
             Play again
           </button>
         )}
-        <Link
-          href={deckHubHref}
-          className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          Back to deck
-        </Link>
+        <BackLink fallbackHref={deckHubHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
+          ← Back
+        </BackLink>
       </div>
     );
   }
@@ -280,12 +272,7 @@ export function FlashcardMatchMode({
     <div className="space-y-4">
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="match" />}
       <div className="flex items-center justify-between gap-3">
-        <Link
-          href={deckHubHref}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Exit
-        </Link>
+        <BackLink fallbackHref={deckHubHref}>← Back</BackLink>
         <p className="text-sm font-semibold text-zinc-900">
           {pairsMatched} matched · {secondsLeft}s left
         </p>

@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -213,12 +214,7 @@ export function FlashcardStudyMode({ deck, initialProgress }: FlashcardStudyMode
   return (
     <div className="space-y-4">
       <div>
-        <Link
-          href={deckHubHref}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to deck
-        </Link>
+        <BackLink fallbackHref={deckHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to deck</BackLink>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
           Flashcards · {deck.deckName}
           {reviewMode && " · Review"}
@@ -362,12 +358,7 @@ function StudySessionSummary({
 
   return (
     <div className="flex flex-1 flex-col">
-      <Link
-        href={deckHubHref}
-        className="text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        ← Back to deck
-      </Link>
+      <BackLink fallbackHref={deckHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to deck</BackLink>
 
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center">
         {allConfident ? (

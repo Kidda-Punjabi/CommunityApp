@@ -9,6 +9,8 @@ export type LessonWithCourse = {
   pdf_url: string | null;
   presentation_url: string | null;
   is_free: boolean;
+  audio_script?: string | null;
+  generated_audio_status?: "none" | "pending_review" | "approved" | "needs_changes";
   courses: { name: string } | null;
   practice: LessonPracticeLinks;
 };

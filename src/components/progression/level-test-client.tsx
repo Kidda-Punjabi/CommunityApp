@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LevelTestPlayer } from "@/components/progression/level-test-player";
@@ -30,9 +31,7 @@ export function LevelTestClient({
     return (
       <div className={ui.card}>
         <p className="text-sm text-zinc-600">This test doesn&apos;t match your current level.</p>
-        <Link href="/dashboard/profile" className="mt-3 inline-block text-sm font-medium text-violet-600">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile" className="mt-3 inline-block text-sm font-medium text-violet-600">← Profile</BackLink>
       </div>
     );
   }
@@ -43,9 +42,7 @@ export function LevelTestClient({
         <p className="text-sm text-zinc-600">
           Earn more XP to unlock the {levelTestLabel(fromLevel)}.
         </p>
-        <Link href="/dashboard/profile" className="mt-3 inline-block text-sm font-medium text-violet-600">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile" className="mt-3 inline-block text-sm font-medium text-violet-600">← Profile</BackLink>
       </div>
     );
   }

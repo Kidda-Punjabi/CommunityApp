@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { conjugate } from "@/lib/conjugation/conjugate";
@@ -147,12 +148,7 @@ export function VerbConjugatorExplorer({ verb }: VerbConjugatorExplorerProps) {
   return (
     <div className="space-y-5">
       <div>
-        <Link
-          href="/dashboard/games/verb-conjugator"
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← All verbs
-        </Link>
+        <BackLink fallbackHref="/dashboard/games/verb-conjugator" className="text-sm font-medium text-violet-600 hover:text-violet-500">← All verbs</BackLink>
         <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900">
           {verb.english}
         </h1>

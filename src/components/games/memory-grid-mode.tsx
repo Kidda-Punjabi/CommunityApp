@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -191,9 +192,7 @@ export function MemoryGridMode({
     return (
       <div className="space-y-6">
         <div>
-          <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-            ← Back to decks
-          </Link>
+          <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to decks</BackLink>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Memory Grid · {deck.deckName}
           </p>
@@ -254,9 +253,7 @@ export function MemoryGridMode({
             Play again
           </button>
         )}
-        <Link href={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
-          Back to decks
-        </Link>
+        <BackLink fallbackHref={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">Back to decks</BackLink>
       </div>
     );
   }
@@ -266,9 +263,7 @@ export function MemoryGridMode({
       <SessionProgressBar current={pairsFound} total={deck.cards.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="memory_grid" />}
       <div className="flex items-center justify-between gap-3">
-        <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Exit
-        </Link>
+        <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Exit</BackLink>
         <p className="text-sm font-semibold text-zinc-900">
           {pairsFound} / {deck.cards.length} pairs · {moves} moves
           {totalBatches > 1 && (

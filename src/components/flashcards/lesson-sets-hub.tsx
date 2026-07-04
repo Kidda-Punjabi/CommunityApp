@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { DeckProgressBar } from "@/components/deck-progress-bar";
 import type { FlashcardSetSummary } from "@/lib/flashcards/load-deck";
@@ -25,12 +26,7 @@ export function FlashcardLessonSetsHub({
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href={backHref}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← {backLabel}
-        </Link>
+        <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← {backLabel}</BackLink>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
           {courseName} · Lesson {lessonNumber}
         </p>

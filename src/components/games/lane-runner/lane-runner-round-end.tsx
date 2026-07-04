@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/navigation/back-link";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { LANE_RUNNER_DISPLAY_NAME } from "@/lib/games/lane-runner/config";
 import type { LaneRunnerRoundSummary } from "@/lib/games/lane-runner/types";
@@ -54,12 +55,7 @@ export function LaneRunnerRoundEnd({ summary, onPlayAgain }: LaneRunnerRoundEndP
           >
             Play again
           </button>
-          <Link
-            href={GAMES_HUB_HREF}
-            className="block w-full rounded-lg px-4 py-2 text-center text-sm font-semibold text-violet-600 hover:text-violet-500"
-          >
-            Back to games
-          </Link>
+          <BackLink fallbackHref={GAMES_HUB_HREF} className="block w-full rounded-lg px-4 py-2 text-center text-sm font-semibold text-violet-600 hover:text-violet-500">Back to games</BackLink>
         </div>
       </div>
     </div>

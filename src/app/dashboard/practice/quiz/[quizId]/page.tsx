@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import { QuizPlayer } from "@/components/quiz-player";
 import { canUserAccessQuiz } from "@/lib/membership/lesson-access";
 import { createClient } from "@/lib/supabase/server";
@@ -25,12 +26,21 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
             ? `Complete level ${access.previousLevel} first to unlock this quiz.`
             : `This quiz requires ${access.requiredCourseLabel ?? "a membership upgrade"}.`}
         </p>
-        <Link
-          href={access.levelLocked ? "/dashboard/games" : "/dashboard/membership"}
-          className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          {access.levelLocked ? "← Back to Practice pathway" : "View membership plans →"}
-        </Link>
+        {access.levelLocked ? (
+          <BackLink
+            fallbackHref="/dashboard/games"
+            className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
+          >
+            ← Back
+          </BackLink>
+        ) : (
+          <Link
+            href="/dashboard/membership"
+            className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
+          >
+            View membership plans →
+          </Link>
+        )}
       </div>
     );
   }
@@ -66,12 +76,9 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           This quiz has no questions yet.
         </p>
-        <Link
-          href="/dashboard/games"
-          className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to Practice
-        </Link>
+        <BackLink fallbackHref="/dashboard/games" className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500">
+          ← Back
+        </BackLink>
       </div>
     );
   }
@@ -80,12 +87,9 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
 
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
-      <Link
-        href="/dashboard/games"
-        className="mb-4 text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        ← Back to Practice
-      </Link>
+      <BackLink fallbackHref="/dashboard/games" className="mb-4">
+        ← Back
+      </BackLink>
       <QuizPlayer
         quizId={quiz.id}
         quizTitle={quiz.title}

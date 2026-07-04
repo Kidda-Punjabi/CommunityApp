@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { LevelTestQuestionBody } from "@/components/progression/level-test-question-body";
@@ -103,9 +104,7 @@ export function LevelTestPlayer({
         <p className="text-sm text-zinc-700">
           Questions for this test aren&apos;t available yet. Check back soon.
         </p>
-        <Link href={backHref} className="mt-4 inline-block text-sm font-medium text-violet-600">
-          ← Back
-        </Link>
+        <BackLink fallbackHref={backHref} className="mt-4 inline-block text-sm font-medium text-violet-600">← Back</BackLink>
       </div>
     );
   }
@@ -138,9 +137,7 @@ export function LevelTestPlayer({
     <div className={`space-y-5 ${LIGHT_SURFACE}`}>
       <SessionProgressBar current={index + 1} total={sessionQuestions.length} />
       <div className="flex items-center justify-between gap-3">
-        <Link href={backHref} className="text-sm font-medium text-violet-700 hover:text-violet-600">
-          ← Exit
-        </Link>
+        <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-700 hover:text-violet-600">← Exit</BackLink>
         <p className="text-sm font-semibold text-zinc-900">
           {index + 1} / {sessionQuestions.length}
         </p>

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTabNav } from "@/components/navigation/tab-nav-provider";
+import { tabIdFromHref } from "@/lib/navigation/tab-nav";
 
 type NavItem = {
   href: string;
@@ -136,6 +138,7 @@ function NavIcon({ href, active }: { href: string; active: boolean }) {
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { activeTab, setActiveTab } = useTabNav();
 
   if (pathname.startsWith("/dashboard/tutor")) {
     return null;
@@ -145,18 +148,15 @@ export function BottomNav() {
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200/60 bg-white/90 shadow-[0_-4px_24px_-8px_rgba(24,24,27,0.08)] backdrop-blur-md">
       <div className="mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5">
         {navItems.map((item) => {
-          const active =
-            item.href === "/dashboard/games"
-              ? pathname.startsWith("/dashboard/games")
-              : item.href === "/dashboard/community"
-                ? pathname === item.href || pathname.startsWith("/dashboard/community/")
-                : pathname === item.href;
+          const tabId = tabIdFromHref(item.href);
+          const active = activeTab === tabId;
 
           return (
             <Link
               key={item.href}
               href={item.href}
               prefetch={true}
+              onClick={() => setActiveTab(tabId)}
               className={`group flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 transition-colors ${
                 active ? "text-violet-600" : "text-zinc-500"
               }`}

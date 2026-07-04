@@ -1,7 +1,7 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { SessionProgressBar } from "@/components/session-progress-bar";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { deckPracticeHref, pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
@@ -74,12 +74,12 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
             {score} / {questions.length} correct
           </h2>
         </div>
-        <Link
-          href={deckHubHref}
+        <BackLink
+          fallbackHref={deckHubHref}
           className="block rounded-lg bg-violet-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-violet-500"
         >
-          Back to deck
-        </Link>
+          ← Back
+        </BackLink>
       </div>
     );
   }
@@ -88,12 +88,7 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
     <div className="space-y-4">
       <SessionProgressBar current={index + 1} total={questions.length} />
       <div>
-        <Link
-          href={deckHubHref}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to deck
-        </Link>
+        <BackLink fallbackHref={deckHubHref}>← Back</BackLink>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
           Test · {deck.deckName}
         </p>

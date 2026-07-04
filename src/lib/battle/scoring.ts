@@ -2,6 +2,11 @@
  * Canonical battle scoring — single source of truth for damage math.
  */
 
+/** Round to nearest integer (0.5 rounds up). Applied consistently to all battle damage. */
+export function roundBattleDamage(value: number): number {
+  return Math.round(value);
+}
+
 export function speedBonus(timeToAnswerSeconds: number): number {
   return Math.max(0, 5 - timeToAnswerSeconds);
 }
@@ -45,6 +50,51 @@ export type RoundDamageResolution = {
   playerTwoDamageDealt: number;
 };
 
+export type RoundScoreBreakdown = {
+  playerOneScore: number;
+  playerTwoScore: number;
+  scoreDifference: number;
+  multiplier: number;
+  unroundedDamage: number;
+  finalDamage: number;
+  damageRecipient: "player_one" | "player_two" | null;
+  lowerScorer: "player_one" | "player_two" | null;
+};
+
+/** UI-facing step-by-step damage breakdown for a resolved round. */
+export function computeRoundScoreBreakdown(
+  roundNumber: number,
+  roundStartedAtIso: string,
+  roundActiveAtIso: string | null,
+  playerOne: PlayerRoundInput,
+  playerTwo: PlayerRoundInput
+): RoundScoreBreakdown {
+  const timerStart = roundActiveAtIso ?? roundStartedAtIso;
+  const damage = resolveRoundDamage(roundNumber, timerStart, playerOne, playerTwo);
+  const p1Score = damage.playerOneRawDamage;
+  const p2Score = damage.playerTwoRawDamage;
+  const higher = Math.max(p1Score, p2Score);
+  const lower = Math.min(p1Score, p2Score);
+  const scoreDifference = higher - lower;
+  const multiplier = roundMultiplier(roundNumber);
+  const unroundedDamage = scoreDifference * multiplier;
+
+  let lowerScorer: "player_one" | "player_two" | null = null;
+  if (p1Score < p2Score) lowerScorer = "player_one";
+  else if (p2Score < p1Score) lowerScorer = "player_two";
+
+  return {
+    playerOneScore: p1Score,
+    playerTwoScore: p2Score,
+    scoreDifference,
+    multiplier,
+    unroundedDamage,
+    finalDamage: damage.finalDamage,
+    damageRecipient: damage.damageRecipient,
+    lowerScorer,
+  };
+}
+
 export function resolveRoundDamage(
   roundNumber: number,
   roundStartedAtIso: string,
@@ -83,7 +133,7 @@ export function resolveRoundDamage(
   }
 
   const multiplier = roundMultiplier(roundNumber);
-  const finalDamage = Math.round(netDamage * multiplier);
+  const finalDamage = roundBattleDamage(netDamage * multiplier);
 
   return {
     playerOneRawDamage: p1Raw,

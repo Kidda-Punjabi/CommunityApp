@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { StreakSurvivalMode } from "@/components/games/streak-survival-mode";
 import { loadChallengeForGamePage } from "@/lib/challenges/load-challenge-for-page";
@@ -28,12 +29,7 @@ export default async function StreakSurvivalFoundationalPage({
   if (cards.length === 0) {
     return (
       <div className="flex flex-1 flex-col px-4 py-6">
-        <Link
-          href="/dashboard/games/streak-survival"
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back
-        </Link>
+        <BackLink fallbackHref="/dashboard/games/streak-survival" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back</BackLink>
         <p className="mt-6 text-sm text-zinc-600">
           No Foundational Course flashcards available yet. Unlock the Foundational Course or try a
           lesson deck instead.

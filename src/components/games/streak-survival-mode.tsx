@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -226,9 +227,7 @@ export function StreakSurvivalMode({
     return (
       <div className="space-y-6">
         <div>
-          <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-            ← Back
-          </Link>
+          <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back</BackLink>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Streak Survival · {title}
           </p>
@@ -283,9 +282,7 @@ export function StreakSurvivalMode({
             Try again
           </button>
         )}
-        <Link href={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
-          Back
-        </Link>
+        <BackLink fallbackHref={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">Back</BackLink>
       </div>
     );
   }
@@ -294,9 +291,7 @@ export function StreakSurvivalMode({
     <div className="space-y-6">
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="streak_survival" />}
       <div className="flex items-center justify-between gap-3">
-        <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Exit
-        </Link>
+        <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Exit</BackLink>
         <p className="text-sm font-semibold text-violet-600">🔥 {streak} streak</p>
       </div>
 

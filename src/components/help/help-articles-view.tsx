@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { useState } from "react";
 import type { HelpContent, HelpSection } from "@/lib/help/types";
@@ -71,13 +72,9 @@ function HelpSectionBlock({ section }: { section: HelpSection }) {
 export function HelpArticlesView({ content, backHref, backLabel = "Back to profile" }: HelpArticlesViewProps) {
   return (
     <div className={ui.page}>
-      <Link
-        href={backHref}
-        className="mb-6 inline-flex items-center gap-1 text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        <span aria-hidden="true">←</span>
-        {backLabel}
-      </Link>
+      <BackLink fallbackHref={backHref} className="mb-6 inline-flex items-center gap-1">
+        ← Back
+      </BackLink>
 
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{content.title}</h1>

@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import { EventCard } from "@/components/event-card";
 import {
   UpcomingEventsList,
@@ -30,12 +31,7 @@ export default async function CommunityEventsPage() {
 
   return (
     <div className={ui.page}>
-      <Link
-        href="/dashboard/community"
-        className="text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        ← Back to Community
-      </Link>
+      <BackLink fallbackHref="/dashboard/community" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Community</BackLink>
 
       <div className="mt-4 mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Upcoming events</h1>
@@ -104,9 +100,7 @@ export default async function CommunityEventsPage() {
 
       <p className="mt-8 text-center text-sm text-zinc-500">
         Need access?{" "}
-        <Link href="/dashboard/membership" className="font-semibold text-violet-600">
-          View your courses
-        </Link>
+        <BackLink fallbackHref="/dashboard/membership" className="font-semibold text-violet-600">View your courses</BackLink>
       </p>
     </div>
   );

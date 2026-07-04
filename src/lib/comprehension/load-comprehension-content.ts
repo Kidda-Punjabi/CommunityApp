@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  approvedAudioUrlFromAsset,
+  loadAudioAssetsForContentIds,
+} from "@/lib/audio/load-audio-asset";
 import type {
   ComprehensionPracticeContent,
   ComprehensionQuestion,
@@ -111,6 +115,26 @@ export async function loadComprehensionPracticeContent(
 
   for (const scriptId of Object.keys(sentencesByScript)) {
     sentencesByScript[scriptId].sort((a, b) => a.sequence_order - b.sequence_order);
+  }
+
+  const sentenceIds = Object.values(sentencesByScript)
+    .flat()
+    .map((sentence) => sentence.id);
+  const audioAssets = await loadAudioAssetsForContentIds(
+    supabase,
+    "comprehension_sentence",
+    sentenceIds
+  );
+
+  for (const scriptId of Object.keys(sentencesByScript)) {
+    sentencesByScript[scriptId] = sentencesByScript[scriptId].map((sentence) => {
+      const asset = audioAssets.get(sentence.id);
+      const approvedUrl = approvedAudioUrlFromAsset(asset);
+      return {
+        ...sentence,
+        audio_url: approvedUrl ?? sentence.audio_url,
+      };
+    });
   }
 
   const questionsByScript: Record<string, ComprehensionQuestion[]> = {};

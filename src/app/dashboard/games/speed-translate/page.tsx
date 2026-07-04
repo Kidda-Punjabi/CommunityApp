@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { GameDeckCoursePicker } from "@/components/games/game-deck-course-picker";
 import { loadAccessibleGameDecks } from "@/lib/games/load-game-decks";
@@ -13,12 +14,7 @@ export default async function TranslationSprintDeckSelectPage() {
 
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
-      <Link
-        href="/dashboard/games"
-        className="text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        ← Back to games
-      </Link>
+      <BackLink fallbackHref="/dashboard/games">← Back</BackLink>
       <h1 className="mt-4 text-2xl font-bold text-zinc-900">Translation Sprint</h1>
       <p className="mt-1 text-sm text-zinc-500">
         Choose a course level, then pick a deck. Pick the correct translation before you run out

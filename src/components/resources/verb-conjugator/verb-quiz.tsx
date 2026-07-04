@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { conjugate } from "@/lib/conjugation/conjugate";
@@ -76,12 +77,7 @@ export function VerbConjugatorQuiz({ verbs }: VerbConjugatorQuizProps) {
   if (!verbs.length || !question) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/dashboard/games/verb-conjugator"
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← All verbs
-        </Link>
+        <BackLink fallbackHref="/dashboard/games/verb-conjugator" className="text-sm font-medium text-violet-600 hover:text-violet-500">← All verbs</BackLink>
         <p className="text-sm text-zinc-500">No verbs available for quiz.</p>
       </div>
     );
@@ -90,12 +86,7 @@ export function VerbConjugatorQuiz({ verbs }: VerbConjugatorQuizProps) {
   return (
     <div className="space-y-5">
       <div>
-        <Link
-          href="/dashboard/games/verb-conjugator"
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← All verbs
-        </Link>
+        <BackLink fallbackHref="/dashboard/games/verb-conjugator" className="text-sm font-medium text-violet-600 hover:text-violet-500">← All verbs</BackLink>
         <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900">Verb Quiz</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Multiple choice — no scores, just practice.

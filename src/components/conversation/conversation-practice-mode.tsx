@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -611,12 +612,7 @@ function ConversationPlayHeader({
   return (
     <header className="mb-3 shrink-0 space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <Link
-          href={GAMES_HUB_HREF}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Exit
-        </Link>
+        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Exit</BackLink>
         <p className="text-right text-xs font-medium text-zinc-600 sm:text-sm">
           Exchange {exchangeIndex + 1} of {totalExchanges}
           <span className="mx-1.5 text-zinc-300" aria-hidden="true">
@@ -665,12 +661,7 @@ function SetupHeader({
             ← Back
           </button>
         ) : (
-          <Link
-            href={GAMES_HUB_HREF}
-            className="text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            ← Back to games
-          </Link>
+          <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
         )}
       </div>
       <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">

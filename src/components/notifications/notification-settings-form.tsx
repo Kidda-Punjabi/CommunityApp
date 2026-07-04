@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useActionState } from "react";
 import Link from "next/link";
 import {
@@ -21,9 +22,7 @@ export function NotificationSettingsForm({ settings }: NotificationSettingsFormP
   return (
     <div className={`${ui.page} ${ui.stackLoose}`}>
       <div>
-        <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600">← Profile</BackLink>
         <h1 className="mt-3 text-2xl font-bold text-zinc-900">Notification settings</h1>
         <p className="mt-1 text-sm text-zinc-500">Choose what you want to hear about in the app.</p>
       </div>

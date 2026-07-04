@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -46,9 +47,7 @@ export function ProgressDetail({ progression }: ProgressDetailProps) {
   if (!placementCompleted || learnerLevel == null || tier == null) {
     return (
       <div className={ui.page}>
-        <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Profile</BackLink>
         <h1 className="mt-4 text-2xl font-bold text-zinc-900">Progress</h1>
         <HubCard className="mt-6">
           <EyebrowLabel>Your level</EyebrowLabel>
@@ -71,9 +70,7 @@ export function ProgressDetail({ progression }: ProgressDetailProps) {
   return (
     <div className={`${ui.page} ${ui.stackLoose}`}>
       <div>
-        <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Profile</BackLink>
         <h1 className="mt-4 text-2xl font-bold text-zinc-900">Progress</h1>
       </div>
 
@@ -91,12 +88,7 @@ export function ProgressDetail({ progression }: ProgressDetailProps) {
         <p className="text-sm font-medium text-zinc-900">{whatsNext.headline}</p>
         <p className="mt-1 text-sm text-zinc-600">{whatsNext.detail}</p>
         {whatsNext.actionHref && whatsNext.actionLabel ? (
-          <Link
-            href={whatsNext.actionHref}
-            className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500"
-          >
-            {whatsNext.actionLabel}
-          </Link>
+          <BackLink fallbackHref={whatsNext.actionHref} className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500">{whatsNext.actionLabel}</BackLink>
         ) : null}
       </HubCard>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import type { ScoreboardEntry } from "@/components/group-games/group-game-scoreboard";
 import { ui } from "@/lib/ui/styles";

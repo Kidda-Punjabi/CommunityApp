@@ -2,8 +2,14 @@ import { BATTLE_ROUND_TIMEOUT_MS } from "@/lib/battle/constants";
 import { resolveRoundDamage, type PlayerRoundInput } from "@/lib/battle/scoring";
 import type { BattleRoundRow, BattleSessionRow } from "@/lib/battle/types";
 
-export function isRoundTimedOut(roundStartedAt: string, nowMs = Date.now()): boolean {
-  return nowMs - new Date(roundStartedAt).getTime() >= BATTLE_ROUND_TIMEOUT_MS;
+export function roundTimerStartAt(round: BattleRoundRow): string | null {
+  return round.round_active_at;
+}
+
+export function isRoundTimedOut(round: BattleRoundRow, nowMs = Date.now()): boolean {
+  const startAt = roundTimerStartAt(round);
+  if (!startAt) return false;
+  return nowMs - new Date(startAt).getTime() >= BATTLE_ROUND_TIMEOUT_MS;
 }
 
 function toPlayerInput(
@@ -39,7 +45,7 @@ export function computeRoundResolution(
   options?: { treatMissingAsTimedOut?: boolean; nowMs?: number }
 ): ComputedRoundResolution {
   const nowMs = options?.nowMs ?? Date.now();
-  const timedOut = isRoundTimedOut(round.round_started_at, nowMs);
+  const timedOut = isRoundTimedOut(round, nowMs);
   const treatMissing = options?.treatMissingAsTimedOut ?? timedOut;
 
   const playerOne = toPlayerInput(
@@ -53,9 +59,10 @@ export function computeRoundResolution(
     treatMissing && !round.player_two_answered_at
   );
 
+  const timerStart = round.round_active_at ?? round.round_started_at;
   const damage = resolveRoundDamage(
     round.round_number,
-    round.round_started_at,
+    timerStart,
     playerOne,
     playerTwo
   );
@@ -93,8 +100,9 @@ export function computeRoundResolution(
 
 export function canResolveRound(round: BattleRoundRow, nowMs = Date.now()): boolean {
   if (round.resolved_at) return false;
+  if (!round.round_active_at) return false;
   const bothAnswered =
     round.player_one_answered_at !== null && round.player_two_answered_at !== null;
   if (bothAnswered) return true;
-  return isRoundTimedOut(round.round_started_at, nowMs);
+  return isRoundTimedOut(round, nowMs);
 }

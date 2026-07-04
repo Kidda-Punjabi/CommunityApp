@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -186,9 +187,7 @@ export function SpeedTranslateMode({
     return (
       <div className="space-y-6">
         <div>
-          <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-            ← Back to decks
-          </Link>
+          <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to decks</BackLink>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Translation Sprint · {deck.deckName}
           </p>
@@ -246,9 +245,7 @@ export function SpeedTranslateMode({
             Play again
           </button>
         )}
-        <Link href={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
-          Back to decks
-        </Link>
+        <BackLink fallbackHref={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">Back to decks</BackLink>
       </div>
     );
   }
@@ -258,9 +255,7 @@ export function SpeedTranslateMode({
       <SessionProgressBar current={index + 1} total={queue.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="speed_translate" />}
       <div className="flex items-center justify-between gap-3">
-        <Link href={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Exit
-        </Link>
+        <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Exit</BackLink>
         <p className="text-sm font-semibold text-zinc-900">
           {score} pts · {"❤️".repeat(lives)}
           {"🖤".repeat(LIVES - lives)}

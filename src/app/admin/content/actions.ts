@@ -123,6 +123,12 @@ function withDbHint(message: string): string {
   if (message.includes("presentation_url") && message.includes("schema cache")) {
     return `${message} Run supabase/lesson-presentations.sql in the Supabase SQL Editor, then retry.`;
   }
+  if (
+    (message.includes("generated_audio_status") || message.includes("audio_assets")) &&
+    message.includes("schema cache")
+  ) {
+    return `${message} Run supabase/lesson-generated-audio.sql and supabase/audio-assets.sql in the Supabase SQL Editor, then retry.`;
+  }
   if (message.includes("lesson_id") && message.includes("schema cache")) {
     return `${message} Run supabase/lesson-links.sql in the Supabase SQL Editor, then retry.`;
   }
@@ -156,6 +162,7 @@ export async function createLesson(
     const audioUrl = (formData.get("audio_url") as string) || null;
     const pdfUrl = (formData.get("pdf_url") as string) || null;
     const presentationUrl = String(formData.get("presentation_url") ?? "").trim() || null;
+    const audioScript = String(formData.get("audio_script") ?? "").trim() || null;
 
     if (!courseId || !title || Number.isNaN(lessonNumber)) {
       return { error: "Course, lesson number, and title are required." };
@@ -169,6 +176,7 @@ export async function createLesson(
       audio_url: audioUrl,
       pdf_url: pdfUrl,
       presentation_url: presentationUrl,
+      audio_script: audioScript,
     });
 
     if (error) return { error: withDbHint(error.message) };
@@ -194,6 +202,7 @@ export async function updateLesson(
     const audioUrl = formData.get("audio_url") as string | null;
     const pdfUrl = formData.get("pdf_url") as string | null;
     const presentationUrl = String(formData.get("presentation_url") ?? "").trim();
+    const audioScript = String(formData.get("audio_script") ?? "").trim();
 
     const updates: Record<string, unknown> = {
       course_id: courseId,
@@ -201,6 +210,7 @@ export async function updateLesson(
       title,
       is_free: isFree,
       presentation_url: presentationUrl || null,
+      audio_script: audioScript || null,
     };
 
     if (audioUrl) {

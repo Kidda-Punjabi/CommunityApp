@@ -15,6 +15,9 @@ export type Lesson = {
   pdf_url: string | null;
   presentation_url: string | null;
   is_free: boolean;
+  audio_script: string | null;
+  generated_audio_status: "none" | "pending_review" | "approved" | "needs_changes";
+  pending_audio_path: string | null;
   courses: { name: string } | null;
 };
 

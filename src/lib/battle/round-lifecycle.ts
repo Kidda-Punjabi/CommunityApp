@@ -55,6 +55,9 @@ export async function ensureCurrentBattleRound(
     player_two_damage_dealt: 0,
     round_multiplier: roundMultiplier(session.current_round),
     resolved_at: null,
+    player_one_ready_at: null,
+    player_two_ready_at: null,
+    round_active_at: null,
   };
 }
 

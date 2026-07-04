@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { BackLink } from "@/components/navigation/back-link";
 import {
   removeFriend,
   respondFriendRequest,
@@ -9,6 +10,7 @@ import {
   type ActionResult,
 } from "@/app/dashboard/friends/actions";
 import { UserAvatar } from "@/components/profile/user-avatar";
+import { CopyButton, type CopyButtonHandle } from "@/components/ui/copy-button";
 import {
   EyebrowLabel,
   HubCard,
@@ -70,7 +72,7 @@ export function FriendsDetail({
 }: FriendsDetailProps) {
   const [addState, addAction, addPending] = useActionState(sendFriendRequestByCode, initial);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const copyButtonRef = useRef<CopyButtonHandle>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [removePending, startRemove] = useTransition();
@@ -113,18 +115,6 @@ export function FriendsDetail({
       })),
   ];
 
-  async function copyLink() {
-    if (!shareUrl) return;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setShareError(null);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setShareError("Could not copy — try selecting the link manually.");
-    }
-  }
-
   async function shareLink() {
     if (!shareUrl) return;
     setShareError(null);
@@ -140,7 +130,10 @@ export function FriendsDetail({
         if (error instanceof DOMException && error.name === "AbortError") return;
       }
     }
-    await copyLink();
+    const copied = await copyButtonRef.current?.copy();
+    if (copied === false) {
+      setShareError("Could not copy — try selecting the link manually.");
+    }
   }
 
   async function handleRespond(requestId: string, accept: boolean) {
@@ -159,9 +152,7 @@ export function FriendsDetail({
   if (friendsUnavailable) {
     return (
       <div className={ui.page}>
-        <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile">← Back</BackLink>
         <h1 className="mt-4 text-2xl font-bold text-zinc-900">Friends</h1>
         <HubCard className="mt-6">
           <p className="text-sm text-zinc-600">
@@ -176,9 +167,7 @@ export function FriendsDetail({
   return (
     <div className={`${ui.page} ${ui.stackLoose}`}>
       <div>
-        <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile">← Back</BackLink>
         <h1 className="mt-4 text-2xl font-bold text-zinc-900">Friends</h1>
       </div>
 
@@ -195,9 +184,18 @@ export function FriendsDetail({
           <p className="mt-2 text-sm text-zinc-500">{unavailableMessage(unavailableReason)}</p>
         )}
         <div className="mt-4 flex flex-wrap gap-3">
-          <HubSecondaryButton onClick={copyLink} disabled={!shareUrl}>
-            {copied ? "Copied!" : "Copy link"}
-          </HubSecondaryButton>
+          <CopyButton
+            ref={copyButtonRef}
+            variant="hub"
+            text={shareUrl ?? ""}
+            disabled={!shareUrl}
+            onCopySuccess={() => setShareError(null)}
+            onCopyError={() =>
+              setShareError("Could not copy — try selecting the link manually.")
+            }
+          >
+            Copy link
+          </CopyButton>
           <HubSecondaryButton onClick={shareLink} disabled={!shareUrl}>
             Share link
           </HubSecondaryButton>

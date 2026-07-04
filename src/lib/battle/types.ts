@@ -61,6 +61,10 @@ export type BattleRoundRow = {
   player_two_damage_dealt: number;
   round_multiplier: number;
   resolved_at: string | null;
+  player_one_ready_at: string | null;
+  player_two_ready_at: string | null;
+  /** When both players acknowledged ready; answer timer starts here. */
+  round_active_at: string | null;
 };
 
 export type RoundResolutionResult = {

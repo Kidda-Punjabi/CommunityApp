@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import { NotificationSettingsForm } from "@/components/notifications/notification-settings-form";
 import { loadNotificationSettings } from "@/lib/notifications/load-notifications";
 import { createClient } from "@/lib/supabase/server";
@@ -17,9 +18,7 @@ export default async function NotificationSettingsPage() {
   if (!settings) {
     return (
       <div className="flex flex-1 flex-col px-5 py-7">
-        <Link href="/dashboard/profile" className="text-sm font-medium text-violet-600">
-          ← Profile
-        </Link>
+        <BackLink fallbackHref="/dashboard/profile" className="text-sm font-medium text-violet-600">← Profile</BackLink>
         <p className="mt-4 text-sm text-zinc-600">
           Run supabase/friends-notifications.sql in Supabase to enable notifications.
         </p>

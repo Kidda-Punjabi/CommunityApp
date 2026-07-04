@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ComprehensionScriptOverlay } from "@/components/comprehension/comprehension-script-overlay";
@@ -217,12 +218,7 @@ export function ComprehensionPracticeMode({
           <SessionProgressBar current={questionIndex + 1} total={questions.length} />
 
           <div className="flex items-center justify-between gap-3">
-            <Link
-              href={GAMES_HUB_HREF}
-              className="text-sm font-medium text-violet-600 hover:text-violet-500"
-            >
-              ← Exit
-            </Link>
+            <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Exit</BackLink>
             <button
               type="button"
               onClick={() => setScriptOverlayOpen(true)}
@@ -387,12 +383,7 @@ export function ComprehensionPracticeMode({
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href={GAMES_HUB_HREF}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to games
-        </Link>
+        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
           {COMPREHENSION_PRACTICE_DISPLAY_NAME}
         </p>

@@ -3,6 +3,11 @@ import {
   type FlashcardRow,
   type QuizRow,
 } from "@/lib/learning/match-lesson-content";
+import {
+  approvedAudioUrlFromAsset,
+  loadAudioAssetsForContentIds,
+  mergeLegacyLessonAudioStatus,
+} from "@/lib/audio/load-audio-asset";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -19,7 +24,7 @@ export async function fetchLearnContent(supabase: SupabaseClient) {
     supabase
       .from("lessons")
       .select(
-        "id, course_id, lesson_number, title, audio_url, pdf_url, presentation_url, is_free, courses(name)"
+        "id, course_id, lesson_number, title, audio_url, pdf_url, presentation_url, is_free, generated_audio_status, courses(name)"
       )
       .order("lesson_number"),
     supabase.from("quizzes").select("id, course_id, level_number, title"),
@@ -37,20 +42,31 @@ export async function fetchLearnContent(supabase: SupabaseClient) {
     (flashcardSets ?? []).map((set) => [set.id, set.name as string])
   );
 
+  const lessonIds = (lessons ?? []).map((lesson) => lesson.id as string);
+  const audioAssets = await loadAudioAssetsForContentIds(supabase, "lesson", lessonIds);
+
   const normalizedLessons: LessonWithCourse[] = (lessons ?? []).map((lesson) => {
     const course = Array.isArray(lesson.courses)
       ? lesson.courses[0]
       : lesson.courses;
+
+    const asset = audioAssets.get(lesson.id as string);
+    const approvedUrl = approvedAudioUrlFromAsset(asset) ?? lesson.audio_url;
+    const generatedStatus = mergeLegacyLessonAudioStatus(
+      asset,
+      lesson.generated_audio_status
+    );
 
     const base = {
       id: lesson.id,
       course_id: lesson.course_id,
       lesson_number: lesson.lesson_number,
       title: lesson.title,
-      audio_url: lesson.audio_url,
+      audio_url: approvedUrl,
       pdf_url: lesson.pdf_url,
       presentation_url: lesson.presentation_url ?? null,
       is_free: lesson.is_free,
+      generated_audio_status: generatedStatus,
       courses: course ? { name: course.name } : null,
     };
 

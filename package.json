@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync-stripe": "npx tsx scripts/sync-stripe-customers.ts"
+    "sync-stripe": "tsx scripts/sync-stripe-customers.ts",
+    "generate-lesson-audio": "tsx scripts/generate-lesson-audio-batch.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",
@@ -28,6 +29,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
+    "tsx": "^4.23.0",
     "typescript": "^5"
   }
 }

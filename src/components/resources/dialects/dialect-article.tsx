@@ -1,3 +1,4 @@
+import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import type { ComparisonRow, DialectContent, VocabRow } from "@/lib/resources/dialects/content";
 import { DIALECTS_HUB_HREF } from "@/lib/resources/dialects/content";
@@ -62,12 +63,7 @@ export function DialectArticle({ dialect }: { dialect: DialectContent }) {
   return (
     <article className="space-y-8">
       <header className="space-y-3">
-        <Link
-          href={DIALECTS_HUB_HREF}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Punjabi dialects
-        </Link>
+        <BackLink fallbackHref={DIALECTS_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Punjabi dialects</BackLink>
         {dialect.isAnchor ? (
           <>
             <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">

@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -63,12 +64,7 @@ export function DictionarySearch({ entries, deckFound }: DictionarySearchProps) 
   return (
     <div className="space-y-5">
       <div>
-        <Link
-          href={GAMES_HUB_HREF}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to Games
-        </Link>
+        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Games</BackLink>
         <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900">
           Punjabi Dictionary
         </h1>

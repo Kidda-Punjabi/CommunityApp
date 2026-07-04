@@ -15,6 +15,7 @@ import { loadHomeworkDueForStudent } from "@/lib/tutoring/homework-reminders";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
+import { SchedulePageHeader } from "@/components/navigation/schedule-page-header";
 
 type StudentSchedulePageProps = {
   searchParams: Promise<{ session_id?: string }>;
@@ -52,12 +53,7 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
 
   return (
     <div className={ui.page}>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Upcoming lessons</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Live sessions with your tutor. Join from here when it&apos;s time.
-        </p>
-      </div>
+      <SchedulePageHeader />
 
       {!schemaReady ? <CalendarSchemaNotice className="mb-6" /> : null}
 
