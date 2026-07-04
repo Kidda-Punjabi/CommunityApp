@@ -1,4 +1,5 @@
 import type { ConversationCharacter } from "@/lib/conversation/types";
+import type { ConversationDisplayPreferences } from "@/lib/conversation/display-preferences";
 
 const ICON_EMOJI: Record<string, string> = {
   store: "🏪",
@@ -24,8 +25,21 @@ type ConversationMessageBubbleProps = {
   english?: string | null;
   audioUrl?: string | null;
   isPlaying?: boolean;
+  displayPreferences: ConversationDisplayPreferences;
   onPlay?: () => void;
 };
+
+function hasVisibleText(
+  preferences: ConversationDisplayPreferences,
+  gurmukhi: string,
+  romanised?: string | null,
+  english?: string | null
+): boolean {
+  if (preferences.showGurmukhi && gurmukhi.trim()) return true;
+  if (preferences.showRomanised && romanised?.trim()) return true;
+  if (preferences.showEnglish && english?.trim()) return true;
+  return false;
+}
 
 export function ConversationMessageBubble({
   role,
@@ -35,20 +49,69 @@ export function ConversationMessageBubble({
   english,
   audioUrl,
   isPlaying = false,
+  displayPreferences,
   onPlay,
 }: ConversationMessageBubbleProps) {
   const canPlay = Boolean(onPlay && audioUrl?.trim());
+  const showText = hasVisibleText(displayPreferences, gurmukhi, romanised, english);
 
   if (role === "student") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[88%] rounded-2xl rounded-tr-sm bg-violet-600 px-4 py-3 shadow-sm">
-          <p className="text-xs font-medium text-violet-200">You</p>
-          <p className="mt-1 text-base font-semibold leading-relaxed text-white">{gurmukhi}</p>
-          {romanised ? (
-            <p className="mt-1 text-sm text-violet-100">{romanised}</p>
-          ) : null}
-          {english ? <p className="mt-1 text-sm text-violet-200/90">{english}</p> : null}
+        <div
+          className={`max-w-[88%] rounded-2xl rounded-tr-sm bg-violet-600 px-4 py-3 shadow-sm ${
+            canPlay ? "cursor-pointer hover:bg-violet-500" : ""
+          }`}
+          onClick={canPlay ? onPlay : undefined}
+          onKeyDown={
+            canPlay
+              ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onPlay?.();
+                  }
+                }
+              : undefined
+          }
+          role={canPlay ? "button" : undefined}
+          tabIndex={canPlay ? 0 : undefined}
+          aria-label={canPlay ? "Play your line" : undefined}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-violet-200">You</p>
+              {showText ? (
+                <>
+                  {displayPreferences.showGurmukhi ? (
+                    <p className="mt-1 text-base font-semibold leading-relaxed text-white">
+                      {gurmukhi}
+                    </p>
+                  ) : null}
+                  {displayPreferences.showRomanised && romanised ? (
+                    <p className="mt-1 text-sm text-violet-100">{romanised}</p>
+                  ) : null}
+                  {displayPreferences.showEnglish && english ? (
+                    <p className="mt-1 text-sm text-violet-200/90">{english}</p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-violet-100">Your reply</p>
+              )}
+              {canPlay ? (
+                <p className="mt-1.5 text-xs text-violet-200/80">Tap to listen</p>
+              ) : null}
+            </div>
+            {canPlay ? (
+              <span
+                className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${
+                  isPlaying ? "bg-white text-violet-700" : "bg-violet-500 text-white"
+                }`}
+                aria-hidden="true"
+              >
+                {isPlaying ? "…" : "▶"}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     );
@@ -91,9 +154,23 @@ export function ConversationMessageBubble({
             {character?.name ? (
               <p className="text-xs font-medium text-violet-600">{character.name}</p>
             ) : null}
-            <p className="mt-1 text-base font-semibold leading-relaxed text-zinc-900">{gurmukhi}</p>
-            {romanised ? <p className="mt-1 text-sm text-violet-600">{romanised}</p> : null}
-            {english ? <p className="mt-1 text-sm text-zinc-500">{english}</p> : null}
+            {showText ? (
+              <>
+                {displayPreferences.showGurmukhi ? (
+                  <p className="mt-1 text-base font-semibold leading-relaxed text-zinc-900">
+                    {gurmukhi}
+                  </p>
+                ) : null}
+                {displayPreferences.showRomanised && romanised ? (
+                  <p className="mt-1 text-sm text-violet-600">{romanised}</p>
+                ) : null}
+                {displayPreferences.showEnglish && english ? (
+                  <p className="mt-1 text-sm text-zinc-500">{english}</p>
+                ) : null}
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-zinc-500">Speaking…</p>
+            )}
             {canPlay ? (
               <p className="mt-1.5 text-xs text-zinc-400">Tap to listen</p>
             ) : null}
@@ -135,6 +212,12 @@ export function ConversationBubble({
       gurmukhi={gurmukhi}
       romanised={romanised}
       english={english}
+      displayPreferences={{
+        showGurmukhi: true,
+        showRomanised: true,
+        showEnglish: true,
+        preset: "reading",
+      }}
     />
   );
 }

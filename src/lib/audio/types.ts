@@ -9,7 +9,13 @@ export type AudioAssetStatus = (typeof AUDIO_ASSET_STATUSES)[number];
 
 export type AudioGenerationStatus = "pending_review" | "approved" | "rejected";
 
-export type AudioContentType = "lesson" | "comprehension_sentence" | "conversation_turn";
+export type AudioContentType =
+  | "lesson"
+  | "comprehension_sentence"
+  | "conversation_turn"
+  | "conversation_exchange_npc_setup"
+  | "conversation_exchange_npc_reply"
+  | "conversation_exchange_player_response";
 
 export type AudioAsset = {
   id: string;
@@ -51,8 +57,17 @@ export const AUDIO_ASSET_STATUS_LABELS: Record<AudioAssetStatus, string> = {
 export const AUDIO_CONTENT_TYPE_LABELS: Record<AudioContentType, string> = {
   lesson: "Lesson",
   comprehension_sentence: "Comprehension Practice",
-  conversation_turn: "Conversation Practice",
+  conversation_turn: "Conversation Turn",
+  conversation_exchange_npc_setup: "Conversation — NPC setup",
+  conversation_exchange_npc_reply: "Conversation — NPC reply",
+  conversation_exchange_player_response: "Conversation — Player response",
 };
+
+export const CONVERSATION_EXCHANGE_AUDIO_CONTENT_TYPES = [
+  "conversation_exchange_npc_setup",
+  "conversation_exchange_npc_reply",
+  "conversation_exchange_player_response",
+] as const satisfies readonly AudioContentType[];
 
 export function audioAssetStatusBadgeClass(status: AudioAssetStatus): string {
   switch (status) {

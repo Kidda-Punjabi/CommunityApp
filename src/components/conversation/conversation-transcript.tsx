@@ -5,6 +5,8 @@ import {
   ConversationMessageBubble,
   type ConversationMessageRole,
 } from "@/components/conversation/conversation-bubble";
+import { ConversationAudioPlayer } from "@/lib/conversation/conversation-audio-player";
+import type { ConversationDisplayPreferences } from "@/lib/conversation/display-preferences";
 import type { ConversationCharacter } from "@/lib/conversation/types";
 
 export type TranscriptEntry = {
@@ -19,60 +21,71 @@ export type TranscriptEntry = {
 type ConversationTranscriptProps = {
   entries: TranscriptEntry[];
   character: ConversationCharacter;
+  displayPreferences: ConversationDisplayPreferences;
+  audioPlayer: ConversationAudioPlayer;
+  autoplayEntryId?: string | null;
+  onAutoplayEntryIdConsumed?: () => void;
 };
 
-function playAudioUrl(url: string, audio: HTMLAudioElement) {
-  return new Promise<void>((resolve, reject) => {
-    audio.src = url;
-    audio.onended = () => resolve();
-    audio.onerror = () => reject(new Error("Playback failed"));
-    void audio.play().catch(reject);
-  });
-}
-
-export function ConversationTranscript({ entries, character }: ConversationTranscriptProps) {
+export function ConversationTranscript({
+  entries,
+  character,
+  displayPreferences,
+  audioPlayer,
+  autoplayEntryId,
+  onAutoplayEntryIdConsumed,
+}: ConversationTranscriptProps) {
   const endRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingEntryId, setPlayingEntryId] = useState<string | null>(null);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
+  const lastAutoplayRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    audioPlayer.attach(setPlayingEntryId);
+    return () => audioPlayer.dispose();
+  }, [audioPlayer]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [entries.length]);
 
   useEffect(() => {
-    audioRef.current = new Audio();
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, []);
+    if (!autoplayEntryId || autoplayEntryId === lastAutoplayRef.current) return;
 
-  const handlePlayEntry = useCallback(async (entry: TranscriptEntry) => {
-    const url = entry.audioUrl?.trim();
-    if (!url) {
-      setAudioNotice("Recording not available yet");
-      window.setTimeout(() => setAudioNotice(null), 2200);
+    const entry = entries.find((item) => item.id === autoplayEntryId);
+    if (!entry?.audioUrl?.trim()) {
+      onAutoplayEntryIdConsumed?.();
       return;
     }
 
-    const audio = audioRef.current;
-    if (!audio) return;
+    lastAutoplayRef.current = autoplayEntryId;
+    void audioPlayer.replayEntry(entry.id, entry.audioUrl).then((played) => {
+      if (!played) {
+        setAudioNotice("Could not play audio");
+        window.setTimeout(() => setAudioNotice(null), 2200);
+      }
+      onAutoplayEntryIdConsumed?.();
+    });
+  }, [autoplayEntryId, entries, audioPlayer, onAutoplayEntryIdConsumed]);
 
-    setPlayingEntryId(entry.id);
-    setAudioNotice(null);
+  const handlePlayEntry = useCallback(
+    async (entry: TranscriptEntry) => {
+      const url = entry.audioUrl?.trim();
+      if (!url) {
+        setAudioNotice("Recording not available yet");
+        window.setTimeout(() => setAudioNotice(null), 2200);
+        return;
+      }
 
-    try {
-      await playAudioUrl(url, audio);
-    } catch {
-      setAudioNotice("Could not play audio");
-      window.setTimeout(() => setAudioNotice(null), 2200);
-    } finally {
-      setPlayingEntryId(null);
-    }
-  }, []);
+      setAudioNotice(null);
+      const played = await audioPlayer.replayEntry(entry.id, url);
+      if (!played) {
+        setAudioNotice("Could not play audio");
+        window.setTimeout(() => setAudioNotice(null), 2200);
+      }
+    },
+    [audioPlayer]
+  );
 
   return (
     <div className="space-y-2">
@@ -94,10 +107,9 @@ export function ConversationTranscript({ entries, character }: ConversationTrans
               english={entry.english}
               audioUrl={entry.audioUrl}
               isPlaying={playingEntryId === entry.id}
+              displayPreferences={displayPreferences}
               onPlay={
-                entry.role === "npc" && entry.audioUrl?.trim()
-                  ? () => void handlePlayEntry(entry)
-                  : undefined
+                entry.audioUrl?.trim() ? () => void handlePlayEntry(entry) : undefined
               }
             />
           ))}

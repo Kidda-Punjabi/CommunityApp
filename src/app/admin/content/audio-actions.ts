@@ -85,6 +85,14 @@ function revalidateAudioPaths(contentType: AudioContentType) {
     revalidatePath(ADMIN_GAMES_PATH);
     revalidatePath("/dashboard/games/conversation-practice");
   }
+  if (
+    contentType === "conversation_exchange_npc_setup" ||
+    contentType === "conversation_exchange_npc_reply" ||
+    contentType === "conversation_exchange_player_response"
+  ) {
+    revalidatePath(ADMIN_GAMES_PATH);
+    revalidatePath("/dashboard/games/conversation-practice");
+  }
 }
 
 export async function loadAudioReviewQueue(): Promise<

@@ -3,6 +3,10 @@
 import { requireAdminFromActions } from "@/app/admin/content/actions";
 import { DEFAULT_VETTED_VOICE_ID } from "@/lib/elevenlabs/constants";
 import type { AudioAssetStatus } from "@/lib/audio/types";
+import {
+  loadConversationExchangeAudioCoverage,
+  type ScenarioAudioCoverageSummary,
+} from "@/lib/conversation/exchange-audio-audit";
 import { revalidatePath } from "next/cache";
 
 const ADMIN_GAMES_PATH = "/admin/content/games";
@@ -55,6 +59,7 @@ export type AdminConversationData = {
   castByScenario: Record<string, AdminConversationScenarioCharacter[]>;
   turnsByScenario: Record<string, AdminConversationTurn[]>;
   audioStatusByTurnId: Record<string, AudioAssetStatus>;
+  exchangeAudioCoverage: ScenarioAudioCoverageSummary[];
   error?: string;
 };
 
@@ -120,6 +125,7 @@ export async function loadConversationAdminData(): Promise<AdminConversationData
           castByScenario: {},
           turnsByScenario: {},
           audioStatusByTurnId: {},
+          exchangeAudioCoverage: [],
           error: `${error} Run supabase/conversation-practice-turns.sql first.`,
         };
       }
@@ -130,6 +136,7 @@ export async function loadConversationAdminData(): Promise<AdminConversationData
         castByScenario: {},
         turnsByScenario: {},
         audioStatusByTurnId: {},
+        exchangeAudioCoverage: [],
         error,
       };
     }
@@ -163,12 +170,21 @@ export async function loadConversationAdminData(): Promise<AdminConversationData
       }
     }
 
+    let exchangeAudioCoverage: ScenarioAudioCoverageSummary[] = [];
+    try {
+      const coverage = await loadConversationExchangeAudioCoverage(supabase);
+      exchangeAudioCoverage = coverage.summaries;
+    } catch {
+      exchangeAudioCoverage = [];
+    }
+
     return {
       scenarios: (scenariosResult.data ?? []) as AdminConversationScenario[],
       globalCharacters: (globalCharsResult.data ?? []) as AdminConversationGlobalCharacter[],
       castByScenario,
       turnsByScenario,
       audioStatusByTurnId,
+      exchangeAudioCoverage,
     };
   } catch (e) {
     return {
@@ -177,6 +193,7 @@ export async function loadConversationAdminData(): Promise<AdminConversationData
       castByScenario: {},
       turnsByScenario: {},
       audioStatusByTurnId: {},
+      exchangeAudioCoverage: [],
       error: e instanceof Error ? e.message : "Failed to load conversation content.",
     };
   }

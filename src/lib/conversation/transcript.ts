@@ -56,15 +56,19 @@ export function npcReplyEntry(
 
 /**
  * Student line in the transcript always uses the canonical target_response so the
- * thread reads as a coherent scripted dialogue (wrong picks are surfaced in the
+ * thread reads as a coherent scripted dialogue ( wrong picks are surfaced in the
  * pinned feedback panel, not in the chat history).
  */
-export function studentAnswerEntry(exchange: ConversationExchange): TranscriptEntry {
+export function studentAnswerEntry(
+  exchange: ConversationExchange,
+  audioUrl?: string | null
+): TranscriptEntry {
   return {
     id: `student-${exchange.id}`,
     role: "student",
     gurmukhi: exchange.target_response_gurmukhi,
     romanised: exchange.target_response_romanised,
     english: exchange.target_response_english,
+    audioUrl: audioUrl ?? null,
   };
 }

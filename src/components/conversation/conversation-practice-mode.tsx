@@ -1,12 +1,12 @@
 "use client";
 
 import { BackLink } from "@/components/navigation/back-link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ConversationTranscript,
   type TranscriptEntry,
 } from "@/components/conversation/conversation-transcript";
+import { ConversationDisplaySettings } from "@/components/conversation/conversation-display-settings";
 import { getConversationCharacterEmoji } from "@/components/conversation/conversation-bubble";
 import { GameSessionReview } from "@/components/games/game-session-review";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
@@ -18,6 +18,17 @@ import {
   CONVERSATION_PRACTICE_DISPLAY_NAME,
   type ConversationDifficulty,
 } from "@/lib/conversation/config";
+import { ConversationAudioPlayer } from "@/lib/conversation/conversation-audio-player";
+import {
+  loadConversationDisplayPreferences,
+  saveConversationDisplayPreferences,
+  type ConversationDisplayPreferences,
+} from "@/lib/conversation/display-preferences";
+import {
+  resolveExchangeNpcReplyAudio,
+  resolveExchangeNpcSetupAudio,
+  resolveExchangePlayerResponseAudio,
+} from "@/lib/conversation/exchange-audio-resolve";
 import {
   buildEasyOptions,
   buildEasyRomanisedBlankTemplate,
@@ -44,9 +55,8 @@ import {
   studentAnswerEntry,
 } from "@/lib/conversation/transcript";
 import { createClient } from "@/lib/supabase/client";
-import { lookupNpcAudio } from "@/lib/conversation/audio-lookup";
 
-const ADVANCE_MS = 1400;
+const FEEDBACK_MS = 900;
 
 type SetupPhase = "characters" | "scenarios" | "difficulty";
 type PlayPhase = "playing" | "finished";
@@ -59,6 +69,7 @@ export function ConversationPracticeMode({
   scenarios,
   exchangesByScenario,
   npcAudioByKey,
+  exchangeAudioById,
   tableReady,
   loadError,
 }: ConversationPracticeModeProps) {
@@ -80,11 +91,17 @@ export function ConversationPracticeMode({
   const [hardBank, setHardBank] = useState<SentenceTile[]>([]);
   const [hardBuilt, setHardBuilt] = useState<SentenceTile[]>([]);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [displayPreferences, setDisplayPreferences] = useState<ConversationDisplayPreferences>(
+    () => loadConversationDisplayPreferences(null)
+  );
 
   const advanceTimerRef = useRef<number | null>(null);
   const answeringRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const audioPlayerRef = useRef(new ConversationAudioPlayer());
+  const exchangesRef = useRef<ConversationExchange[]>([]);
+  const exchangeIndexRef = useRef(0);
 
   const selectedCharacter = useMemo(
     () => characters.find((character) => character.id === selectedCharacterId) ?? null,
@@ -108,8 +125,25 @@ export function ConversationPracticeMode({
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       userIdRef.current = user?.id ?? null;
+      setDisplayPreferences(loadConversationDisplayPreferences(user?.id ?? null));
     });
   }, []);
+
+  useEffect(() => {
+    exchangesRef.current = exchanges;
+  }, [exchanges]);
+
+  useEffect(() => {
+    exchangeIndexRef.current = exchangeIndex;
+  }, [exchangeIndex]);
+
+  const handleDisplayPreferencesChange = useCallback(
+    (next: ConversationDisplayPreferences) => {
+      setDisplayPreferences(next);
+      saveConversationDisplayPreferences(userIdRef.current, next);
+    },
+    []
+  );
 
   useEffect(() => {
     return () => {
@@ -159,9 +193,73 @@ export function ConversationPracticeMode({
     setHardBank(buildHardTileBank(exchange.hard_word_tiles, exchange.id));
   }
 
-  function npcAudioFor(exchange: ConversationExchange, gurmukhi: string): string | null {
-    if (!selectedScenarioId) return null;
-    return lookupNpcAudio(npcAudioByKey, selectedScenarioId, gurmukhi);
+  function npcSetupAudio(exchange: ConversationExchange): string | null {
+    return resolveExchangeNpcSetupAudio(exchange, exchangeAudioById, npcAudioByKey);
+  }
+
+  function npcReplyAudio(exchange: ConversationExchange): string | null {
+    return resolveExchangeNpcReplyAudio(exchange, exchangeAudioById, npcAudioByKey);
+  }
+
+  function playerResponseAudio(exchange: ConversationExchange): string | null {
+    return resolveExchangePlayerResponseAudio(exchange, exchangeAudioById);
+  }
+
+  function delay(ms: number) {
+    return new Promise<void>((resolve) => {
+      advanceTimerRef.current = window.setTimeout(() => resolve(), ms);
+    });
+  }
+
+  async function playSetupForExchange(exchange: ConversationExchange) {
+    const setupUrl = npcSetupAudio(exchange);
+    if (!setupUrl) return;
+    await audioPlayerRef.current.playSequence([
+      { id: `npc-setup-${exchange.id}`, url: setupUrl },
+    ]);
+  }
+
+  function beginNextExchange(nextIndex: number) {
+    const list = exchangesRef.current;
+    if (nextIndex >= list.length) {
+      setPlayPhase("finished");
+      return;
+    }
+
+    const next = list[nextIndex];
+    const setupUrl = npcSetupAudio(next);
+
+    setExchangeIndex(nextIndex);
+    resetQuestionState(next);
+    setTranscript((prev) =>
+      appendTranscriptEntry(prev, npcSetupEntry(next, setupUrl))
+    );
+
+    void playSetupForExchange(next);
+  }
+
+  async function runPostAnswerAudioChain(exchange: ConversationExchange, correct: boolean) {
+    await delay(FEEDBACK_MS);
+
+    const playerUrl = correct ? playerResponseAudio(exchange) : null;
+    const replyUrl = npcReplyAudio(exchange);
+
+    if (playerUrl) {
+      await audioPlayerRef.current.playSequence([
+        { id: `student-${exchange.id}`, url: playerUrl },
+      ]);
+    }
+
+    const reply = npcReplyEntry(exchange, replyUrl);
+    if (reply) {
+      setExchangeStep("reply");
+      setTranscript((prev) => appendTranscriptEntry(prev, reply));
+      if (replyUrl) {
+        await audioPlayerRef.current.playSequence([{ id: reply.id, url: replyUrl }]);
+      }
+    }
+
+    beginNextExchange(exchangeIndexRef.current + 1);
   }
 
   function startScenario(selectedDifficulty: ConversationDifficulty) {
@@ -169,46 +267,37 @@ export function ConversationPracticeMode({
     const scenarioExchanges = exchangesByScenario[selectedScenarioId] ?? [];
     if (scenarioExchanges.length === 0) return;
 
+    const first = scenarioExchanges[0];
+    const setupUrl = npcSetupAudio(first);
+
+    audioPlayerRef.current.attach();
+    audioPlayerRef.current.primeFromGesture(setupUrl);
+
     savedRef.current = false;
     setDifficulty(selectedDifficulty);
     setExchanges(scenarioExchanges);
+    exchangesRef.current = scenarioExchanges;
     setExchangeIndex(0);
+    exchangeIndexRef.current = 0;
     setResults([]);
-    const first = scenarioExchanges[0];
-    setTranscript([
-      npcSetupEntry(first, npcAudioFor(first, first.npc_setup_gurmukhi)),
-    ]);
+    setTranscript([npcSetupEntry(first, setupUrl)]);
     setPlayPhase("playing");
-    resetQuestionState(scenarioExchanges[0]);
-  }
+    resetQuestionState(first);
 
-  function scheduleAdvance(callback: () => void) {
-    if (advanceTimerRef.current) {
-      window.clearTimeout(advanceTimerRef.current);
-    }
-    advanceTimerRef.current = window.setTimeout(callback, ADVANCE_MS);
-  }
-
-  function goToNextExchange() {
-    const nextIndex = exchangeIndex + 1;
-    if (nextIndex >= exchanges.length) {
-      setPlayPhase("finished");
-      return;
-    }
-
-    setExchangeIndex(nextIndex);
-    resetQuestionState(exchanges[nextIndex]);
-    const next = exchanges[nextIndex];
-    setTranscript((prev) =>
-      appendTranscriptEntry(prev, npcSetupEntry(next, npcAudioFor(next, next.npc_setup_gurmukhi)))
-    );
+    void playSetupForExchange(first);
   }
 
   function recordResult(exchange: ConversationExchange, correct: boolean) {
     if (answeringRef.current) return;
     answeringRef.current = true;
 
-    setTranscript((prev) => appendTranscriptEntry(prev, studentAnswerEntry(exchange)));
+    const playerUrl = correct ? playerResponseAudio(exchange) : null;
+    const replyUrl = npcReplyAudio(exchange);
+    audioPlayerRef.current.primeFromGesture(playerUrl ?? replyUrl ?? npcSetupAudio(exchange));
+
+    setTranscript((prev) =>
+      appendTranscriptEntry(prev, studentAnswerEntry(exchange, playerUrl))
+    );
     setResults((prev) => [
       ...prev,
       {
@@ -219,38 +308,19 @@ export function ConversationPracticeMode({
     ]);
     setLastCorrect(correct);
     setExchangeStep("feedback");
-  }
 
-  function afterFeedback(exchange: ConversationExchange) {
-    const reply = npcReplyEntry(
-      exchange,
-      exchange.npc_reply_gurmukhi
-        ? npcAudioFor(exchange, exchange.npc_reply_gurmukhi)
-        : null
-    );
-
-    if (reply) {
-      setExchangeStep("reply");
-      setTranscript((prev) => appendTranscriptEntry(prev, reply));
-      scheduleAdvance(() => goToNextExchange());
-      return;
-    }
-
-    scheduleAdvance(() => goToNextExchange());
+    void runPostAnswerAudioChain(exchange, correct);
   }
 
   function handleEasySelect(option: EasyWordOption) {
     if (!currentExchange || exchangeStep !== "question") return;
     setEasySelected(option);
-    const correct = option.isCorrect;
-    recordResult(currentExchange, correct);
-    scheduleAdvance(() => afterFeedback(currentExchange));
+    recordResult(currentExchange, option.isCorrect);
   }
 
   function handleMediumSelect(option: MediumSentenceOption) {
     if (!currentExchange || exchangeStep !== "question") return;
     recordResult(currentExchange, option.isCorrect);
-    scheduleAdvance(() => afterFeedback(currentExchange));
   }
 
   function handleHardCheck() {
@@ -260,7 +330,6 @@ export function ConversationPracticeMode({
       currentExchange.hard_word_tiles
     );
     recordResult(currentExchange, correct);
-    scheduleAdvance(() => afterFeedback(currentExchange));
   }
 
   function moveHardToBuilt(tile: SentenceTile) {
@@ -276,6 +345,7 @@ export function ConversationPracticeMode({
   }
 
   function resetToCharacters() {
+    audioPlayerRef.current.dispose();
     setPlayPhase(null);
     setSetupPhase("characters");
     setSelectedCharacterId(null);
@@ -335,9 +405,16 @@ export function ConversationPracticeMode({
           exchangeIndex={exchangeIndex}
           totalExchanges={exchanges.length}
           correctCount={correctCount}
+          displayPreferences={displayPreferences}
+          onDisplayPreferencesChange={handleDisplayPreferencesChange}
         />
 
-        <ConversationTranscript entries={transcript} character={selectedCharacter} />
+        <ConversationTranscript
+          entries={transcript}
+          character={selectedCharacter}
+          displayPreferences={displayPreferences}
+          audioPlayer={audioPlayerRef.current}
+        />
 
         <div className="mt-3 shrink-0 space-y-4 border-t border-zinc-200 bg-white pt-4">
         <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
@@ -620,10 +697,14 @@ function ConversationPlayHeader({
   exchangeIndex,
   totalExchanges,
   correctCount,
+  displayPreferences,
+  onDisplayPreferencesChange,
 }: {
   exchangeIndex: number;
   totalExchanges: number;
   correctCount: number;
+  displayPreferences: ConversationDisplayPreferences;
+  onDisplayPreferencesChange: (next: ConversationDisplayPreferences) => void;
 }) {
   const progressPct =
     totalExchanges > 0 ? Math.min(100, ((exchangeIndex + 1) / totalExchanges) * 100) : 0;
@@ -632,13 +713,19 @@ function ConversationPlayHeader({
     <header className="mb-3 shrink-0 space-y-2">
       <div className="flex items-center justify-between gap-3">
         <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Exit</BackLink>
-        <p className="text-right text-xs font-medium text-zinc-600 sm:text-sm">
-          Exchange {exchangeIndex + 1} of {totalExchanges}
-          <span className="mx-1.5 text-zinc-300" aria-hidden="true">
-            ·
-          </span>
-          <span className="text-violet-700">{correctCount} correct</span>
-        </p>
+        <div className="flex items-center gap-2">
+          <ConversationDisplaySettings
+            preferences={displayPreferences}
+            onChange={onDisplayPreferencesChange}
+          />
+          <p className="text-right text-xs font-medium text-zinc-600 sm:text-sm">
+            Exchange {exchangeIndex + 1} of {totalExchanges}
+            <span className="mx-1.5 text-zinc-300" aria-hidden="true">
+              ·
+            </span>
+            <span className="text-violet-700">{correctCount} correct</span>
+          </p>
+        </div>
       </div>
       <div
         className="h-1.5 overflow-hidden rounded-full bg-zinc-100"

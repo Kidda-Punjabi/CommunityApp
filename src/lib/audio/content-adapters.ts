@@ -1,6 +1,10 @@
 import { slugifyCourseName } from "@/lib/lessons/slugify-course-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AudioContentType } from "@/lib/audio/types";
+import {
+  CONVERSATION_EXCHANGE_AUDIO_TYPES,
+  type ConversationExchangeAudioSlot,
+} from "@/lib/conversation/exchange-audio-types";
 
 export type AudioContentContext = {
   contentType: AudioContentType;
@@ -218,10 +222,104 @@ const conversationTurnAdapter: AudioContentAdapter = {
   },
 };
 
+type ExchangeRow = {
+  id: string;
+  scenario_id: string;
+  sequence_order: number;
+  npc_setup_gurmukhi: string;
+  npc_reply_gurmukhi: string | null;
+  target_response_gurmukhi: string;
+  conversation_scenarios:
+    | { title: string }
+    | { title: string }[]
+    | null;
+};
+
+const EXCHANGE_SLOT_LABELS: Record<ConversationExchangeAudioSlot, string> = {
+  npc_setup: "NPC setup",
+  npc_reply: "NPC reply",
+  player_response: "Player response",
+};
+
+function exchangeScriptForSlot(row: ExchangeRow, slot: ConversationExchangeAudioSlot): string {
+  switch (slot) {
+    case "npc_setup":
+      return row.npc_setup_gurmukhi.trim();
+    case "npc_reply":
+      return (row.npc_reply_gurmukhi ?? "").trim();
+    case "player_response":
+      return row.target_response_gurmukhi.trim();
+  }
+}
+
+function createConversationExchangeAdapter(
+  slot: ConversationExchangeAudioSlot
+): AudioContentAdapter {
+  const contentType = CONVERSATION_EXCHANGE_AUDIO_TYPES[slot];
+  const slotLabel = EXCHANGE_SLOT_LABELS[slot];
+
+  return {
+    contentType,
+    label: `Conversation — ${slotLabel}`,
+    async loadContext(supabase, contentId) {
+      const { data, error } = await supabase
+        .from("conversation_exchanges")
+        .select(
+          "id, scenario_id, sequence_order, npc_setup_gurmukhi, npc_reply_gurmukhi, target_response_gurmukhi, conversation_scenarios(title)"
+        )
+        .eq("id", contentId)
+        .single();
+
+      if (error || !data) return null;
+
+      const row = data as ExchangeRow;
+      const scenario = Array.isArray(row.conversation_scenarios)
+        ? row.conversation_scenarios[0]
+        : row.conversation_scenarios;
+      const defaultScript = exchangeScriptForSlot(row, slot);
+      if (!defaultScript && slot !== "npc_reply") return null;
+      if (slot === "npc_reply" && !defaultScript) return null;
+
+      return {
+        contentType,
+        contentId: row.id,
+        title: scenario?.title ?? "Conversation script",
+        subtitle: `Exchange ${row.sequence_order} · ${slotLabel}`,
+        defaultScript,
+        scriptId: row.scenario_id,
+        sequenceOrder: row.sequence_order,
+      };
+    },
+    storagePath(context) {
+      return `${context.scriptId}/${slot}/${context.contentId}.mp3`;
+    },
+    async syncOnGenerate() {
+      // Exchange audio lives only in audio_assets — no column on conversation_exchanges.
+    },
+    async syncOnApprove() {
+      // Learner reads approved URLs from audio_assets.
+    },
+    async syncOnReject() {
+      // Previous approved clip remains until a new one is approved.
+    },
+    async syncScriptOnly() {
+      // Script text is owned by conversation_exchanges, not edited via audio panel.
+    },
+  };
+}
+
+const conversationExchangeNpcSetupAdapter = createConversationExchangeAdapter("npc_setup");
+const conversationExchangeNpcReplyAdapter = createConversationExchangeAdapter("npc_reply");
+const conversationExchangePlayerResponseAdapter =
+  createConversationExchangeAdapter("player_response");
+
 export const AUDIO_CONTENT_ADAPTERS: Record<AudioContentType, AudioContentAdapter> = {
   lesson: lessonAdapter,
   comprehension_sentence: comprehensionSentenceAdapter,
   conversation_turn: conversationTurnAdapter,
+  conversation_exchange_npc_setup: conversationExchangeNpcSetupAdapter,
+  conversation_exchange_npc_reply: conversationExchangeNpcReplyAdapter,
+  conversation_exchange_player_response: conversationExchangePlayerResponseAdapter,
 };
 
 export function getAudioContentAdapter(contentType: AudioContentType): AudioContentAdapter {

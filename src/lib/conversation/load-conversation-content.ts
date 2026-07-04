@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { conversationAudioKey } from "./audio-lookup";
+import {
+  CONVERSATION_EXCHANGE_AUDIO_TYPES,
+  emptyExchangeAudioMap,
+  type ExchangeAudioById,
+} from "./exchange-audio-types";
 import type {
   ConversationCharacter,
   ConversationExchange,
@@ -108,7 +113,8 @@ function normalizeExchange(row: Record<string, unknown>): ConversationExchange {
 export async function loadConversationPracticeContent(
   supabase: SupabaseClient
 ): Promise<ConversationPracticeContent> {
-  const [charactersResult, scenariosResult, exchangesResult, turnsResult] = await Promise.all([
+  const [charactersResult, scenariosResult, exchangesResult, turnsResult, exchangeAssetsResult] =
+    await Promise.all([
     supabase
       .from("conversation_characters")
       .select("*")
@@ -127,6 +133,11 @@ export async function loadConversationPracticeContent(
       .from("conversation_turns")
       .select("scenario_id, gurmukhi_text, audio_url, requires_audio")
       .eq("requires_audio", true),
+    supabase
+      .from("audio_assets")
+      .select("content_type, content_id, audio_url, status")
+      .in("content_type", Object.values(CONVERSATION_EXCHANGE_AUDIO_TYPES))
+      .eq("status", "approved"),
   ]);
 
   const firstError =
@@ -146,6 +157,7 @@ export async function loadConversationPracticeContent(
         scenarios: [],
         exchangesByScenario: {},
         npcAudioByKey: {},
+        exchangeAudioById: {},
         tableReady: false,
         loadError: null,
       };
@@ -156,6 +168,7 @@ export async function loadConversationPracticeContent(
       scenarios: [],
       exchangesByScenario: {},
       npcAudioByKey: {},
+      exchangeAudioById: {},
       tableReady: true,
       loadError: firstError.message,
     };
@@ -193,11 +206,34 @@ export async function loadConversationPracticeContent(
     }
   }
 
+  const exchangeAudioById: ExchangeAudioById = {};
+  if (!exchangeAssetsResult.error) {
+    for (const row of exchangeAssetsResult.data ?? []) {
+      const exchangeId = String(row.content_id ?? "");
+      const audioUrl = row.audio_url ? String(row.audio_url).trim() : "";
+      if (!exchangeId || !audioUrl) continue;
+
+      if (!exchangeAudioById[exchangeId]) {
+        exchangeAudioById[exchangeId] = emptyExchangeAudioMap();
+      }
+
+      const contentType = String(row.content_type);
+      if (contentType === CONVERSATION_EXCHANGE_AUDIO_TYPES.npc_setup) {
+        exchangeAudioById[exchangeId].npcSetup = audioUrl;
+      } else if (contentType === CONVERSATION_EXCHANGE_AUDIO_TYPES.npc_reply) {
+        exchangeAudioById[exchangeId].npcReply = audioUrl;
+      } else if (contentType === CONVERSATION_EXCHANGE_AUDIO_TYPES.player_response) {
+        exchangeAudioById[exchangeId].playerResponse = audioUrl;
+      }
+    }
+  }
+
   return {
     characters,
     scenarios,
     exchangesByScenario,
     npcAudioByKey,
+    exchangeAudioById,
     tableReady: true,
     loadError: null,
   };

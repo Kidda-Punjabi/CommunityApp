@@ -2,6 +2,12 @@
 export const PUNJABI_LESSON_VOICE_ID = "ttyKbP9zTIRyRCN6b2Ye";
 
 /**
+ * Learner / player voice for Conversation Practice — distinct from NPC voices.
+ * Noor: young female Punjabi (Doaba accent). Vetted for player-response clips only.
+ */
+export const PUNJABI_CONVERSATION_PLAYER_VOICE_ID = "vT0wMbLG5dssaBsksrb6";
+
+/**
  * Eleven v3 — matches the ElevenLabs dashboard default for expressive multilingual TTS.
  * Required for phoneme pronunciation dictionary rules on non-English text.
  * (Pipeline previously used eleven_multilingual_v2, which differs materially from dashboard v3.)
@@ -19,7 +25,13 @@ export const VETTED_PUNJABI_VOICES: VettedVoice[] = [
   {
     id: PUNJABI_LESSON_VOICE_ID,
     label: "Yatin — Punjabi Customer Support",
-    description: "Primary voice used for lesson and comprehension audio.",
+    description: "Primary voice used for lesson, comprehension, and NPC conversation lines.",
+  },
+  {
+    id: PUNJABI_CONVERSATION_PLAYER_VOICE_ID,
+    label: "Noor — Punjabi (learner)",
+    description:
+      "Young female Punjabi voice for conversation player-response clips — distinct from NPC speakers.",
   },
 ];
 

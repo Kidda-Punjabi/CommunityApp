@@ -23,6 +23,7 @@ import {
   VETTED_PUNJABI_VOICES,
 } from "@/lib/elevenlabs/constants";
 import type { AudioAssetStatus } from "@/lib/audio/types";
+import type { ScenarioAudioCoverageSummary } from "@/lib/conversation/exchange-audio-audit";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import {
   FormMessage,
@@ -127,16 +128,20 @@ export function ConversationTab() {
   }
 
   const audioStatusByTurnId = data?.audioStatusByTurnId ?? {};
+  const exchangeCoverage = data?.exchangeAudioCoverage ?? [];
+  const hasExchangeGaps = exchangeCoverage.some((row) => !row.fullyApproved);
 
   return (
     <div className="space-y-4">
+      <ExchangeAudioCoveragePanel coverage={exchangeCoverage} hasGaps={hasExchangeGaps} />
+
       <div className="rounded-lg border border-violet-200 bg-violet-50/50 px-4 py-3 text-sm text-violet-950">
-        <p className="font-semibold">Audio scope (confirmed for current game design)</p>
+        <p className="font-semibold">Learner game audio model</p>
         <p className="mt-1 text-violet-900/90">
-          The learner game shows NPC lines to listen to and prompts the player to speak their own
-          lines — so generate audio for <strong>listener/NPC characters</strong> only. Player-role
-          turns default to &quot;no audio needed&quot; but can be overridden if you want full audio
-          for every line.
+          The playable game uses <strong>legacy exchanges</strong> — one approved clip per exchange
+          for NPC setup, NPC reply (when present), and a single player-response line (Noor voice).
+          Turn-based audio below is kept for script editing; exchange coverage above is what the
+          learner actually needs.
         </p>
       </div>
 
@@ -198,6 +203,87 @@ export function ConversationTab() {
         </ul>
       )}
     </div>
+  );
+}
+
+function ExchangeAudioCoveragePanel({
+  coverage,
+  hasGaps,
+}: {
+  coverage: ScenarioAudioCoverageSummary[];
+  hasGaps: boolean;
+}) {
+  if (coverage.length === 0) {
+    return (
+      <section className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500">
+        No legacy exchanges found — learner audio coverage will appear once exchanges are seeded.
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className={`rounded-xl border px-4 py-4 ${
+        hasGaps ? "border-amber-300 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/50"
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-zinc-900">Exchange audio coverage</h3>
+          <p className="mt-1 text-sm text-zinc-600">
+            Approved clips required per exchange: NPC setup, NPC reply (if scripted), and one player
+            response. Gaps here mean the learner game will be silent for those lines.
+          </p>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+            hasGaps ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"
+          }`}
+        >
+          {hasGaps ? "Gaps found" : "All exchanges covered"}
+        </span>
+      </div>
+
+      <ul className="mt-4 space-y-2">
+        {coverage.map((row) => {
+          const missingTotal =
+            row.missingNpcSetup + row.missingNpcReply + row.missingPlayerResponse;
+          const ok = row.fullyApproved;
+
+          return (
+            <li
+              key={row.scenarioId}
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                ok ? "border-emerald-200 bg-white/80" : "border-amber-200 bg-white"
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium text-zinc-900">{row.scenarioTitle}</p>
+                <p className="text-xs text-zinc-500">{row.exchangeCount} exchanges</p>
+              </div>
+              {ok ? (
+                <p className="mt-1 text-xs text-emerald-700">All exchange audio approved</p>
+              ) : (
+                <p className="mt-1 text-xs text-amber-900">
+                  {row.missingNpcSetup > 0 ? `${row.missingNpcSetup} setup missing` : null}
+                  {row.missingNpcSetup > 0 && (row.missingNpcReply > 0 || row.missingPlayerResponse > 0)
+                    ? " · "
+                    : null}
+                  {row.missingNpcReply > 0 ? `${row.missingNpcReply} reply missing` : null}
+                  {row.missingNpcReply > 0 && row.missingPlayerResponse > 0 ? " · " : null}
+                  {row.missingPlayerResponse > 0
+                    ? `${row.missingPlayerResponse} player response missing`
+                    : null}
+                  {row.pendingReview > 0
+                    ? `${missingTotal > 0 ? " · " : ""}${row.pendingReview} pending review`
+                    : null}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

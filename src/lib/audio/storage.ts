@@ -4,6 +4,9 @@ export const AUDIO_BUCKETS = {
   lesson: "lesson-audio",
   comprehension_sentence: "comprehension-audio",
   conversation_turn: "conversation-audio",
+  conversation_exchange_npc_setup: "conversation-audio",
+  conversation_exchange_npc_reply: "conversation-audio",
+  conversation_exchange_player_response: "conversation-audio",
 } as const satisfies Record<AudioContentType, string>;
 
 export function bucketForContentType(contentType: AudioContentType): string {

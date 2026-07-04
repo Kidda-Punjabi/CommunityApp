@@ -1,4 +1,5 @@
 import type { ConversationDifficulty } from "./config";
+import type { ExchangeAudioById } from "./exchange-audio-types";
 
 /** Hard-mode tile — extends grammar word_tiles with position + distractor flags. */
 export type ConversationHardWordTile = {
@@ -84,8 +85,10 @@ export type ConversationPracticeContent = {
   characters: ConversationCharacter[];
   scenarios: ConversationScenario[];
   exchangesByScenario: Record<string, ConversationExchange[]>;
-  /** Approved NPC line audio keyed by `${scenarioId}:${gurmukhi}`. */
+  /** Approved NPC line audio keyed by `${scenarioId}:${gurmukhi}` (legacy turn fallback). */
   npcAudioByKey: Record<string, string>;
+  /** Approved exchange audio keyed by exchange id. */
+  exchangeAudioById: ExchangeAudioById;
   tableReady: boolean;
   loadError: string | null;
 };
