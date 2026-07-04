@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import {
-  COLLECTIBLE_CONTACT_HOLD_MS,
+  FALL_MOTION_EASING,
   LETTER_END_SCALE,
   LETTER_START_SCALE,
   laneX,
@@ -19,23 +19,15 @@ type LaneRunnerLetterProps = {
 export function LaneRunnerLetter({ letter, fallDurationMs, onArrive }: LaneRunnerLetterProps) {
   const [fallen, setFallen] = useState(false);
   const arrivedRef = useRef(false);
-  const holdTimerRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     arrivedRef.current = false;
     setFallen(false);
-    if (holdTimerRef.current) {
-      window.clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
 
     const frame = requestAnimationFrame(() => {
       requestAnimationFrame(() => setFallen(true));
     });
-    return () => {
-      cancelAnimationFrame(frame);
-      if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
-    };
+    return () => cancelAnimationFrame(frame);
   }, [letter.id]);
 
   const isFalling = letter.status === "falling";
@@ -66,7 +58,7 @@ export function LaneRunnerLetter({ letter, fallDurationMs, onArrive }: LaneRunne
         transform: `translate(-50%, -50%) scale(${scale})`,
         transition:
           fallen && isFalling
-            ? `left ${fallDurationMs}ms linear, top ${fallDurationMs}ms linear, transform ${fallDurationMs}ms linear`
+            ? `left ${fallDurationMs}ms ${FALL_MOTION_EASING}, top ${fallDurationMs}ms ${FALL_MOTION_EASING}, transform ${fallDurationMs}ms ${FALL_MOTION_EASING}`
             : "none",
       }}
       onTransitionEnd={(event) => {
@@ -79,9 +71,7 @@ export function LaneRunnerLetter({ letter, fallDurationMs, onArrive }: LaneRunne
           return;
         }
         arrivedRef.current = true;
-        holdTimerRef.current = window.setTimeout(() => {
-          onArrive(letter.id);
-        }, COLLECTIBLE_CONTACT_HOLD_MS);
+        onArrive(letter.id);
       }}
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-md border-2 border-violet-800 bg-violet-600 text-lg font-bold text-white shadow-sm">

@@ -21,8 +21,8 @@ export const BASE_GATE_FALL_MS = 4500;
 /** Coin/letter travel time at base speed (ms). */
 export const BASE_COLLECTIBLE_FALL_MS = 4200;
 
-/** Delay before gate fall starts each round (coins spawn and fall during this window). */
-export const GATE_START_DELAY_MS = 3200;
+/** Delay before gate fall starts — 0 when collectibles run in a separate beat first. */
+export const GATE_START_DELAY_MS = 0;
 
 /** Lane gold pickups spawned per gate question. */
 export const COINS_PER_GATE = 3;
@@ -30,8 +30,8 @@ export const COINS_PER_GATE = 3;
 /** Stagger between each coin spawn at the start of a gate round (ms). */
 export const COIN_SPAWN_STAGGER_MS = 700;
 
-/** Brief pause at contact line before collectible resolves (ms). */
-export const COLLECTIBLE_CONTACT_HOLD_MS = 380;
+/** @deprecated Collectibles resolve on transition end — no contact hold. */
+export const COLLECTIBLE_CONTACT_HOLD_MS = 0;
 
 /** Every N ms of active play, speed increases by SPEED_RAMP_RATE. */
 export const SPEED_RAMP_INTERVAL_MS = 20_000;
@@ -72,6 +72,9 @@ export const DASH_SCROLL_SPEED = 1.4;
 export const DASH_CYCLE_PX = 24;
 
 export const SPRING_EASING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
+
+/** Fall motion — ease-in so objects accelerate toward the contact line (constant world speed feel). */
+export const FALL_MOTION_EASING = "cubic-bezier(0.35, 0, 0.85, 0.45)";
 
 /** Brief road flash when a gate resolves (ms). */
 export const ROAD_FLASH_MS = 360;

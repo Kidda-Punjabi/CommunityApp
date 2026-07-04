@@ -1,10 +1,10 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  COLLECTIBLE_CONTACT_HOLD_MS,
   COIN_END_SCALE,
   COIN_START_SCALE,
+  FALL_MOTION_EASING,
   GATE_END_SCALE,
   GATE_START_DELAY_MS,
   GATE_START_SCALE,
@@ -18,7 +18,10 @@ type LaneRunnerGateViewProps = {
   gateKey: number;
   fallDurationMs: number;
   startDelayMs?: number;
+  /** When false the gate stays parked at the horizon. */
+  canFall: boolean;
   onArrive: () => void;
+  onFallStart?: () => void;
 };
 
 function GateTile({
@@ -49,7 +52,7 @@ function GateTile({
         top: `${top}%`,
         transform: `translate(-50%, -50%) scale(${scale})`,
         transition: fallen
-          ? `left ${fallDurationMs}ms linear, top ${fallDurationMs}ms linear, transform ${fallDurationMs}ms linear`
+          ? `left ${fallDurationMs}ms ${FALL_MOTION_EASING}, top ${fallDurationMs}ms ${FALL_MOTION_EASING}, transform ${fallDurationMs}ms ${FALL_MOTION_EASING}`
           : "none",
       }}
       onTransitionEnd={(event) => {
@@ -72,23 +75,40 @@ export function LaneRunnerGateView({
   gateKey,
   fallDurationMs,
   startDelayMs = GATE_START_DELAY_MS,
+  canFall,
   onArrive,
+  onFallStart,
 }: LaneRunnerGateViewProps) {
   const [fallen, setFallen] = useState(false);
   const arrivedRef = useRef(false);
+  const fallStartRef = useRef(false);
+  const onFallStartRef = useRef(onFallStart);
+
+  useEffect(() => {
+    onFallStartRef.current = onFallStart;
+  }, [onFallStart]);
 
   useLayoutEffect(() => {
     arrivedRef.current = false;
+    fallStartRef.current = false;
     setFallen(false);
+
+    if (!canFall) return;
 
     const delayTimer = window.setTimeout(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => setFallen(true));
+        requestAnimationFrame(() => {
+          if (!fallStartRef.current) {
+            fallStartRef.current = true;
+            onFallStartRef.current?.();
+          }
+          setFallen(true);
+        });
       });
     }, startDelayMs);
 
     return () => window.clearTimeout(delayTimer);
-  }, [gateKey, gate.flashcard_id, startDelayMs]);
+  }, [gateKey, gate.flashcard_id, startDelayMs, canFall]);
 
   return (
     <>

@@ -3,9 +3,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { shuffleArray } from "@/lib/flashcards/utils";
 import {
-  COLLECTIBLE_CONTACT_HOLD_MS,
   COIN_END_SCALE,
   COIN_START_SCALE,
+  FALL_MOTION_EASING,
   laneX,
   laneY,
 } from "@/lib/games/lane-runner/config";
@@ -20,15 +20,10 @@ type LaneRunnerCoinProps = {
 export function LaneRunnerCoin({ coin, fallDurationMs, onArrive }: LaneRunnerCoinProps) {
   const [fallen, setFallen] = useState(false);
   const arrivedRef = useRef(false);
-  const holdTimerRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     arrivedRef.current = false;
     setFallen(false);
-    if (holdTimerRef.current) {
-      window.clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
 
     const delayTimer = window.setTimeout(() => {
       requestAnimationFrame(() => {
@@ -36,10 +31,7 @@ export function LaneRunnerCoin({ coin, fallDurationMs, onArrive }: LaneRunnerCoi
       });
     }, coin.startDelayMs);
 
-    return () => {
-      window.clearTimeout(delayTimer);
-      if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
-    };
+    return () => window.clearTimeout(delayTimer);
   }, [coin.id, coin.startDelayMs]);
 
   const isFalling = coin.status === "falling";
@@ -69,7 +61,7 @@ export function LaneRunnerCoin({ coin, fallDurationMs, onArrive }: LaneRunnerCoi
         transform: `translate(-50%, -50%) scale(${scale})`,
         transition:
           fallen && isFalling
-            ? `left ${fallDurationMs}ms linear, top ${fallDurationMs}ms linear, transform ${fallDurationMs}ms linear`
+            ? `left ${fallDurationMs}ms ${FALL_MOTION_EASING}, top ${fallDurationMs}ms ${FALL_MOTION_EASING}, transform ${fallDurationMs}ms ${FALL_MOTION_EASING}`
             : "none",
       }}
       onTransitionEnd={(event) => {
@@ -82,9 +74,7 @@ export function LaneRunnerCoin({ coin, fallDurationMs, onArrive }: LaneRunnerCoi
           return;
         }
         arrivedRef.current = true;
-        holdTimerRef.current = window.setTimeout(() => {
-          onArrive(coin.id);
-        }, COLLECTIBLE_CONTACT_HOLD_MS);
+        onArrive(coin.id);
       }}
     >
       {coin.status === "caught" ? (
