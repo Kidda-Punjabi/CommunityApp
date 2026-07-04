@@ -81,6 +81,10 @@ function revalidateAudioPaths(contentType: AudioContentType) {
     revalidatePath(ADMIN_GAMES_PATH);
     revalidatePath("/dashboard/games/comprehension-practice");
   }
+  if (contentType === "conversation_turn") {
+    revalidatePath(ADMIN_GAMES_PATH);
+    revalidatePath("/dashboard/games/conversation-practice");
+  }
 }
 
 export async function loadAudioReviewQueue(): Promise<

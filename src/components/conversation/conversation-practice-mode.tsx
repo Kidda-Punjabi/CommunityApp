@@ -7,6 +7,7 @@ import {
   ConversationTranscript,
   type TranscriptEntry,
 } from "@/components/conversation/conversation-transcript";
+import { getConversationCharacterEmoji } from "@/components/conversation/conversation-bubble";
 import { GameSessionReview } from "@/components/games/game-session-review";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
@@ -515,7 +516,7 @@ export function ConversationPracticeMode({
               className="rounded-xl border border-zinc-200 bg-white p-5 text-left shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-50/40"
             >
               <p className="text-2xl" aria-hidden="true">
-                {character.icon_name === "store" ? "🏪" : "💬"}
+                {getConversationCharacterEmoji(character.icon_name)}
               </p>
               <p className="mt-2 text-lg font-semibold text-zinc-900">{character.name}</p>
               <p className="text-sm text-violet-600">{character.role}</p>

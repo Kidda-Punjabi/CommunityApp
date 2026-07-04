@@ -5,6 +5,7 @@ import { useAdminData } from "@/app/admin/content/admin-data-provider";
 import { SentenceBuilderTab } from "@/app/admin/content/components/sentence-builder-tab";
 import { ConjugationTab } from "@/app/admin/content/components/conjugation-tab";
 import { ComprehensionTab } from "@/app/admin/content/components/comprehension-tab";
+import { ConversationTab } from "@/app/admin/content/components/conversation-tab";
 import { GenderSortTab } from "@/app/admin/content/components/gender-sort-tab";
 import { AdminContentSubNav } from "@/components/admin/admin-content-sub-nav";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
@@ -16,6 +17,7 @@ const tabs = [
   { id: "conjugation", label: "Conjugation" },
   { id: "gender-sort", label: "Gender sort" },
   { id: "comprehension", label: "Comprehension" },
+  { id: "conversation", label: "Conversation" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -42,6 +44,7 @@ export function AdminGamesSection() {
         {activeTab === "conjugation" && <ConjugationTab data={data} />}
         {activeTab === "gender-sort" && <GenderSortTab data={data} />}
         {activeTab === "comprehension" && <ComprehensionTab />}
+        {activeTab === "conversation" && <ConversationTab />}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import type { AudioContentType } from "@/lib/audio/types";
 export const AUDIO_BUCKETS = {
   lesson: "lesson-audio",
   comprehension_sentence: "comprehension-audio",
+  conversation_turn: "conversation-audio",
 } as const satisfies Record<AudioContentType, string>;
 
 export function bucketForContentType(contentType: AudioContentType): string {

@@ -1,6 +1,12 @@
 "use server";
 
 import { requireAdminFromActions } from "@/app/admin/content/actions";
+import type { ComprehensionTier } from "@/lib/comprehension/tiers";
+import {
+  COMPREHENSION_DIFFICULTY_MAX,
+  COMPREHENSION_DIFFICULTY_MIN,
+  COMPREHENSION_TIERS,
+} from "@/lib/comprehension/tiers";
 import type { AudioAssetStatus } from "@/lib/audio/types";
 import { revalidatePath } from "next/cache";
 
@@ -12,14 +18,23 @@ export type AdminComprehensionScript = {
   id: string;
   title: string;
   description: string | null;
+  tier: ComprehensionTier | null;
   difficulty: number | null;
   display_order: number;
   active: boolean;
+  needs_rewrite: boolean;
+};
+
+export type AdminComprehensionParagraph = {
+  id: string;
+  script_id: string;
+  sequence_order: number;
 };
 
 export type AdminComprehensionSentence = {
   id: string;
   script_id: string;
+  paragraph_id: string | null;
   sequence_order: number;
   gurmukhi_text: string;
   romanised_text: string;
@@ -42,6 +57,7 @@ export type AdminComprehensionQuestion = {
 
 export type AdminComprehensionData = {
   scripts: AdminComprehensionScript[];
+  paragraphsByScript: Record<string, AdminComprehensionParagraph[]>;
   sentencesByScript: Record<string, AdminComprehensionSentence[]>;
   questionsByScript: Record<string, AdminComprehensionQuestion[]>;
   audioStatusBySentenceId: Record<string, AudioAssetStatus>;
@@ -53,7 +69,15 @@ function parseDifficulty(value: FormDataEntryValue | null): number | null {
   if (!raw) return null;
   const n = parseInt(raw, 10);
   if (Number.isNaN(n)) return null;
-  return Math.min(5, Math.max(1, n));
+  return Math.min(COMPREHENSION_DIFFICULTY_MAX, Math.max(COMPREHENSION_DIFFICULTY_MIN, n));
+}
+
+function parseTier(value: FormDataEntryValue | null): ComprehensionTier | null {
+  const raw = (value as string)?.trim();
+  if (COMPREHENSION_TIERS.includes(raw as ComprehensionTier)) {
+    return raw as ComprehensionTier;
+  }
+  return null;
 }
 
 function revalidate() {
@@ -61,15 +85,23 @@ function revalidate() {
   revalidatePath("/dashboard/games/comprehension-practice");
 }
 
+function isMissingTable(message: string, table: string): boolean {
+  return message.toLowerCase().includes(table) && message.toLowerCase().includes("does not exist");
+}
+
 export async function loadComprehensionAdminData(): Promise<AdminComprehensionData> {
   try {
     const supabase = await requireAdminFromActions();
 
-    const [scriptsResult, sentencesResult, questionsResult] = await Promise.all([
+    const [scriptsResult, paragraphsResult, sentencesResult, questionsResult] = await Promise.all([
       supabase
         .from("comprehension_scripts")
         .select("*")
         .order("display_order", { ascending: true }),
+      supabase
+        .from("comprehension_paragraphs")
+        .select("*")
+        .order("sequence_order", { ascending: true }),
       supabase
         .from("comprehension_sentences")
         .select("*")
@@ -82,17 +114,39 @@ export async function loadComprehensionAdminData(): Promise<AdminComprehensionDa
 
     const error =
       scriptsResult.error?.message ??
+      paragraphsResult.error?.message ??
       sentencesResult.error?.message ??
       questionsResult.error?.message;
 
     if (error) {
+      if (isMissingTable(error, "comprehension_paragraphs")) {
+        return {
+          scripts: (scriptsResult.data ?? []) as AdminComprehensionScript[],
+          paragraphsByScript: {},
+          sentencesByScript: {},
+          questionsByScript: {},
+          audioStatusBySentenceId: {},
+          error: `${error} Run supabase/comprehension-paragraphs-tier.sql first.`,
+        };
+      }
+
       return {
         scripts: [],
+        paragraphsByScript: {},
         sentencesByScript: {},
         questionsByScript: {},
         audioStatusBySentenceId: {},
         error,
       };
+    }
+
+    const paragraphsByScript: Record<string, AdminComprehensionParagraph[]> = {};
+    for (const row of paragraphsResult.data ?? []) {
+      const paragraph = row as AdminComprehensionParagraph;
+      if (!paragraphsByScript[paragraph.script_id]) {
+        paragraphsByScript[paragraph.script_id] = [];
+      }
+      paragraphsByScript[paragraph.script_id].push(paragraph);
     }
 
     const sentencesByScript: Record<string, AdminComprehensionSentence[]> = {};
@@ -130,6 +184,7 @@ export async function loadComprehensionAdminData(): Promise<AdminComprehensionDa
 
     return {
       scripts: (scriptsResult.data ?? []) as AdminComprehensionScript[],
+      paragraphsByScript,
       sentencesByScript,
       questionsByScript,
       audioStatusBySentenceId,
@@ -137,6 +192,7 @@ export async function loadComprehensionAdminData(): Promise<AdminComprehensionDa
   } catch (e) {
     return {
       scripts: [],
+      paragraphsByScript: {},
       sentencesByScript: {},
       questionsByScript: {},
       audioStatusBySentenceId: {},
@@ -152,19 +208,23 @@ export async function createComprehensionScript(
   try {
     const supabase = await requireAdminFromActions();
     const title = (formData.get("title") as string)?.trim();
+    const tier = parseTier(formData.get("tier"));
     if (!title) return { error: "Title is required." };
+    if (!tier) return { error: "Tier is required." };
 
     const { error } = await supabase.from("comprehension_scripts").insert({
       title,
+      tier,
       description: (formData.get("description") as string)?.trim() || null,
       difficulty: parseDifficulty(formData.get("difficulty")),
       display_order: parseInt((formData.get("display_order") as string) || "0", 10) || 0,
       active: formData.get("active") === "on",
+      needs_rewrite: false,
     });
 
     if (error) return { error: error.message };
     revalidate();
-    return { success: "Script created." };
+    return { success: "Script created — add paragraphs, then sentences." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create script." };
   }
@@ -178,16 +238,20 @@ export async function updateComprehensionScript(
     const supabase = await requireAdminFromActions();
     const id = formData.get("id") as string;
     const title = (formData.get("title") as string)?.trim();
+    const tier = parseTier(formData.get("tier"));
     if (!id || !title) return { error: "Title is required." };
+    if (!tier) return { error: "Tier is required." };
 
     const { error } = await supabase
       .from("comprehension_scripts")
       .update({
         title,
+        tier,
         description: (formData.get("description") as string)?.trim() || null,
         difficulty: parseDifficulty(formData.get("difficulty")),
         display_order: parseInt((formData.get("display_order") as string) || "0", 10) || 0,
         active: formData.get("active") === "on",
+        needs_rewrite: formData.get("needs_rewrite") === "on",
       })
       .eq("id", id);
 
@@ -226,6 +290,56 @@ export async function deleteComprehensionScript(scriptId: string): Promise<Compr
   }
 }
 
+export async function createComprehensionParagraph(
+  _prev: ComprehensionActionResult,
+  formData: FormData
+): Promise<ComprehensionActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+    const scriptId = (formData.get("script_id") as string)?.trim();
+    if (!scriptId) return { error: "Script is required." };
+
+    const { error } = await supabase.from("comprehension_paragraphs").insert({
+      script_id: scriptId,
+      sequence_order: parseInt((formData.get("sequence_order") as string) || "1", 10) || 1,
+    });
+
+    if (error) return { error: error.message };
+    revalidate();
+    return { success: "Paragraph added." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to add paragraph." };
+  }
+}
+
+export async function deleteComprehensionParagraph(
+  paragraphId: string
+): Promise<ComprehensionActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+
+    const { count } = await supabase
+      .from("comprehension_sentences")
+      .select("id", { count: "exact", head: true })
+      .eq("paragraph_id", paragraphId);
+
+    if ((count ?? 0) > 0) {
+      return { error: "Remove or move sentences in this paragraph first." };
+    }
+
+    const { error } = await supabase
+      .from("comprehension_paragraphs")
+      .delete()
+      .eq("id", paragraphId);
+
+    if (error) return { error: error.message };
+    revalidate();
+    return { success: "Paragraph removed." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to remove paragraph." };
+  }
+}
+
 export async function createComprehensionSentence(
   _prev: ComprehensionActionResult,
   formData: FormData
@@ -233,14 +347,16 @@ export async function createComprehensionSentence(
   try {
     const supabase = await requireAdminFromActions();
     const scriptId = formData.get("script_id") as string;
+    const paragraphId = (formData.get("paragraph_id") as string)?.trim();
     const gurmukhi = (formData.get("gurmukhi_text") as string)?.trim();
     const romanised = (formData.get("romanised_text") as string)?.trim();
-    if (!scriptId || !gurmukhi || !romanised) {
-      return { error: "Gurmukhi and romanised text are required." };
+    if (!scriptId || !paragraphId || !gurmukhi || !romanised) {
+      return { error: "Paragraph, Gurmukhi, and romanised text are required." };
     }
 
     const { error } = await supabase.from("comprehension_sentences").insert({
       script_id: scriptId,
+      paragraph_id: paragraphId,
       sequence_order: parseInt((formData.get("sequence_order") as string) || "1", 10) || 1,
       gurmukhi_text: gurmukhi,
       romanised_text: romanised,
@@ -262,15 +378,17 @@ export async function updateComprehensionSentence(
   try {
     const supabase = await requireAdminFromActions();
     const id = formData.get("id") as string;
+    const paragraphId = (formData.get("paragraph_id") as string)?.trim();
     const gurmukhi = (formData.get("gurmukhi_text") as string)?.trim();
     const romanised = (formData.get("romanised_text") as string)?.trim();
-    if (!id || !gurmukhi || !romanised) {
-      return { error: "Gurmukhi and romanised text are required." };
+    if (!id || !paragraphId || !gurmukhi || !romanised) {
+      return { error: "Paragraph, Gurmukhi, and romanised text are required." };
     }
 
     const { error } = await supabase
       .from("comprehension_sentences")
       .update({
+        paragraph_id: paragraphId,
         sequence_order: parseInt((formData.get("sequence_order") as string) || "1", 10) || 1,
         gurmukhi_text: gurmukhi,
         romanised_text: romanised,

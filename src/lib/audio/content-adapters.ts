@@ -161,9 +161,67 @@ const comprehensionSentenceAdapter: AudioContentAdapter = {
   },
 };
 
+const conversationTurnAdapter: AudioContentAdapter = {
+  contentType: "conversation_turn",
+  label: "Conversation Practice",
+  async loadContext(supabase, contentId) {
+    const { data, error } = await supabase
+      .from("conversation_turns")
+      .select(
+        "id, scenario_id, sequence_order, gurmukhi_text, conversation_scenarios(title), conversation_scenario_characters(name)"
+      )
+      .eq("id", contentId)
+      .single();
+
+    if (error || !data) return null;
+
+    const scenario = Array.isArray(data.conversation_scenarios)
+      ? data.conversation_scenarios[0]
+      : data.conversation_scenarios;
+    const character = Array.isArray(data.conversation_scenario_characters)
+      ? data.conversation_scenario_characters[0]
+      : data.conversation_scenario_characters;
+
+    return {
+      contentType: "conversation_turn",
+      contentId: data.id,
+      title: scenario?.title ?? "Conversation script",
+      subtitle: `${character?.name ?? "Speaker"} · Turn ${data.sequence_order}`,
+      defaultScript: data.gurmukhi_text.trim(),
+      scriptId: data.scenario_id,
+      sequenceOrder: data.sequence_order,
+    };
+  },
+  storagePath(context) {
+    return `${context.scriptId}/${context.contentId}.mp3`;
+  },
+  async syncOnGenerate(supabase, context, scriptText) {
+    await supabase
+      .from("conversation_turns")
+      .update({ gurmukhi_text: scriptText })
+      .eq("id", context.contentId);
+  },
+  async syncOnApprove(supabase, context, publicUrl) {
+    await supabase
+      .from("conversation_turns")
+      .update({ audio_url: publicUrl })
+      .eq("id", context.contentId);
+  },
+  async syncOnReject() {
+    // Turn keeps previous approved audio_url until a new clip is approved.
+  },
+  async syncScriptOnly(supabase, context, scriptText) {
+    await supabase
+      .from("conversation_turns")
+      .update({ gurmukhi_text: scriptText })
+      .eq("id", context.contentId);
+  },
+};
+
 export const AUDIO_CONTENT_ADAPTERS: Record<AudioContentType, AudioContentAdapter> = {
   lesson: lessonAdapter,
   comprehension_sentence: comprehensionSentenceAdapter,
+  conversation_turn: conversationTurnAdapter,
 };
 
 export function getAudioContentAdapter(contentType: AudioContentType): AudioContentAdapter {

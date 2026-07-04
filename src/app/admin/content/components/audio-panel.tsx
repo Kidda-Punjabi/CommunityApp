@@ -37,6 +37,8 @@ type AudioPanelProps = {
   defaultScript?: string | null;
   scriptHint?: string;
   onUpdated?: () => void;
+  /** Pre-select voice when generating (e.g. character default). */
+  defaultVoiceId?: string | null;
 };
 
 function voiceLabelForId(voiceId: string | null): string | null {
@@ -50,6 +52,7 @@ export function AudioPanel({
   defaultScript = "",
   scriptHint = "Enter the Punjabi text to be read aloud (Gurmukhi).",
   onUpdated,
+  defaultVoiceId,
 }: AudioPanelProps) {
   const router = useRouter();
   const [script, setScript] = useState(defaultScript ?? "");
@@ -92,6 +95,8 @@ export function AudioPanel({
 
       if (asset.activeVoiceId) {
         setVoiceId(asset.activeVoiceId);
+      } else if (defaultVoiceId) {
+        setVoiceId(defaultVoiceId);
       }
     } else {
       setStatus("none");
@@ -104,7 +109,7 @@ export function AudioPanel({
     }
 
     setLoading(false);
-  }, [contentType, contentId, defaultScript]);
+  }, [contentType, contentId, defaultScript, defaultVoiceId]);
 
   useEffect(() => {
     setScript(defaultScript ?? "");

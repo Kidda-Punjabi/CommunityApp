@@ -4,7 +4,15 @@ const ICON_EMOJI: Record<string, string> = {
   store: "🏪",
   shop: "🏪",
   person: "🧑",
+  home: "🏠",
+  medical: "🩺",
+  grandmother: "👵",
 };
+
+export function getConversationCharacterEmoji(iconName?: string | null): string {
+  if (!iconName) return "💬";
+  return ICON_EMOJI[iconName] ?? "💬";
+}
 
 export type ConversationMessageRole = "npc" | "student";
 
@@ -38,9 +46,7 @@ export function ConversationMessageBubble({
     );
   }
 
-  const emoji = character?.icon_name
-    ? (ICON_EMOJI[character.icon_name] ?? "💬")
-    : "💬";
+  const emoji = getConversationCharacterEmoji(character?.icon_name);
 
   return (
     <div className="flex gap-2.5 sm:gap-3">

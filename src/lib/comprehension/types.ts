@@ -1,17 +1,27 @@
 import type { ComprehensionMode } from "./config";
+import type { ComprehensionTier } from "./tiers";
 
 export type ComprehensionScript = {
   id: string;
   title: string;
   description: string | null;
+  tier: ComprehensionTier | null;
   difficulty: number | null;
   display_order: number;
   active: boolean;
+  needs_rewrite: boolean;
+};
+
+export type ComprehensionParagraph = {
+  id: string;
+  script_id: string;
+  sequence_order: number;
 };
 
 export type ComprehensionSentence = {
   id: string;
   script_id: string;
+  paragraph_id: string | null;
   sequence_order: number;
   gurmukhi_text: string;
   romanised_text: string;
@@ -35,6 +45,7 @@ export type ComprehensionQuestion = {
 };
 
 export type ComprehensionScriptSummary = ComprehensionScript & {
+  paragraph_count: number;
   sentence_count: number;
   question_count: number;
   listening_ready: boolean;
@@ -48,6 +59,7 @@ export type ComprehensionQuestionResult = {
 
 export type ComprehensionPracticeContent = {
   scripts: ComprehensionScriptSummary[];
+  paragraphsByScript: Record<string, ComprehensionParagraph[]>;
   sentencesByScript: Record<string, ComprehensionSentence[]>;
   questionsByScript: Record<string, ComprehensionQuestion[]>;
   tablesReady: boolean;

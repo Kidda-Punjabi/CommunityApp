@@ -16,6 +16,7 @@ import {
   COMPREHENSION_PRACTICE_DISPLAY_NAME,
   type ComprehensionMode,
 } from "@/lib/comprehension/config";
+import { COMPREHENSION_TIER_LABELS } from "@/lib/comprehension/tiers";
 import type {
   ComprehensionPracticeContent,
   ComprehensionQuestion,
@@ -413,7 +414,11 @@ export function ComprehensionPracticeMode({
                     <p className="mt-1 text-sm text-zinc-500">{script.description}</p>
                   ) : null}
                   <p className="mt-2 text-xs text-zinc-400">
-                    {script.sentence_count} sentence{script.sentence_count === 1 ? "" : "s"}
+                    {script.tier ? COMPREHENSION_TIER_LABELS[script.tier] : "Untiered"}
+                    {script.paragraph_count > 0
+                      ? ` · ${script.paragraph_count} paragraph${script.paragraph_count === 1 ? "" : "s"}`
+                      : ""}
+                    {` · ${script.sentence_count} sentence${script.sentence_count === 1 ? "" : "s"}`}
                     {script.question_count > 0
                       ? ` · ${script.question_count} question${script.question_count === 1 ? "" : "s"}`
                       : ""}
@@ -421,7 +426,10 @@ export function ComprehensionPracticeMode({
                 </div>
                 <div className="shrink-0 text-right text-xs">
                   {script.difficulty ? (
-                    <p className="font-medium text-violet-700">Tier {script.difficulty}</p>
+                    <p className="font-medium text-violet-700">Difficulty {script.difficulty}</p>
+                  ) : null}
+                  {script.needs_rewrite ? (
+                    <p className="mt-1 font-medium text-amber-700">Being rewritten</p>
                   ) : null}
                   <p className="mt-1 text-zinc-500">
                     {script.listening_ready ? "Listening ready" : "Recordings coming soon"}

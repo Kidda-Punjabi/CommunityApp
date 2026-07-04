@@ -9,7 +9,7 @@ export type AudioAssetStatus = (typeof AUDIO_ASSET_STATUSES)[number];
 
 export type AudioGenerationStatus = "pending_review" | "approved" | "rejected";
 
-export type AudioContentType = "lesson" | "comprehension_sentence";
+export type AudioContentType = "lesson" | "comprehension_sentence" | "conversation_turn";
 
 export type AudioAsset = {
   id: string;
@@ -51,6 +51,7 @@ export const AUDIO_ASSET_STATUS_LABELS: Record<AudioAssetStatus, string> = {
 export const AUDIO_CONTENT_TYPE_LABELS: Record<AudioContentType, string> = {
   lesson: "Lesson",
   comprehension_sentence: "Comprehension Practice",
+  conversation_turn: "Conversation Practice",
 };
 
 export function audioAssetStatusBadgeClass(status: AudioAssetStatus): string {

@@ -187,7 +187,7 @@ export function ComprehensionScriptViewer({
             disabled={playingAll || sentences.length === 0}
             className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:bg-zinc-300"
           >
-            {playingAll ? "Playing…" : "Play all"}
+            {playingAll ? "Playing…" : "Play full passage"}
           </button>
           {audioNotice ? (
             <p className="text-sm text-amber-800">{audioNotice}</p>
@@ -196,14 +196,33 @@ export function ComprehensionScriptViewer({
       ) : null}
 
       <div className="space-y-3">
-        {sentences.map((sentence) => (
+        {sentences.map((sentence) => {
+          const canReplay = Boolean(sentence.audio_url?.trim()) && (emphasizeAudio || mode !== "reading");
+          return (
           <div
             key={sentence.id}
+            role={canReplay ? "button" : undefined}
+            tabIndex={canReplay ? 0 : undefined}
+            onClick={
+              canReplay && !playingAll
+                ? () => void handlePlaySentence(sentence)
+                : undefined
+            }
+            onKeyDown={
+              canReplay && !playingAll
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      void handlePlaySentence(sentence);
+                    }
+                  }
+                : undefined
+            }
             className={`rounded-xl border px-4 py-3 ${
               playingSentenceId === sentence.id
                 ? "border-violet-400 bg-violet-50"
                 : "border-zinc-200 bg-white"
-            }`}
+            } ${canReplay && !playingAll ? "cursor-pointer hover:border-violet-300" : ""}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1 space-y-1">
@@ -224,11 +243,17 @@ export function ComprehensionScriptViewer({
                 {textHidden ? (
                   <p className="text-sm italic text-zinc-400">Text hidden — tap Reveal script</p>
                 ) : null}
+                {canReplay ? (
+                  <p className="text-xs text-zinc-400">Tap sentence to replay audio</p>
+                ) : null}
               </div>
               {(emphasizeAudio || mode !== "reading") && (
                 <button
                   type="button"
-                  onClick={() => void handlePlaySentence(sentence)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handlePlaySentence(sentence);
+                  }}
                   disabled={playingAll}
                   className="shrink-0 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-800 hover:border-violet-300 disabled:opacity-50"
                   aria-label={`Play sentence ${sentence.sequence_order}`}
@@ -238,7 +263,8 @@ export function ComprehensionScriptViewer({
               )}
             </div>
           </div>
-        ))}
+        );
+        })}
         {sentences.length === 0 ? (
           <p className="text-sm text-zinc-500">This script has no sentences yet.</p>
         ) : null}
