@@ -4,6 +4,10 @@ import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ComprehensionScriptOverlay } from "@/components/comprehension/comprehension-script-overlay";
+import {
+  ComprehensionScriptList,
+  ComprehensionTierPicker,
+} from "@/components/comprehension/comprehension-picker";
 import { ComprehensionScriptViewer } from "@/components/comprehension/comprehension-script-viewer";
 import { GameSessionReview } from "@/components/games/game-session-review";
 import { SessionProgressBar } from "@/components/session-progress-bar";
@@ -17,6 +21,7 @@ import {
   type ComprehensionMode,
 } from "@/lib/comprehension/config";
 import { COMPREHENSION_TIER_LABELS } from "@/lib/comprehension/tiers";
+import type { ComprehensionTier } from "@/lib/comprehension/tiers";
 import type {
   ComprehensionPracticeContent,
   ComprehensionQuestion,
@@ -30,7 +35,7 @@ import { createClient } from "@/lib/supabase/client";
 
 const FEEDBACK_MS = 1000;
 
-type Phase = "hub" | "mode" | "script" | "questions" | "finished";
+type Phase = "tier" | "scripts" | "mode" | "script" | "questions" | "finished";
 
 type ComprehensionPracticeModeProps = ComprehensionPracticeContent;
 
@@ -41,7 +46,8 @@ export function ComprehensionPracticeMode({
   tablesReady,
   loadError,
 }: ComprehensionPracticeModeProps) {
-  const [phase, setPhase] = useState<Phase>("hub");
+  const [phase, setPhase] = useState<Phase>("tier");
+  const [selectedTier, setSelectedTier] = useState<ComprehensionTier | null>(null);
   const [selectedScript, setSelectedScript] = useState<ComprehensionScriptSummary | null>(null);
   const [mode, setMode] = useState<ComprehensionMode>("reading");
   const [viewerPreferences, setViewerPreferences] = useState<ComprehensionViewerPreferences>(
@@ -108,6 +114,11 @@ export function ComprehensionPracticeMode({
     void persist();
   }, [phase, questions.length, results, selectedScript, mode]);
 
+  function selectTier(tier: ComprehensionTier) {
+    setSelectedTier(tier);
+    setPhase("scripts");
+  }
+
   function selectScript(script: ComprehensionScriptSummary) {
     setSelectedScript(script);
     setPhase("mode");
@@ -159,8 +170,19 @@ export function ComprehensionPracticeMode({
     }, FEEDBACK_MS);
   }
 
-  function resetToHub() {
-    setPhase("hub");
+  function resetToTierPicker() {
+    setPhase("tier");
+    setSelectedTier(null);
+    setSelectedScript(null);
+    setScriptOverlayOpen(false);
+    setQuestions([]);
+    setQuestionIndex(0);
+    setResults([]);
+    setSelectedOption(null);
+  }
+
+  function resetToScriptList() {
+    setPhase("scripts");
     setSelectedScript(null);
     setScriptOverlayOpen(false);
     setQuestions([]);
@@ -195,7 +217,7 @@ export function ComprehensionPracticeMode({
         sessionLog={[]}
         pointsEarned={pointsEarned}
         scoreSubtitle={`${COMPREHENSION_MODE_LABELS[mode]} · ${selectedScript.title}`}
-        onPlayAgain={resetToHub}
+        onPlayAgain={resetToTierPicker}
       />
     );
   }
@@ -326,13 +348,10 @@ export function ComprehensionPracticeMode({
       <div className="space-y-5">
         <button
           type="button"
-          onClick={() => {
-            setSelectedScript(null);
-            setPhase("hub");
-          }}
+          onClick={resetToScriptList}
           className="text-sm font-medium text-violet-600 hover:text-violet-500"
         >
-          ← Back to scripts
+          ← Back to {selectedScript.tier ? COMPREHENSION_TIER_LABELS[selectedScript.tier] : "scripts"}
         </button>
 
         <div>
@@ -381,65 +400,19 @@ export function ComprehensionPracticeMode({
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
-          {COMPREHENSION_PRACTICE_DISPLAY_NAME}
-        </p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-900">Choose a script</h1>
-        <p className="mt-2 text-sm text-zinc-500">
-          Read or listen to a short passage, then answer comprehension questions.
-        </p>
-      </div>
+  if (phase === "scripts" && selectedTier) {
+    return (
+      <ComprehensionScriptList
+        tier={selectedTier}
+        scripts={scripts}
+        onBack={() => {
+          setSelectedTier(null);
+          setPhase("tier");
+        }}
+        onSelectScript={selectScript}
+      />
+    );
+  }
 
-      {scripts.length === 0 ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Scripts are being prepared — check back soon.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {scripts.map((script) => (
-            <button
-              key={script.id}
-              type="button"
-              onClick={() => selectScript(script)}
-              className="w-full rounded-xl border border-zinc-200 bg-white px-5 py-4 text-left shadow-sm hover:border-violet-300"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-zinc-900">{script.title}</p>
-                  {script.description ? (
-                    <p className="mt-1 text-sm text-zinc-500">{script.description}</p>
-                  ) : null}
-                  <p className="mt-2 text-xs text-zinc-400">
-                    {script.tier ? COMPREHENSION_TIER_LABELS[script.tier] : "Untiered"}
-                    {script.paragraph_count > 0
-                      ? ` · ${script.paragraph_count} paragraph${script.paragraph_count === 1 ? "" : "s"}`
-                      : ""}
-                    {` · ${script.sentence_count} sentence${script.sentence_count === 1 ? "" : "s"}`}
-                    {script.question_count > 0
-                      ? ` · ${script.question_count} question${script.question_count === 1 ? "" : "s"}`
-                      : ""}
-                  </p>
-                </div>
-                <div className="shrink-0 text-right text-xs">
-                  {script.difficulty ? (
-                    <p className="font-medium text-violet-700">Difficulty {script.difficulty}</p>
-                  ) : null}
-                  {script.needs_rewrite ? (
-                    <p className="mt-1 font-medium text-amber-700">Being rewritten</p>
-                  ) : null}
-                  <p className="mt-1 text-zinc-500">
-                    {script.listening_ready ? "Listening ready" : "Recordings coming soon"}
-                  </p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  return <ComprehensionTierPicker scripts={scripts} onSelectTier={selectTier} />;
 }

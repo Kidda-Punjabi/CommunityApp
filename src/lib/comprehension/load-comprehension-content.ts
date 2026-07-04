@@ -4,6 +4,10 @@ import {
   loadAudioAssetsForContentIds,
 } from "@/lib/audio/load-audio-asset";
 import { orderSentencesForScript } from "@/lib/comprehension/order-sentences";
+import {
+  filterLearnerScripts,
+  scriptListeningReady,
+} from "@/lib/comprehension/learner-scripts";
 import type {
   ComprehensionParagraph,
   ComprehensionPracticeContent,
@@ -77,8 +81,7 @@ function normalizeQuestion(row: Record<string, unknown>): ComprehensionQuestion 
 }
 
 function listeningReady(sentences: ComprehensionSentence[]): boolean {
-  if (sentences.length === 0) return false;
-  return sentences.every((sentence) => Boolean(sentence.audio_url?.trim()));
+  return scriptListeningReady(sentences);
 }
 
 export async function loadComprehensionPracticeContent(
@@ -196,7 +199,7 @@ export async function loadComprehensionPracticeContent(
     questionsByScript[scriptId].sort((a, b) => a.sequence_order - b.sequence_order);
   }
 
-  const scripts: ComprehensionScriptSummary[] = (scriptsResult.data ?? []).map((row) => {
+  const allSummaries: ComprehensionScriptSummary[] = (scriptsResult.data ?? []).map((row) => {
     const script = normalizeScript(row as Record<string, unknown>);
     const paragraphs = paragraphsByScript[script.id] ?? [];
     const sentences = sentencesByScript[script.id] ?? [];
@@ -210,11 +213,22 @@ export async function loadComprehensionPracticeContent(
     };
   });
 
+  const scripts = filterLearnerScripts(allSummaries, sentencesByScript, questionsByScript);
+
+  const learnerScriptIds = new Set(scripts.map((script) => script.id));
+  const filteredSentencesByScript: Record<string, ComprehensionSentence[]> = {};
+  const filteredQuestionsByScript: Record<string, ComprehensionQuestion[]> = {};
+
+  for (const scriptId of learnerScriptIds) {
+    filteredSentencesByScript[scriptId] = sentencesByScript[scriptId] ?? [];
+    filteredQuestionsByScript[scriptId] = questionsByScript[scriptId] ?? [];
+  }
+
   return {
     scripts,
     paragraphsByScript,
-    sentencesByScript,
-    questionsByScript,
+    sentencesByScript: filteredSentencesByScript,
+    questionsByScript: filteredQuestionsByScript,
     tablesReady: true,
     loadError: null,
   };
