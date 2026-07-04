@@ -22,17 +22,24 @@ export function appendTranscriptEntry(
   return [...prev, entry];
 }
 
-export function npcSetupEntry(exchange: ConversationExchange): TranscriptEntry {
+export function npcSetupEntry(
+  exchange: ConversationExchange,
+  audioUrl?: string | null
+): TranscriptEntry {
   return {
     id: `npc-setup-${exchange.id}`,
     role: "npc",
     gurmukhi: exchange.npc_setup_gurmukhi,
     romanised: exchange.npc_setup_romanised,
     english: exchange.npc_setup_english,
+    audioUrl: audioUrl ?? null,
   };
 }
 
-export function npcReplyEntry(exchange: ConversationExchange): TranscriptEntry | null {
+export function npcReplyEntry(
+  exchange: ConversationExchange,
+  audioUrl?: string | null
+): TranscriptEntry | null {
   const gurmukhi = exchange.npc_reply_gurmukhi?.trim();
   const english = exchange.npc_reply_english?.trim();
   if (!gurmukhi && !english) return null;
@@ -43,6 +50,7 @@ export function npcReplyEntry(exchange: ConversationExchange): TranscriptEntry |
     gurmukhi: gurmukhi ?? "",
     romanised: exchange.npc_reply_romanised,
     english: exchange.npc_reply_english,
+    audioUrl: audioUrl ?? null,
   };
 }
 

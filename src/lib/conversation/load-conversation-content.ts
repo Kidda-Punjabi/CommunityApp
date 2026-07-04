@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { conversationAudioKey } from "./audio-lookup";
 import type {
   ConversationCharacter,
   ConversationExchange,
@@ -107,7 +108,7 @@ function normalizeExchange(row: Record<string, unknown>): ConversationExchange {
 export async function loadConversationPracticeContent(
   supabase: SupabaseClient
 ): Promise<ConversationPracticeContent> {
-  const [charactersResult, scenariosResult, exchangesResult] = await Promise.all([
+  const [charactersResult, scenariosResult, exchangesResult, turnsResult] = await Promise.all([
     supabase
       .from("conversation_characters")
       .select("*")
@@ -122,10 +123,17 @@ export async function loadConversationPracticeContent(
       .from("conversation_exchanges")
       .select("*")
       .order("sequence_order", { ascending: true }),
+    supabase
+      .from("conversation_turns")
+      .select("scenario_id, gurmukhi_text, audio_url, requires_audio")
+      .eq("requires_audio", true),
   ]);
 
   const firstError =
-    charactersResult.error ?? scenariosResult.error ?? exchangesResult.error;
+    charactersResult.error ??
+    scenariosResult.error ??
+    exchangesResult.error ??
+    turnsResult.error;
 
   if (firstError) {
     if (
@@ -137,6 +145,7 @@ export async function loadConversationPracticeContent(
         characters: [],
         scenarios: [],
         exchangesByScenario: {},
+        npcAudioByKey: {},
         tableReady: false,
         loadError: null,
       };
@@ -146,6 +155,7 @@ export async function loadConversationPracticeContent(
       characters: [],
       scenarios: [],
       exchangesByScenario: {},
+      npcAudioByKey: {},
       tableReady: true,
       loadError: firstError.message,
     };
@@ -171,10 +181,23 @@ export async function loadConversationPracticeContent(
     exchangesByScenario[scenarioId].sort((a, b) => a.sequence_order - b.sequence_order);
   }
 
+  const npcAudioByKey: Record<string, string> = {};
+  if (!turnsResult.error) {
+    for (const row of turnsResult.data ?? []) {
+      const scenarioId = String(row.scenario_id ?? "");
+      const gurmukhi = String(row.gurmukhi_text ?? "").trim();
+      const audioUrl = row.audio_url ? String(row.audio_url).trim() : "";
+      if (scenarioId && gurmukhi && audioUrl) {
+        npcAudioByKey[conversationAudioKey(scenarioId, gurmukhi)] = audioUrl;
+      }
+    }
+  }
+
   return {
     characters,
     scenarios,
     exchangesByScenario,
+    npcAudioByKey,
     tableReady: true,
     loadError: null,
   };

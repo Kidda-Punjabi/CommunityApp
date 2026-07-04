@@ -84,6 +84,8 @@ export type ConversationPracticeContent = {
   characters: ConversationCharacter[];
   scenarios: ConversationScenario[];
   exchangesByScenario: Record<string, ConversationExchange[]>;
+  /** Approved NPC line audio keyed by `${scenarioId}:${gurmukhi}`. */
+  npcAudioByKey: Record<string, string>;
   tableReady: boolean;
   loadError: string | null;
 };

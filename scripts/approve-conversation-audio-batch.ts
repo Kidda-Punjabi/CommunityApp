@@ -1,10 +1,8 @@
 /**
- * Bulk-approve pending comprehension sentence audio.
+ * Bulk-approve pending conversation turn audio.
  *
  * Usage:
- *   npx tsx scripts/approve-comprehension-audio-batch.ts
- *   npx tsx scripts/approve-comprehension-audio-batch.ts --limit=50
- *   npx tsx scripts/approve-comprehension-audio-batch.ts --reviewer-id=<uuid>
+ *   npx tsx scripts/approve-conversation-audio-batch.ts
  *
  * Requires in .env.local:
  *   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -70,8 +68,6 @@ async function main() {
     process.exit(1);
   }
 
-  const limit = Math.max(1, parseInt(argValue("limit") ?? "99999", 10));
-
   const supabase = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -87,7 +83,7 @@ async function main() {
   const { data: assets, error } = await supabase
     .from("audio_assets")
     .select("content_id, status")
-    .eq("content_type", "comprehension_sentence")
+    .eq("content_type", "conversation_turn")
     .eq("status", "pending_review")
     .order("updated_at", { ascending: true });
 
@@ -96,8 +92,8 @@ async function main() {
     process.exit(1);
   }
 
-  const queue = (assets ?? []).slice(0, limit);
-  console.log(`Found ${assets?.length ?? 0} pending comprehension clip(s); approving ${queue.length}.`);
+  const queue = assets ?? [];
+  console.log(`Found ${queue.length} pending conversation clip(s); approving all.`);
 
   if (queue.length === 0) {
     return;
@@ -110,7 +106,7 @@ async function main() {
     const contentId = queue[i].content_id as string;
     const result = await approveContentAudio(
       supabase,
-      "comprehension_sentence",
+      "conversation_turn",
       contentId,
       reviewerId
     );
@@ -122,7 +118,7 @@ async function main() {
     }
 
     ok += 1;
-    if ((i + 1) % 25 === 0 || i + 1 === queue.length) {
+    if ((i + 1) % 10 === 0 || i + 1 === queue.length) {
       console.log(`  OK    ${i + 1}/${queue.length} approved…`);
     }
   }

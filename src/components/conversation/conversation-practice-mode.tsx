@@ -44,6 +44,7 @@ import {
   studentAnswerEntry,
 } from "@/lib/conversation/transcript";
 import { createClient } from "@/lib/supabase/client";
+import { lookupNpcAudio } from "@/lib/conversation/audio-lookup";
 
 const ADVANCE_MS = 1400;
 
@@ -57,6 +58,7 @@ export function ConversationPracticeMode({
   characters,
   scenarios,
   exchangesByScenario,
+  npcAudioByKey,
   tableReady,
   loadError,
 }: ConversationPracticeModeProps) {
@@ -157,6 +159,11 @@ export function ConversationPracticeMode({
     setHardBank(buildHardTileBank(exchange.hard_word_tiles, exchange.id));
   }
 
+  function npcAudioFor(exchange: ConversationExchange, gurmukhi: string): string | null {
+    if (!selectedScenarioId) return null;
+    return lookupNpcAudio(npcAudioByKey, selectedScenarioId, gurmukhi);
+  }
+
   function startScenario(selectedDifficulty: ConversationDifficulty) {
     if (!selectedScenarioId) return;
     const scenarioExchanges = exchangesByScenario[selectedScenarioId] ?? [];
@@ -167,7 +174,10 @@ export function ConversationPracticeMode({
     setExchanges(scenarioExchanges);
     setExchangeIndex(0);
     setResults([]);
-    setTranscript([npcSetupEntry(scenarioExchanges[0])]);
+    const first = scenarioExchanges[0];
+    setTranscript([
+      npcSetupEntry(first, npcAudioFor(first, first.npc_setup_gurmukhi)),
+    ]);
     setPlayPhase("playing");
     resetQuestionState(scenarioExchanges[0]);
   }
@@ -188,7 +198,10 @@ export function ConversationPracticeMode({
 
     setExchangeIndex(nextIndex);
     resetQuestionState(exchanges[nextIndex]);
-    setTranscript((prev) => appendTranscriptEntry(prev, npcSetupEntry(exchanges[nextIndex])));
+    const next = exchanges[nextIndex];
+    setTranscript((prev) =>
+      appendTranscriptEntry(prev, npcSetupEntry(next, npcAudioFor(next, next.npc_setup_gurmukhi)))
+    );
   }
 
   function recordResult(exchange: ConversationExchange, correct: boolean) {
@@ -209,7 +222,12 @@ export function ConversationPracticeMode({
   }
 
   function afterFeedback(exchange: ConversationExchange) {
-    const reply = npcReplyEntry(exchange);
+    const reply = npcReplyEntry(
+      exchange,
+      exchange.npc_reply_gurmukhi
+        ? npcAudioFor(exchange, exchange.npc_reply_gurmukhi)
+        : null
+    );
 
     if (reply) {
       setExchangeStep("reply");

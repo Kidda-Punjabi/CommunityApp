@@ -22,6 +22,9 @@ type ConversationMessageBubbleProps = {
   gurmukhi: string;
   romanised?: string | null;
   english?: string | null;
+  audioUrl?: string | null;
+  isPlaying?: boolean;
+  onPlay?: () => void;
 };
 
 export function ConversationMessageBubble({
@@ -30,7 +33,12 @@ export function ConversationMessageBubble({
   gurmukhi,
   romanised,
   english,
+  audioUrl,
+  isPlaying = false,
+  onPlay,
 }: ConversationMessageBubbleProps) {
+  const canPlay = Boolean(onPlay && audioUrl?.trim());
+
   if (role === "student") {
     return (
       <div className="flex justify-end">
@@ -65,14 +73,43 @@ export function ConversationMessageBubble({
           emoji
         )}
       </div>
-      <div className="max-w-[88%] rounded-2xl rounded-tl-sm border border-zinc-200 bg-white px-4 py-3 shadow-sm">
-        {character?.name ? (
-          <p className="text-xs font-medium text-violet-600">{character.name}</p>
-        ) : null}
-        <p className="mt-1 text-base font-semibold leading-relaxed text-zinc-900">{gurmukhi}</p>
-        {romanised ? <p className="mt-1 text-sm text-violet-600">{romanised}</p> : null}
-        {english ? <p className="mt-1 text-sm text-zinc-500">{english}</p> : null}
-      </div>
+      <button
+        type="button"
+        onClick={canPlay ? onPlay : undefined}
+        disabled={!canPlay}
+        className={`max-w-[88%] rounded-2xl rounded-tl-sm border px-4 py-3 text-left shadow-sm transition-colors ${
+          isPlaying
+            ? "border-violet-400 bg-violet-50"
+            : canPlay
+              ? "cursor-pointer border-zinc-200 bg-white hover:border-violet-300 hover:bg-violet-50/40"
+              : "border-zinc-200 bg-white"
+        }`}
+        aria-label={canPlay ? "Play message audio" : undefined}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {character?.name ? (
+              <p className="text-xs font-medium text-violet-600">{character.name}</p>
+            ) : null}
+            <p className="mt-1 text-base font-semibold leading-relaxed text-zinc-900">{gurmukhi}</p>
+            {romanised ? <p className="mt-1 text-sm text-violet-600">{romanised}</p> : null}
+            {english ? <p className="mt-1 text-sm text-zinc-500">{english}</p> : null}
+            {canPlay ? (
+              <p className="mt-1.5 text-xs text-zinc-400">Tap to listen</p>
+            ) : null}
+          </div>
+          {canPlay ? (
+            <span
+              className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${
+                isPlaying ? "bg-violet-600 text-white" : "bg-zinc-100 text-zinc-700"
+              }`}
+              aria-hidden="true"
+            >
+              {isPlaying ? "…" : "▶"}
+            </span>
+          ) : null}
+        </div>
+      </button>
     </div>
   );
 }
