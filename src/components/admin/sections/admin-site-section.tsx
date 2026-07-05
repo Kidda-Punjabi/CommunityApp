@@ -6,6 +6,8 @@ import { EventsTab } from "@/app/admin/content/components/events-tab";
 import { AnnouncementsTab } from "@/app/admin/content/components/announcements-tab";
 import { BrandingTab } from "@/app/admin/content/components/branding-tab";
 import { StreakDebugTab } from "@/app/admin/content/components/streak-debug-tab";
+import { ForumModerationTab } from "@/components/forum/forum-moderation-tab";
+import type { ForumReportRow } from "@/lib/forum/types";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
 import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
 import { ui } from "@/lib/ui/styles";
@@ -13,13 +15,18 @@ import { ui } from "@/lib/ui/styles";
 const tabs = [
   { id: "events", label: "Events" },
   { id: "announcements", label: "Announcements" },
+  { id: "forum", label: "Forum moderation" },
   { id: "branding", label: "Branding" },
   { id: "streaks", label: "Streak debug" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
 
-export function AdminSiteSection() {
+type AdminSiteSectionProps = {
+  forumReports: ForumReportRow[];
+};
+
+export function AdminSiteSection({ forumReports }: AdminSiteSectionProps) {
   const { data, branding } = useAdminData();
   const [activeTab, setActiveTab] = useState<TabId>("events");
 
@@ -38,6 +45,7 @@ export function AdminSiteSection() {
       <div className="mt-6">
         {activeTab === "events" && <EventsTab data={data} />}
         {activeTab === "announcements" && <AnnouncementsTab />}
+        {activeTab === "forum" && <ForumModerationTab reports={forumReports} />}
         {activeTab === "branding" && <BrandingTab initialBranding={branding} />}
         {activeTab === "streaks" && <StreakDebugTab />}
       </div>

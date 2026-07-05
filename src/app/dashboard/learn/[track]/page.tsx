@@ -35,15 +35,18 @@ import {
   fetchLessonRecordingsForUser,
 } from "@/lib/tutoring/lesson-content-access";
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
+import { fetchCatchupEnabledLessonIds } from "@/lib/catchup/load-catchup";
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 
 type LearnTrackPageProps = {
   params: Promise<{ track: string }>;
+  searchParams: Promise<{ homework?: string; catchupReturn?: string }>;
 };
 
-export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
+export default async function LearnTrackPage({ params, searchParams }: LearnTrackPageProps) {
   const { track: trackId } = await params;
+  const { homework: homeworkFocusLessonId, catchupReturn } = await searchParams;
   const track = getLearnTrack(trackId);
 
   if (!track) notFound();
@@ -65,10 +68,14 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
 
   if (track.alwaysUnlocked) {
     const lessons = filterFreeLessons(allLessons);
-    const [completionMap, contentUnlockedMap, recordingMap] = await Promise.all([
+    const [completionMap, contentUnlockedMap, recordingMap, catchupLessonIds] = await Promise.all([
       fetchLessonCompletionMap(supabase, user!.id, lessons),
       fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
       fetchLessonRecordingsForUser(supabase, user!.id, lessons.map((lesson) => lesson.id)),
+      fetchCatchupEnabledLessonIds(
+        supabase,
+        lessons.map((lesson) => lesson.id)
+      ),
     ]);
     const accessibleLessons = lessons.filter((lesson) => {
       const canBrowse = canAccessLessonInContext(access, lesson);
@@ -93,6 +100,7 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
         completionMap={completionMap}
         contentUnlockedMap={contentUnlockedMap}
         recordingMap={recordingMap}
+        catchupLessonIds={catchupLessonIds}
         courseProgress={{
           completed: courseProgress.completedLessons,
           total: courseProgress.totalLessons,
@@ -112,13 +120,15 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
   const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
   const showHomework = track.id === "foundational" || track.id === "beginners";
   const lessonIds = lessons.map((lesson) => lesson.id);
-  const [completionMap, contentUnlockedMap, recordingMap, homeworkMap] = await Promise.all([
+  const [completionMap, contentUnlockedMap, recordingMap, homeworkMap, catchupLessonIds] =
+    await Promise.all([
     fetchLessonCompletionMap(supabase, user!.id, lessons),
     fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
     fetchLessonRecordingsForUser(supabase, user!.id, lessonIds),
     showHomework
       ? fetchHomeworkSubmissionsForUser(supabase, user!.id, lessonIds)
       : Promise.resolve(new Map()),
+    fetchCatchupEnabledLessonIds(supabase, lessonIds),
   ]);
   const accessibleLessons = lessons.filter((lesson) => {
     const canBrowse = canAccessLessonInContext(access, lesson);
@@ -178,6 +188,9 @@ export default async function LearnTrackPage({ params }: LearnTrackPageProps) {
       recordingMap={recordingMap}
       homeworkMap={homeworkMap}
       showHomework={showHomework}
+      catchupLessonIds={catchupLessonIds}
+      homeworkFocusLessonId={homeworkFocusLessonId ?? null}
+      catchupReturn={catchupReturn ?? null}
     />
   );
 }

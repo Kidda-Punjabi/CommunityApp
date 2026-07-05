@@ -142,6 +142,14 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     section: "vocabulary",
     href: "/dashboard/games/lane-runner",
   },
+  {
+    type: "speaking_practice",
+    title: "Speaking Practice",
+    description: "See a vocab word, record yourself saying it, and get instant pronunciation feedback",
+    emoji: "🗣️",
+    section: "vocabulary",
+    href: "/dashboard/games/speaking-practice",
+  },
 ];
 
 export function gameDeckPlayHref(

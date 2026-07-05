@@ -1,5 +1,6 @@
 "use client";
 
+import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -20,11 +21,16 @@ import { recordStreakActivity, type StreakResult } from "@/lib/progress/streak";
 type FlashcardStudyModeProps = {
   deck: FlashcardDeckContext;
   initialProgress: FlashcardProgressRow[];
+  catchupReturn?: string | null;
 };
 
 type SessionPhase = "studying" | "summary";
 
-export function FlashcardStudyMode({ deck, initialProgress }: FlashcardStudyModeProps) {
+export function FlashcardStudyMode({
+  deck,
+  initialProgress,
+  catchupReturn = null,
+}: FlashcardStudyModeProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<SessionPhase>("studying");
   const [reviewMode, setReviewMode] = useState(false);
@@ -192,6 +198,7 @@ export function FlashcardStudyMode({ deck, initialProgress }: FlashcardStudyMode
         onReview={startReview}
         onFinish={finishSession}
         deckHubHref={deckHubHref}
+        catchupReturn={catchupReturn}
       />
     );
   }
@@ -207,6 +214,7 @@ export function FlashcardStudyMode({ deck, initialProgress }: FlashcardStudyMode
         onReview={startReview}
         onFinish={finishSession}
         deckHubHref={deckHubHref}
+        catchupReturn={catchupReturn}
       />
     );
   }
@@ -344,6 +352,7 @@ function StudySessionSummary({
   onReview,
   onFinish,
   deckHubHref,
+  catchupReturn,
 }: {
   deck: FlashcardDeckContext;
   stats: ReturnType<typeof computeDeckConfidenceStats>;
@@ -353,6 +362,7 @@ function StudySessionSummary({
   onReview: () => void;
   onFinish: () => void;
   deckHubHref: string;
+  catchupReturn?: string | null;
 }) {
   const hasNotConfident = stats.notConfident > 0;
 
@@ -384,6 +394,7 @@ function StudySessionSummary({
             >
               Done
             </button>
+            <CatchupReturnButton returnUrl={catchupReturn} />
           </>
         ) : (
           <>
@@ -419,6 +430,7 @@ function StudySessionSummary({
               >
                 Finish for now
               </button>
+              <CatchupReturnButton returnUrl={catchupReturn} />
             </div>
           </>
         )}

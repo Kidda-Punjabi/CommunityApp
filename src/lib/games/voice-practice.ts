@@ -58,12 +58,103 @@ export function romanisedHint(sentence: GrammarSentence): string | null {
   return line || null;
 }
 
+/** Multi-char replacements must run before single-char mapping. */
+const CYRILLIC_MULTI_TO_LATIN: [string, string][] = [
+  ["щ", "shch"],
+  ["Щ", "shch"],
+  ["ш", "sh"],
+  ["Ш", "sh"],
+  ["ч", "ch"],
+  ["Ч", "ch"],
+  ["ж", "zh"],
+  ["Ж", "zh"],
+  ["ю", "yu"],
+  ["Ю", "yu"],
+  ["я", "ya"],
+  ["Я", "ya"],
+  ["ё", "yo"],
+  ["Ё", "yo"],
+];
+
+const CYRILLIC_SINGLE_TO_LATIN: Record<string, string> = {
+  а: "a",
+  А: "a",
+  б: "b",
+  Б: "b",
+  в: "v",
+  В: "v",
+  г: "g",
+  Г: "g",
+  д: "d",
+  Д: "d",
+  е: "e",
+  Е: "e",
+  з: "z",
+  З: "z",
+  и: "i",
+  И: "i",
+  й: "y",
+  Й: "y",
+  к: "k",
+  К: "k",
+  л: "l",
+  Л: "l",
+  м: "m",
+  М: "m",
+  н: "n",
+  Н: "n",
+  о: "o",
+  О: "o",
+  п: "p",
+  П: "p",
+  р: "r",
+  Р: "r",
+  с: "s",
+  С: "s",
+  т: "t",
+  Т: "t",
+  у: "u",
+  У: "u",
+  ф: "f",
+  Ф: "f",
+  х: "h",
+  Х: "h",
+  ц: "ts",
+  Ц: "ts",
+  ъ: "",
+  Ъ: "",
+  ы: "y",
+  Ы: "y",
+  ь: "",
+  Ь: "",
+  э: "e",
+  Э: "e",
+};
+
+/**
+ * Scribe sometimes returns Cyrillic lookalikes for spoken Punjabi romanisation
+ * (e.g. "Сочно" for "sochna"). Map those to Latin before fuzzy matching.
+ */
+export function transliterateHomoglyphsToLatin(text: string): string {
+  let result = text;
+  for (const [from, to] of CYRILLIC_MULTI_TO_LATIN) {
+    result = result.split(from).join(to);
+  }
+  return [...result].map((char) => CYRILLIC_SINGLE_TO_LATIN[char] ?? char).join("");
+}
+
 function normalizeSpeechText(text: string): string {
-  return text
+  return transliterateHomoglyphsToLatin(text)
     .trim()
     .normalize("NFC")
     .replace(/\s+/g, " ")
-    .replace(/[.,!?;:'"()\-–—]/g, "");
+    .replace(/[.,!?;:'"()\-–—]/g, "")
+    .toLowerCase();
+}
+
+/** Latin-friendly transcript for display and romanised matching. */
+export function normalizeSpeechTranscript(text: string): string {
+  return normalizeSpeechText(text);
 }
 
 function levenshteinDistance(a: string, b: string): number {

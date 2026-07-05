@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { createClient } from "@/lib/supabase/client";
 import { sumPointsEarned } from "@/lib/points/notify-points-earned";
@@ -28,6 +29,7 @@ type QuizPlayerProps = {
   lessonNumber: number | null;
   lessonId?: string | null;
   questions: QuizQuestion[];
+  catchupReturn?: string | null;
 };
 
 export function QuizPlayer({
@@ -37,6 +39,7 @@ export function QuizPlayer({
   lessonNumber,
   lessonId,
   questions,
+  catchupReturn,
 }: QuizPlayerProps) {
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -136,6 +139,7 @@ export function QuizPlayer({
           </p>
         )}
         <div className="mt-6 flex flex-col gap-2">
+          <CatchupReturnButton returnUrl={catchupReturn} />
           <Link
             href="/dashboard/practice"
             className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500"

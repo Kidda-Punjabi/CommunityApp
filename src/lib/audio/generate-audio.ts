@@ -229,6 +229,144 @@ export async function generateContentAudio(
   };
 }
 
+type AutoApproveOptions = {
+  scriptOverride?: string | null;
+  voiceId?: string;
+  reviewerId: string;
+};
+
+function isAudioAssetUniqueViolation(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("audio_assets_content_unique") ||
+    (lower.includes("duplicate key") && lower.includes("audio_assets"))
+  );
+}
+
+/**
+ * Dictionary batch jobs only — synthesize once and persist as approved immediately
+ * (skips the manual review queue). Caller must verify no audio_assets row exists yet.
+ */
+export async function generateAndAutoApproveContentAudio(
+  supabase: SupabaseClient,
+  contentType: AudioContentType,
+  contentId: string,
+  options: AutoApproveOptions
+): Promise<GenerateAudioResult> {
+  const adapter = getAudioContentAdapter(contentType);
+  const context = await adapter.loadContext(supabase, contentId);
+
+  if (!context) {
+    return { ok: false, error: "Content not found." };
+  }
+
+  const scriptText = resolveScriptText(context, options.scriptOverride);
+  if (!scriptText) {
+    return { ok: false, error: "Add a script (Punjabi text) before generating." };
+  }
+
+  const existing = await loadAudioAsset(supabase, contentType, contentId);
+  if (existing) {
+    return { ok: false, error: "Audio asset already exists.", skipped: true };
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    return { ok: false, error: "NEXT_PUBLIC_SUPABASE_URL is not set." };
+  }
+
+  const voiceId = resolveVettedVoiceId(options.voiceId);
+  const bucket = bucketForContentType(contentType);
+  const storagePath = adapter.storagePath(context);
+  const pronunciationLocator = await getPronunciationDictionaryLocator(supabase);
+  const locators = pronunciationLocator ? [pronunciationLocator] : undefined;
+
+  let synthResult;
+  try {
+    synthResult = await synthesizeSpeech({
+      text: scriptText,
+      voiceId,
+      pronunciationDictionaryLocators: locators,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "ElevenLabs request failed.";
+    console.error(`[audio] TTS failed for ${contentType} ${contentId}:`, message);
+    return { ok: false, error: message };
+  }
+
+  const finalScriptText = synthResult.normalizedText;
+
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(storagePath, synthResult.audio, {
+      contentType: "audio/mpeg",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    return { ok: false, error: `Storage upload failed: ${uploadError.message}` };
+  }
+
+  const publicUrl = getPublicAudioUrl(supabaseUrl, contentType, storagePath);
+  const now = new Date().toISOString();
+
+  const { data: asset, error: assetError } = await supabase
+    .from("audio_assets")
+    .insert({
+      content_type: contentType,
+      content_id: contentId,
+      script_text: finalScriptText,
+      storage_path: storagePath,
+      audio_url: publicUrl,
+      status: "approved",
+      reviewed_by: options.reviewerId,
+      reviewed_at: now,
+      updated_at: now,
+    })
+    .select("id")
+    .single();
+
+  if (assetError || !asset) {
+    const message = assetError?.message ?? "Failed to create audio asset record.";
+    if (isAudioAssetUniqueViolation(message)) {
+      return { ok: false, error: "Audio asset already exists.", skipped: true };
+    }
+    return { ok: false, error: message };
+  }
+
+  const { data: generation, error: generationError } = await supabase
+    .from("audio_generations")
+    .insert({
+      audio_asset_id: asset.id,
+      script_text: finalScriptText,
+      storage_path: storagePath,
+      status: "approved",
+      voice_id: voiceId,
+      variation_index: 0,
+      reviewed_by: options.reviewerId,
+      reviewed_at: now,
+    })
+    .select("id")
+    .single();
+
+  if (generationError || !generation) {
+    return {
+      ok: false,
+      error: generationError?.message ?? "Failed to save generation record.",
+    };
+  }
+
+  await adapter.syncOnApprove(supabase, context, publicUrl);
+
+  return {
+    ok: true,
+    generationId: generation.id,
+    storagePath,
+    audioAssetId: asset.id,
+    variationCount: 1,
+  };
+}
+
 export function getPublicAudioUrl(
   supabaseUrl: string,
   contentType: AudioContentType,

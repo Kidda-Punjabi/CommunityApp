@@ -17,6 +17,7 @@ import {
   VIEW_AS_COOKIE,
 } from "./view-as";
 import { isAdmin } from "@/lib/auth/admin";
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
@@ -67,6 +68,15 @@ export async function getCourseAccessContext(
         label: formatViewAsLabel(viewAsState.tiers),
         tiers: viewAsState.tiers,
       },
+    };
+  }
+
+  if (await canAccessAdminPanel(user, supabase)) {
+    return {
+      unlockedCourseIds: new Set(courses.map((course) => course.id)),
+      courses,
+      isFreeOnly: false,
+      viewAs: null,
     };
   }
 

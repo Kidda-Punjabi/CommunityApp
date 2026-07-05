@@ -44,10 +44,12 @@ type VoicePracticeModeProps = {
   sentences: GrammarSentence[];
   tableReady: boolean;
   loadError: string | null;
+  catchupReturn?: string | null;
 };
 
 export function VoicePracticeMode({
   sentences,
+  catchupReturn = null,
   tableReady,
   loadError,
 }: VoicePracticeModeProps) {
@@ -314,6 +316,7 @@ export function VoicePracticeMode({
         pointsEarned={pointsEarned}
         scoreSubtitle={`${passed} passed out of ${totalQuestions}`}
         onPlayAgain={() => setPhase("ready")}
+        catchupReturn={catchupReturn}
       />
     );
   }

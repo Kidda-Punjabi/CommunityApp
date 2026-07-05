@@ -1,3 +1,4 @@
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { canAccessLessonInContext } from "@/lib/learning/learn-access";
 import { getCourseRequiredTier } from "./access";
 import { getCourseAccessContext } from "./unlocked";
@@ -115,6 +116,22 @@ export async function canUserAccessQuiz(
       lesson: null,
       requiredCourseLabel: null,
       requiredTier: null,
+      levelLocked: false,
+      previousLevel: null,
+    };
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user && (await canAccessAdminPanel(user, supabase))) {
+    const membership = await checkQuizMembershipAccess(supabase, userId, quiz);
+    return {
+      allowed: true as const,
+      lesson: membership.lesson,
+      requiredCourseLabel: membership.requiredCourseLabel,
+      requiredTier: membership.requiredTier,
       levelLocked: false,
       previousLevel: null,
     };

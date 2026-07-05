@@ -3,6 +3,8 @@
 import {
   addPronunciationRuleAndRegenerateAction,
   approveContentAudioAction,
+  bulkApprovePendingAudioAction,
+  bulkGenerateAudioAction,
   loadAudioReviewQueue,
   loadContentAudioAsset,
   loadPronunciationRulesAction,
@@ -12,6 +14,7 @@ import {
   type AudioReviewItem,
 } from "@/app/admin/content/audio-actions";
 import { formatAudioReviewTitle, getPublicAudioUrl } from "@/lib/audio/generate-audio";
+import { AUDIO_CONTENT_ADAPTERS } from "@/lib/audio/content-adapters";
 import {
   audioAssetStatusBadgeClass,
   AUDIO_ASSET_STATUS_LABELS,
@@ -411,6 +414,136 @@ function ReviewCard({
   );
 }
 
+function BulkAudioActions({
+  pendingCount,
+  needsChangesCount,
+  contentTypeFilter,
+  onComplete,
+}: {
+  pendingCount: number;
+  needsChangesCount: number;
+  contentTypeFilter: string;
+  onComplete: () => void;
+}) {
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const contentType =
+    contentTypeFilter === "all"
+      ? undefined
+      : Object.values(AUDIO_CONTENT_ADAPTERS).find(
+          (adapter) => adapter.label === contentTypeFilter
+        )?.contentType;
+
+  function runBulk(
+    action: "approve" | "generate",
+    limit?: number
+  ) {
+    setMessage(null);
+    setError(null);
+    startTransition(async () => {
+      const result =
+        action === "approve"
+          ? await bulkApprovePendingAudioAction({ contentType, limit })
+          : await bulkGenerateAudioAction({ contentType, limit: limit ?? 9999 });
+
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      const detail =
+        result.failed && result.failed > 0
+          ? ` (${result.failed} failed)`
+          : "";
+      setMessage(`${result.success ?? "Done."}${detail}`);
+      onComplete();
+    });
+  }
+
+  const filterNote =
+    contentTypeFilter === "all" ? "all types" : contentTypeFilter.toLowerCase();
+
+  return (
+    <section className={`${ui.cardBordered} space-y-4`}>
+      <div>
+        <h3 className="font-semibold text-zinc-900">Bulk actions</h3>
+        <p className="mt-1 text-sm text-zinc-500">
+          Process clips in batches for {filterNote}. Approve picks the first take when multiple
+          variations exist. Generate queues missing or needs-changes clips (up to 200 per run).
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-6">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Approve pending ({pendingCount})
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending || pendingCount === 0}
+              onClick={() => runBulk("approve", 10)}
+              className={secondaryButtonClass}
+            >
+              {pending ? "Working…" : "Approve 10"}
+            </button>
+            <button
+              type="button"
+              disabled={pending || pendingCount === 0}
+              onClick={() => runBulk("approve")}
+              className={buttonClass}
+            >
+              {pending ? "Working…" : `Approve all (${pendingCount})`}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Generate audio
+            {needsChangesCount > 0 ? ` · ${needsChangesCount} need changes` : ""}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => runBulk("generate", 10)}
+              className={secondaryButtonClass}
+            >
+              {pending ? "Working…" : "Generate 10"}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => runBulk("generate", 50)}
+              className={secondaryButtonClass}
+            >
+              {pending ? "Working…" : "Generate 50"}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => runBulk("generate")}
+              className={buttonClass}
+            >
+              {pending ? "Working…" : "Generate all"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {error ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+      ) : null}
+      {message ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>
+      ) : null}
+    </section>
+  );
+}
+
 export function AudioReviewTab() {
   const [items, setItems] = useState<AudioReviewItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -493,6 +626,15 @@ export function AudioReviewTab() {
       </div>
 
       <PronunciationRulesSection refreshKey={rulesRefreshKey} />
+
+      {!loading && !loadError ? (
+        <BulkAudioActions
+          pendingCount={pending.length}
+          needsChangesCount={needsChanges.length}
+          contentTypeFilter={typeFilter}
+          onComplete={() => void refresh()}
+        />
+      ) : null}
 
       {typeLabels.length > 1 ? (
         <div className="flex flex-wrap gap-2">

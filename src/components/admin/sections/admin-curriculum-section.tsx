@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
+import { CatchupSegmentsTab } from "@/app/admin/content/components/catchup-segments-tab";
 import { CoursesLessonsTab } from "@/app/admin/content/components/courses-lessons-tab";
 import { QuizzesTab } from "@/app/admin/content/components/quizzes-tab";
 import { FlashcardsTab } from "@/app/admin/content/components/flashcards-tab";
@@ -12,6 +13,7 @@ import { ui } from "@/lib/ui/styles";
 
 const tabs = [
   { id: "lessons", label: "Courses & lessons" },
+  { id: "catchup", label: "Catch-up segments" },
   { id: "quizzes", label: "Quizzes" },
   { id: "flashcards", label: "Flashcards" },
 ] as const;
@@ -37,6 +39,7 @@ export function AdminCurriculumSection() {
 
       <div className="mt-6">
         {activeTab === "lessons" && <CoursesLessonsTab data={data} />}
+        {activeTab === "catchup" && <CatchupSegmentsTab data={data} />}
         {activeTab === "quizzes" && <QuizzesTab data={data} />}
         {activeTab === "flashcards" && <FlashcardsTab data={data} />}
       </div>

@@ -2,6 +2,9 @@ import type { AudioContentType } from "@/lib/audio/types";
 
 export const AUDIO_BUCKETS = {
   lesson: "lesson-audio",
+  lesson_segment_beat: "lesson-audio",
+  flashcard: "lesson-audio",
+  flashcard_example: "lesson-audio",
   comprehension_sentence: "comprehension-audio",
   conversation_turn: "conversation-audio",
   conversation_exchange_npc_setup: "conversation-audio",

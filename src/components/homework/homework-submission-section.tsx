@@ -11,6 +11,7 @@ import {
   recordingExtensionForBlob,
   useAudioRecorder,
 } from "@/lib/audio/use-audio-recorder";
+import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import { lessonContentRowButtonClass } from "@/components/lesson-card";
 import { cn, ui } from "@/lib/ui/styles";
@@ -19,6 +20,7 @@ type HomeworkSubmissionSectionProps = {
   lessonId: string;
   submission: HomeworkSubmissionView | null;
   variant?: "standalone" | "integrated";
+  catchupReturn?: string | null;
 };
 
 function homeworkSubtitle(submission: HomeworkSubmissionView | null): string {
@@ -133,9 +135,20 @@ function HomeworkRecorderBody({
             <p className="mt-2 text-sm text-zinc-700">{localSubmission.tutorComment}</p>
           ) : null}
         </div>
-        <div className="mt-3">
-          <HomeworkAudioPlayback storagePath={localSubmission.storagePath} />
-        </div>
+        {localSubmission.submissionType === "text" && localSubmission.textAnswers?.length ? (
+          <ul className="mt-3 space-y-2">
+            {localSubmission.textAnswers.map((answer) => (
+              <li key={answer.question_number} className="rounded-xl border border-zinc-200 px-3 py-2 text-sm">
+                <span className="font-medium">{answer.question_number}.</span> {answer.answer_text}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {localSubmission.storagePath ? (
+          <div className="mt-3">
+            <HomeworkAudioPlayback storagePath={localSubmission.storagePath} />
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -146,9 +159,18 @@ function HomeworkRecorderBody({
         <div className="rounded-2xl bg-violet-50 px-4 py-3">
           <p className="text-sm font-semibold text-violet-800">In review</p>
           <p className="mt-1 text-sm text-violet-700">
-            Your tutor is listening. You will get a notification when they have feedback.
+            Your tutor is reviewing your homework. You will get a notification when they have feedback.
           </p>
         </div>
+        {localSubmission.submissionType === "text" && localSubmission.textAnswers?.length ? (
+          <ul className="mt-3 space-y-2">
+            {localSubmission.textAnswers.map((answer) => (
+              <li key={answer.question_number} className="rounded-xl border border-zinc-200 px-3 py-2 text-sm">
+                <span className="font-medium">{answer.question_number}.</span> {answer.answer_text}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {localSubmission.storagePath ? (
           <div className="mt-3">
             <HomeworkAudioPlayback storagePath={localSubmission.storagePath} />
@@ -230,6 +252,7 @@ export function HomeworkSubmissionSection({
   lessonId,
   submission,
   variant = "standalone",
+  catchupReturn = null,
 }: HomeworkSubmissionSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const [localSubmission, setLocalSubmission] = useState(submission);
@@ -255,11 +278,14 @@ export function HomeworkSubmissionSection({
           </button>
         </div>
         {expanded ? (
-          <HomeworkRecorderBody
-            lessonId={lessonId}
-            localSubmission={localSubmission}
-            variant="integrated"
-          />
+          <div className="space-y-3 border-b border-zinc-100 pb-3">
+            <HomeworkRecorderBody
+              lessonId={lessonId}
+              localSubmission={localSubmission}
+              variant="integrated"
+            />
+            <CatchupReturnButton returnUrl={catchupReturn} />
+          </div>
         ) : null}
       </>
     );

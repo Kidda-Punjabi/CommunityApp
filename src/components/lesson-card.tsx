@@ -42,6 +42,8 @@ type LessonCardProps = {
   showHomework?: boolean;
   /** e.g. "Week" for community course; defaults to "Lesson". */
   unitLabel?: string;
+  hasCatchupSegments?: boolean;
+  homeworkCatchupReturn?: string | null;
 };
 
 export function LessonCard({
@@ -59,6 +61,8 @@ export function LessonCard({
   homework,
   showHomework = false,
   unitLabel = "Lesson",
+  hasCatchupSegments = false,
+  homeworkCatchupReturn = null,
 }: LessonCardProps) {
   const hasPresentation = Boolean(lesson.presentation_url);
   const hasPdf = SHOW_LESSON_PDF && Boolean(lesson.pdf_url);
@@ -152,11 +156,20 @@ export function LessonCard({
               href={recording ? recording.url : undefined}
               external
             />
+            {hasCatchupSegments ? (
+              <ContentRow
+                label="Catch-up lesson"
+                subtitle="Self-paced review before your next live session"
+                actionLabel="Start"
+                href={`/catchup/${lesson.id}`}
+              />
+            ) : null}
             {showHomework ? (
               <HomeworkSubmissionSection
                 lessonId={lesson.id}
                 submission={homework ?? null}
                 variant="integrated"
+                catchupReturn={homeworkCatchupReturn}
               />
             ) : null}
             {contentUnlocked && hasApprovedGeneratedAudio && lesson.audio_url ? (

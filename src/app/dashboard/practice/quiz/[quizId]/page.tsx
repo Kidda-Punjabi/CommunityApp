@@ -7,10 +7,12 @@ import { notFound } from "next/navigation";
 
 type QuizPageProps = {
   params: Promise<{ quizId: string }>;
+  searchParams: Promise<{ catchupReturn?: string }>;
 };
 
-export default async function QuizPracticePage({ params }: QuizPageProps) {
+export default async function QuizPracticePage({ params, searchParams }: QuizPageProps) {
   const { quizId } = await params;
+  const { catchupReturn } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -97,6 +99,7 @@ export default async function QuizPracticePage({ params }: QuizPageProps) {
         lessonNumber={quiz.level_number}
         lessonId={lessonId}
         questions={questions}
+        catchupReturn={catchupReturn ?? null}
       />
     </div>
   );

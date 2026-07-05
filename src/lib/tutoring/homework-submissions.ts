@@ -1,13 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type HomeworkSubmissionStatus = "pending_review" | "reviewed";
+export type HomeworkSubmissionType = "voice" | "text";
 
 export type HomeworkSubmissionView = {
   id: string;
   lessonId: string;
-  storagePath: string;
+  submissionType: HomeworkSubmissionType;
+  storagePath: string | null;
   mimeType: string | null;
   durationSeconds: number | null;
+  textAnswers: Array<{ question_number: number; answer_text: string }> | null;
   status: HomeworkSubmissionStatus;
   approved: boolean | null;
   tutorComment: string | null;
@@ -17,9 +20,11 @@ export type HomeworkSubmissionView = {
 type HomeworkRow = {
   id: string;
   lesson_id: string;
-  storage_path: string;
+  storage_path: string | null;
   mime_type: string | null;
   duration_seconds: number | null;
+  submission_type?: HomeworkSubmissionType | null;
+  text_answers?: Array<{ question_number: number; answer_text: string }> | null;
   status: HomeworkSubmissionStatus;
   approved: boolean | null;
   tutor_comment: string | null;
@@ -30,9 +35,11 @@ function toView(row: HomeworkRow): HomeworkSubmissionView {
   return {
     id: row.id,
     lessonId: row.lesson_id,
+    submissionType: row.submission_type === "text" ? "text" : "voice",
     storagePath: row.storage_path,
     mimeType: row.mime_type,
     durationSeconds: row.duration_seconds,
+    textAnswers: row.text_answers ?? null,
     status: row.status,
     approved: row.approved,
     tutorComment: row.tutor_comment,
@@ -55,7 +62,7 @@ export async function fetchHomeworkSubmissionsForUser(
   const { data, error } = await supabase
     .from("homework_submissions")
     .select(
-      "id, lesson_id, storage_path, mime_type, duration_seconds, status, approved, tutor_comment, submitted_at"
+      "id, lesson_id, storage_path, mime_type, duration_seconds, submission_type, text_answers, status, approved, tutor_comment, submitted_at"
     )
     .eq("student_id", userId)
     .in("lesson_id", lessonIds);
@@ -80,9 +87,17 @@ export type PendingHomeworkReviewRow = {
   lessonTitle: string;
   lessonNumber: number;
   submittedAt: string;
-  storagePath: string;
+  submissionType: HomeworkSubmissionType;
+  storagePath: string | null;
   mimeType: string | null;
   durationSeconds: number | null;
+  textAnswers: Array<{ question_number: number; answer_text: string }> | null;
+  answerKeys: Array<{
+    questionNumber: number;
+    promptEnglish: string;
+    answerRomanised: string;
+    answerGurmukhi: string | null;
+  }>;
 };
 
 export async function loadPendingHomeworkReviews(
@@ -98,12 +113,15 @@ export async function loadPendingHomeworkReviews(
       storage_path,
       mime_type,
       duration_seconds,
+      submission_type,
+      text_answers,
       submitted_at,
       student:student_id (full_name, preferred_name),
       lesson:lesson_id (title, lesson_number)
     `
     )
     .eq("status", "pending_review")
+    .eq("is_practice", false)
     .order("submitted_at", { ascending: true });
 
   if (error) {
@@ -112,24 +130,49 @@ export async function loadPendingHomeworkReviews(
   }
 
   const { getDisplayName } = await import("@/lib/profile/display-name");
+  const { loadHomeworkTextQuestionsForLesson } = await import(
+    "@/lib/catchup/load-segment-questions"
+  );
 
-  return (data ?? []).map((row) => {
-    const student = Array.isArray(row.student) ? row.student[0] : row.student;
-    const lesson = Array.isArray(row.lesson) ? row.lesson[0] : row.lesson;
+  const rows = await Promise.all(
+    (data ?? []).map(async (row) => {
+      const student = Array.isArray(row.student) ? row.student[0] : row.student;
+      const lesson = Array.isArray(row.lesson) ? row.lesson[0] : row.lesson;
+      const lessonId = row.lesson_id as string;
+      const submissionType: HomeworkSubmissionType =
+        row.submission_type === "text" ? "text" : "voice";
 
-    return {
-      id: row.id as string,
-      studentId: row.student_id as string,
-      studentName: getDisplayName(student) ?? "Student",
-      lessonId: row.lesson_id as string,
-      lessonTitle: (lesson?.title as string) ?? "Lesson",
-      lessonNumber: (lesson?.lesson_number as number) ?? 0,
-      submittedAt: row.submitted_at as string,
-      storagePath: row.storage_path as string,
-      mimeType: (row.mime_type as string | null) ?? null,
-      durationSeconds: (row.duration_seconds as number | null) ?? null,
-    };
-  });
+      const answerKeys =
+        submissionType === "text"
+          ? (await loadHomeworkTextQuestionsForLesson(supabase, lessonId)).map((question) => ({
+              questionNumber: question.questionNumber,
+              promptEnglish: question.promptEnglish,
+              answerRomanised: question.answerRomanised,
+              answerGurmukhi: question.answerGurmukhi,
+            }))
+          : [];
+
+      return {
+        id: row.id as string,
+        studentId: row.student_id as string,
+        studentName: getDisplayName(student) ?? "Student",
+        lessonId,
+        lessonTitle: (lesson?.title as string) ?? "Lesson",
+        lessonNumber: (lesson?.lesson_number as number) ?? 0,
+        submittedAt: row.submitted_at as string,
+        submissionType,
+        storagePath: (row.storage_path as string | null) ?? null,
+        mimeType: (row.mime_type as string | null) ?? null,
+        durationSeconds: (row.duration_seconds as number | null) ?? null,
+        textAnswers:
+          (row.text_answers as Array<{ question_number: number; answer_text: string }> | null) ??
+          null,
+        answerKeys,
+      };
+    })
+  );
+
+  return rows;
 }
 
 export const HOMEWORK_RECORDINGS_BUCKET = "homework-recordings";

@@ -38,6 +38,9 @@ type LearnLessonListProps = {
   homeworkMap?: Map<string, HomeworkSubmissionView>;
   showHomework?: boolean;
   unitLabel?: string;
+  catchupLessonIds?: Set<string>;
+  homeworkFocusLessonId?: string | null;
+  catchupReturn?: string | null;
 };
 
 export function LearnLessonList({
@@ -58,9 +61,13 @@ export function LearnLessonList({
   homeworkMap,
   showHomework = false,
   unitLabel,
+  catchupLessonIds,
+  homeworkFocusLessonId,
+  catchupReturn,
 }: LearnLessonListProps) {
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
   const defaultExpandedLessonId =
+    homeworkFocusLessonId ??
     lessons.find((lesson) => {
       const canBrowse = canAccessLessonInContext(access, lesson);
       const contentUnlocked = isLessonContentUnlockedForUser(
@@ -173,6 +180,10 @@ export function LearnLessonList({
                 homework={homeworkMap?.get(lesson.id) ?? null}
                 showHomework={showHomework}
                 unitLabel={unitLabel}
+                hasCatchupSegments={catchupLessonIds?.has(lesson.id) ?? false}
+                homeworkCatchupReturn={
+                  homeworkFocusLessonId === lesson.id ? (catchupReturn ?? null) : null
+                }
               />
             );
           })}

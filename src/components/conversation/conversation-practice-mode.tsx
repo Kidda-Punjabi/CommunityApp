@@ -62,12 +62,15 @@ type SetupPhase = "characters" | "scenarios" | "difficulty";
 type PlayPhase = "playing" | "finished";
 type ExchangeStep = "question" | "feedback" | "reply";
 
-type ConversationPracticeModeProps = ConversationPracticeContent;
+type ConversationPracticeModeProps = ConversationPracticeContent & {
+  catchupReturn?: string | null;
+};
 
 export function ConversationPracticeMode({
   characters,
   scenarios,
   exchangesByScenario,
+  catchupReturn = null,
   npcAudioByKey,
   exchangeAudioById,
   tableReady,
@@ -381,6 +384,7 @@ export function ConversationPracticeMode({
         pointsEarned={pointsEarned}
         scoreSubtitle={`${correctCount} out of ${exchanges.length} exchanges correct`}
         onPlayAgain={resetToCharacters}
+        catchupReturn={catchupReturn}
       />
     );
   }

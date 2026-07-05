@@ -13,6 +13,7 @@ import {
 } from "@/lib/games/memory-grid-batches";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
+import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
 import { SessionProgressBar } from "@/components/session-progress-bar";
@@ -23,12 +24,14 @@ type MemoryGridModeProps = {
   deck: FlashcardDeckContext;
   initialBestScore: number;
   challenge?: ChallengePlayContext | null;
+  catchupReturn?: string | null;
 };
 
 export function MemoryGridMode({
   deck,
   initialBestScore,
   challenge = null,
+  catchupReturn = null,
 }: MemoryGridModeProps) {
   const backHref = `/dashboard/games/memory-grid`;
 
@@ -253,6 +256,7 @@ export function MemoryGridMode({
             Play again
           </button>
         )}
+        <CatchupReturnButton returnUrl={catchupReturn} />
         <BackLink fallbackHref={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">Back to decks</BackLink>
       </div>
     );

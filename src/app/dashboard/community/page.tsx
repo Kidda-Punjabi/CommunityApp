@@ -62,6 +62,24 @@ export default async function CommunityPage() {
 
         <FriendsSummaryRow friends={friendsData.friends} variant="community" />
 
+        <section>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-medium text-zinc-900">Community forum</h2>
+            <Link
+              href="/dashboard/community/forum"
+              className="text-sm font-medium text-violet-600 hover:text-violet-500"
+            >
+              Open forum
+            </Link>
+          </div>
+          <Link href="/dashboard/community/forum" className={ui.cardInteractive}>
+            <p className="font-medium text-zinc-900">Ask questions &amp; share tips</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              Connect with members and tutors in the community forum.
+            </p>
+          </Link>
+        </section>
+
         {testimonial ? <FeaturedTestimonialCard testimonial={testimonial} /> : null}
       </div>
     </div>

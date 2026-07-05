@@ -10,7 +10,7 @@ import { notFound } from "next/navigation";
 
 type MemoryGridPlayPageProps = {
   params: Promise<{ lessonId: string; deckId: string }>;
-  searchParams: Promise<{ challenge?: string }>;
+  searchParams: Promise<{ challenge?: string; catchupReturn?: string }>;
 };
 
 export default async function MemoryGridPlayPage({
@@ -18,6 +18,7 @@ export default async function MemoryGridPlayPage({
   searchParams,
 }: MemoryGridPlayPageProps) {
   const { lessonId, deckId } = await params;
+  const { catchupReturn } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -40,6 +41,7 @@ export default async function MemoryGridPlayPage({
         deck={result.deck}
         initialBestScore={result.matchScore?.best_score ?? 0}
         challenge={challenge}
+        catchupReturn={catchupReturn ?? null}
       />
     </div>
   );

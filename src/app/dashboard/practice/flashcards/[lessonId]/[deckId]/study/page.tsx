@@ -9,10 +9,12 @@ import { notFound } from "next/navigation";
 
 type StudyPageProps = {
   params: Promise<{ lessonId: string; deckId: string }>;
+  searchParams: Promise<{ catchupReturn?: string }>;
 };
 
-export default async function FlashcardsStudyPage({ params }: StudyPageProps) {
+export default async function FlashcardsStudyPage({ params, searchParams }: StudyPageProps) {
   const { lessonId, deckId } = await params;
+  const { catchupReturn } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -28,7 +30,11 @@ export default async function FlashcardsStudyPage({ params }: StudyPageProps) {
 
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
-      <FlashcardStudyMode deck={result.deck} initialProgress={result.progress} />
+      <FlashcardStudyMode
+        deck={result.deck}
+        initialProgress={result.progress}
+        catchupReturn={catchupReturn ?? null}
+      />
     </div>
   );
 }

@@ -11,6 +11,9 @@ export type AudioGenerationStatus = "pending_review" | "approved" | "rejected";
 
 export type AudioContentType =
   | "lesson"
+  | "lesson_segment_beat"
+  | "flashcard"
+  | "flashcard_example"
   | "comprehension_sentence"
   | "conversation_turn"
   | "conversation_exchange_npc_setup"
@@ -56,6 +59,9 @@ export const AUDIO_ASSET_STATUS_LABELS: Record<AudioAssetStatus, string> = {
 
 export const AUDIO_CONTENT_TYPE_LABELS: Record<AudioContentType, string> = {
   lesson: "Lesson",
+  lesson_segment_beat: "Catch-up beat",
+  flashcard: "Flashcard",
+  flashcard_example: "Flashcard example",
   comprehension_sentence: "Comprehension Practice",
   conversation_turn: "Conversation Turn",
   conversation_exchange_npc_setup: "Conversation — NPC setup",

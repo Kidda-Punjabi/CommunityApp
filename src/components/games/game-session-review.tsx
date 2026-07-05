@@ -1,3 +1,4 @@
+import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
@@ -19,6 +20,7 @@ type GameSessionReviewProps = {
   extraSummary?: React.ReactNode;
   onPlayAgain: () => void;
   hidePlayAgain?: boolean;
+  catchupReturn?: string | null;
   gamesHubHref?: string;
 };
 
@@ -156,6 +158,7 @@ export function GameSessionReview({
   onPlayAgain,
   hidePlayAgain = false,
   gamesHubHref = GAMES_HUB_HREF,
+  catchupReturn = null,
 }: GameSessionReviewProps) {
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
   const validLog = sessionLog.filter((entry) => entry.prompt.trim().length > 0);
@@ -202,6 +205,7 @@ export function GameSessionReview({
       >
         Play again
       </button>
+      <CatchupReturnButton returnUrl={catchupReturn} />
       <Link
         href={gamesHubHref}
         className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"

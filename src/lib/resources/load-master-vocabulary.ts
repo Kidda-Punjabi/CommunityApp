@@ -6,47 +6,96 @@ import {
   MASTER_VOCABULARY_DECK_NAME,
   type DictionaryEntry,
 } from "./dictionary";
+import { loadDictionaryAudioByFlashcardId } from "./load-dictionary-audio";
 
-const CARD_SELECT_WITH_ROMANISED =
-  "id, front_text, back_text, romanised, topic_tags";
-const CARD_SELECT_BASE = "id, front_text, back_text, topic_tags";
+const CARD_SELECT_WITH_EXAMPLES =
+  "id, front_text, back_text, romanised, topic_tags, example_sentence_gurmukhi, example_sentence_romanised, example_sentence_english";
 
-export async function loadMasterVocabularyDictionary(
-  supabase: SupabaseClient
-): Promise<{ entries: DictionaryEntry[]; deckFound: boolean }> {
+async function resolveMasterDeckId(supabase: SupabaseClient): Promise<string | null> {
   const { data: sets } = await supabase.from("flashcard_sets").select("id, name");
-
   const masterSet =
     sets?.find((set) => set.name === MASTER_VOCABULARY_DECK_NAME) ??
     sets?.find((set) => isMasterVocabularyDeck(set.name));
+  return masterSet?.id ?? null;
+}
 
-  if (!masterSet) {
-    return { entries: [], deckFound: false };
-  }
+export async function loadDictionaryEntryById(
+  supabase: SupabaseClient,
+  entryId: string
+): Promise<DictionaryEntry | null> {
+  const masterDeckId = await resolveMasterDeckId(supabase);
+  if (!masterDeckId) return null;
 
-  let cardRows: Parameters<typeof mapFlashcardToDictionaryEntry>[0][] | null = null;
-
-  const withRomanised = await supabase
+  const { data: row, error } = await supabase
     .from("flashcards")
-    .select(CARD_SELECT_WITH_ROMANISED)
-    .eq("deck_id", masterSet.id)
-    .order("front_text");
+    .select(CARD_SELECT_WITH_EXAMPLES)
+    .eq("id", entryId)
+    .eq("deck_id", masterDeckId)
+    .maybeSingle();
 
-  if (!withRomanised.error) {
-    cardRows = withRomanised.data ?? [];
-  } else if (withRomanised.error.message.includes("romanised")) {
-    const fallback = await supabase
-      .from("flashcards")
-      .select(CARD_SELECT_BASE)
-      .eq("deck_id", masterSet.id)
-      .order("front_text");
-    cardRows = fallback.data ?? [];
-  } else {
-    throw withRomanised.error;
+  if (error) throw error;
+  if (!row) return null;
+
+  const audioById = await loadDictionaryAudioByFlashcardId(supabase, [row.id]);
+  return mapFlashcardToDictionaryEntry(row, audioById.get(row.id));
+}
+
+export async function loadMasterVocabularyDictionary(
+  supabase: SupabaseClient
+): Promise<{ entries: DictionaryEntry[]; deckFound: boolean; rawRowCount: number }> {
+  const masterDeckId = await resolveMasterDeckId(supabase);
+
+  if (!masterDeckId) {
+    return { entries: [], deckFound: false, rawRowCount: 0 };
   }
+
+  let cardRows: Parameters<typeof mapFlashcardToDictionaryEntry>[0][] = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const withExamples = await supabase
+      .from("flashcards")
+      .select(CARD_SELECT_WITH_EXAMPLES)
+      .eq("deck_id", masterDeckId)
+      .order("front_text")
+      .range(from, from + pageSize - 1);
+
+    if (!withExamples.error) {
+      cardRows.push(...(withExamples.data ?? []));
+      if ((withExamples.data ?? []).length < pageSize) break;
+      from += pageSize;
+      continue;
+    }
+
+    if (withExamples.error.message.includes("example_sentence")) {
+      const { data, error } = await supabase
+        .from("flashcards")
+        .select("id, front_text, back_text, romanised, topic_tags")
+        .eq("deck_id", masterDeckId)
+        .order("front_text")
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      cardRows.push(...(data ?? []));
+      if ((data ?? []).length < pageSize) break;
+      from += pageSize;
+      continue;
+    }
+
+    throw withExamples.error;
+  }
+
+  const rows = cardRows;
+  const audioById = await loadDictionaryAudioByFlashcardId(
+    supabase,
+    rows.map((row) => row.id)
+  );
 
   return {
-    entries: dedupeDictionaryEntries((cardRows ?? []).map(mapFlashcardToDictionaryEntry)),
+    entries: dedupeDictionaryEntries(
+      rows.map((row) => mapFlashcardToDictionaryEntry(row, audioById.get(row.id)))
+    ),
     deckFound: true,
+    rawRowCount: rows.length,
   };
 }

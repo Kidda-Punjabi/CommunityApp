@@ -1,6 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/navigation/back-link";
+import { dictionaryEntryHasExample } from "@/components/resources/dictionary-entry-sections";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -15,35 +16,58 @@ const DEBOUNCE_MS = 200;
 type DictionarySearchProps = {
   entries: DictionaryEntry[];
   deckFound: boolean;
+  rawRowCount?: number;
 };
 
+function dictionaryEntryHref(entryId: string): string {
+  return `/dashboard/games/dictionary/${entryId}`;
+}
+
 function DictionaryResultRow({ entry }: { entry: DictionaryEntry }) {
+  const hasExample = dictionaryEntryHasExample(entry);
+
   return (
-    <li className="px-4 py-3.5">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="font-medium text-zinc-900">{entry.english}</p>
-        <div className="flex flex-wrap gap-1.5">
-          {entry.gender && (
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium capitalize text-zinc-600">
-              {entry.gender}
-            </span>
-          )}
-          {entry.isPlural && (
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600">
-              plural
-            </span>
-          )}
+    <li>
+      <Link
+        href={dictionaryEntryHref(entry.id)}
+        className="flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-violet-50/60"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium text-zinc-900">{entry.english}</p>
+            {entry.gender ? (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium capitalize text-zinc-600">
+                {entry.gender}
+              </span>
+            ) : null}
+            {entry.isPlural ? (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600">
+                plural
+              </span>
+            ) : null}
+            {entry.wordAudioUrl ? (
+              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+                audio
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-lg text-zinc-900">{formatPunjabiForDisplay(entry.punjabi)}</p>
+          {entry.romanised ? (
+            <p className="mt-0.5 text-sm font-medium text-violet-600">{entry.romanised}</p>
+          ) : null}
+          {hasExample ? (
+            <p className="mt-1 text-xs text-zinc-500">Tap to see example sentence</p>
+          ) : null}
         </div>
-      </div>
-      <p className="mt-1.5 text-xl text-zinc-900">{formatPunjabiForDisplay(entry.punjabi)}</p>
-      {entry.romanised && (
-        <p className="mt-1 text-sm font-medium text-violet-600">{entry.romanised}</p>
-      )}
+        <span className="shrink-0 text-lg text-zinc-300" aria-hidden="true">
+          ›
+        </span>
+      </Link>
     </li>
   );
 }
 
-export function DictionarySearch({ entries, deckFound }: DictionarySearchProps) {
+export function DictionarySearch({ entries, deckFound, rawRowCount }: DictionarySearchProps) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
@@ -69,7 +93,8 @@ export function DictionarySearch({ entries, deckFound }: DictionarySearchProps) 
           Punjabi Dictionary
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Search by English, Gurmukhi, or romanised pronunciation.
+          Search by English, Gurmukhi, romanised pronunciation, or example sentence. Tap a result
+          to open the full entry.
         </p>
       </div>
 
@@ -94,7 +119,11 @@ export function DictionarySearch({ entries, deckFound }: DictionarySearchProps) 
 
           {showPrompt && (
             <p className="text-center text-sm text-zinc-500">
-              {entries.length} words in the master list. Start typing to search.
+              {entries.length} unique words in the dictionary
+              {rawRowCount && rawRowCount > entries.length
+                ? ` (${rawRowCount} cards in the master deck)`
+                : ""}
+              . Start typing to search.
             </p>
           )}
 

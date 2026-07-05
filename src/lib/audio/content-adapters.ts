@@ -51,6 +51,21 @@ function courseNameFromRelation(
   return courses?.name ?? "course";
 }
 
+/** Prefer Gurmukhi for TTS — lesson cards use Gurmukhi front; dictionary uses Gurmukhi back. */
+function defaultFlashcardScript(
+  frontText: string | null | undefined,
+  backText: string | null | undefined,
+  romanised: string | null | undefined
+): string {
+  const front = frontText?.trim() ?? "";
+  const back = backText?.trim() ?? "";
+  const gurmukhi = /[\u0A00-\u0A7F]/;
+
+  if (gurmukhi.test(front)) return front;
+  if (gurmukhi.test(back)) return back;
+  return romanised?.trim() || back || front || "Flashcard phrase";
+}
+
 const lessonAdapter: AudioContentAdapter = {
   contentType: "lesson",
   label: "Lesson",
@@ -313,8 +328,132 @@ const conversationExchangeNpcReplyAdapter = createConversationExchangeAdapter("n
 const conversationExchangePlayerResponseAdapter =
   createConversationExchangeAdapter("player_response");
 
+const lessonSegmentBeatAdapter: AudioContentAdapter = {
+  contentType: "lesson_segment_beat",
+  label: "Catch-up beat",
+  async loadContext(supabase, contentId) {
+    const { data, error } = await supabase
+      .from("lesson_segment_beats")
+      .select("id, beat_number, script_text, segment_id")
+      .eq("id", contentId)
+      .single();
+
+    if (error || !data) return null;
+
+    const { data: segment } = await supabase
+      .from("lesson_segments")
+      .select("title, segment_number, lesson_id")
+      .eq("id", data.segment_id)
+      .maybeSingle();
+
+    let courseName = "course";
+    let lessonNumber: number | null = null;
+    if (segment?.lesson_id) {
+      const { data: lesson } = await supabase
+        .from("lessons")
+        .select("lesson_number, courses(name)")
+        .eq("id", segment.lesson_id)
+        .maybeSingle();
+      lessonNumber = lesson?.lesson_number ?? null;
+      courseName = courseNameFromRelation(lesson?.courses ?? null);
+    }
+
+    return {
+      contentType: "lesson_segment_beat",
+      contentId: data.id,
+      title: segment?.title ?? "Catch-up segment",
+      subtitle: `${courseName} · L${lessonNumber ?? "?"} · Beat ${data.beat_number}`,
+      defaultScript: data.script_text?.trim() || segment?.title || "Narration",
+      courseName,
+    };
+  },
+  storagePath(context) {
+    return `catchup-beats/${context.contentId}.mp3`;
+  },
+  async syncOnGenerate() {},
+  async syncOnApprove() {},
+  async syncOnReject() {},
+  async syncScriptOnly(supabase, context, scriptText) {
+    await supabase
+      .from("lesson_segment_beats")
+      .update({ script_text: scriptText })
+      .eq("id", context.contentId);
+  },
+};
+
+const flashcardAdapter: AudioContentAdapter = {
+  contentType: "flashcard",
+  label: "Flashcard",
+  async loadContext(supabase, contentId) {
+    const { data, error } = await supabase
+      .from("flashcards")
+      .select("id, front_text, back_text, romanised, deck_name")
+      .eq("id", contentId)
+      .single();
+
+    if (error || !data) return null;
+
+    const defaultScript = defaultFlashcardScript(
+      data.front_text,
+      data.back_text,
+      data.romanised
+    );
+    return {
+      contentType: "flashcard",
+      contentId: data.id,
+      title: data.front_text?.trim() || data.deck_name?.trim() || "Flashcard",
+      subtitle: data.romanised?.trim() || data.back_text?.trim() || null,
+      defaultScript,
+    };
+  },
+  storagePath(context) {
+    return `flashcards/${context.contentId}.mp3`;
+  },
+  async syncOnGenerate() {},
+  async syncOnApprove() {},
+  async syncOnReject() {},
+  async syncScriptOnly() {},
+};
+
+const flashcardExampleAdapter: AudioContentAdapter = {
+  contentType: "flashcard_example",
+  label: "Flashcard example",
+  async loadContext(supabase, contentId) {
+    const { data, error } = await supabase
+      .from("flashcards")
+      .select(
+        "id, front_text, example_sentence_gurmukhi, example_sentence_romanised, example_sentence_english"
+      )
+      .eq("id", contentId)
+      .single();
+
+    if (error || !data) return null;
+
+    const defaultScript = data.example_sentence_gurmukhi?.trim();
+    if (!defaultScript) return null;
+
+    return {
+      contentType: "flashcard_example",
+      contentId: data.id,
+      title: data.front_text?.trim() || "Example sentence",
+      subtitle: data.example_sentence_english?.trim() || null,
+      defaultScript,
+    };
+  },
+  storagePath(context) {
+    return `flashcards/${context.contentId}-example.mp3`;
+  },
+  async syncOnGenerate() {},
+  async syncOnApprove() {},
+  async syncOnReject() {},
+  async syncScriptOnly() {},
+};
+
 export const AUDIO_CONTENT_ADAPTERS: Record<AudioContentType, AudioContentAdapter> = {
   lesson: lessonAdapter,
+  lesson_segment_beat: lessonSegmentBeatAdapter,
+  flashcard: flashcardAdapter,
+  flashcard_example: flashcardExampleAdapter,
   comprehension_sentence: comprehensionSentenceAdapter,
   conversation_turn: conversationTurnAdapter,
   conversation_exchange_npc_setup: conversationExchangeNpcSetupAdapter,

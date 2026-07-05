@@ -2,6 +2,7 @@ import {
   isCommunityCourseLesson,
   isLessonContentUnlockedForUser,
 } from "@/lib/learning/learn-access";
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import type { CourseAccessContext } from "@/lib/membership/unlocked";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -26,6 +27,17 @@ export async function fetchLessonContentUnlockMap(
 ): Promise<Map<string, boolean>> {
   const map = new Map<string, boolean>();
   if (lessons.length === 0) return map;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user && (await canAccessAdminPanel(user, supabase))) {
+    for (const lesson of lessons) {
+      map.set(lesson.id, isLessonContentUnlockedForUser(access, lesson, true));
+    }
+    return map;
+  }
 
   const rpcLessonIds: string[] = [];
 

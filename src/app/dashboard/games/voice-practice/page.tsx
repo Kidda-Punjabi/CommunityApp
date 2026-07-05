@@ -2,7 +2,12 @@ import { VoicePracticeMode } from "@/components/games/voice-practice-mode";
 import { loadGrammarSentencesForGames } from "@/lib/games/load-grammar-sentences";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function VoicePracticePage() {
+type PageProps = {
+  searchParams: Promise<{ catchupReturn?: string }>;
+};
+
+export default async function VoicePracticePage({ searchParams }: PageProps) {
+  const { catchupReturn } = await searchParams;
   const supabase = await createClient();
   const { sentences, tableReady, loadError } = await loadGrammarSentencesForGames(supabase);
 
@@ -12,6 +17,7 @@ export default async function VoicePracticePage() {
         sentences={sentences}
         tableReady={tableReady}
         loadError={loadError}
+        catchupReturn={catchupReturn ?? null}
       />
     </div>
   );

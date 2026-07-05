@@ -7,6 +7,13 @@ export type DictionaryEntry = {
   romanised: string | null;
   gender: "masculine" | "feminine" | null;
   isPlural: boolean;
+  exampleGurmukhi: string | null;
+  exampleRomanised: string | null;
+  exampleEnglish: string | null;
+  /** Approved word pronunciation only — never pending clips */
+  wordAudioUrl: string | null;
+  /** Approved example sentence audio only */
+  exampleAudioUrl: string | null;
 };
 
 type FlashcardRow = {
@@ -15,6 +22,14 @@ type FlashcardRow = {
   back_text: string;
   romanised?: string | null;
   topic_tags?: string[] | null;
+  example_sentence_gurmukhi?: string | null;
+  example_sentence_romanised?: string | null;
+  example_sentence_english?: string | null;
+};
+
+export type DictionaryAudioLookup = {
+  wordAudioUrl: string | null;
+  exampleAudioUrl: string | null;
 };
 
 export function normalizeMasterDeckName(name: string): string {
@@ -47,7 +62,10 @@ export function parseDictionaryMetadata(topicTags: string[] | null | undefined):
   return { gender, isPlural };
 }
 
-export function mapFlashcardToDictionaryEntry(row: FlashcardRow): DictionaryEntry {
+export function mapFlashcardToDictionaryEntry(
+  row: FlashcardRow,
+  audio?: DictionaryAudioLookup
+): DictionaryEntry {
   const { gender, isPlural } = parseDictionaryMetadata(row.topic_tags);
 
   return {
@@ -57,6 +75,11 @@ export function mapFlashcardToDictionaryEntry(row: FlashcardRow): DictionaryEntr
     romanised: row.romanised?.trim() || null,
     gender,
     isPlural,
+    exampleGurmukhi: row.example_sentence_gurmukhi?.trim() || null,
+    exampleRomanised: row.example_sentence_romanised?.trim() || null,
+    exampleEnglish: row.example_sentence_english?.trim() || null,
+    wordAudioUrl: audio?.wordAudioUrl ?? null,
+    exampleAudioUrl: audio?.exampleAudioUrl ?? null,
   };
 }
 
@@ -105,6 +128,9 @@ export function searchDictionaryEntries(
     if (entry.english.toLowerCase().includes(term)) return true;
     if (entry.punjabi.toLowerCase().includes(term)) return true;
     if (entry.romanised?.toLowerCase().includes(term)) return true;
+    if (entry.exampleEnglish?.toLowerCase().includes(term)) return true;
+    if (entry.exampleRomanised?.toLowerCase().includes(term)) return true;
+    if (entry.exampleGurmukhi?.toLowerCase().includes(term)) return true;
     return false;
   });
 }

@@ -19,14 +19,22 @@ import {
   type PronunciationRule,
   type PronunciationRuleType,
 } from "@/lib/elevenlabs/pronunciation-dictionary";
-import { loadGenerationsForAsset } from "@/lib/audio/load-audio-asset";
+import { loadAudioAsset, loadGenerationsForAsset } from "@/lib/audio/load-audio-asset";
 import type { AudioAssetStatus, AudioContentType, AudioGeneration } from "@/lib/audio/types";
 import { revalidatePath } from "next/cache";
 
 const ADMIN_CURRICULUM_PATH = "/admin/content/curriculum";
 const ADMIN_GAMES_PATH = "/admin/content/games";
+const ADMIN_AUDIO_REVIEW_PATH = "/admin/content/audio-review";
+const MASTER_DECK_NAME = "Vocabulary - Master List";
 
 export type AudioActionResult = { error?: string; success?: string };
+
+export type BulkAudioActionResult = AudioActionResult & {
+  processed?: number;
+  succeeded?: number;
+  failed?: number;
+};
 
 export type PendingVariation = {
   id: string;
@@ -74,6 +82,7 @@ async function requireAdminUser() {
 
 function revalidateAudioPaths(contentType: AudioContentType) {
   revalidatePath(ADMIN_CURRICULUM_PATH);
+  revalidatePath(ADMIN_AUDIO_REVIEW_PATH);
   if (contentType === "lesson") {
     revalidatePath("/dashboard/learn");
   }
@@ -92,6 +101,12 @@ function revalidateAudioPaths(contentType: AudioContentType) {
   ) {
     revalidatePath(ADMIN_GAMES_PATH);
     revalidatePath("/dashboard/games/conversation-practice");
+  }
+  if (contentType === "lesson_segment_beat") {
+    revalidatePath("/catchup", "layout");
+  }
+  if (contentType === "flashcard" || contentType === "flashcard_example") {
+    revalidatePath("/dashboard/games/dictionary");
   }
 }
 
@@ -477,6 +492,286 @@ export async function loadContentAudioAsset(
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to load audio asset." };
+  }
+}
+
+type GenerateCandidate = {
+  contentType: AudioContentType;
+  contentId: string;
+  script: string;
+};
+
+function candidateKey(contentType: AudioContentType, contentId: string): string {
+  return `${contentType}:${contentId}`;
+}
+
+async function firstPendingGenerationId(
+  supabase: Awaited<ReturnType<typeof requireAdminUser>>["supabase"],
+  contentType: AudioContentType,
+  contentId: string
+): Promise<string | null> {
+  const asset = await loadAudioAsset(supabase, contentType, contentId);
+  if (!asset) return null;
+
+  const generations = await loadGenerationsForAsset(supabase, asset.id);
+  const pending = generations
+    .filter((generation) => generation.status === "pending_review")
+    .sort((a, b) => (a.variation_index ?? 0) - (b.variation_index ?? 0));
+
+  return pending[0]?.id ?? null;
+}
+
+async function discoverGenerateCandidates(
+  supabase: Awaited<ReturnType<typeof requireAdminUser>>["supabase"],
+  options: { contentType?: AudioContentType; limit: number }
+): Promise<GenerateCandidate[]> {
+  const candidates: GenerateCandidate[] = [];
+  const seen = new Set<string>();
+
+  function addCandidate(contentType: AudioContentType, contentId: string, script: string) {
+    const key = candidateKey(contentType, contentId);
+    if (seen.has(key) || !script.trim() || candidates.length >= options.limit) return;
+    seen.add(key);
+    candidates.push({ contentType, contentId, script: script.trim() });
+  }
+
+  async function addFromAssets(statuses: AudioAssetStatus[]) {
+    if (candidates.length >= options.limit) return;
+
+    let query = supabase
+      .from("audio_assets")
+      .select("content_type, content_id, script_text, status")
+      .in("status", statuses)
+      .order("updated_at", { ascending: true });
+
+    if (options.contentType) {
+      query = query.eq("content_type", options.contentType);
+    }
+
+    const { data: assets } = await query.limit(Math.max(options.limit * 4, 40));
+
+    for (const asset of assets ?? []) {
+      if (candidates.length >= options.limit) break;
+
+      const contentType = asset.content_type as AudioContentType;
+      const contentId = asset.content_id as string;
+      const adapter = getAudioContentAdapter(contentType);
+      const context = await adapter.loadContext(supabase, contentId);
+      if (!context) continue;
+
+      const script =
+        (asset.script_text as string | null)?.trim() || context.defaultScript.trim();
+      addCandidate(contentType, contentId, script);
+    }
+  }
+
+  await addFromAssets(["needs_changes"]);
+  await addFromAssets(["none"]);
+
+  const flashcardTypes: AudioContentType[] = options.contentType
+    ? options.contentType === "flashcard" || options.contentType === "flashcard_example"
+      ? [options.contentType]
+      : []
+    : ["flashcard", "flashcard_example"];
+
+  if (flashcardTypes.length > 0 && candidates.length < options.limit) {
+    const { data: masterSet } = await supabase
+      .from("flashcard_sets")
+      .select("id")
+      .eq("name", MASTER_DECK_NAME)
+      .maybeSingle();
+
+    if (masterSet) {
+      const { data: cards } = await supabase
+        .from("flashcards")
+        .select("id, example_sentence_gurmukhi")
+        .eq("deck_id", masterSet.id)
+        .order("front_text");
+
+      const cardIds = (cards ?? []).map((card) => card.id);
+      const statusMap = new Map<string, AudioAssetStatus | "missing">();
+
+      if (cardIds.length > 0) {
+        const { data: existingAssets } = await supabase
+          .from("audio_assets")
+          .select("content_type, content_id, status")
+          .in("content_type", ["flashcard", "flashcard_example"])
+          .in("content_id", cardIds);
+
+        for (const asset of existingAssets ?? []) {
+          statusMap.set(
+            candidateKey(asset.content_type as AudioContentType, asset.content_id as string),
+            asset.status as AudioAssetStatus
+          );
+        }
+      }
+
+      for (const card of cards ?? []) {
+        if (candidates.length >= options.limit) break;
+
+        if (flashcardTypes.includes("flashcard")) {
+          const key = candidateKey("flashcard", card.id);
+          const status = statusMap.get(key) ?? "missing";
+          if (status === "missing" || status === "none" || status === "needs_changes") {
+            const context = await getAudioContentAdapter("flashcard").loadContext(
+              supabase,
+              card.id
+            );
+            if (context) addCandidate("flashcard", card.id, context.defaultScript);
+          }
+        }
+
+        if (
+          flashcardTypes.includes("flashcard_example") &&
+          card.example_sentence_gurmukhi?.trim()
+        ) {
+          const key = candidateKey("flashcard_example", card.id);
+          const status = statusMap.get(key) ?? "missing";
+          if (status === "missing" || status === "none" || status === "needs_changes") {
+            const context = await getAudioContentAdapter("flashcard_example").loadContext(
+              supabase,
+              card.id
+            );
+            if (context) addCandidate("flashcard_example", card.id, context.defaultScript);
+          }
+        }
+      }
+    }
+  }
+
+  return candidates;
+}
+
+export async function bulkApprovePendingAudioAction(options?: {
+  contentType?: AudioContentType;
+  limit?: number;
+}): Promise<BulkAudioActionResult> {
+  try {
+    const { user, supabase } = await requireAdminUser();
+    const limit = options?.limit ?? 9999;
+
+    let query = supabase
+      .from("audio_assets")
+      .select("content_type, content_id")
+      .eq("status", "pending_review")
+      .order("updated_at", { ascending: true })
+      .limit(limit);
+
+    if (options?.contentType) {
+      query = query.eq("content_type", options.contentType);
+    }
+
+    const { data: assets, error } = await query;
+    if (error) {
+      return { error: error.message };
+    }
+
+    const queue = assets ?? [];
+    if (queue.length === 0) {
+      return { success: "No pending clips to approve.", processed: 0, succeeded: 0, failed: 0 };
+    }
+
+    let succeeded = 0;
+    let failed = 0;
+    const touchedTypes = new Set<AudioContentType>();
+
+    for (const asset of queue) {
+      const contentType = asset.content_type as AudioContentType;
+      const contentId = asset.content_id as string;
+      const generationId = await firstPendingGenerationId(supabase, contentType, contentId);
+
+      const result = await approveContentAudio(
+        supabase,
+        contentType,
+        contentId,
+        user.id,
+        generationId ?? undefined
+      );
+
+      if (!result.ok) {
+        failed += 1;
+        continue;
+      }
+
+      succeeded += 1;
+      touchedTypes.add(contentType);
+    }
+
+    for (const contentType of touchedTypes) {
+      revalidateAudioPaths(contentType);
+    }
+
+    const processed = succeeded + failed;
+    return {
+      success: `Approved ${succeeded} of ${processed} pending clip${processed === 1 ? "" : "s"}.`,
+      processed,
+      succeeded,
+      failed,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Bulk approval failed." };
+  }
+}
+
+export async function bulkGenerateAudioAction(options: {
+  contentType?: AudioContentType;
+  limit: number;
+}): Promise<BulkAudioActionResult> {
+  try {
+    const { supabase } = await requireAdminUser();
+    const limit = Math.max(1, Math.min(options.limit, 200));
+    const candidates = await discoverGenerateCandidates(supabase, {
+      contentType: options.contentType,
+      limit,
+    });
+
+    if (candidates.length === 0) {
+      return {
+        success: "No clips need generation.",
+        processed: 0,
+        succeeded: 0,
+        failed: 0,
+      };
+    }
+
+    let succeeded = 0;
+    let failed = 0;
+    const touchedTypes = new Set<AudioContentType>();
+
+    for (const candidate of candidates) {
+      const result = await generateContentAudio(
+        supabase,
+        candidate.contentType,
+        candidate.contentId,
+        {
+          scriptOverride: candidate.script,
+          variationCount: 1,
+          force: true,
+        }
+      );
+
+      if (!result.ok) {
+        failed += 1;
+        continue;
+      }
+
+      succeeded += 1;
+      touchedTypes.add(candidate.contentType);
+    }
+
+    for (const contentType of touchedTypes) {
+      revalidateAudioPaths(contentType);
+    }
+
+    const processed = succeeded + failed;
+    return {
+      success: `Generated ${succeeded} of ${processed} clip${processed === 1 ? "" : "s"} — now pending review.`,
+      processed,
+      succeeded,
+      failed,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Bulk generation failed." };
   }
 }
 
