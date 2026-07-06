@@ -2,6 +2,8 @@ import { AdminDataHydrator } from "@/components/admin/admin-data-hydrator";
 import { AdminServerError } from "@/app/admin/content/admin-server-error";
 import { loadAdminCurriculumData } from "@/lib/admin/load-admin-data";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminCurriculumLayout({
   children,
 }: {

@@ -6,6 +6,7 @@ import { loadAdminTutorPanelData } from "@/app/admin/content/tutor-actions";
 import type { AdminData } from "@/app/admin/content/types";
 import type { SiteBranding } from "@/lib/branding/types";
 import { EMPTY_ADMIN_DATA } from "@/lib/admin/empty-admin-data";
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AdminLoadResult =
@@ -88,10 +89,10 @@ export async function loadAdminCurriculumData(): Promise<AdminLoadResult> {
     { data: courses, error: coursesError },
     { data: lessons, error: lessonsError },
     { data: quizzes, error: quizzesError },
-    { data: questions, error: questionsError },
+    questionsResult,
     { data: flashcardSets, error: flashcardSetsError },
     { data: setCourseLinks, error: setCourseLinksError },
-    { data: flashcards, error: flashcardsError },
+    flashcardsResult,
     { data: grammarSentences, error: grammarSentencesError },
     { data: verbConjugations, error: verbConjugationsError },
     { data: genderedNouns, error: genderedNounsError },
@@ -107,28 +108,35 @@ export async function loadAdminCurriculumData(): Promise<AdminLoadResult> {
       .select("*, courses(name)")
       .order("course_id")
       .order("level_number"),
-    supabase
-      .from("quiz_questions")
-      .select("*")
-      .order("quiz_id")
-      .order("question_order"),
+    fetchAllRows(supabase, "quiz_questions", "*", [
+      { column: "quiz_id" },
+      { column: "question_order" },
+    ]),
     supabase.from("flashcard_sets").select("*").order("name"),
     supabase.from("set_course_links").select("*"),
-    supabase.from("flashcards").select("*").order("deck_id").order("created_at"),
+    fetchAllRows(supabase, "flashcards", "*", [
+      { column: "deck_id" },
+      { column: "created_at" },
+    ]),
     supabase.from("grammar_sentences").select("*").order("created_at", { ascending: false }),
     supabase.from("verb_conjugations").select("*").order("verb_root"),
     supabase.from("gendered_nouns").select("*").order("punjabi_word"),
   ]);
+
+  const questions = questionsResult.data;
+  const questionsError = questionsResult.error;
+  const flashcards = flashcardsResult.data;
+  const flashcardsError = flashcardsResult.error;
 
   const data: AdminData = {
     ...EMPTY_ADMIN_DATA,
     courses: courses ?? [],
     lessons: (lessons ?? []) as AdminData["lessons"],
     quizzes: (quizzes ?? []) as AdminData["quizzes"],
-    questions: questions ?? [],
+    questions: questions as AdminData["questions"],
     flashcardSets: flashcardSets ?? [],
     setCourseLinks: setCourseLinks ?? [],
-    flashcards: (flashcards ?? []) as AdminData["flashcards"],
+    flashcards: flashcards as AdminData["flashcards"],
     grammarSentences: (grammarSentences ?? []) as AdminData["grammarSentences"],
     verbConjugations: (verbConjugations ?? []) as AdminData["verbConjugations"],
     genderedNouns: (genderedNouns ?? []) as AdminData["genderedNouns"],

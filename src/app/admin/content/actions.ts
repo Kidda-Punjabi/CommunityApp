@@ -799,7 +799,11 @@ export async function bulkCreateFlashcards(
     }
 
     if (parsed.length === 0) {
-      return { error: "No valid flashcards to import." };
+      return {
+        error: bulkText
+          ? "No valid flashcards found. Separate front and back with a tab, pipe (|), or two+ spaces."
+          : "No flashcard rows were received. Paste your rows and try again.",
+      };
     }
 
     const deckName = await getFlashcardSetName(supabase, deckId);

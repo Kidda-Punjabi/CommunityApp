@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   bulkCreateFlashcards,
@@ -175,6 +175,7 @@ function FlashcardSetEditView({
   );
   const [bulkText, setBulkText] = useState("");
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const bulkFormRef = useRef<HTMLFormElement>(null);
 
   const linkedCourseIds = data.setCourseLinks
     .filter((link) => link.deck_id === set.id && link.course_id)
@@ -191,12 +192,23 @@ function FlashcardSetEditView({
   }, [setState.success, router]);
 
   useEffect(() => {
-    if (cardState.success || bulkState.success) router.refresh();
-  }, [cardState.success, bulkState.success, router]);
+    if (cardState.success) router.refresh();
+  }, [cardState.success, router]);
 
   useEffect(() => {
-    if (bulkState.success) setBulkText("");
-  }, [bulkState.success]);
+    if (!bulkState.success) return;
+    setBulkText("");
+    router.refresh();
+  }, [bulkState.success, router]);
+
+  const submitBulkImport = () => {
+    if (!bulkFormRef.current || bulkPreview.items.length === 0) return;
+
+    const formData = new FormData(bulkFormRef.current);
+    formData.set("deck_id", set.id);
+    formData.set("bulk_text", bulkText);
+    bulkAction(formData);
+  };
 
   return (
     <div className="space-y-6">
@@ -293,18 +305,16 @@ function FlashcardSetEditView({
 
       <SectionCard title="Bulk import cards">
         <div className="space-y-4">
-          <form action={bulkAction} className="space-y-4">
-            <input type="hidden" name="deck_id" value={set.id} />
+          <form ref={bulkFormRef} className="space-y-4" onSubmit={(event) => event.preventDefault()}>
             <CardMetadataFields />
             <div>
-              <label className={labelClass}>Tab-separated rows</label>
+              <label className={labelClass}>Rows (tab, pipe, or two spaces between front and back)</label>
               <textarea
-                name="bulk_text"
                 value={bulkText}
                 onChange={(event) => setBulkText(event.target.value)}
                 rows={8}
                 className={inputClass}
-                placeholder={"Sat Sri Akal\tHello\nDhanvaad\tThank you\nPani\tWater"}
+                placeholder={"Sat Sri Akal\tHello\nDhanvaad | Thank you\nPani  Water"}
               />
             </div>
             {bulkPreview.errors.length > 0 && (
@@ -325,7 +335,8 @@ function FlashcardSetEditView({
             )}
             <FormMessage state={bulkState} />
             <button
-              type="submit"
+              type="button"
+              onClick={submitBulkImport}
               disabled={bulkPending || bulkPreview.items.length === 0}
               className={buttonClass}
             >
