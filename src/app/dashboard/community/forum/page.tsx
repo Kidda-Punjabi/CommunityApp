@@ -1,3 +1,4 @@
+import { requireForumAccessAllowed } from "@/lib/kids/guards";
 import { ForumPostCard } from "@/components/forum/forum-post-card";
 import {
   canAccessForum,
@@ -5,16 +6,11 @@ import {
   loadForumGuidelinesAgreement,
 } from "@/lib/forum/access";
 import { loadForumPosts } from "@/lib/forum/load-forum";
-import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 export default async function ForumPage() {
-  const session = await getCachedAuthSession();
-  if (!session) redirect("/login");
-
-  const { supabase, user } = session;
+  const { user, supabase } = await requireForumAccessAllowed();
   const hasAccess = await canAccessForum(supabase, user.id);
   if (!hasAccess) {
     return (

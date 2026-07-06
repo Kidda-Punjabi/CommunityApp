@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
+import { LessonFeedbackPanel } from "@/components/feedback/lesson-feedback-panel";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { createClient } from "@/lib/supabase/client";
 import { sumPointsEarned } from "@/lib/points/notify-points-earned";
@@ -47,7 +50,9 @@ export function QuizPlayer({
   const [finished, setFinished] = useState(false);
   const [streakResult, setStreakResult] = useState<StreakResult | null>(null);
   const [pointsEarned, setPointsEarned] = useState(0);
+  const [lessonCompleted, setLessonCompleted] = useState(false);
   const savedRef = useRef(false);
+  const { playSound } = useAudioManager();
 
   const question = questions[index];
   const isCorrect = selected === question.correct_answer;
@@ -75,6 +80,9 @@ export function QuizPlayer({
       const result = await saveQuizProgress(supabase, user.id, quizId, percentage, { lessonId });
       const totalPoints = sumPointsEarned([result.quizPoints, result.lessonBonus]);
       setPointsEarned(totalPoints);
+      if (result.lessonBonus > 0) {
+        setLessonCompleted(true);
+      }
 
       if (percentage >= PASSING_QUIZ_SCORE) {
         const result = await recordStreakActivity(supabase, user.id);
@@ -112,6 +120,16 @@ export function QuizPlayer({
     return () => window.clearTimeout(timeout);
   }, [selected, question.correct_answer, index, questions.length]);
 
+  useEffect(() => {
+    if (!selected) return;
+    playSound(selected === question.correct_answer ? "correct" : "incorrect");
+  }, [selected, question.correct_answer, playSound]);
+
+  useEffect(() => {
+    if (!finished) return;
+    playSound("game_complete");
+  }, [finished, playSound]);
+
   function handleSelect(optionKey: string) {
     if (selected) return;
     setSelected(optionKey);
@@ -126,7 +144,8 @@ export function QuizPlayer({
 
   if (finished) {
     return (
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+      <div className="relative rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+        <FloatingSoundToggle />
         <p className="text-sm font-medium text-violet-600">Quiz complete</p>
         <h2 className="mt-2 text-2xl font-bold text-zinc-900">
           {score} / {questions.length} correct
@@ -140,6 +159,9 @@ export function QuizPlayer({
         )}
         <div className="mt-6 flex flex-col gap-2">
           <CatchupReturnButton returnUrl={catchupReturn} />
+          {lessonCompleted && lessonId && (
+            <LessonFeedbackPanel lessonId={lessonId} />
+          )}
           <Link
             href="/dashboard/practice"
             className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500"
@@ -158,7 +180,8 @@ export function QuizPlayer({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      <FloatingSoundToggle />
       <SessionProgressBar current={index + 1} total={questions.length} />
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">

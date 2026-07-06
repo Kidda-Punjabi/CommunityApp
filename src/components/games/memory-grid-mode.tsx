@@ -3,6 +3,9 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
+import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { saveGameScoreIfBest } from "@/lib/games/game-scores";
@@ -54,6 +57,7 @@ export function MemoryGridMode({
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
   const batchesRef = useRef<ReturnType<typeof createMemoryGridBatches>>([]);
+  const { playSound } = useAudioManager();
 
   const totalBatches = batchesRef.current.length;
   const currentBatchSize = batchesRef.current[batchIndex]?.length ?? 0;
@@ -174,6 +178,7 @@ export function MemoryGridMode({
     setMoves((m) => m + 1);
 
     if (first.cardId === card.cardId && first.side !== card.side) {
+      playSound("correct");
       setMatchedCardIds((prev) => new Set(prev).add(card.cardId));
       setPairsFound((p) => p + 1);
       setBatchPairsFound((p) => p + 1);
@@ -181,6 +186,7 @@ export function MemoryGridMode({
       return;
     }
 
+    playSound("incorrect");
     setWrongId(card.id);
     window.setTimeout(() => {
       setFlippedIds(new Set());
@@ -224,46 +230,23 @@ export function MemoryGridMode({
 
   if (phase === "finished") {
     return (
-      <div className="space-y-6">
-        {challenge && (
-          <ChallengePostGameBanner
-            opponentName={challenge.opponentDisplayName}
-            result={challengeFinish.result}
-            error={challengeFinish.error}
-            submitting={challengeFinish.submitting}
-          />
-        )}
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-medium text-violet-600">Complete!</p>
-          <h2 className="mt-2 text-2xl font-bold text-zinc-900">
-            {pairsFound} / {deck.cards.length} pairs
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500">{moves} moves</p>
-          <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
-          {result?.isNewBest && (
-            <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
-          )}
-          {result && !result.isNewBest && result.currentBest > 0 && (
-            <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
-          )}
-        </div>
-        {!challenge && (
-          <button
-            type="button"
-            onClick={startGame}
-            className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-          >
-            Play again
-          </button>
-        )}
-        <CatchupReturnButton returnUrl={catchupReturn} />
-        <BackLink fallbackHref={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">Back to decks</BackLink>
-      </div>
+      <MemoryGridFinishedScreen
+        challenge={challenge}
+        challengeFinish={challengeFinish}
+        pairsFound={pairsFound}
+        deck={deck}
+        moves={moves}
+        result={result}
+        catchupReturn={catchupReturn}
+        backHref={backHref}
+        onPlayAgain={startGame}
+      />
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      <FloatingSoundToggle />
       <SessionProgressBar current={pairsFound} total={deck.cards.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="memory_grid" />}
       <div className="flex items-center justify-between gap-3">
@@ -305,6 +288,74 @@ export function MemoryGridMode({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function MemoryGridFinishedScreen({
+  challenge,
+  challengeFinish,
+  pairsFound,
+  deck,
+  moves,
+  result,
+  catchupReturn,
+  backHref,
+  onPlayAgain,
+}: {
+  challenge: ChallengePlayContext | null;
+  challengeFinish: ReturnType<typeof useChallengeFinish>;
+  pairsFound: number;
+  deck: FlashcardDeckContext;
+  moves: number;
+  result: { isNewBest: boolean; currentBest: number; pointsEarned: number } | null;
+  catchupReturn: string | null;
+  backHref: string;
+  onPlayAgain: () => void;
+}) {
+  usePlaySoundOnce("game_complete");
+
+  return (
+    <div className="relative space-y-6">
+      <FloatingSoundToggle />
+      {challenge && (
+        <ChallengePostGameBanner
+          opponentName={challenge.opponentDisplayName}
+          result={challengeFinish.result}
+          error={challengeFinish.error}
+          submitting={challengeFinish.submitting}
+        />
+      )}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+        <p className="text-sm font-medium text-violet-600">Complete!</p>
+        <h2 className="mt-2 text-2xl font-bold text-zinc-900">
+          {pairsFound} / {deck.cards.length} pairs
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500">{moves} moves</p>
+        <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
+        {result?.isNewBest && (
+          <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
+        )}
+        {result && !result.isNewBest && result.currentBest > 0 && (
+          <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
+        )}
+      </div>
+      {!challenge && (
+        <button
+          type="button"
+          onClick={onPlayAgain}
+          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+        >
+          Play again
+        </button>
+      )}
+      <CatchupReturnButton returnUrl={catchupReturn} />
+      <BackLink
+        fallbackHref={backHref}
+        className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
+      >
+        Back to decks
+      </BackLink>
     </div>
   );
 }

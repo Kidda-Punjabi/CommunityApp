@@ -3,6 +3,9 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
+import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { createClient } from "@/lib/supabase/client";
 import { shuffleArray } from "@/lib/flashcards/utils";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
@@ -146,6 +149,7 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
 
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const { playSound } = useAudioManager();
   const advanceTimerRef = useRef<number | null>(null);
 
   const difficultyConfig = useMemo(
@@ -282,16 +286,21 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
       });
 
       if (wasCorrect) {
+        playSound("correct");
         setScore((value) => value + POINTS_PER_CORRECT);
         setCorrectCount((value) => value + 1);
         setCelebrate(true);
+      }
+
+      if (!wasCorrect) {
+        playSound("incorrect");
       }
 
       advanceTimerRef.current = window.setTimeout(() => {
         advanceRound();
       }, FEEDBACK_MS);
     },
-    [phase, currentCard, locked, advanceRound]
+    [phase, currentCard, locked, advanceRound, playSound]
   );
 
   if (loadState === "loading") {
@@ -388,35 +397,12 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
   }
 
   if (phase === "finished") {
-    return (
-      <div className="space-y-6">
-        <div className={`${ui.cardBordered} text-center`}>
-          <p className="text-sm font-medium text-violet-600">Round complete</p>
-          <h2 className="mt-2 text-3xl font-bold text-zinc-900">
-            {score} / {maxScore}
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            {correctCount} of {totalRounds} correct
-          </p>
-          <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
-          {result?.isNewBest ? (
-            <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
-          ) : null}
-          {result && !result.isNewBest && result.currentBest > 0 ? (
-            <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
-          ) : null}
-        </div>
-
-        <button type="button" onClick={startGame} className={ui.btnPrimaryBlock}>
-          Play again
-        </button>
-        <BackLink fallbackHref={GAMES_HUB_HREF} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">Back to games</BackLink>
-      </div>
-    );
+    return <PictureMatchFinishedScreen score={score} maxScore={maxScore} correctCount={correctCount} totalRounds={totalRounds} result={result} onPlayAgain={startGame} />;
   }
 
   return (
-    <div className="space-y-6 pb-4">
+    <div className="relative space-y-6 pb-4">
+      <FloatingSoundToggle />
       <SessionProgressBar current={roundIndex + 1} total={totalRounds} />
 
       <div className="flex items-center justify-between pt-2">
@@ -486,6 +472,56 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function PictureMatchFinishedScreen({
+  score,
+  maxScore,
+  correctCount,
+  totalRounds,
+  result,
+  onPlayAgain,
+}: {
+  score: number;
+  maxScore: number;
+  correctCount: number;
+  totalRounds: number;
+  result: { isNewBest: boolean; currentBest: number; pointsEarned: number } | null;
+  onPlayAgain: () => void;
+}) {
+  usePlaySoundOnce("game_complete");
+
+  return (
+    <div className="relative space-y-6">
+      <FloatingSoundToggle />
+      <div className={`${ui.cardBordered} text-center`}>
+        <p className="text-sm font-medium text-violet-600">Round complete</p>
+        <h2 className="mt-2 text-3xl font-bold text-zinc-900">
+          {score} / {maxScore}
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          {correctCount} of {totalRounds} correct
+        </p>
+        <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
+        {result?.isNewBest ? (
+          <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
+        ) : null}
+        {result && !result.isNewBest && result.currentBest > 0 ? (
+          <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
+        ) : null}
+      </div>
+
+      <button type="button" onClick={onPlayAgain} className={ui.btnPrimaryBlock}>
+        Play again
+      </button>
+      <BackLink
+        fallbackHref={GAMES_HUB_HREF}
+        className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
+      >
+        Back to games
+      </BackLink>
     </div>
   );
 }

@@ -28,6 +28,9 @@ export function AccountCard({ membershipLabel, isFreeOnly }: AccountCardProps) {
             href="/courses"
             label={isFreeOnly ? "Browse courses" : "Buy another course"}
           />
+          <AccountListRow href="/dashboard/profile/sound" label="Sound effects" />
+          <AccountListRow href="/dashboard/profile/kids" label="Kids Mode" />
+          <AccountListRow href="/dashboard/profile/feedback" label="Lesson feedback" />
           <AccountListRow href="/dashboard/profile/help" label="Help articles" />
           <AccountListRow
             label="Book a call with the team"

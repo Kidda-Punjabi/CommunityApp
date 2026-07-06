@@ -2,6 +2,8 @@
 
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { GameSessionReview } from "@/components/games/game-session-review";
 import { GameSessionSettings } from "@/components/games/game-session-settings";
 import { SessionProgressBar } from "@/components/session-progress-bar";
@@ -80,6 +82,7 @@ export function SpeakingPracticeMode({
   const chunksRef = useRef<BlobPart[]>([]);
   const stopTimerRef = useRef<number | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
+  const { playSound } = useAudioManager();
   const mediaSupported =
     typeof window !== "undefined" &&
     typeof navigator !== "undefined" &&
@@ -250,6 +253,7 @@ export function SpeakingPracticeMode({
       setLastTranscript(displayTranscript);
 
       if (passedSpeakingAttempt(similarity)) {
+        playSound("correct");
         setFeedback("pass");
         void persistCorrectAttempt(current, transcript, similarity);
         scheduleAdvance(true);
@@ -257,6 +261,7 @@ export function SpeakingPracticeMode({
       }
 
       if (nextAttempts >= VOICE_PRACTICE_MAX_ATTEMPTS) {
+        playSound("incorrect");
         setFeedback("failed");
         scheduleAdvance(false);
         return;
@@ -399,7 +404,8 @@ export function SpeakingPracticeMode({
   const punjabiDisplay = current ? formatPunjabiForDisplay(current.punjabi) : "";
 
   return (
-    <div className="space-y-5">
+    <div className="relative space-y-5">
+      <FloatingSoundToggle />
       <SessionProgressBar current={questionIndex + 1} total={roundCards.length} />
 
       <div className="space-y-3">

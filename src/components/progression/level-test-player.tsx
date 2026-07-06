@@ -2,7 +2,9 @@
 
 import { BackLink } from "@/components/navigation/back-link";
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
+import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { LevelTestQuestionBody } from "@/components/progression/level-test-question-body";
 import { SessionProgressBar } from "@/components/session-progress-bar";
 import { pickCycledPool } from "@/lib/games/session-settings";
@@ -55,9 +57,12 @@ export function LevelTestPlayer({
 
   const question = sessionQuestions[index];
   const locked = selectedOptionId !== null;
+  const { playSound } = useAudioManager();
 
   function advanceAfterAnswer(isCorrect: boolean, optionId: string | null) {
     if (!question || locked || finished) return;
+
+    playSound(isCorrect ? "correct" : "incorrect");
 
     setSelectedOptionId(optionId ?? "__answered__");
     const nextCorrect = correctCount + (isCorrect ? 1 : 0);
@@ -111,30 +116,13 @@ export function LevelTestPlayer({
 
   if (finished && result) {
     return (
-      <div className={`${ui.card} ${LIGHT_SURFACE} space-y-4 text-center`}>
-        <p className="text-xs font-semibold uppercase tracking-wider text-violet-700">
-          {mode === "placement" ? "Placement result" : levelTestLabel(fromLevel)}
-        </p>
-        <h2 className="text-3xl font-bold text-zinc-900">{result.scorePct}%</h2>
-        <p className="text-sm text-zinc-700">
-          {result.correctCount}/{result.totalCount} correct · need {LEVEL_TEST_PASS_PCT}%+
-          to pass
-        </p>
-        {submitting ? (
-          <p className="text-sm text-zinc-600">Saving…</p>
-        ) : (
-          <p
-            className={`text-sm font-semibold ${result.passed ? "text-green-800" : "text-amber-800"}`}
-          >
-            {result.passed ? "Passed!" : "Not quite — you can try again anytime."}
-          </p>
-        )}
-      </div>
+      <LevelTestResultScreen mode={mode} fromLevel={fromLevel} result={result} submitting={submitting} />
     );
   }
 
   return (
-    <div className={`space-y-5 ${LIGHT_SURFACE}`}>
+    <div className={`relative space-y-5 ${LIGHT_SURFACE}`}>
+      <FloatingSoundToggle />
       <SessionProgressBar current={index + 1} total={sessionQuestions.length} />
       <div className="flex items-center justify-between gap-3">
         <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-700 hover:text-violet-600">← Exit</BackLink>
@@ -157,6 +145,48 @@ export function LevelTestPlayer({
           onSentenceBuilderAnswer={handleSentenceBuilderAnswer}
         />
       ) : null}
+    </div>
+  );
+}
+
+function LevelTestResultScreen({
+  mode,
+  fromLevel,
+  result,
+  submitting,
+}: {
+  mode: "placement" | "progression";
+  fromLevel: number;
+  result: {
+    scorePct: number;
+    passed: boolean;
+    correctCount: number;
+    totalCount: number;
+  };
+  submitting: boolean;
+}) {
+  usePlaySoundOnce("game_complete");
+  usePlaySoundOnce("level_up", mode === "progression" && result.passed);
+
+  return (
+    <div className={`relative ${ui.card} ${LIGHT_SURFACE} space-y-4 text-center`}>
+      <FloatingSoundToggle />
+      <p className="text-xs font-semibold uppercase tracking-wider text-violet-700">
+        {mode === "placement" ? "Placement result" : levelTestLabel(fromLevel)}
+      </p>
+      <h2 className="text-3xl font-bold text-zinc-900">{result.scorePct}%</h2>
+      <p className="text-sm text-zinc-700">
+        {result.correctCount}/{result.totalCount} correct · need {LEVEL_TEST_PASS_PCT}%+ to pass
+      </p>
+      {submitting ? (
+        <p className="text-sm text-zinc-600">Saving…</p>
+      ) : (
+        <p
+          className={`text-sm font-semibold ${result.passed ? "text-green-800" : "text-amber-800"}`}
+        >
+          {result.passed ? "Passed!" : "Not quite — you can try again anytime."}
+        </p>
+      )}
     </div>
   );
 }

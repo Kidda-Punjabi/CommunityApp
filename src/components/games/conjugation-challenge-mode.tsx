@@ -3,6 +3,8 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { createClient } from "@/lib/supabase/client";
 import {
   buildChallengeRound,
@@ -152,6 +154,7 @@ export function ConjugationChallengeMode({
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const { playSound } = useAudioManager();
 
   const playableSentences = useMemo(
     () =>
@@ -267,6 +270,7 @@ export function ConjugationChallengeMode({
     if (phase !== "playing" || !current || feedback) return;
 
     const isCorrect = answer === current.correctAnswer;
+    playSound(isCorrect ? "correct" : "incorrect");
     setSessionLog((prev) => [
       ...prev,
       buildConjugationChallengeLogEntry(current, answer, isCorrect),
@@ -371,7 +375,8 @@ export function ConjugationChallengeMode({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="relative space-y-3">
+      <FloatingSoundToggle />
       <SessionProgressBar current={questionIndex + 1} total={questions.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="conjugation_challenge" />}
       <div className="flex items-center justify-between gap-3">

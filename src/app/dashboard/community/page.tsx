@@ -1,3 +1,4 @@
+import { loadKidSession } from "@/lib/kids/session";
 import { EventCard } from "@/components/event-card";
 import { FeaturedTestimonialCard } from "@/components/community/featured-testimonial-card";
 import { WeeklyLeaderboardCard } from "@/components/community/weekly-leaderboard-card";
@@ -16,6 +17,9 @@ export default async function CommunityPage() {
 
   const { friendsData, leaderboard, testimonial, preparedUpcoming } =
     await getCommunityTabData(session.user.id);
+
+  const kidSession = await loadKidSession(session.user.id);
+  const hideForum = kidSession.activeKidProfile !== null;
 
   const previewEvents = preparedUpcoming.slice(0, PREVIEW_EVENT_COUNT);
 
@@ -62,6 +66,7 @@ export default async function CommunityPage() {
 
         <FriendsSummaryRow friends={friendsData.friends} variant="community" />
 
+        {!hideForum && (
         <section>
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-medium text-zinc-900">Community forum</h2>
@@ -79,6 +84,7 @@ export default async function CommunityPage() {
             </p>
           </Link>
         </section>
+        )}
 
         {testimonial ? <FeaturedTestimonialCard testimonial={testimonial} /> : null}
       </div>

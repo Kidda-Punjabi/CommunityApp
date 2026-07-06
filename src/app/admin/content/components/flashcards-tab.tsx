@@ -14,6 +14,7 @@ import {
 } from "../actions";
 import type { AdminData, FlashcardCategory, FlashcardSet } from "../types";
 import { parseBulkFlashcards } from "@/lib/admin/parse-bulk-flashcards";
+import { describeFlashcardSetLinks } from "@/lib/admin/resolve-flashcard-set-links";
 import { FlashcardSetsList } from "./flashcard-sets-list";
 import { SetAssociationFields } from "./set-association-fields";
 import {
@@ -169,15 +170,19 @@ function FlashcardSetEditView({
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const bulkFormRef = useRef<HTMLFormElement>(null);
 
-  const linkedCourseIds = data.setCourseLinks
-    .filter((link) => link.deck_id === set.id && link.course_id)
-    .map((link) => link.course_id as string);
-
-  const linkedLessonIds = data.setCourseLinks
-    .filter((link) => link.deck_id === set.id && link.lesson_id)
-    .map((link) => link.lesson_id as string);
-
   const bulkPreview = useMemo(() => parseBulkFlashcards(bulkText), [bulkText]);
+
+  const linkSummary = useMemo(
+    () =>
+      describeFlashcardSetLinks(
+        set.course_association ?? "uncategorized",
+        set.week_number ?? null,
+        set.name,
+        data.courses,
+        data.lessons
+      ),
+    [set, data.courses, data.lessons]
+  );
 
   useEffect(() => {
     if (setState.success) router.refresh();
@@ -214,6 +219,7 @@ function FlashcardSetEditView({
           <SetAssociationFields
             defaultAssociation={set.course_association ?? "uncategorized"}
             defaultWeekNumber={set.week_number}
+            linkSummary={linkSummary}
           />
           <div>
             <label className={labelClass}>Set name</label>
@@ -227,50 +233,6 @@ function FlashcardSetEditView({
               defaultValue={set.description ?? ""}
               className={inputClass}
             />
-          </div>
-
-          <div>
-            <label className={labelClass}>Relevant courses</label>
-            <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3">
-              {data.courses.map((course) => (
-                <label
-                  key={course.id}
-                  className="flex cursor-pointer items-center gap-2 text-sm text-zinc-900"
-                >
-                  <input
-                    type="checkbox"
-                    name="course_ids"
-                    value={course.id}
-                    defaultChecked={linkedCourseIds.includes(course.id)}
-                    className="h-4 w-4 rounded border-zinc-300 text-violet-600"
-                  />
-                  <span className="font-medium">{course.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Relevant lessons</label>
-            <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3">
-              {data.lessons.map((lesson) => (
-                <label
-                  key={lesson.id}
-                  className="flex cursor-pointer items-center gap-2 text-sm text-zinc-900"
-                >
-                  <input
-                    type="checkbox"
-                    name="lesson_ids"
-                    value={lesson.id}
-                    defaultChecked={linkedLessonIds.includes(lesson.id)}
-                    className="h-4 w-4 rounded border-zinc-300 text-violet-600"
-                  />
-                  <span className="font-medium">
-                    {lesson.courses?.name} · Lesson {lesson.lesson_number}: {lesson.title}
-                  </span>
-                </label>
-              ))}
-            </div>
           </div>
 
           <FormMessage state={setState} />

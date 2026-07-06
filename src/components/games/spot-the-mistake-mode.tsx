@@ -3,6 +3,8 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
 import { GameSessionReview } from "@/components/games/game-session-review";
 import { GameSessionSettings } from "@/components/games/game-session-settings";
@@ -60,6 +62,7 @@ export function SpotTheMistakeMode({
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const { playSound } = useAudioManager();
 
   const eligibleSentences = useMemo(
     () =>
@@ -179,12 +182,14 @@ export function SpotTheMistakeMode({
     if (!current || questionStep !== "spot") return;
 
     if (token.isMistake) {
+      playSound("correct");
       proceedToFix(wrongSpotTaps === 0);
       return;
     }
 
     const nextWrong = wrongSpotTaps + 1;
     setWrongSpotTaps(nextWrong);
+    playSound("incorrect");
 
     if (nextWrong >= SPOT_MAX_WRONG_TAPS) {
       proceedToFix(false);
@@ -195,6 +200,7 @@ export function SpotTheMistakeMode({
     if (!current || questionStep !== "fix" || selectedFixId) return;
 
     const isCorrect = optionId === current.correctFixOptionId;
+    playSound(isCorrect ? "correct" : "incorrect");
     const spotFirst = spotCorrectFirstTry;
 
     setSelectedFixId(optionId);
@@ -267,7 +273,8 @@ export function SpotTheMistakeMode({
     questionStep === "revealed" ? current.correctedRomanised : current.brokenRomanised;
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      <FloatingSoundToggle />
       <SessionProgressBar current={questionIndex + 1} total={questions.length} />
 
       <div className="flex items-center justify-between gap-3">

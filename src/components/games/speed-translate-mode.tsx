@@ -3,6 +3,9 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
+import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
@@ -58,6 +61,7 @@ export function SpeedTranslateMode({
   const answeredRef = useRef(0);
   const correctCountRef = useRef(0);
   const questionShownAtRef = useRef(Date.now());
+  const { playSound } = useAudioManager();
 
   const currentCard = queue[index];
 
@@ -155,6 +159,7 @@ export function SpeedTranslateMode({
     answeredRef.current += 1;
 
     if (answer === currentCard.back_text) {
+      playSound("correct");
       const elapsed = Date.now() - questionShownAtRef.current;
       const points = pointsForCorrectAnswer(elapsed);
       const nextScore = score + points;
@@ -170,6 +175,7 @@ export function SpeedTranslateMode({
       return;
     }
 
+    playSound("incorrect");
     const nextLives = lives - 1;
     setLives(nextLives);
     if (nextLives <= 0) {
@@ -215,43 +221,12 @@ export function SpeedTranslateMode({
   }
 
   if (phase === "finished") {
-    return (
-      <div className="space-y-6">
-        {challenge && (
-          <ChallengePostGameBanner
-            opponentName={challenge.opponentDisplayName}
-            result={challengeFinish.result}
-            error={challengeFinish.error}
-            submitting={challengeFinish.submitting}
-          />
-        )}
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-medium text-violet-600">Game over</p>
-          <h2 className="mt-2 text-2xl font-bold text-zinc-900">{score} points</h2>
-          <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
-          {result?.isNewBest && (
-            <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
-          )}
-          {result && !result.isNewBest && result.currentBest > 0 && (
-            <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
-          )}
-        </div>
-        {!challenge && (
-          <button
-            type="button"
-            onClick={startGame}
-            className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-          >
-            Play again
-          </button>
-        )}
-        <BackLink fallbackHref={backHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">Back to decks</BackLink>
-      </div>
-    );
+    return <SpeedTranslateFinishedScreen challenge={challenge} challengeFinish={challengeFinish} score={score} result={result} backHref={backHref} onPlayAgain={startGame} />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
+      <FloatingSoundToggle />
       <SessionProgressBar current={index + 1} total={queue.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="speed_translate" />}
       <div className="flex items-center justify-between gap-3">
@@ -279,6 +254,64 @@ export function SpeedTranslateMode({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SpeedTranslateFinishedScreen({
+  challenge,
+  challengeFinish,
+  score,
+  result,
+  backHref,
+  onPlayAgain,
+}: {
+  challenge: ChallengePlayContext | null;
+  challengeFinish: ReturnType<typeof useChallengeFinish>;
+  score: number;
+  result: { isNewBest: boolean; currentBest: number; pointsEarned: number } | null;
+  backHref: string;
+  onPlayAgain: () => void;
+}) {
+  usePlaySoundOnce("game_complete");
+
+  return (
+    <div className="relative space-y-6">
+      <FloatingSoundToggle />
+      {challenge && (
+        <ChallengePostGameBanner
+          opponentName={challenge.opponentDisplayName}
+          result={challengeFinish.result}
+          error={challengeFinish.error}
+          submitting={challengeFinish.submitting}
+        />
+      )}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+        <p className="text-sm font-medium text-violet-600">Game over</p>
+        <h2 className="mt-2 text-2xl font-bold text-zinc-900">{score} points</h2>
+        <PointsEarnedBadge points={result?.pointsEarned ?? 0} className="mt-3" />
+        {result?.isNewBest && (
+          <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
+        )}
+        {result && !result.isNewBest && result.currentBest > 0 && (
+          <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest}</p>
+        )}
+      </div>
+      {!challenge && (
+        <button
+          type="button"
+          onClick={onPlayAgain}
+          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+        >
+          Play again
+        </button>
+      )}
+      <BackLink
+        fallbackHref={backHref}
+        className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
+      >
+        Back to decks
+      </BackLink>
     </div>
   );
 }

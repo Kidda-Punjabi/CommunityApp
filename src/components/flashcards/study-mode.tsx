@@ -1,11 +1,16 @@
 "use client";
 
+import { emojiForIcon } from "@/components/games/PictureMatch/emojiMap";
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { LessonFeedbackPanel } from "@/components/feedback/lesson-feedback-panel";
 import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DeckProgressBar } from "@/components/deck-progress-bar";
+import { useAudioManager } from "@/lib/audio/audio-manager";
+import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { deckPracticeHref, shuffleArray } from "@/lib/flashcards/utils";
@@ -22,6 +27,8 @@ type FlashcardStudyModeProps = {
   deck: FlashcardDeckContext;
   initialProgress: FlashcardProgressRow[];
   catchupReturn?: string | null;
+  kidsMode?: boolean;
+  onKidsComplete?: () => void | Promise<void>;
 };
 
 type SessionPhase = "studying" | "summary";
@@ -30,6 +37,8 @@ export function FlashcardStudyMode({
   deck,
   initialProgress,
   catchupReturn = null,
+  kidsMode = false,
+  onKidsComplete,
 }: FlashcardStudyModeProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<SessionPhase>("studying");
@@ -46,6 +55,7 @@ export function FlashcardStudyMode({
   const userIdRef = useRef<string | null>(null);
   const streakUpdatedRef = useRef(false);
   const touchStartXRef = useRef(0);
+  const { playSound } = useAudioManager();
 
   const deckHubHref =
     deck.deckId != null
@@ -112,7 +122,7 @@ export function FlashcardStudyMode({
   }, [phase, reviewMode, activeCards.length]);
 
   useEffect(() => {
-    if (phase !== "summary" || !allConfident || streakUpdatedRef.current) return;
+    if (kidsMode || phase !== "summary" || !allConfident || streakUpdatedRef.current) return;
     if (startedAllConfidentRef.current) return;
 
     const userId = userIdRef.current;
@@ -131,12 +141,16 @@ export function FlashcardStudyMode({
   async function recordConfidence(confidence: FlashcardConfidence) {
     if (!card) return;
 
+    playSound(confidence === "confident" ? "correct" : "incorrect");
+
     const userId = userIdRef.current;
     if (!userId) return;
 
     const supabase = createClient();
     const result = await saveFlashcardConfidence(supabase, userId, card.id, confidence);
-    const totalPoints = sumPointsEarned([result.flashcardPoints, result.lessonBonus]);
+    if (!kidsMode) {
+      sumPointsEarned([result.flashcardPoints, result.lessonBonus]);
+    }
     setProgressMap((prev) => {
       const next = new Map(prev);
       next.set(card.id, { flashcard_id: card.id, confidence });
@@ -199,6 +213,8 @@ export function FlashcardStudyMode({
         onFinish={finishSession}
         deckHubHref={deckHubHref}
         catchupReturn={catchupReturn}
+        kidsMode={kidsMode}
+        onKidsComplete={onKidsComplete}
       />
     );
   }
@@ -215,12 +231,15 @@ export function FlashcardStudyMode({
         onFinish={finishSession}
         deckHubHref={deckHubHref}
         catchupReturn={catchupReturn}
+        kidsMode={kidsMode}
+        onKidsComplete={onKidsComplete}
       />
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      {!kidsMode && <FloatingSoundToggle />}
       <div>
         <BackLink fallbackHref={deckHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to deck</BackLink>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
@@ -239,6 +258,7 @@ export function FlashcardStudyMode({
         />
       </div>
 
+      {!kidsMode && (
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -263,6 +283,7 @@ export function FlashcardStudyMode({
           {showBackFirst ? "Back first" : "Front first"}
         </button>
       </div>
+      )}
 
       <div className="space-y-3">
         <div
@@ -298,18 +319,33 @@ export function FlashcardStudyMode({
           <button
             type="button"
             onClick={() => setFlipped((prev) => !prev)}
-            className="min-h-56 w-full rounded-2xl border border-zinc-200 bg-white px-6 pb-6 pt-10 text-left shadow-sm transition-colors hover:border-violet-300"
+            className={`min-h-56 w-full rounded-2xl border px-6 pb-6 pt-10 text-left shadow-sm transition-colors ${
+              kidsMode
+                ? "min-h-64 border-sky-200 bg-white hover:border-violet-300"
+                : "border-zinc-200 bg-white hover:border-violet-300"
+            }`}
           >
+            {!kidsMode && (
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
               {flipped ? "Answer" : "Prompt"}
             </p>
-            <p className="mt-4 text-xl font-semibold text-zinc-900">
-              {flipped ? answerText : promptText}
+            )}
+            {kidsMode && card?.icon_name && !flipped && (
+              <p className="text-center text-6xl" aria-hidden>
+                {emojiForIcon(card.icon_name)}
+              </p>
+            )}
+            <p className={`font-semibold text-zinc-900 ${kidsMode ? "mt-4 text-center text-2xl" : "mt-4 text-xl"}`}>
+              {kidsMode && !flipped ? "" : flipped ? answerText : kidsMode ? "?" : promptText}
             </p>
-            <p className="mt-6 text-sm text-violet-600">
+            <p className={`text-violet-600 ${kidsMode ? "mt-8 text-center text-base font-bold" : "mt-6 text-sm"}`}>
               {flipped
-                ? "Swipe right = confident · left = not confident"
-                : "Tap to flip"}
+                ? kidsMode
+                  ? "Great! Tap a button below"
+                  : "Swipe right = confident · left = not confident"
+                : kidsMode
+                  ? "Tap to hear the word!"
+                  : "Tap to flip"}
             </p>
             {cardProgress && (
               <p className="mt-2 text-xs font-medium text-zinc-500">
@@ -321,20 +357,28 @@ export function FlashcardStudyMode({
         </div>
 
         {flipped && (
-          <div className="flex gap-2">
+          <div className={`flex gap-2 ${kidsMode ? "gap-4" : ""}`}>
             <button
               type="button"
               onClick={() => void recordConfidence("not_confident")}
-              className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+              className={`flex-1 font-semibold ${
+                kidsMode
+                  ? "rounded-2xl border-2 border-amber-300 bg-amber-100 px-4 py-5 text-lg text-amber-900"
+                  : "rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 hover:bg-amber-100"
+              }`}
             >
-              Not confident
+              {kidsMode ? "Try again" : "Not confident"}
             </button>
             <button
               type="button"
               onClick={() => void recordConfidence("confident")}
-              className="flex-1 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800 hover:bg-green-100"
+              className={`flex-1 font-semibold ${
+                kidsMode
+                  ? "rounded-2xl border-2 border-green-300 bg-green-100 px-4 py-5 text-lg text-green-900"
+                  : "rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 hover:bg-green-100"
+              }`}
             >
-              Confident
+              {kidsMode ? "Got it!" : "Confident"}
             </button>
           </div>
         )}
@@ -353,6 +397,8 @@ function StudySessionSummary({
   onFinish,
   deckHubHref,
   catchupReturn,
+  kidsMode = false,
+  onKidsComplete,
 }: {
   deck: FlashcardDeckContext;
   stats: ReturnType<typeof computeDeckConfidenceStats>;
@@ -363,12 +409,25 @@ function StudySessionSummary({
   onFinish: () => void;
   deckHubHref: string;
   catchupReturn?: string | null;
+  kidsMode?: boolean;
+  onKidsComplete?: () => void | Promise<void>;
 }) {
   const hasNotConfident = stats.notConfident > 0;
+  const kidsDoneRef = useRef(false);
+
+  usePlaySoundOnce("game_complete");
+
+  useEffect(() => {
+    if (!kidsMode || !allConfident || kidsDoneRef.current) return;
+    kidsDoneRef.current = true;
+    void onKidsComplete?.();
+  }, [kidsMode, allConfident, onKidsComplete]);
 
   return (
     <div className="flex flex-1 flex-col">
+      {!kidsMode && (
       <BackLink fallbackHref={deckHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to deck</BackLink>
+      )}
 
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center">
         {allConfident ? (
@@ -376,17 +435,22 @@ function StudySessionSummary({
             <span className="text-5xl" role="img" aria-hidden="true">
               ✓
             </span>
-            <h2 className="mt-4 text-2xl font-bold text-zinc-900">Set complete!</h2>
+            <h2 className="mt-4 text-2xl font-bold text-zinc-900">
+              {kidsMode ? "Amazing!" : "Set complete!"}
+            </h2>
+            {!kidsMode && (
             <p className="mt-2 max-w-sm text-sm text-zinc-600">
               All {stats.total} card{stats.total === 1 ? "" : "s"} confident in{" "}
               <span className="font-medium text-zinc-800">{deck.deckName}</span>.
             </p>
-            {streakResult?.streak_rescued && (
+            )}
+            {!kidsMode && streakResult?.streak_rescued && (
               <p className="mt-3 rounded-lg bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">
                 Streak rescued! Back to {streakResult.display_streak} day
                 {streakResult.display_streak === 1 ? "" : "s"}.
               </p>
             )}
+            {!kidsMode && (
             <button
               type="button"
               onClick={onFinish}
@@ -394,7 +458,17 @@ function StudySessionSummary({
             >
               Done
             </button>
-            <CatchupReturnButton returnUrl={catchupReturn} />
+            )}
+            {!kidsMode && <CatchupReturnButton returnUrl={catchupReturn} />}
+            {!kidsMode && deck.lessonId && deck.lessonId !== "kids" && (
+              <div className="mt-6 w-full max-w-lg text-left">
+                <LessonFeedbackPanel
+                  lessonId={deck.lessonId}
+                  title="How was this lesson?"
+                  description="Quick feedback helps us improve your learning experience."
+                />
+              </div>
+            )}
           </>
         ) : (
           <>

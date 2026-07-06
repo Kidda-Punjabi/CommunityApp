@@ -3,6 +3,8 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
 import { GameSessionReview } from "@/components/games/game-session-review";
 import { GameSessionSettings } from "@/components/games/game-session-settings";
@@ -73,6 +75,7 @@ export function VoicePracticeMode({
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const { playSound } = useAudioManager();
   const speechSupported = useMemo(() => isSpeechRecognitionSupported(), []);
   const safariBrowser = useMemo(() => isSafariBrowser(), []);
 
@@ -219,6 +222,7 @@ export function VoicePracticeMode({
     setLastTranscript(transcript);
 
     if (passedVoiceAttempt(similarity)) {
+      playSound("correct");
       setFeedback("pass");
       scheduleAdvance({
         sentence_id: current.id,
@@ -230,6 +234,7 @@ export function VoicePracticeMode({
     }
 
     if (nextAttempts >= VOICE_PRACTICE_MAX_ATTEMPTS) {
+      playSound("incorrect");
       setFeedback("failed");
       scheduleAdvance({
         sentence_id: current.id,
@@ -328,7 +333,8 @@ export function VoicePracticeMode({
   const revealAnswer = feedback === "failed";
 
   return (
-    <div className="space-y-5">
+    <div className="relative space-y-5">
+      <FloatingSoundToggle />
       <SessionProgressBar current={questionIndex + 1} total={questions.length} />
 
       <div className="space-y-3">

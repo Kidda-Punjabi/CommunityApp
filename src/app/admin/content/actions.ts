@@ -8,6 +8,11 @@ import type { StorageBucket } from "@/lib/supabase/upload";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseBulkFlashcards } from "@/lib/admin/parse-bulk-flashcards";
+import {
+  buildCourseLessonLookup,
+  inferWeekNumberFromSetName,
+  resolveFlashcardSetLinks,
+} from "@/lib/admin/resolve-flashcard-set-links";
 import { revalidatePath } from "next/cache";
 
 const ADMIN_PATH = "/admin/content";
@@ -481,10 +486,11 @@ function parseFlashcardWeekNumber(
   raw: FormDataEntryValue | null,
   association: FlashcardSetAssociation
 ): number | null {
-  if (association !== "beginners") return null;
+  if (association === "uncategorized") return null;
   const value = parseOptionalInt(raw);
   if (value === null) return null;
-  if (value < 1 || value > 12) return null;
+  const maxWeek = association === "community" ? 24 : 12;
+  if (value < 1 || value > maxWeek) return null;
   return value;
 }
 
@@ -500,6 +506,38 @@ function flashcardSetFieldsFromForm(formData: FormData) {
     course_association: courseAssociation,
     week_number: weekNumber,
   };
+}
+
+async function syncFlashcardSetLinksFromAssociation(
+  supabase: SupabaseClient,
+  deckId: string,
+  association: FlashcardSetAssociation,
+  weekNumber: number | null,
+  setName: string
+) {
+  const [{ data: courses }, { data: lessons }] = await Promise.all([
+    supabase.from("courses").select("id, name, required_tier"),
+    supabase.from("lessons").select("id, course_id, lesson_number, title"),
+  ]);
+
+  const lookup = buildCourseLessonLookup(courses ?? [], lessons ?? []);
+  const effectiveWeek =
+    weekNumber ?? inferWeekNumberFromSetName(setName, association);
+  const { courseIds, lessonIds } = resolveFlashcardSetLinks(
+    lookup,
+    association,
+    effectiveWeek,
+    setName
+  );
+
+  await syncSetCourseLinks(supabase, deckId, courseIds, lessonIds);
+
+  if (effectiveWeek !== weekNumber && effectiveWeek !== null) {
+    await supabase
+      .from("flashcard_sets")
+      .update({ week_number: effectiveWeek })
+      .eq("id", deckId);
+  }
 }
 
 function parseTopicTags(raw: FormDataEntryValue | null): string[] {
@@ -647,14 +685,28 @@ export async function createFlashcardSet(
     const associationFields = flashcardSetFieldsFromForm(formData);
     if ("error" in associationFields) return { error: associationFields.error };
 
-    const { error } = await supabase.from("flashcard_sets").insert({
-      name,
-      description,
-      course_association: associationFields.course_association,
-      week_number: associationFields.week_number,
-    });
+    const { data: created, error } = await supabase
+      .from("flashcard_sets")
+      .insert({
+        name,
+        description,
+        course_association: associationFields.course_association,
+        week_number: associationFields.week_number,
+      })
+      .select("id")
+      .single();
 
     if (error) return { error: withDbHint(error.message) };
+
+    if (created?.id) {
+      await syncFlashcardSetLinksFromAssociation(
+        supabase,
+        created.id,
+        associationFields.course_association,
+        associationFields.week_number,
+        name
+      );
+    }
 
     revalidatePath(ADMIN_PATH);
     revalidatePath(ADMIN_CURRICULUM_PATH);
@@ -673,8 +725,6 @@ export async function updateFlashcardSet(
     const id = formData.get("id") as string;
     const name = (formData.get("name") as string)?.trim();
     const description = (formData.get("description") as string)?.trim() || null;
-    const courseIds = formData.getAll("course_ids").map(String).filter(Boolean);
-    const lessonIds = formData.getAll("lesson_ids").map(String).filter(Boolean);
 
     if (!id || !name) return { error: "Set id and name are required." };
 
@@ -698,7 +748,13 @@ export async function updateFlashcardSet(
       .update({ deck_name: name })
       .eq("deck_id", id);
 
-    await syncSetCourseLinks(supabase, id, courseIds, lessonIds);
+    await syncFlashcardSetLinksFromAssociation(
+      supabase,
+      id,
+      associationFields.course_association,
+      associationFields.week_number,
+      name
+    );
 
     revalidatePath(ADMIN_PATH);
     revalidatePath(ADMIN_CURRICULUM_PATH);

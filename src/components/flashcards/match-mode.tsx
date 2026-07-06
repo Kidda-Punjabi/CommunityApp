@@ -2,6 +2,9 @@
 
 import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useRef, useState } from "react";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
+import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { gameDeckHubHref, shuffleArray } from "@/lib/flashcards/utils";
@@ -24,12 +27,16 @@ type FlashcardMatchModeProps = {
   deck: FlashcardDeckContext;
   initialBestScore: number;
   challenge?: ChallengePlayContext | null;
+  kidsMode?: boolean;
+  onKidsComplete?: (score: number) => void | Promise<void>;
 };
 
 export function FlashcardMatchMode({
   deck,
   initialBestScore,
   challenge = null,
+  kidsMode = false,
+  onKidsComplete,
 }: FlashcardMatchModeProps) {
   const deckHubHref = gameDeckHubHref("match");
 
@@ -48,6 +55,7 @@ export function FlashcardMatchMode({
   const userIdRef = useRef<string | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const savedRef = useRef(false);
+  const { playSound } = useAudioManager();
 
   const [tiles, setTiles] = useState<Tile[]>([]);
 
@@ -108,7 +116,12 @@ export function FlashcardMatchMode({
   }, [phase]);
 
   useEffect(() => {
-    if (phase !== "finished" || savedRef.current) return;
+    if (!kidsMode || phase !== "finished") return;
+    void onKidsComplete?.(pairsMatched);
+  }, [kidsMode, phase, pairsMatched, onKidsComplete]);
+
+  useEffect(() => {
+    if (kidsMode || phase !== "finished" || savedRef.current) return;
     savedRef.current = true;
 
     const timeUsed = startedAtRef.current
@@ -179,12 +192,14 @@ export function FlashcardMatchMode({
     }
 
     if (firstTile.cardId === tile.cardId) {
+      playSound("correct");
       setMatchedCardIds((prev) => new Set(prev).add(tile.cardId));
       setPairsMatched((prev) => prev + 1);
       setSelectedTileId(null);
       return;
     }
 
+    playSound("incorrect");
     setWrongTileId(tile.id);
     window.setTimeout(() => {
       setWrongTileId(null);
@@ -228,48 +243,23 @@ export function FlashcardMatchMode({
 
   if (phase === "finished") {
     return (
-      <div className="space-y-6">
-        {challenge && (
-          <ChallengePostGameBanner
-            opponentName={challenge.opponentDisplayName}
-            result={challengeFinish.result}
-            error={challengeFinish.error}
-            submitting={challengeFinish.submitting}
-          />
-        )}
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-medium text-violet-600">Time&apos;s up</p>
-          <h2 className="mt-2 text-2xl font-bold text-zinc-900">
-            {pairsMatched} / {deck.cards.length} pairs
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500">in {elapsedSeconds} seconds</p>
-          {result?.isNewBest && (
-            <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
-          )}
-          {result && !result.isNewBest && result.currentBest > 0 && (
-            <p className="mt-3 text-sm text-zinc-500">
-              Personal best: {result.currentBest} pairs
-            </p>
-          )}
-        </div>
-        {!challenge && (
-          <button
-            type="button"
-            onClick={startGame}
-            className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-          >
-            Play again
-          </button>
-        )}
-        <BackLink fallbackHref={deckHubHref} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Back
-        </BackLink>
-      </div>
+      <MatchFinishedScreen
+        challenge={challenge}
+        challengeFinish={challengeFinish}
+        pairsMatched={pairsMatched}
+        deck={deck}
+        elapsedSeconds={elapsedSeconds}
+        result={result}
+        deckHubHref={deckHubHref}
+        onPlayAgain={startGame}
+        kidsMode={kidsMode}
+      />
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      {!kidsMode && <FloatingSoundToggle />}
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="match" />}
       <div className="flex items-center justify-between gap-3">
         <BackLink fallbackHref={deckHubHref}>← Back</BackLink>
@@ -305,6 +295,72 @@ export function FlashcardMatchMode({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function MatchFinishedScreen({
+  challenge,
+  challengeFinish,
+  pairsMatched,
+  deck,
+  elapsedSeconds,
+  result,
+  deckHubHref,
+  onPlayAgain,
+  kidsMode,
+}: {
+  challenge: ChallengePlayContext | null | undefined;
+  challengeFinish: ReturnType<typeof useChallengeFinish>;
+  pairsMatched: number;
+  deck: FlashcardDeckContext;
+  elapsedSeconds: number;
+  result: { isNewBest: boolean; currentBest: number } | null;
+  deckHubHref: string;
+  onPlayAgain: () => void;
+  kidsMode: boolean;
+}) {
+  usePlaySoundOnce("game_complete");
+
+  return (
+    <div className="relative space-y-6">
+      {!kidsMode && <FloatingSoundToggle />}
+      {challenge && (
+        <ChallengePostGameBanner
+          opponentName={challenge.opponentDisplayName}
+          result={challengeFinish.result}
+          error={challengeFinish.error}
+          submitting={challengeFinish.submitting}
+        />
+      )}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+        <p className="text-sm font-medium text-violet-600">Time&apos;s up</p>
+        <h2 className="mt-2 text-2xl font-bold text-zinc-900">
+          {pairsMatched} / {deck.cards.length} pairs
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500">in {elapsedSeconds} seconds</p>
+        {result?.isNewBest && (
+          <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
+        )}
+        {result && !result.isNewBest && result.currentBest > 0 && (
+          <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest} pairs</p>
+        )}
+      </div>
+      {!challenge && (
+        <button
+          type="button"
+          onClick={onPlayAgain}
+          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+        >
+          Play again
+        </button>
+      )}
+      <BackLink
+        fallbackHref={deckHubHref}
+        className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500"
+      >
+        ← Back
+      </BackLink>
     </div>
   );
 }

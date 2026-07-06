@@ -196,6 +196,12 @@ export function LessonCard({
                 href={flashcardsRow.href}
               />
             ) : null}
+            <ContentRow
+              label="Feedback"
+              subtitle="Share how this lesson went for you"
+              actionLabel="Give feedback"
+              href={`/dashboard/feedback/${lesson.id}`}
+            />
           </div>
 
           {contentUnlocked && !hasLessonContent && (

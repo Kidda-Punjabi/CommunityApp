@@ -3,6 +3,8 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
 import { GameSessionReview } from "@/components/games/game-session-review";
 import { GameSessionSettings } from "@/components/games/game-session-settings";
@@ -55,6 +57,7 @@ export function PossessivePracticeMode({
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const { playSound } = useAudioManager();
 
   const canStart =
     tablesReady &&
@@ -160,6 +163,7 @@ export function PossessivePracticeMode({
     if (phase !== "playing" || !current || feedback) return;
 
     const isCorrect = optionId === current.correctOptionId;
+    playSound(isCorrect ? "correct" : "incorrect");
     const result: PossessiveQuestionResult = {
       possessive_form_id: current.possessiveFormId,
       noun_id: current.nounId,
@@ -237,7 +241,8 @@ export function PossessivePracticeMode({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="relative space-y-3">
+      <FloatingSoundToggle />
       <SessionProgressBar current={questionIndex + 1} total={questions.length} />
 
       <div className="flex items-center justify-between gap-3">

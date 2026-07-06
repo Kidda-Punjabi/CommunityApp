@@ -1,0 +1,90 @@
+import {
+  buildNotionFeedbackProperties,
+  createNotionFeedbackPage,
+} from "@/lib/feedback/notion";
+import type { FeedbackContext, FeedbackSubmitPayload } from "@/lib/feedback/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export async function saveFeedbackSubmission(
+  supabase: SupabaseClient,
+  userId: string,
+  context: FeedbackContext,
+  payload: FeedbackSubmitPayload
+): Promise<{
+  submissionId: string;
+  notionSynced: boolean;
+  notionError?: string;
+}> {
+  const submittedAt = new Date();
+
+  const { data: row, error: insertError } = await supabase
+    .from("feedback_submissions")
+    .insert({
+      user_id: userId,
+      lesson_id: context.lessonId,
+      form_variant: payload.formVariant,
+      full_name: context.fullName,
+      email: context.email,
+      phone: context.phone,
+      cohort: context.cohort,
+      course: context.course,
+      lesson_label: context.lessonLabel,
+      tutor: context.tutor,
+      tutor_unmatched: context.tutorUnmatched,
+      learning_relevance: payload.learningRelevance,
+      tutor_effectiveness: payload.tutorEffectiveness,
+      confidence: payload.confidence,
+      understanding: payload.understanding ?? null,
+      speaking: payload.speaking ?? null,
+      understanding_grammar: payload.understandingGrammar ?? null,
+      clarity_structure: payload.clarityStructure ?? null,
+      concept_breakdown: payload.conceptBreakdown ?? null,
+      supportiveness: payload.supportiveness ?? null,
+      overall_score: payload.overallScore ?? null,
+      comments: payload.comments,
+      testimonials: payload.testimonials ?? null,
+      recommend: payload.recommend ?? null,
+      video_testimonial: payload.videoTestimonial ?? null,
+      future_support: payload.futureSupport ?? [],
+      notion_sync_status: "pending",
+      submitted_at: submittedAt.toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !row) {
+    throw new Error(insertError?.message ?? "Failed to save feedback.");
+  }
+
+  try {
+    const properties = buildNotionFeedbackProperties(context, payload, submittedAt);
+    const { pageId } = await createNotionFeedbackPage(properties);
+
+    await supabase
+      .from("feedback_submissions")
+      .update({
+        notion_page_id: pageId,
+        notion_sync_status: "synced",
+        notion_synced_at: new Date().toISOString(),
+        notion_sync_error: null,
+      })
+      .eq("id", row.id);
+
+    return { submissionId: row.id, notionSynced: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Notion sync failed.";
+    await supabase
+      .from("feedback_submissions")
+      .update({
+        notion_sync_status: "failed",
+        notion_sync_error: message,
+      })
+      .eq("id", row.id);
+
+    return {
+      submissionId: row.id,
+      notionSynced: false,
+      notionError: message,
+    };
+  }
+}

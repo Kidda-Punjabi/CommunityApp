@@ -3,6 +3,8 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { createClient } from "@/lib/supabase/client";
 import {
   answersMatch,
@@ -62,6 +64,7 @@ export function SentenceBuilderMode({
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const { playSound } = useAudioManager();
 
   const playableSentences = useMemo(
     () => sentences.filter((sentence) => sentence.word_tiles.length > 0),
@@ -203,6 +206,7 @@ export function SentenceBuilderMode({
 
     const attempt = built.map((tile) => tile.word);
     const isCorrect = answersMatch(attempt, current.correctTiles);
+    playSound(isCorrect ? "correct" : "incorrect");
     setSessionLog((prev) => [
       ...prev,
       buildSentenceBuilderLogEntry(current, built, isCorrect),
@@ -286,7 +290,8 @@ export function SentenceBuilderMode({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="relative space-y-5">
+      <FloatingSoundToggle />
       <SessionProgressBar current={questionIndex + 1} total={questions.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="sentence_builder" />}
       <div className="space-y-3">

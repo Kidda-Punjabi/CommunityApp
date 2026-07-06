@@ -1,4 +1,8 @@
+"use client";
+
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
@@ -165,8 +169,11 @@ export function GameSessionReview({
   const missed = missedCount(validLog);
   const headline = encouragingScoreHeadline(correct, total);
 
+  usePlaySoundOnce("game_complete");
+
   return (
     <div className="space-y-6">
+      <FloatingSoundToggle />
       <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
         <p className="text-sm font-medium text-violet-600">{title}</p>
         <h2 className="mt-2 text-3xl font-bold text-zinc-900">{headline}</h2>

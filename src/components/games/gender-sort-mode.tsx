@@ -3,6 +3,8 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { createClient } from "@/lib/supabase/client";
 import type { GenderedNoun } from "@/lib/games/types";
 import { GameSessionReview } from "@/components/games/game-session-review";
@@ -129,6 +131,7 @@ export function GenderSortMode({
 
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
+  const { playSound } = useAudioManager();
   const advanceTimerRef = useRef<number | null>(null);
 
   const current = queue[index];
@@ -266,6 +269,7 @@ export function GenderSortMode({
     if (phase !== "playing" || !adjectiveQuestion || adjectiveFeedback) return;
 
     const isCorrect = option === adjectiveQuestion.correctAnswer;
+    playSound(isCorrect ? "correct" : "incorrect");
     const points = isCorrect ? BASE_POINTS : 0;
     setSessionLog((prev) => [
       ...prev,
@@ -302,6 +306,7 @@ export function GenderSortMode({
 
     const elapsed = Date.now() - shownAt;
     const isCorrect = guess === current.gender;
+    playSound(isCorrect ? "correct" : "incorrect");
     const speedBonus = isCorrect && elapsed < SPEED_BONUS_MS ? 5 : 0;
     const points = isCorrect ? BASE_POINTS + speedBonus : 0;
     const nextScore = score + points;
@@ -431,7 +436,8 @@ export function GenderSortMode({
 
   if (sortMode === "adjectives" && adjectiveQuestion) {
     return (
-      <div className="space-y-6">
+      <div className="relative space-y-6">
+        <FloatingSoundToggle />
         <SessionProgressBar current={index + 1} total={adjectiveQueue.length} />
         {challenge && <ChallengeModeBanner challenge={challenge} gameType="gender_sort" />}
         <div className="flex items-center justify-between gap-3">
@@ -514,7 +520,8 @@ export function GenderSortMode({
     : "border-zinc-200 bg-white";
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
+      <FloatingSoundToggle />
       <SessionProgressBar current={index + 1} total={queue.length} />
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="gender_sort" />}
       <div className="flex items-center justify-between gap-3">
