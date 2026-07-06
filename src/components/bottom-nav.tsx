@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { NavLink } from "@/components/ui/nav-link";
 import { usePathname } from "next/navigation";
 import { useTabNav } from "@/components/navigation/tab-nav-provider";
 import { useKidSession } from "@/components/kids/kid-session-provider";
@@ -162,10 +162,9 @@ export function BottomNav() {
           const active = activeTab === tabId;
 
           return (
-            <Link
+            <NavLink
               key={item.href}
               href={item.href}
-              prefetch={true}
               onClick={() => setActiveTab(tabId)}
               className={`group flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 transition-colors ${
                 active ? "text-violet-600" : "text-zinc-500"
@@ -181,7 +180,7 @@ export function BottomNav() {
               >
                 {item.label}
               </span>
-            </Link>
+            </NavLink>
           );
         })}
       </div>

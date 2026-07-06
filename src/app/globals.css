@@ -37,6 +37,19 @@ button,
   -webkit-text-fill-color: currentColor;
 }
 
+.kidda-pressable {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 100ms ease,
+    opacity 100ms ease;
+}
+
+.kidda-pressable:active:not(:disabled) {
+  transform: scale(0.975);
+  opacity: 0.85;
+}
+
 h1,
 h2,
 h3,

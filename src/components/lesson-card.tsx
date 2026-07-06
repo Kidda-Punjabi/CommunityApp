@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NavLink } from "@/components/ui/nav-link";
 import { LessonInlineAudioRow } from "@/components/lesson-inline-audio-row";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import { LessonPdfViewer } from "@/components/lesson-pdf-viewer";
@@ -14,10 +15,13 @@ import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import type { FlashcardProgressRow } from "@/lib/progress/flashcard-progress";
 import type { QuizProgressRow } from "@/lib/progress/quiz-progress";
 import type { FlashcardSetInfo } from "@/lib/learning/match-lesson-content";
+import { pressableClass } from "@/lib/ui/pressable";
 import { cn, ui } from "@/lib/ui/styles";
 
-export const lessonContentRowButtonClass =
-  "inline-flex shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50";
+export const lessonContentRowButtonClass = cn(
+  pressableClass,
+  "inline-flex shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+);
 
 type LessonProgress = {
   audioCompleted: boolean;
@@ -400,9 +404,9 @@ function ContentRow({
           {actionLabel}
         </a>
       ) : (
-        <Link href={href} className={buttonClass}>
+        <NavLink href={href} className={buttonClass}>
           {actionLabel}
-        </Link>
+        </NavLink>
       )
     ) : (
       <button type="button" className={buttonClass} disabled={disabled}>

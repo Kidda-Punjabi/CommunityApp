@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { NavLink } from "@/components/ui/nav-link";
+import { pressableClass } from "@/lib/ui/pressable";
 import { cn } from "@/lib/ui/styles";
 
 export const hubCardClass =
@@ -35,6 +37,7 @@ export function HubPrimaryButton({
     <button
       type="button"
       className={cn(
+        pressableClass,
         "inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50",
         className
       )}
@@ -54,6 +57,7 @@ export function HubSecondaryButton({
     <button
       type="button"
       className={cn(
+        pressableClass,
         "inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50",
         className
       )}
@@ -103,7 +107,7 @@ export function SummaryRow({
   className?: string;
 }) {
   return (
-    <Link href={href} className={cn(hubCardClass, "block transition-colors hover:bg-zinc-50", className)}>
+    <NavLink href={href} className={cn(hubCardClass, "block transition-colors hover:bg-zinc-50", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-zinc-900">{title}</p>
@@ -111,7 +115,7 @@ export function SummaryRow({
         </div>
         <ChevronRight className="mt-0.5 shrink-0" />
       </div>
-    </Link>
+    </NavLink>
   );
 }
 
@@ -127,6 +131,7 @@ export function AccountListRow({
   className?: string;
 }) {
   const rowClass = cn(
+    pressableClass,
     "flex w-full items-center justify-between gap-3 py-3 text-left text-sm font-medium text-zinc-900 transition-colors hover:text-violet-600",
     className
   );
@@ -143,10 +148,10 @@ export function AccountListRow({
   }
 
   return (
-    <Link href={href ?? "#"} className={rowClass}>
+    <NavLink href={href ?? "#"} className={rowClass}>
       <span>{label}</span>
       {trailing}
-    </Link>
+    </NavLink>
   );
 }
 
@@ -192,7 +197,7 @@ export function ActionListRow({
   badge?: React.ReactNode;
 }) {
   return (
-    <Link
+    <NavLink
       href={href}
       className="flex items-center gap-3 py-3 transition-colors hover:bg-zinc-50"
     >
@@ -208,6 +213,6 @@ export function ActionListRow({
         {subtitle ? <p className="mt-0.5 text-sm text-zinc-500">{subtitle}</p> : null}
       </div>
       <ChevronRight className="shrink-0" />
-    </Link>
+    </NavLink>
   );
 }

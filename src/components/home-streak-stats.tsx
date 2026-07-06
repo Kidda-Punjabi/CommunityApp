@@ -69,6 +69,12 @@ export function HomeStreakProvider({
   );
 }
 
+export function isHomeStreakAtRisk(
+  stats: Pick<HomeStreakInitial, "streakAtRisk" | "redemptionAvailable">
+): boolean {
+  return stats.streakAtRisk && !stats.redemptionAvailable;
+}
+
 export function HomeStreakBanner() {
   const stats = useHomeStreakStats();
 
@@ -95,7 +101,7 @@ export function HomeStreakCard() {
           "No streak yet"
         )}
       </p>
-      {stats.streakAtRisk && !stats.redemptionAvailable && (
+      {isHomeStreakAtRisk(stats) && (
         <p className="mt-1 text-xs font-medium text-amber-600">
           Study today to keep it going
         </p>

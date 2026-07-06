@@ -79,6 +79,9 @@ export default async function ProfilePage() {
               {displayName || "Your profile"}
             </h1>
             <p className="mt-0.5 truncate text-sm text-zinc-500">{user?.email}</p>
+            <p className="mt-1 text-sm font-medium tabular-nums text-violet-700">
+              {progression.totalXp.toLocaleString()} lifetime XP
+            </p>
           </div>
         </div>
         <Link

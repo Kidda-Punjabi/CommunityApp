@@ -12,6 +12,13 @@ export function HomeActionList({ membersStudiedTodayLabel }: HomeActionListProps
   return (
     <HubCard className="divide-y divide-zinc-100 py-0">
       <ActionListRow
+        href="/dashboard/profile/progress"
+        icon="📈"
+        eyebrow="Progress"
+        title="Your learning journey"
+        subtitle="Level, XP, streaks, and level-up tests"
+      />
+      <ActionListRow
         href="/dashboard/schedule"
         icon="📅"
         eyebrow="Tutoring"

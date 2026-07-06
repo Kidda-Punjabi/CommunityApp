@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavLink } from "@/components/ui/nav-link";
 import type { LearnTrack } from "@/lib/learning/learn-catalog";
 import { learnTrackPath } from "@/lib/learning/learn-catalog";
 import type { StudentPackage } from "@/lib/packages/load-student-packages";
@@ -59,7 +59,7 @@ export function LearnCourseCard({
 
   return (
     <div className={`${ui.listRow} flex-col items-stretch gap-0 p-0`}>
-      <Link
+      <NavLink
         href={href}
         className={`group flex items-center gap-4 p-4 ${showLock ? "opacity-90" : ""}`}
       >
@@ -87,7 +87,7 @@ export function LearnCourseCard({
             </svg>
           </span>
         )}
-      </Link>
+      </NavLink>
 
       {showPackage && studentPackage ? (
         <div className="px-4 pb-4">

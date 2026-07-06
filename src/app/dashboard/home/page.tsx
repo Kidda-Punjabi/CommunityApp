@@ -1,6 +1,6 @@
+import { HomeHeroLink } from "@/components/home/home-hero-link";
 import { HomeGreetingHeader } from "@/components/home-greeting-header";
 import { HomeActionList } from "@/components/home/home-action-list";
-import { HomeStatsBar } from "@/components/home/home-stats-bar";
 import {
   HomeStreakBanner,
   HomeStreakProvider,
@@ -40,26 +40,14 @@ export default async function HomePage() {
           }}
           learnerLevel={onboarding.learnerLevel}
           unreadNotificationCount={unreadNotificationCount}
+          weeklyPoints={weeklyPoints}
         />
 
         <section className={ui.section}>
-          <Link href={dashboard.primaryCta.href} className={ui.heroCard}>
-            <span className={ui.heroBadge}>Up next</span>
-            <p className={ui.heroTitle}>{dashboard.primaryCta.label}</p>
-            <p className={ui.heroSubtitle}>Tap to continue your learning</p>
-            <span className={ui.heroCta}>Get started →</span>
-          </Link>
+          <HomeHeroLink href={dashboard.primaryCta.href} label={dashboard.primaryCta.label} />
         </section>
 
         <HomeStreakBanner />
-
-        <section className={ui.section}>
-          <HomeStatsBar
-            lessonsCompleted={dashboard.stats.lessonsCompleted}
-            quizzesPassed={dashboard.stats.quizzesPassed}
-            weeklyPoints={weeklyPoints}
-          />
-        </section>
 
         <section className={ui.section}>
           <HomeActionList membersStudiedTodayLabel={dashboard.membersStudiedTodayLabel} />

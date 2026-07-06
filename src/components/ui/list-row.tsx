@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavLink } from "@/components/ui/nav-link";
 import { ui } from "@/lib/ui/styles";
 
 type ListRowProps = {
@@ -31,7 +31,7 @@ export function ListRow({
   className,
 }: ListRowProps) {
   return (
-    <Link href={href} className={`group ${ui.listRow} ${className ?? ""}`}>
+    <NavLink href={href} className={`group ${ui.listRow} ${className ?? ""}`}>
       {icon ?? (
         <span className={ui.listRowIcon} aria-hidden="true">
           {emoji}
@@ -47,6 +47,6 @@ export function ListRow({
             <PlayIcon />
           </span>
         ) : null)}
-    </Link>
+    </NavLink>
   );
 }
