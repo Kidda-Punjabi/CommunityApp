@@ -143,6 +143,9 @@ function withDbHint(message: string): string {
   if (message.includes("quiz_id") && message.includes("not-null")) {
     return `${message} Run: ALTER TABLE public.flashcards ALTER COLUMN quiz_id DROP NOT NULL; in the Supabase SQL Editor.`;
   }
+  if (message.includes("course_association") && message.includes("schema cache")) {
+    return `${message} Run supabase/flashcard-set-course-association.sql in the Supabase SQL Editor, then retry.`;
+  }
   if (message.includes("permission denied")) {
     return `${message} Run supabase/grants.sql in the Supabase SQL Editor, then retry.`;
   }
@@ -456,6 +459,49 @@ export async function bulkCreateQuizQuestions(
 
 const FLASHCARD_CATEGORIES = ["alphabet", "vocab", "sentences"] as const;
 
+const FLASHCARD_SET_ASSOCIATIONS = [
+  "foundations",
+  "beginners",
+  "community",
+  "uncategorized",
+] as const;
+
+type FlashcardSetAssociation = (typeof FLASHCARD_SET_ASSOCIATIONS)[number];
+
+function parseFlashcardSetAssociation(
+  raw: FormDataEntryValue | null
+): FlashcardSetAssociation {
+  if (typeof raw !== "string") return "uncategorized";
+  return FLASHCARD_SET_ASSOCIATIONS.includes(raw as FlashcardSetAssociation)
+    ? (raw as FlashcardSetAssociation)
+    : "uncategorized";
+}
+
+function parseFlashcardWeekNumber(
+  raw: FormDataEntryValue | null,
+  association: FlashcardSetAssociation
+): number | null {
+  if (association !== "beginners") return null;
+  const value = parseOptionalInt(raw);
+  if (value === null) return null;
+  if (value < 1 || value > 12) return null;
+  return value;
+}
+
+function flashcardSetFieldsFromForm(formData: FormData) {
+  const courseAssociation = parseFlashcardSetAssociation(formData.get("course_association"));
+  const weekNumber = parseFlashcardWeekNumber(formData.get("week_number"), courseAssociation);
+
+  if (courseAssociation === "beginners" && weekNumber === null) {
+    return { error: "Week number (1–12) is required for Beginners course sets." as const };
+  }
+
+  return {
+    course_association: courseAssociation,
+    week_number: weekNumber,
+  };
+}
+
 function parseTopicTags(raw: FormDataEntryValue | null): string[] {
   if (typeof raw !== "string" || !raw.trim()) return [];
   return raw
@@ -598,14 +644,20 @@ export async function createFlashcardSet(
 
     if (!name) return { error: "Set name is required." };
 
+    const associationFields = flashcardSetFieldsFromForm(formData);
+    if ("error" in associationFields) return { error: associationFields.error };
+
     const { error } = await supabase.from("flashcard_sets").insert({
       name,
       description,
+      course_association: associationFields.course_association,
+      week_number: associationFields.week_number,
     });
 
     if (error) return { error: withDbHint(error.message) };
 
     revalidatePath(ADMIN_PATH);
+    revalidatePath(ADMIN_CURRICULUM_PATH);
     return { success: "Flashcard set created." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create flashcard set." };
@@ -626,9 +678,17 @@ export async function updateFlashcardSet(
 
     if (!id || !name) return { error: "Set id and name are required." };
 
+    const associationFields = flashcardSetFieldsFromForm(formData);
+    if ("error" in associationFields) return { error: associationFields.error };
+
     const { error } = await supabase
       .from("flashcard_sets")
-      .update({ name, description })
+      .update({
+        name,
+        description,
+        course_association: associationFields.course_association,
+        week_number: associationFields.week_number,
+      })
       .eq("id", id);
 
     if (error) return { error: withDbHint(error.message) };
@@ -641,6 +701,7 @@ export async function updateFlashcardSet(
     await syncSetCourseLinks(supabase, id, courseIds, lessonIds);
 
     revalidatePath(ADMIN_PATH);
+    revalidatePath(ADMIN_CURRICULUM_PATH);
     return { success: "Flashcard set updated." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update flashcard set." };

@@ -14,6 +14,8 @@ import {
 } from "../actions";
 import type { AdminData, FlashcardCategory, FlashcardSet } from "../types";
 import { parseBulkFlashcards } from "@/lib/admin/parse-bulk-flashcards";
+import { FlashcardSetsList } from "./flashcard-sets-list";
+import { SetAssociationFields } from "./set-association-fields";
 import {
   FormMessage,
   SectionCard,
@@ -54,6 +56,7 @@ function persistEditingSetId(id: string | null) {
 }
 
 export function FlashcardsTab({ data }: { data: AdminData }) {
+  const router = useRouter();
   const [editingSetId, setEditingSetId] = useState<string | null>(() => readEditingSetId());
   const [createSetState, createSetAction, createSetPending] = useActionState(
     createFlashcardSet,
@@ -68,6 +71,10 @@ export function FlashcardsTab({ data }: { data: AdminData }) {
     }
     return counts;
   }, [data.flashcards]);
+
+  const needsCourseAssociationMigration =
+    data.flashcardSets.length > 0 &&
+    data.flashcardSets.every((set) => set.course_association == null);
 
   const editingSet = editingSetId
     ? data.flashcardSets.find((set) => set.id === editingSetId) ?? null
@@ -96,8 +103,16 @@ export function FlashcardsTab({ data }: { data: AdminData }) {
 
   return (
     <div className="space-y-6">
+      {needsCourseAssociationMigration && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Run <code className="font-mono text-xs">supabase/flashcard-set-course-association.sql</code>{" "}
+          in the Supabase SQL Editor to enable course grouping and auto-categorise existing sets.
+        </p>
+      )}
+
       <SectionCard title="Create flashcard set">
         <form action={createSetAction} className="space-y-4">
+          <SetAssociationFields />
           <div>
             <label className={labelClass}>Set name</label>
             <input name="name" required placeholder="e.g. Greetings" className={inputClass} />
@@ -114,42 +129,19 @@ export function FlashcardsTab({ data }: { data: AdminData }) {
       </SectionCard>
 
       <SectionCard title={`Flashcard sets (${data.flashcardSets.length})`}>
-        {data.flashcardSets.length === 0 ? (
-          <p className="text-sm text-zinc-500">No flashcard sets yet.</p>
-        ) : (
-          <ul className="divide-y divide-zinc-100">
-            {data.flashcardSets.map((set) => (
-              <li
-                key={set.id}
-                className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-semibold text-zinc-900">{set.name}</p>
-                  {set.description && (
-                    <p className="mt-1 text-sm text-zinc-500">{set.description}</p>
-                  )}
-                  <p className="mt-1 text-xs text-zinc-400">
-                    {cardCountBySet.get(set.id) ?? 0} card
-                    {(cardCountBySet.get(set.id) ?? 0) === 1 ? "" : "s"}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingSetId(set.id);
-                      persistEditingSetId(set.id);
-                    }}
-                    className={secondaryButtonClass}
-                  >
-                    Edit
-                  </button>
-                  <DeleteFlashcardSetButton id={set.id} name={set.name} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <FlashcardSetsList
+          sets={data.flashcardSets}
+          cardCountBySet={cardCountBySet}
+          onEdit={(setId) => {
+            setEditingSetId(setId);
+            persistEditingSetId(setId);
+          }}
+          onDelete={async (id, name) => {
+            if (!confirm(`Delete "${name}" and all its cards?`)) return;
+            await deleteFlashcardSet(id);
+            router.refresh();
+          }}
+        />
       </SectionCard>
     </div>
   );
@@ -219,6 +211,10 @@ function FlashcardSetEditView({
       <SectionCard title={`Edit set: ${set.name}`}>
         <form action={setAction} className="space-y-4">
           <input type="hidden" name="id" value={set.id} />
+          <SetAssociationFields
+            defaultAssociation={set.course_association ?? "uncategorized"}
+            defaultWeekNumber={set.week_number}
+          />
           <div>
             <label className={labelClass}>Set name</label>
             <input name="name" required defaultValue={set.name} className={inputClass} />
@@ -523,28 +519,6 @@ function DeleteFlashcardButton({ id }: { id: string }) {
         if (!confirm("Delete this flashcard?")) return;
         setPending(true);
         await deleteFlashcard(id);
-        router.refresh();
-        setPending(false);
-      }}
-    >
-      Delete
-    </button>
-  );
-}
-
-function DeleteFlashcardSetButton({ id, name }: { id: string; name: string }) {
-  const [pending, setPending] = useState(false);
-  const router = useRouter();
-
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      className={dangerButtonClass}
-      onClick={async () => {
-        if (!confirm(`Delete "${name}" and all its cards?`)) return;
-        setPending(true);
-        await deleteFlashcardSet(id);
         router.refresh();
         setPending(false);
       }}

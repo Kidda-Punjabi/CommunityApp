@@ -44,10 +44,18 @@ export type QuizQuestion = {
 
 export type FlashcardCategory = "alphabet" | "vocab" | "sentences";
 
+export type FlashcardSetCourseAssociation =
+  | "foundations"
+  | "beginners"
+  | "community"
+  | "uncategorized";
+
 export type FlashcardSet = {
   id: string;
   name: string;
   description: string | null;
+  course_association?: FlashcardSetCourseAssociation | null;
+  week_number?: number | null;
   created_at: string;
   updated_at: string;
 };
