@@ -7,9 +7,11 @@ import { ensureStorageBuckets } from "@/lib/supabase/ensure-storage-buckets";
 import type { StorageBucket } from "@/lib/supabase/upload";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseBulkFlashcards } from "@/lib/admin/parse-bulk-flashcards";
 import { revalidatePath } from "next/cache";
 
 const ADMIN_PATH = "/admin/content";
+const ADMIN_CURRICULUM_PATH = "/admin/content/curriculum";
 const COMMUNITY_PATH = "/dashboard/community";
 const COMMUNITY_EVENTS_PATH = "/dashboard/community/events";
 
@@ -764,19 +766,39 @@ export async function bulkCreateFlashcards(
   try {
     const supabase = await requireAdmin();
     const deckId = formData.get("deck_id") as string;
-    const bulkItemsRaw = formData.get("bulk_items") as string;
+    const bulkText = (formData.get("bulk_text") as string)?.trim();
+    const bulkItemsRaw = formData.get("bulk_items") as string | null;
     const lessonId = (formData.get("lesson_id") as string) || null;
 
-    if (!deckId || !bulkItemsRaw) {
-      return { error: "Deck and parsed flashcards are required." };
+    if (!deckId) {
+      return { error: "Deck is required." };
     }
 
-    const parsed = JSON.parse(bulkItemsRaw) as Array<{
-      front_text: string;
-      back_text: string;
-    }>;
+    let parsed: Array<{ front_text: string; back_text: string }> = [];
 
-    if (!Array.isArray(parsed) || parsed.length === 0) {
+    if (bulkText) {
+      const result = parseBulkFlashcards(bulkText);
+      parsed = result.items;
+      if (parsed.length === 0) {
+        return {
+          error:
+            result.errors[0] ??
+            "No valid flashcards to import. Use tab-separated rows (front[TAB]back).",
+        };
+      }
+    } else if (bulkItemsRaw) {
+      try {
+        const legacy = JSON.parse(bulkItemsRaw) as Array<{
+          front_text: string;
+          back_text: string;
+        }>;
+        if (Array.isArray(legacy)) parsed = legacy;
+      } catch {
+        return { error: "Could not read bulk flashcard data. Paste rows and try again." };
+      }
+    }
+
+    if (parsed.length === 0) {
       return { error: "No valid flashcards to import." };
     }
 
@@ -806,6 +828,7 @@ export async function bulkCreateFlashcards(
     if (error) return { error: withDbHint(error.message) };
 
     revalidatePath(ADMIN_PATH);
+    revalidatePath(ADMIN_CURRICULUM_PATH);
     return { success: `${rows.length} flashcards imported.` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to import flashcards." };

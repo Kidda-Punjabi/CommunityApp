@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
 import { CatchupSegmentsTab } from "@/app/admin/content/components/catchup-segments-tab";
 import { CoursesLessonsTab } from "@/app/admin/content/components/courses-lessons-tab";
@@ -20,9 +20,21 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]["id"];
 
+const CURRICULUM_TAB_KEY = "admin-curriculum-tab";
+
+function readStoredTab(): TabId {
+  if (typeof window === "undefined") return "lessons";
+  const stored = sessionStorage.getItem(CURRICULUM_TAB_KEY);
+  return tabs.some((tab) => tab.id === stored) ? (stored as TabId) : "lessons";
+}
+
 export function AdminCurriculumSection() {
   const { data } = useAdminData();
-  const [activeTab, setActiveTab] = useState<TabId>("lessons");
+  const [activeTab, setActiveTab] = useState<TabId>(() => readStoredTab());
+
+  useEffect(() => {
+    sessionStorage.setItem(CURRICULUM_TAB_KEY, activeTab);
+  }, [activeTab]);
 
   return (
     <div className={ui.page}>

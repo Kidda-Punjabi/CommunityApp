@@ -13,6 +13,7 @@ import {
   type ActionResult,
 } from "../actions";
 import type { AdminData, FlashcardCategory, FlashcardSet } from "../types";
+import { parseBulkFlashcards } from "@/lib/admin/parse-bulk-flashcards";
 import {
   FormMessage,
   SectionCard,
@@ -39,8 +40,21 @@ type CardMetadataDefaults = {
   icon_name?: string;
 };
 
+const FLASHCARDS_EDITING_SET_KEY = "admin-flashcards-editing-set-id";
+
+function readEditingSetId(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(FLASHCARDS_EDITING_SET_KEY);
+}
+
+function persistEditingSetId(id: string | null) {
+  if (typeof window === "undefined") return;
+  if (id) sessionStorage.setItem(FLASHCARDS_EDITING_SET_KEY, id);
+  else sessionStorage.removeItem(FLASHCARDS_EDITING_SET_KEY);
+}
+
 export function FlashcardsTab({ data }: { data: AdminData }) {
-  const [editingSetId, setEditingSetId] = useState<string | null>(null);
+  const [editingSetId, setEditingSetId] = useState<string | null>(() => readEditingSetId());
   const [createSetState, createSetAction, createSetPending] = useActionState(
     createFlashcardSet,
     initialState
@@ -59,13 +73,23 @@ export function FlashcardsTab({ data }: { data: AdminData }) {
     ? data.flashcardSets.find((set) => set.id === editingSetId) ?? null
     : null;
 
+  useEffect(() => {
+    if (editingSetId && !editingSet) {
+      setEditingSetId(null);
+      persistEditingSetId(null);
+    }
+  }, [editingSetId, editingSet]);
+
   if (editingSet) {
     return (
       <FlashcardSetEditView
         data={data}
         set={editingSet}
         cards={data.flashcards.filter((card) => card.deck_id === editingSet.id)}
-        onBack={() => setEditingSetId(null)}
+        onBack={() => {
+          setEditingSetId(null);
+          persistEditingSetId(null);
+        }}
       />
     );
   }
@@ -112,7 +136,10 @@ export function FlashcardsTab({ data }: { data: AdminData }) {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setEditingSetId(set.id)}
+                    onClick={() => {
+                      setEditingSetId(set.id);
+                      persistEditingSetId(set.id);
+                    }}
                     className={secondaryButtonClass}
                   >
                     Edit
@@ -166,6 +193,10 @@ function FlashcardSetEditView({
   useEffect(() => {
     if (cardState.success || bulkState.success) router.refresh();
   }, [cardState.success, bulkState.success, router]);
+
+  useEffect(() => {
+    if (bulkState.success) setBulkText("");
+  }, [bulkState.success]);
 
   return (
     <div className="space-y-6">
@@ -264,11 +295,11 @@ function FlashcardSetEditView({
         <div className="space-y-4">
           <form action={bulkAction} className="space-y-4">
             <input type="hidden" name="deck_id" value={set.id} />
-            <input type="hidden" name="bulk_items" value={JSON.stringify(bulkPreview.items)} />
             <CardMetadataFields />
             <div>
               <label className={labelClass}>Tab-separated rows</label>
               <textarea
+                name="bulk_text"
                 value={bulkText}
                 onChange={(event) => setBulkText(event.target.value)}
                 rows={8}
@@ -510,30 +541,4 @@ function DeleteFlashcardSetButton({ id, name }: { id: string; name: string }) {
       Delete
     </button>
   );
-}
-
-function parseBulkFlashcards(raw: string) {
-  const items: Array<{ front_text: string; back_text: string }> = [];
-  const errors: string[] = [];
-
-  raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .forEach((line, index) => {
-      const parts = line.split("\t");
-      if (parts.length < 2) {
-        errors.push(`Line ${index + 1} is missing a tab separator and was skipped.`);
-        return;
-      }
-      const front = parts[0]?.trim();
-      const back = parts.slice(1).join("\t").trim();
-      if (!front || !back) {
-        errors.push(`Line ${index + 1} is incomplete and was skipped.`);
-        return;
-      }
-      items.push({ front_text: front, back_text: back });
-    });
-
-  return { items, errors };
 }
