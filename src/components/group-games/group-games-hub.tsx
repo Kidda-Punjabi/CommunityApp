@@ -11,6 +11,7 @@ import {
   GROUP_GAME_LABELS,
   GROUP_GAME_TYPES,
 } from "@/lib/game-rooms/constants";
+import type { GroupGameType } from "@/lib/game-rooms/types";
 import { BackLink } from "@/components/navigation/back-link";
 import { ui } from "@/lib/ui/styles";
 
@@ -18,9 +19,18 @@ const initial: GroupGameActionResult = {};
 
 type GroupGamesHubProps = {
   initialJoinCode?: string;
+  initialGameType?: string;
 };
 
-export function GroupGamesHub({ initialJoinCode = "" }: GroupGamesHubProps) {
+function resolveInitialGameType(value?: string): GroupGameType {
+  if (value && GROUP_GAME_TYPES.includes(value as GroupGameType)) {
+    return value as GroupGameType;
+  }
+  return "buzz_in";
+}
+
+export function GroupGamesHub({ initialJoinCode = "", initialGameType }: GroupGamesHubProps) {
+  const defaultGameType = resolveInitialGameType(initialGameType);
   const [createState, createAction, createPending] = useActionState(createGameRoom, initial);
   const [joinState, joinAction, joinPending] = useActionState(joinGameRoomByCode, initial);
 
@@ -55,7 +65,7 @@ export function GroupGamesHub({ initialJoinCode = "" }: GroupGamesHubProps) {
                   type="radio"
                   name="game_type"
                   value={gameType}
-                  defaultChecked={gameType === "buzz_in"}
+                  defaultChecked={gameType === defaultGameType}
                   className="h-4 w-4 accent-violet-600"
                 />
                 <span className="font-medium text-zinc-900">{GROUP_GAME_LABELS[gameType]}</span>

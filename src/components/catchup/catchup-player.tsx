@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CatchupBeatRow } from "@/components/catchup/catchup-beat-row";
+import { CatchupSegmentNav } from "@/components/catchup/catchup-segment-nav";
 import { CatchupSegmentActivity } from "@/components/catchup/catchup-segment-activity";
 import { CatchupSegmentVisual } from "@/components/catchup/catchup-segment-visual";
 import { buildSegmentActivityHref } from "@/lib/catchup/activity-links";
@@ -154,44 +155,39 @@ export function CatchupPlayer({
         <p className="mt-1 text-sm text-zinc-500">
           Segment {segment.segmentNumber} of {lesson.segments.length}: {segment.title}
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={segmentIndex === 0}
-            onClick={goToPreviousSegment}
-            className={ui.btnSecondary}
-          >
-            ← Previous segment
-          </button>
-          <button
-            type="button"
-            disabled={isLastSegment}
-            onClick={() => void goToNextSegment()}
-            className={ui.btnSecondary}
-          >
-            Next segment →
-          </button>
-        </div>
       </div>
+
+      <CatchupSegmentNav
+        segments={lesson.segments}
+        activeIndex={segmentIndex}
+        onSelect={setSegmentIndex}
+      />
 
       {segment.teachingVisual ? (
         <CatchupSegmentVisual visual={segment.teachingVisual} />
       ) : null}
 
-      <div className={ui.stack}>
-        {beats.map((beat, index) => (
-          <CatchupBeatRow
-            key={beat.id}
-            beat={beat}
-            isActive={!beatsFinished && index === activeBeatIndex}
-            onPlay={() => {
-              setBeatsFinished(false);
-              setActiveBeatIndex(index);
-            }}
-            onEnded={advanceBeat}
-          />
-        ))}
-      </div>
+      {beats.length > 0 ? (
+        <details className="rounded-2xl border border-zinc-200 bg-white">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-zinc-900 [&::-webkit-details-marker]:hidden">
+            {beats.length} listening beat{beats.length === 1 ? "" : "s"} in this segment
+          </summary>
+          <div className={`${ui.stack} border-t border-zinc-100 p-3 pt-2`}>
+            {beats.map((beat, index) => (
+              <CatchupBeatRow
+                key={beat.id}
+                beat={beat}
+                isActive={!beatsFinished && index === activeBeatIndex}
+                onPlay={() => {
+                  setBeatsFinished(false);
+                  setActiveBeatIndex(index);
+                }}
+                onEnded={advanceBeat}
+              />
+            ))}
+          </div>
+        </details>
+      ) : null}
 
       {beats.length === 0 || beatsFinished ? (
         <div className={`${ui.cardBordered} space-y-4`}>
@@ -230,13 +226,32 @@ export function CatchupPlayer({
       ) : (
         <div className="flex flex-col items-center gap-3">
           <p className="text-center text-xs text-zinc-500">
-            Listening through the segment — tap Play on any beat to replay it.
+            Listening through the segment — open the beats above to replay audio.
           </p>
           <button type="button" onClick={skipToContinue} className={ui.btnSecondary}>
             Skip to continue
           </button>
         </div>
       )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={segmentIndex === 0}
+          onClick={goToPreviousSegment}
+          className={ui.btnSecondary}
+        >
+          ← Previous segment
+        </button>
+        <button
+          type="button"
+          disabled={isLastSegment}
+          onClick={() => void goToNextSegment()}
+          className={ui.btnSecondary}
+        >
+          Next segment →
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NewForumPostForm } from "@/components/forum/new-forum-post-form";
 import {
   canAccessForum,
-  loadForumGuidelinesAgreement,
+  loadForumOnboardingState,
 } from "@/lib/forum/access";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
@@ -17,9 +17,12 @@ export default async function NewForumPostPage() {
     redirect("/dashboard/community/forum");
   }
 
-  const hasAgreed = await loadForumGuidelinesAgreement(supabase, user.id);
-  if (!hasAgreed) {
+  const onboarding = await loadForumOnboardingState(supabase, user.id);
+  if (!onboarding.hasAgreedGuidelines) {
     redirect("/dashboard/community/forum/guidelines");
+  }
+  if (!onboarding.hasCompletedIntro) {
+    redirect("/dashboard/community/forum/intro");
   }
 
   return (

@@ -3,10 +3,14 @@
 import {
   canAccessForum,
   canModerateForum,
+  FORUM_INTRO_CATEGORY,
   loadForumGuidelinesAgreement,
+  loadForumOnboardingState,
 } from "@/lib/forum/access";
+import { getDisplayName } from "@/lib/profile/display-name";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export type ForumActionResult = { error?: string; success?: string };
 
@@ -28,6 +32,19 @@ async function requireForumMember(): Promise<ForumSession> {
   return { ok: true, supabase, userId: user.id };
 }
 
+async function requireIntroComplete(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<void> {
+  const onboarding = await loadForumOnboardingState(supabase, userId);
+  if (!onboarding.hasAgreedGuidelines) {
+    redirect("/dashboard/community/forum/guidelines");
+  }
+  if (!onboarding.hasCompletedIntro) {
+    redirect("/dashboard/community/forum/intro");
+  }
+}
+
 export async function agreeToForumGuidelines(
   _prev: ForumActionResult,
   _formData: FormData
@@ -36,6 +53,14 @@ export async function agreeToForumGuidelines(
   if (!session.ok) return session.result;
 
   const { supabase, userId } = session;
+  const onboarding = await loadForumOnboardingState(supabase, userId);
+  if (onboarding.hasAgreedGuidelines && onboarding.hasCompletedIntro) {
+    redirect("/dashboard/community/forum");
+  }
+  if (onboarding.hasAgreedGuidelines) {
+    redirect("/dashboard/community/forum/intro");
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({ has_agreed_forum_guidelines: true })
@@ -45,7 +70,60 @@ export async function agreeToForumGuidelines(
 
   revalidatePath("/dashboard/community/forum");
   revalidatePath("/dashboard/community/forum/guidelines");
-  return { success: "Thanks — you can now post in the forum." };
+  revalidatePath("/dashboard/community/forum/intro");
+  redirect("/dashboard/community/forum/intro");
+}
+
+export async function createForumIntroPost(
+  _prev: ForumActionResult,
+  formData: FormData
+): Promise<ForumActionResult> {
+  const session = await requireForumMember();
+  if (!session.ok) return session.result;
+
+  const { supabase, userId } = session;
+  const onboarding = await loadForumOnboardingState(supabase, userId);
+
+  if (!onboarding.hasAgreedGuidelines) {
+    redirect("/dashboard/community/forum/guidelines");
+  }
+  if (onboarding.hasCompletedIntro) {
+    redirect("/dashboard/community/forum");
+  }
+
+  const body = String(formData.get("body") ?? "").trim();
+  if (!body) return { error: "Please write a short introduction." };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, preferred_name")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const displayName = getDisplayName(profile) ?? "a new member";
+  const title = `Hello from ${displayName}`;
+
+  const { error: postError } = await supabase.from("forum_posts").insert({
+    author_id: userId,
+    title,
+    body,
+    category: FORUM_INTRO_CATEGORY,
+    status: "visible",
+  });
+
+  if (postError) return { error: postError.message };
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ has_completed_community_intro: true })
+    .eq("id", userId);
+
+  if (profileError) return { error: profileError.message };
+
+  revalidatePath("/dashboard/community");
+  revalidatePath("/dashboard/community/forum");
+  revalidatePath("/dashboard/community/forum/intro");
+  redirect("/dashboard/community/forum");
 }
 
 export async function createForumPost(
@@ -56,10 +134,7 @@ export async function createForumPost(
   if (!session.ok) return session.result;
 
   const { supabase, userId } = session;
-  const agreed = await loadForumGuidelinesAgreement(supabase, userId);
-  if (!agreed) {
-    return { error: "Please read and accept the community guidelines first." };
-  }
+  await requireIntroComplete(supabase, userId);
 
   const title = String(formData.get("title") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
@@ -77,6 +152,7 @@ export async function createForumPost(
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/community/forum");
+  revalidatePath("/dashboard/community");
   return { success: "Post published." };
 }
 
@@ -92,6 +168,8 @@ export async function createForumReply(
   if (!body) return { error: "Reply cannot be empty." };
 
   const { supabase, userId } = session;
+  await requireIntroComplete(supabase, userId);
+
   const { error } = await supabase.from("forum_replies").insert({
     post_id: postId,
     author_id: userId,

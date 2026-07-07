@@ -6,7 +6,6 @@ import {
   DIALECTS_HUB_HREF,
   DIALECTS_INTRO,
 } from "@/lib/resources/dialects/content";
-import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 
 export function DialectsLanding() {
   const majhi = DIALECTS.find((dialect) => dialect.isAnchor)!;
@@ -15,7 +14,7 @@ export function DialectsLanding() {
   return (
     <div className="space-y-8">
       <header className="space-y-3">
-        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Games</BackLink>
+        <BackLink className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back</BackLink>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Punjabi dialects</h1>
         <div className="space-y-2 text-base leading-relaxed text-zinc-600">
           {DIALECTS_INTRO.map((paragraph) => (

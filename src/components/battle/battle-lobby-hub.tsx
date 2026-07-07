@@ -19,9 +19,18 @@ const initial: BattleActionResult = {};
 
 type BattleLobbyHubProps = {
   initialJoinCode?: string;
+  initialGameSource?: string;
 };
 
-export function BattleLobbyHub({ initialJoinCode = "" }: BattleLobbyHubProps) {
+function resolveInitialGameSource(value?: string): (typeof BATTLE_GAME_SOURCES)[number] {
+  if (value && BATTLE_GAME_SOURCES.includes(value as (typeof BATTLE_GAME_SOURCES)[number])) {
+    return value as (typeof BATTLE_GAME_SOURCES)[number];
+  }
+  return "gender_sort";
+}
+
+export function BattleLobbyHub({ initialJoinCode = "", initialGameSource }: BattleLobbyHubProps) {
+  const defaultGameSource = resolveInitialGameSource(initialGameSource);
   const [createState, createAction, createPending] = useActionState(createBattleSession, initial);
   const [joinState, joinAction, joinPending] = useActionState(joinBattleByCode, initial);
 
@@ -56,7 +65,7 @@ export function BattleLobbyHub({ initialJoinCode = "" }: BattleLobbyHubProps) {
                   type="radio"
                   name="game_source"
                   value={source}
-                  defaultChecked={source === "gender_sort"}
+                  defaultChecked={source === defaultGameSource}
                   className="h-4 w-4 accent-violet-600"
                 />
                 <span className="font-medium text-zinc-900">{GAME_LABELS[source]}</span>

@@ -21,7 +21,7 @@ export const OBLIQUE_PRONOUNS: Record<Person, PronounSet> = {
   he_she: { punjabi: "ਉਸਨੂੰ", romanised: "usnu" },
   we: { punjabi: "ਸਾਨੂੰ", romanised: "sanu" },
   you_plural: { punjabi: "ਤੁਹਾਨੂੰ", romanised: "tuhaanu" },
-  they: { punjabi: "ਉਹਨਾਂਨੂੰ", romanised: "uhanaanu" },
+  they: { punjabi: "ਉਹਨਾਂ ਨੂੰ", romanised: "ohna nu" },
 };
 
 /** Second-person uses plural verb agreement (ਤੁਸੀਂ + plural endings + ਹੋ/ਹਨ). */
@@ -84,10 +84,10 @@ export const HABITUAL_CONSONANT: EndingForms = {
 };
 
 export const HABITUAL_KANAA: EndingForms = {
-  masc_sg: { punjabi: "ਉਂਦਾ", romanised: "undaa" },
-  fem_sg: { punjabi: "ਉਂਦੀ", romanised: "undee" },
-  masc_pl: { punjabi: "ਉਂਦੇ", romanised: "unde" },
-  fem_pl: { punjabi: "ਉਂਦੀਆਂ", romanised: "undiaan" },
+  masc_sg: { punjabi: "ਂਦਾ", romanised: "ndaa" },
+  fem_sg: { punjabi: "ਂਦੀ", romanised: "ndee" },
+  masc_pl: { punjabi: "ਂਦੇ", romanised: "nde" },
+  fem_pl: { punjabi: "ਂਦੀਆਂ", romanised: "ndiaan" },
 };
 
 export const HABITUAL_VOWEL: EndingForms = {

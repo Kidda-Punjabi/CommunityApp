@@ -2,7 +2,6 @@
 
 import { BackLink } from "@/components/navigation/back-link";
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { conjugate } from "@/lib/conjugation/conjugate";
 import { verbPhraseDisplayParts } from "@/lib/conjugation/format";
 import { latinRomanised } from "@/lib/conjugation/romanised";
@@ -111,7 +110,23 @@ function ConjugationResultCard({
         />
       </div>
 
-      <p className="mt-4 text-sm text-zinc-500">{result.explanation}</p>
+      <div className="mt-4 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2.5 text-sm">
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Structure</p>
+        <p className="mt-1.5 leading-relaxed">
+          <span className="text-emerald-700">[subject: {result.pronounRomanised}]</span>
+          <span className="px-1 text-zinc-400">+</span>
+          <span className="text-violet-600">
+            [verb:{" "}
+            {[stemRomanised, endingRomanised].filter((part) => part.trim().length > 0).join(" ")}]
+          </span>
+          {result.auxiliaryRomanised ? (
+            <>
+              <span className="px-1 text-zinc-400">+</span>
+              <span className="text-amber-600">[aux: {result.auxiliaryRomanised}]</span>
+            </>
+          ) : null}
+        </p>
+      </div>
     </div>
   );
 }
@@ -148,7 +163,7 @@ export function VerbConjugatorExplorer({ verb }: VerbConjugatorExplorerProps) {
   return (
     <div className="space-y-5">
       <div>
-        <BackLink fallbackHref="/dashboard/games/verb-conjugator" className="text-sm font-medium text-violet-600 hover:text-violet-500">← All verbs</BackLink>
+        <BackLink className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back</BackLink>
         <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900">
           {verb.english}
         </h1>

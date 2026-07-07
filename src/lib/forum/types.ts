@@ -25,6 +25,10 @@ export type ForumPostDetail = ForumPostSummary & {
   body: string;
 };
 
+export type ForumPostPreview = ForumPostSummary & {
+  bodySnippet: string;
+};
+
 export type ForumReply = {
   id: string;
   body: string;

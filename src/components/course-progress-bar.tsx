@@ -21,7 +21,7 @@ export function CourseProgressBar({
         </span>
         <span className="font-semibold text-violet-600">{percentage}%</span>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-violet-100">
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-violet-100">
         <div
           className="h-full rounded-full bg-violet-600 transition-all"
           style={{ width: `${percentage}%` }}

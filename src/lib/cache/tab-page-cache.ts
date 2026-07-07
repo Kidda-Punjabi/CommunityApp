@@ -8,10 +8,11 @@ import { loadOnboardingProfile } from "@/lib/progression/load-user-progression";
 import { getUserActivityDate } from "@/lib/progress/server-activity-date";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
 import { fetchPersonalBestsByGame } from "@/lib/games/game-scores";
-import { loadFeaturedTestimonial } from "@/lib/community/load-featured-testimonial";
 import { prepareCommunityEvents } from "@/lib/community/prepare-events";
 import { loadFriendsProfileData } from "@/lib/friends/load-friends";
 import { loadLeaderboard } from "@/lib/leaderboard/load-leaderboard";
+import { loadForumOnboardingState } from "@/lib/forum/access";
+import { loadForumPostPreviews } from "@/lib/forum/load-forum";
 import { splitExpandedEvents, type StoredEvent } from "@/lib/events/recurrence";
 import { getCachedCourseAccess } from "@/lib/supabase/cached-session";
 import { loadTutorDashboard } from "@/lib/tutoring/load-tutor-dashboard";
@@ -71,13 +72,14 @@ export const getCommunityTabData = cache(async (userId: string) => {
   const activityDate = await getUserActivityDate();
   const currentWeekStart = getCurrentWeekStart(activityDate);
 
-  const [access, friendsData, leaderboard, testimonial, eventsResult] =
+  const [access, friendsData, leaderboard, eventsResult, forumPosts, forumOnboarding] =
     await Promise.all([
       getCachedCourseAccess(supabase, user),
       loadFriendsProfileData(supabase, userId),
       loadLeaderboard(supabase, currentWeekStart, userId),
-      loadFeaturedTestimonial(supabase),
       supabase.from("events").select("*").order("starts_at", { ascending: true }),
+      loadForumPostPreviews(supabase, userId, 2),
+      loadForumOnboardingState(supabase, userId),
     ]);
 
   const { upcoming } = splitExpandedEvents((eventsResult.data ?? []) as StoredEvent[]);
@@ -86,8 +88,9 @@ export const getCommunityTabData = cache(async (userId: string) => {
   return {
     friendsData,
     leaderboard,
-    testimonial,
     preparedUpcoming,
+    forumPosts,
+    forumOnboarding,
   };
 });
 

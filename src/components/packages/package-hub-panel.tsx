@@ -60,117 +60,69 @@ export function BuyExtraOneToOneCard({ pkg }: { pkg: StudentPackage }) {
 }
 
 export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps) {
+  const contactName = pkg.tutorName ?? pkg.communityLeadName;
+  const contactAvatar = pkg.tutorAvatarUrl ?? pkg.communityLeadAvatarUrl;
+  const contactLabel = pkg.tutorName
+    ? pkg.deliveryMode === "group" && pkg.cohortName
+      ? `Group · ${pkg.cohortName}`
+      : "1-1 tutoring"
+    : pkg.communityLeadName
+      ? "Community lead"
+      : null;
+
   const body = (
     <>
-      {variant === "full" ? (
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-              Your package
-            </p>
-            <p className="mt-1 text-sm text-zinc-500">{pkg.description}</p>
-          </div>
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusClass(pkg.status)}`}
-          >
-            {statusLabel(pkg.status)}
-          </span>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Your package
           </p>
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusClass(pkg.status)}`}
-          >
-            {statusLabel(pkg.status)}
-          </span>
+          <p className="mt-0.5 truncate text-sm font-semibold text-zinc-900">{pkg.name}</p>
         </div>
-      )}
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusClass(pkg.status)}`}
+        >
+          {statusLabel(pkg.status)}
+        </span>
+      </div>
 
-      {pkg.includesLiveSessions ? (
-        <div className="rounded-2xl bg-zinc-50 px-4 py-3">
-          {pkg.tutorName ? (
-            <div className="flex items-center gap-3">
-              <UserAvatar
-                profile={{
-                  full_name: pkg.tutorName,
-                  preferred_name: null,
-                  avatar_url: pkg.tutorAvatarUrl,
-                }}
-                size="sm"
-              />
-              <div>
-                <p className="text-sm font-semibold text-zinc-900">{pkg.tutorName}</p>
-                <p className="text-sm text-zinc-500">
-                  {pkg.deliveryMode === "group" && pkg.cohortName
-                    ? `Group · ${pkg.cohortName}`
-                    : "1-1 tutoring"}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-zinc-600">
-              Your tutor and calendar invite are being set up. You can browse lessons meanwhile —
-              content unlocks once your tutor is assigned.
-            </p>
-          )}
+      {contactName ? (
+        <div className="flex items-center gap-3 rounded-xl bg-zinc-50 px-3 py-2.5">
+          <UserAvatar
+            profile={{
+              full_name: contactName,
+              preferred_name: null,
+              avatar_url: contactAvatar,
+            }}
+            size="sm"
+          />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-zinc-900">{contactName}</p>
+            {contactLabel ? (
+              <p className="truncate text-xs text-zinc-500">{contactLabel}</p>
+            ) : null}
+          </div>
         </div>
+      ) : pkg.includesLiveSessions ? (
+        <p className="text-xs text-zinc-500">
+          Your tutor is being assigned — you can browse lessons meanwhile.
+        </p>
       ) : null}
 
       {pkg.includesLiveSessions ? (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Live lessons
-          </p>
-          {pkg.nextSession ? (
-            <div className="flex items-start justify-between gap-3 rounded-2xl border border-violet-100 bg-violet-50/50 px-4 py-3">
-              <div className="min-w-0">
-                <p className="font-medium text-zinc-900">{pkg.nextSession.title}</p>
-                <p className="mt-0.5 text-sm text-zinc-500">{pkg.nextSession.whenLabel}</p>
-                {pkg.upcomingSessionCount > 1 ? (
-                  <p className="mt-1 text-xs text-zinc-500">
-                    +{pkg.upcomingSessionCount - 1} more upcoming
-                  </p>
-                ) : null}
-              </div>
-              {pkg.nextSession.meetLink ? (
-                <a
-                  href={pkg.nextSession.meetLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={ui.btnPrimary}
-                >
-                  Join
-                </a>
-              ) : null}
-            </div>
-          ) : pkg.status === "active" ? (
-            <p className="text-sm text-zinc-500">
-              No upcoming live lessons synced yet. Your tutor will add you to the Google Calendar
-              invite for this package.
-            </p>
-          ) : null}
-
-          <Link
-            href="/dashboard/schedule"
-            className="text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            View full schedule →
-          </Link>
-        </div>
-      ) : (
-        <p className="text-sm text-zinc-500">
-          Community content and events — no personal tutor calendar for this package.
-        </p>
-      )}
+        <Link
+          href="/dashboard/schedule"
+          className="text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
+          View full schedule →
+        </Link>
+      ) : null}
     </>
   );
 
   if (variant === "embedded") {
-    return <div className="space-y-4 border-t border-zinc-100 pt-4">{body}</div>;
+    return <div className="space-y-3 border-t border-zinc-100 pt-3">{body}</div>;
   }
 
-  return <div className={`${ui.cardBordered} mb-6 space-y-4`}>{body}</div>;
+  return <div className={`${ui.cardBordered} mb-6 space-y-3`}>{body}</div>;
 }

@@ -9,6 +9,8 @@ import {
   SHOW_LESSON_PDF,
 } from "@/lib/learning/lesson-content-flags";
 import { HomeworkSubmissionSection } from "@/components/homework/homework-submission-section";
+import { LessonPresentationEmbed } from "@/components/lesson/lesson-presentation-embed";
+import { LessonRecordingPlayer } from "@/components/lesson/lesson-recording-player";
 import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
@@ -144,22 +146,30 @@ export function LessonCard({
           </summary>
 
           <div className="mt-4 border-t border-zinc-100 pt-2">
-            <ContentRow
-              label="Presentation"
-              subtitle={hasPresentation ? "Slides for this lesson" : "Not available yet"}
-              actionLabel="Open"
-              disabled={!hasPresentation}
-              href={hasPresentation ? lesson.presentation_url! : undefined}
-              external
-            />
-            <ContentRow
-              label="Session recording"
-              subtitle={recording ? (recording.title ?? "Watch your replay") : "Not available yet"}
-              actionLabel="Open"
-              disabled={!recording}
-              href={recording ? recording.url : undefined}
-              external
-            />
+            {contentUnlocked && hasPresentation ? (
+              <div className="border-b border-zinc-100 py-3">
+                <LessonPresentationEmbed presentationUrl={lesson.presentation_url!} />
+              </div>
+            ) : (
+              <ContentRow
+                label="Presentation"
+                subtitle={hasPresentation ? "Slides for this lesson" : "Not available yet"}
+                actionLabel="Open"
+                disabled={!hasPresentation}
+              />
+            )}
+            {contentUnlocked && recording ? (
+              <div className="border-b border-zinc-100 py-3">
+                <LessonRecordingPlayer url={recording.url} title={recording.title} />
+              </div>
+            ) : (
+              <ContentRow
+                label="Session recording"
+                subtitle={recording ? (recording.title ?? "Watch your replay") : "Not available yet"}
+                actionLabel="Open"
+                disabled={!recording}
+              />
+            )}
             {hasCatchupSegments ? (
               <ContentRow
                 label="Catch-up lesson"
@@ -205,6 +215,12 @@ export function LessonCard({
               subtitle="Share how this lesson went for you"
               actionLabel="Give feedback"
               href={`/dashboard/feedback/${lesson.id}`}
+            />
+            <ContentRow
+              label="My feedback"
+              subtitle="View feedback you submitted for this lesson"
+              actionLabel="View"
+              href={`/dashboard/feedback/${lesson.id}/history`}
             />
           </div>
 

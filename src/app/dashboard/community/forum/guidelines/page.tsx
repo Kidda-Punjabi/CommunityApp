@@ -1,6 +1,5 @@
 import { ForumGuidelinesAgreementForm } from "@/components/forum/forum-guidelines-agreement-form";
-import { ForumGuidelinesContent } from "@/components/forum/forum-guidelines-content";
-import { canAccessForum, loadForumGuidelinesAgreement } from "@/lib/forum/access";
+import { canAccessForum, loadForumOnboardingState } from "@/lib/forum/access";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -15,7 +14,13 @@ export default async function ForumGuidelinesPage() {
     redirect("/dashboard/community/forum");
   }
 
-  const hasAgreed = await loadForumGuidelinesAgreement(supabase, user.id);
+  const onboarding = await loadForumOnboardingState(supabase, user.id);
+  if (onboarding.hasCompletedIntro) {
+    redirect("/dashboard/community/forum");
+  }
+  if (onboarding.hasAgreedGuidelines) {
+    redirect("/dashboard/community/forum/intro");
+  }
 
   return (
     <div className={ui.page}>
@@ -31,21 +36,7 @@ export default async function ForumGuidelinesPage() {
       </p>
 
       <div className="mt-6">
-        {hasAgreed ? (
-          <div className={ui.stackLoose}>
-            <div className={ui.cardBordered}>
-              <ForumGuidelinesContent />
-            </div>
-            <p className="text-sm text-emerald-700">
-              You have already accepted the guidelines.{" "}
-              <Link href="/dashboard/community/forum/new" className="font-semibold underline">
-                Create a post
-              </Link>
-            </p>
-          </div>
-        ) : (
-          <ForumGuidelinesAgreementForm />
-        )}
+        <ForumGuidelinesAgreementForm />
       </div>
     </div>
   );

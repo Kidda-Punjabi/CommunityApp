@@ -43,6 +43,9 @@ export type BattleSessionRow = {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  is_quick_match: boolean;
+  is_bot_opponent: boolean;
+  bot_skill: number | null;
 };
 
 export type BattleRoundRow = {

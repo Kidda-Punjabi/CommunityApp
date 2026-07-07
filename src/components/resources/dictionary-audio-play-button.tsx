@@ -1,5 +1,6 @@
 "use client";
 
+import { Volume2 } from "lucide-react";
 import { useRef } from "react";
 
 type DictionaryAudioPlayButtonProps = {
@@ -24,10 +25,7 @@ export function DictionaryAudioPlayButton({
     });
   }
 
-  const sizeClass =
-    size === "sm"
-      ? "rounded-full px-2.5 py-1 text-[11px]"
-      : "rounded-full px-3 py-1.5 text-xs";
+  const iconClass = size === "sm" ? "h-4 w-4" : "h-5 w-5";
 
   return (
     <>
@@ -35,9 +33,9 @@ export function DictionaryAudioPlayButton({
         type="button"
         onClick={handlePlay}
         aria-label={label}
-        className={`shrink-0 border border-zinc-200 bg-white font-semibold text-zinc-700 transition-colors hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 ${sizeClass}`}
+        className="shrink-0 text-zinc-500 transition-colors hover:text-violet-600"
       >
-        Play
+        <Volume2 className={iconClass} aria-hidden="true" />
       </button>
       <audio ref={audioRef} src={audioUrl} preload="metadata" className="hidden" />
     </>

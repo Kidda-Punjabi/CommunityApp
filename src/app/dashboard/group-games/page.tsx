@@ -2,11 +2,11 @@ import { GroupGamesHub } from "@/components/group-games/group-games-hub";
 import { ui } from "@/lib/ui/styles";
 
 type GroupGamesPageProps = {
-  searchParams: Promise<{ cancelled?: string }>;
+  searchParams: Promise<{ cancelled?: string; game_type?: string }>;
 };
 
 export default async function GroupGamesPage({ searchParams }: GroupGamesPageProps) {
-  const { cancelled } = await searchParams;
+  const { cancelled, game_type: gameType } = await searchParams;
 
   return (
     <div className={ui.page}>
@@ -15,7 +15,7 @@ export default async function GroupGamesPage({ searchParams }: GroupGamesPagePro
           The host left — this room was cancelled.
         </p>
       ) : null}
-      <GroupGamesHub />
+      <GroupGamesHub initialGameType={gameType} />
     </div>
   );
 }

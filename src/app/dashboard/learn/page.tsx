@@ -12,10 +12,6 @@ import {
 } from "@/lib/learning/learn-access";
 import { LEARN_TRACKS } from "@/lib/learning/learn-catalog";
 import {
-  findStudentPackageForTrack,
-  loadStudentPackages,
-} from "@/lib/packages/load-student-packages";
-import {
   getCachedAuthSession,
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
@@ -40,10 +36,9 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, studentPackages, completionMap] = await Promise.all([
+  const [access, allLessons, completionMap] = await Promise.all([
     getCachedCourseAccess(supabase, user),
     lessonsPromise,
-    loadStudentPackages(supabase, user),
     lessonsPromise.then((lessons) => fetchLessonCompletionMap(supabase, user.id, lessons)),
   ]);
 
@@ -113,7 +108,6 @@ export default async function LearnPage() {
             track={track}
             locked={locked}
             lessonCount={lessonCount}
-            studentPackage={findStudentPackageForTrack(studentPackages, track.id)}
             courseProgress={
               courseProgress
                 ? {

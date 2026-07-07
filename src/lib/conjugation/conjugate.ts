@@ -59,6 +59,44 @@ type BuildParams = {
   verbWordLayout: VerbWordLayout;
 };
 
+function startsWithVowelSound(endingPunjabi: string): boolean {
+  return /^[ਾਿੀੁੂੇੈੋੌਅਆਇਈਉਊਏਐਓਔ]/.test(endingPunjabi);
+}
+
+function applyVowelGlide(
+  verb: Verb,
+  stemPunjabi: string,
+  stemRomanised: string,
+  endingPunjabi: string,
+  endingRomanised: string
+): {
+  stemPunjabi: string;
+  stemRomanised: string;
+  endingPunjabi: string;
+  endingRomanised: string;
+} {
+  if (
+    (verb.rootClass !== "vowel" && verb.rootClass !== "kanaa") ||
+    !startsWithVowelSound(endingPunjabi) ||
+    stemPunjabi.endsWith("ਵ")
+  ) {
+    return { stemPunjabi, stemRomanised, endingPunjabi, endingRomanised };
+  }
+
+  let nextEndingPunjabi = endingPunjabi;
+  if (endingPunjabi.startsWith("ਏ")) {
+    nextEndingPunjabi = `ੇ${endingPunjabi.slice(1)}`;
+  }
+
+  const nextStemRomanised = stemRomanised ? `${stemRomanised}v` : stemRomanised;
+  return {
+    stemPunjabi: `${stemPunjabi}ਵ`,
+    stemRomanised: nextStemRomanised,
+    endingPunjabi: nextEndingPunjabi,
+    endingRomanised,
+  };
+}
+
 const HABITUAL_PRESENT_STEMS: Record<string, { stem: string; romanised: string; note: string }> = {
   "ਹੋਣਾ": { stem: "ਹੁ", romanised: "hu", note: "ਹੋਣਾ uses ਹੁੰਦਾ in present habitual" },
   "ਦੇਣਾ": { stem: "ਦਿ", romanised: "di", note: "ਦੇਣਾ uses ਦਿੰਦਾ in present habitual (irregular)" },
@@ -329,8 +367,7 @@ export function conjugate(
         auxiliaryRomanised: aux.romanised,
         englishGloss: `${personLabel} have to ${verbGloss}`,
         verbWordLayout: layout,
-        explanation:
-          "Present necessity: oblique pronoun + infinitive + ਪੈਂਦਾ family + ਹੈ/ਹਨ — TODO: verify gender agreement",
+        explanation: "Present necessity: oblique pronoun + infinitive + paindaa-family + hai/han",
       });
     }
 
@@ -455,20 +492,27 @@ export function conjugate(
         auxiliaryRomanised: aux.romanised,
         englishGloss: `${personLabel} had to ${verbGloss}`,
         verbWordLayout: layout,
-        explanation:
-          "Past necessity (situational): oblique + infinitive + ਪਿਆ family + ਸੀ/ਸਨ — habitual form not yet built",
+        explanation: "Past necessity: oblique pronoun + infinitive + piaa-family + see/san",
       });
     }
 
     case "future_simple": {
       const ending = futureSimpleEnding(person, slot, verb.rootClass);
+      const stemRomanised = resolveStemRomanised(verb, verb.root);
+      const withGlide = applyVowelGlide(
+        verb,
+        verb.root,
+        stemRomanised,
+        ending.punjabi,
+        ending.romanised
+      );
       return buildResult({
         pronoun: subject.punjabi,
         pronounRomanised: subject.romanised,
-        verbStem: verb.root,
-        verbStemRomanised: resolveStemRomanised(verb, verb.root),
-        ending: ending.punjabi,
-        endingRomanised: ending.romanised,
+        verbStem: withGlide.stemPunjabi,
+        verbStemRomanised: withGlide.stemRomanised,
+        ending: withGlide.endingPunjabi,
+        endingRomanised: withGlide.endingRomanised,
         auxiliary: null,
         auxiliaryRomanised: null,
         englishGloss: `${personLabel} will ${verbGloss}`,
@@ -497,13 +541,21 @@ export function conjugate(
 
     case "future_ability": {
       const ending = futureAbilityEnding(person, slot, verb.rootClass);
+      const stemRomanised = resolveStemRomanised(verb, verb.root);
+      const withGlide = applyVowelGlide(
+        verb,
+        verb.root,
+        stemRomanised,
+        ending.punjabi,
+        ending.romanised
+      );
       return buildResult({
         pronoun: subject.punjabi,
         pronounRomanised: subject.romanised,
-        verbStem: verb.root,
-        verbStemRomanised: resolveStemRomanised(verb, verb.root),
-        ending: ending.punjabi,
-        endingRomanised: ending.romanised,
+        verbStem: withGlide.stemPunjabi,
+        verbStemRomanised: withGlide.stemRomanised,
+        ending: withGlide.endingPunjabi,
+        endingRomanised: withGlide.endingRomanised,
         auxiliary: null,
         auxiliaryRomanised: null,
         englishGloss: `${personLabel} will be able to ${verbGloss}`,

@@ -1,13 +1,15 @@
+import { ForumFeed } from "@/components/forum/forum-feed";
 import { requireForumAccessAllowed } from "@/lib/kids/guards";
-import { ForumPostCard } from "@/components/forum/forum-post-card";
 import {
   canAccessForum,
   canModerateForum,
-  loadForumGuidelinesAgreement,
+  forumComposerPath,
+  loadForumOnboardingState,
 } from "@/lib/forum/access";
 import { loadForumPosts } from "@/lib/forum/load-forum";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default async function ForumPage() {
   const { user, supabase } = await requireForumAccessAllowed();
@@ -28,11 +30,17 @@ export default async function ForumPage() {
     );
   }
 
-  const [posts, hasAgreed, isModerator] = await Promise.all([
+  const [posts, onboarding, isModerator] = await Promise.all([
     loadForumPosts(supabase, user.id),
-    loadForumGuidelinesAgreement(supabase, user.id),
+    loadForumOnboardingState(supabase, user.id),
     canModerateForum(supabase, user.id),
   ]);
+
+  if (onboarding.hasAgreedGuidelines && !onboarding.hasCompletedIntro) {
+    redirect("/dashboard/community/forum/intro");
+  }
+
+  const composerHref = forumComposerPath(onboarding);
 
   return (
     <div className={ui.page}>
@@ -50,27 +58,21 @@ export default async function ForumPage() {
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
-          {hasAgreed ? (
-            <Link href="/dashboard/community/forum/new" className={ui.btnPrimary}>
-              New post
-            </Link>
-          ) : (
-            <Link href="/dashboard/community/forum/guidelines" className={ui.btnPrimary}>
-              New post
-            </Link>
-          )}
-          {isModerator && (
+          <Link href={composerHref} className={ui.btnPrimary}>
+            New post
+          </Link>
+          {isModerator ? (
             <Link
               href="/dashboard/community/forum/moderation"
               className="text-sm font-medium text-zinc-500 hover:text-violet-600"
             >
               Moderation
             </Link>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {!hasAgreed && (
+      {!onboarding.hasAgreedGuidelines ? (
         <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Before your first post, please{" "}
           <Link href="/dashboard/community/forum/guidelines" className="font-semibold underline">
@@ -78,18 +80,14 @@ export default async function ForumPage() {
           </Link>
           .
         </div>
-      )}
+      ) : null}
 
       {posts.length === 0 ? (
         <div className={ui.emptyState}>
           <p className="text-sm text-zinc-600">No posts yet. Be the first to start a conversation.</p>
         </div>
       ) : (
-        <div className={ui.stack}>
-          {posts.map((post) => (
-            <ForumPostCard key={post.id} post={post} />
-          ))}
-        </div>
+        <ForumFeed posts={posts} />
       )}
     </div>
   );

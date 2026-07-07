@@ -25,7 +25,12 @@ export default async function BattleSessionPage({ params }: BattleSessionPagePro
 
   return (
     <BattleArena
-      initialSession={view.session}
+      initialSession={{
+        ...view.session,
+        is_quick_match: view.session.is_quick_match ?? false,
+        is_bot_opponent: view.session.is_bot_opponent ?? false,
+        bot_skill: view.session.bot_skill ?? null,
+      }}
       initialRound={view.currentRound}
       playerOne={view.playerOne}
       playerTwo={view.playerTwo}

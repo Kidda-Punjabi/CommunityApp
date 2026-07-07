@@ -3,7 +3,7 @@ import { getDisplayName } from "@/lib/profile/display-name";
 import { loadCurrentUserAppRoles } from "@/lib/tutoring/tutor-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FORUM_STAFF_ROLES } from "./access";
-import type { ForumAuthor, ForumPostDetail, ForumPostSummary, ForumReply, ForumReportRow } from "./types";
+import type { ForumAuthor, ForumPostDetail, ForumPostPreview, ForumPostSummary, ForumReply, ForumReportRow } from "./types";
 
 type ProfileRow = {
   id: string;
@@ -195,6 +195,44 @@ export async function loadForumPosts(
   return rows.map((row) =>
     mapPostSummary(row, staffRolesByUser, replyCounts, likedPostIds)
   );
+}
+
+function snippetBody(body: string, maxLength = 100): string {
+  const trimmed = body.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength).trimEnd()}…`;
+}
+
+export async function loadForumPostPreviews(
+  supabase: SupabaseClient,
+  viewerUserId: string,
+  limit = 2
+): Promise<ForumPostPreview[]> {
+  const { data, error } = await supabase
+    .from("forum_posts")
+    .select(
+      "id, title, body, category, like_count, created_at, author_id, profiles:author_id (id, full_name, preferred_name, avatar_url)"
+    )
+    .eq("status", "visible")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as (PostRow & { body: string })[];
+  const postIds = rows.map((row) => row.id);
+  const authorIds = [...new Set(rows.map((row) => row.author_id))];
+
+  const [staffRolesByUser, replyCounts, likedPostIds] = await Promise.all([
+    loadStaffRolesByUserId(supabase, authorIds),
+    loadReplyCounts(supabase, postIds),
+    loadPostLikesByViewer(supabase, viewerUserId, postIds),
+  ]);
+
+  return rows.map((row) => ({
+    ...mapPostSummary(row, staffRolesByUser, replyCounts, likedPostIds),
+    bodySnippet: snippetBody(row.body),
+  }));
 }
 
 export async function loadForumPostDetail(

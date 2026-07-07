@@ -3,6 +3,7 @@ import type { PaidCourseTier } from "@/lib/membership/access";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
+import { loadCommunityLeads } from "@/lib/tutoring/load-course-staff";
 import {
   packageSlugForEnrollment,
   PACKAGE_CATALOG,
@@ -36,6 +37,9 @@ export type StudentPackage = {
   deliveryMode: "one_to_one" | "group" | null;
   tutorName: string | null;
   tutorAvatarUrl: string | null;
+  /** Shown when no tutor is assigned — first community lead by display name (alphabetical). */
+  communityLeadName: string | null;
+  communityLeadAvatarUrl: string | null;
   cohortId: string | null;
   cohortName: string | null;
   nextSession: StudentPackageSession | null;
@@ -115,9 +119,10 @@ export async function loadStudentPackages(
   supabase: SupabaseClient,
   user: User
 ): Promise<StudentPackage[]> {
-  const [access, sessionLoad] = await Promise.all([
+  const [access, sessionLoad, communityLeads] = await Promise.all([
     getCourseAccessContext(supabase, user),
     loadStudentUpcomingSessions(supabase, user.id, user.email),
+    loadCommunityLeads(supabase),
   ]);
 
   if (access.unlockedCourseIds.size === 0) return [];
@@ -193,6 +198,12 @@ export async function loadStudentPackages(
 
     const next = packageSessions[0] ?? null;
 
+    const tutorName = enrollment?.tutor_id ? (tutorById.get(enrollment.tutor_id) ?? null) : null;
+    const tutorAvatarUrl = enrollment?.tutor_id
+      ? (tutorAvatarById.get(enrollment.tutor_id) ?? null)
+      : null;
+    const fallbackLead = communityLeads[0] ?? null;
+
     packages.push({
       slug: catalog.slug,
       name: catalog.name,
@@ -208,10 +219,10 @@ export async function loadStudentPackages(
         enrollment?.delivery_mode === "group" || enrollment?.delivery_mode === "one_to_one"
           ? enrollment.delivery_mode
           : catalog.deliveryMode,
-      tutorName: enrollment?.tutor_id ? (tutorById.get(enrollment.tutor_id) ?? null) : null,
-      tutorAvatarUrl: enrollment?.tutor_id
-        ? (tutorAvatarById.get(enrollment.tutor_id) ?? null)
-        : null,
+      tutorName,
+      tutorAvatarUrl,
+      communityLeadName: !tutorName && fallbackLead ? fallbackLead.displayName : null,
+      communityLeadAvatarUrl: !tutorName && fallbackLead ? fallbackLead.avatarUrl : null,
       cohortId: enrollment?.cohort_id ?? null,
       cohortName: enrollment?.cohort_id
         ? (cohortNameById.get(enrollment.cohort_id) ?? null)

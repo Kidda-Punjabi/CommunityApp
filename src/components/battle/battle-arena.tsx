@@ -12,10 +12,12 @@ import {
 } from "@/components/battle/battle-versus-hud";
 import {
   BATTLE_DISCONNECT_MS,
+  BATTLE_QUICK_MATCH_WAIT_MS,
   BATTLE_RECONNECTING_MS,
   BATTLE_ROUND_TIMEOUT_MS,
 } from "@/lib/battle/constants";
 import type { BattlePlayerProfile } from "@/lib/battle/load-battle";
+import { botResponseDelayMs } from "@/lib/battle/bot-opponent";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { roundMultiplier } from "@/lib/battle/scoring";
 import type { BattleQuestionPayload, BattleRoundRow, BattleSessionRow } from "@/lib/battle/types";
@@ -47,6 +49,10 @@ type Phase =
   | "finished"
   | "abandoned";
 
+function sessionHasOpponent(session: BattleSessionRow): boolean {
+  return Boolean(session.player_two_id || session.is_bot_opponent);
+}
+
 function resolveInitialPhase(
   session: BattleSessionRow,
   round: BattleRoundRow | null,
@@ -64,6 +70,9 @@ function resolveInitialPhase(
       session.current_round === 1 &&
       session.player_two_id === currentUserId
     ) {
+      return "opponent_joined";
+    }
+    if (session.current_round === 1 && session.is_bot_opponent && session.player_one_id === currentUserId) {
       return "opponent_joined";
     }
     return "get_ready";
@@ -95,6 +104,10 @@ export function BattleArena({
   const [opponentDisconnectBanner, setOpponentDisconnectBanner] = useState<string | null>(
     null
   );
+  const [quickMatchSecondsLeft, setQuickMatchSecondsLeft] = useState(
+    Math.ceil(BATTLE_QUICK_MATCH_WAIT_MS / 1000)
+  );
+  const quickMatchBotRequestedRef = useRef(false);
 
   const [preRoundHp, setPreRoundHp] = useState<{ p1: number; p2: number } | null>(null);
   const [displayHp, setDisplayHp] = useState<{ p1: number; p2: number } | null>(null);
@@ -117,10 +130,11 @@ export function BattleArena({
   const youArePlayerOne = session.player_one_id === currentUserId;
   const opponent = youArePlayerOne ? resolvedPlayerTwo : playerOne;
   const playerTwoProfile = resolvedPlayerTwo ?? {
-    id: session.player_two_id ?? "",
-    displayName: "Opponent",
+    id: session.player_two_id ?? (session.is_bot_opponent ? "bot" : ""),
+    displayName: session.is_bot_opponent ? "Computer" : "Opponent",
     avatarUrl: null,
   };
+  const hasOpponent = sessionHasOpponent(session);
 
   const markOpponentActive = useCallback(() => {
     opponentLastSeenRef.current = Date.now();
@@ -156,7 +170,7 @@ export function BattleArena({
         return;
       }
       setSession(next);
-      if (next.status === "active" && next.player_two_id) {
+      if (next.status === "active" && sessionHasOpponent(next)) {
         activateBattle(next);
       }
     },
@@ -229,7 +243,9 @@ export function BattleArena({
   useEffect(() => {
     if (phase !== "waiting") return;
 
+    const startedAt = Date.now();
     const supabase = createClient();
+
     const poll = async () => {
       const { data } = await supabase
         .from("battle_sessions")
@@ -237,60 +253,104 @@ export function BattleArena({
         .eq("id", session.id)
         .maybeSingle();
 
-      if (data?.status === "active" && data.player_two_id) {
+      if (data?.status === "active" && sessionHasOpponent(data as BattleSessionRow)) {
         handleSessionChange(data as BattleSessionRow);
       }
     };
 
-    void poll();
-    const id = window.setInterval(() => void poll(), 2000);
-    return () => window.clearInterval(id);
-  }, [phase, session.id, handleSessionChange]);
+    const tryPairBot = async () => {
+      if (quickMatchBotRequestedRef.current || !session.is_quick_match) return;
+      quickMatchBotRequestedRef.current = true;
 
-  useEffect(() => {
-    if (phase !== "opponent_joined" || !session.player_two_id) return;
-
-    const supabase = createClient();
-    const opponentId = session.player_two_id;
-
-    void (async () => {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, full_name, preferred_name, avatar_url")
-        .eq("id", opponentId)
-        .maybeSingle();
-
-      if (profile) {
-        setResolvedPlayerTwo({
-          id: profile.id,
-          displayName: getDisplayName(profile) ?? "Opponent",
-          avatarUrl: profile.avatar_url ?? null,
-        });
-      } else {
-        setResolvedPlayerTwo({
-          id: opponentId,
-          displayName: "Opponent",
-          avatarUrl: null,
-        });
-      }
-
-      await fetch("/api/battle/ensure-round", {
+      const res = await fetch("/api/battle/pair-bot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: session.id }),
       });
-    })();
+      const data = await res.json();
+      if (data.session) {
+        handleSessionChange(data.session as BattleSessionRow);
+      }
+    };
+
+    void poll();
+    const pollId = window.setInterval(() => void poll(), 1000);
+
+    const countdownId = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, Math.ceil((BATTLE_QUICK_MATCH_WAIT_MS - elapsed) / 1000));
+      setQuickMatchSecondsLeft(remaining);
+
+      if (elapsed >= BATTLE_QUICK_MATCH_WAIT_MS) {
+        void tryPairBot();
+      }
+    }, 250);
+
+    return () => {
+      window.clearInterval(pollId);
+      window.clearInterval(countdownId);
+    };
+  }, [phase, session.id, session.is_quick_match, handleSessionChange]);
+
+  useEffect(() => {
+    if (phase !== "opponent_joined" || !hasOpponent) return;
+
+    if (session.is_bot_opponent && playerTwo) {
+      setResolvedPlayerTwo(playerTwo);
+    } else if (!session.player_two_id) {
+      return;
+    } else {
+      const supabase = createClient();
+      const opponentId = session.player_two_id!;
+
+      void (async () => {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id, full_name, preferred_name, avatar_url")
+          .eq("id", opponentId)
+          .maybeSingle();
+
+        if (profile) {
+          setResolvedPlayerTwo({
+            id: profile.id,
+            displayName: getDisplayName(profile) ?? "Opponent",
+            avatarUrl: profile.avatar_url ?? null,
+          });
+        } else {
+          setResolvedPlayerTwo({
+            id: opponentId,
+            displayName: "Opponent",
+            avatarUrl: null,
+          });
+        }
+
+        await fetch("/api/battle/ensure-round", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: session.id }),
+        });
+      })();
+    }
+
+    if (session.is_bot_opponent) {
+      void fetch("/api/battle/ensure-round", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: session.id }),
+      });
+    }
 
     const timer = window.setTimeout(() => {
       markOpponentActive();
       setGetReadyVisualDone(false);
       setPhase("get_ready");
-    }, OPPONENT_JOINED_MS);
+    }, session.is_bot_opponent ? 900 : OPPONENT_JOINED_MS);
 
     return () => window.clearTimeout(timer);
-  }, [phase, session.id, session.player_two_id, markOpponentActive]);
+  }, [phase, session.id, session.player_two_id, session.is_bot_opponent, hasOpponent, playerTwo, markOpponentActive]);
 
   useEffect(() => {
+    if (session.is_bot_opponent) return;
     if (!session.player_two_id || session.status !== "active") return;
 
     const supabase = createClient();
@@ -365,7 +425,7 @@ export function BattleArena({
   useEffect(() => {
     if (phase !== "get_ready" && phase !== "waiting_for_opponent") return;
     if (!getReadyVisualDone) return;
-    if (!session.player_two_id) return;
+    if (!hasOpponent) return;
 
     const roundNumber = session.current_round;
     if (hasMarkedReadyRef.current === roundNumber) return;
@@ -401,7 +461,64 @@ export function BattleArena({
 
       setPhase("waiting_for_opponent");
     })();
-  }, [phase, getReadyVisualDone, session.id, session.current_round, session.player_two_id]);
+  }, [phase, getReadyVisualDone, session.id, session.current_round, hasOpponent]);
+
+  useEffect(() => {
+    if (!session.is_bot_opponent || phase !== "playing" || !round?.round_active_at || round.resolved_at) {
+      return;
+    }
+    if (round.player_two_answered_at) return;
+
+    const skill = session.bot_skill ?? 0.55;
+    const delay = botResponseDelayMs(skill);
+    const timer = window.setTimeout(() => {
+      void fetch("/api/battle/bot-answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: session.id,
+          round_number: round.round_number,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.round) setRound(data.round);
+          if (data.resolved) {
+            if (data.session) setSession(data.session);
+            if (data.round) {
+              setPreRoundHp({
+                p1:
+                  (data.session?.player_one_hp ?? session.player_one_hp) +
+                  (data.round.player_two_damage_dealt ?? 0),
+                p2:
+                  (data.session?.player_two_hp ?? session.player_two_hp) +
+                  (data.round.player_one_damage_dealt ?? 0),
+              });
+              setDisplayHp({
+                p1:
+                  (data.session?.player_one_hp ?? session.player_one_hp) +
+                  (data.round.player_two_damage_dealt ?? 0),
+                p2:
+                  (data.session?.player_two_hp ?? session.player_two_hp) +
+                  (data.round.player_one_damage_dealt ?? 0),
+              });
+              setRound(data.round);
+            }
+            setPhase("result");
+          }
+        })
+        .catch(() => undefined);
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    phase,
+    round,
+    session.id,
+    session.is_bot_opponent,
+    session.player_one_hp,
+    session.player_two_hp,
+  ]);
 
   useEffect(() => {
     if (phase !== "playing" || !round?.round_active_at || round.resolved_at) return;
@@ -565,6 +682,28 @@ export function BattleArena({
   const hudPlayerTwoHp = displayHp?.p2 ?? session.player_two_hp;
 
   if (phase === "waiting") {
+    if (session.is_quick_match) {
+      return (
+        <div className={ui.page}>
+          <h1 className="text-2xl font-bold text-zinc-900">Finding an opponent</h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            Looking for someone else in quick match. If no one joins in {quickMatchSecondsLeft}s,
+            you&apos;ll face the computer instead.
+          </p>
+          <div className={`mt-6 ${ui.card} text-center`}>
+            <p className="text-4xl" aria-hidden="true">
+              ⚡
+            </p>
+            <p className="mt-4 text-sm font-medium text-zinc-700">Searching for a live opponent…</p>
+            <p className="mt-2 font-mono text-3xl font-bold text-violet-600">{quickMatchSecondsLeft}s</p>
+          </div>
+          <BackLink fallbackHref="/dashboard/community" className={`mt-6 inline-block ${ui.btnGhost}`}>
+            ← Cancel
+          </BackLink>
+        </div>
+      );
+    }
+
     return (
       <div className={ui.page}>
         <h1 className="text-2xl font-bold text-zinc-900">Waiting for opponent</h1>
@@ -659,7 +798,7 @@ export function BattleArena({
     );
   }
 
-  if ((phase === "get_ready" || phase === "waiting_for_opponent") && session.player_two_id) {
+  if ((phase === "get_ready" || phase === "waiting_for_opponent") && hasOpponent) {
     return (
       <div className={ui.page}>
         <BattleGetReady
@@ -688,7 +827,7 @@ export function BattleArena({
         </p>
       ) : null}
 
-      {session.player_two_id ? (
+      {hasOpponent ? (
         <BattleVersusHud
           playerOne={playerOne}
           playerTwo={playerTwoProfile}

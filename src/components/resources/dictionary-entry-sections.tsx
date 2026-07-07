@@ -1,6 +1,7 @@
 import { DictionaryAudioPlayButton } from "@/components/resources/dictionary-audio-play-button";
 import type { DictionaryEntry } from "@/lib/resources/dictionary";
 import { formatPunjabiForDisplay } from "@/lib/conjugation/format";
+import Link from "next/link";
 
 export function dictionaryEntryHasExample(entry: DictionaryEntry): boolean {
   return Boolean(
@@ -10,9 +11,15 @@ export function dictionaryEntryHasExample(entry: DictionaryEntry): boolean {
   );
 }
 
-export function DictionaryWordHeader({ entry }: { entry: DictionaryEntry }) {
+function dictionaryEntryHref(entryId: string): string {
+  return `/dashboard/games/dictionary/${entryId}`;
+}
+
+export function DictionaryEntryCard({ entry }: { entry: DictionaryEntry }) {
+  const hasExample = dictionaryEntryHasExample(entry);
+
   return (
-    <div>
+    <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-bold text-zinc-900">{entry.english}</h1>
         <div className="flex flex-wrap gap-1.5">
@@ -28,23 +35,13 @@ export function DictionaryWordHeader({ entry }: { entry: DictionaryEntry }) {
           ) : null}
         </div>
       </div>
-      <p className="mt-3 text-3xl text-zinc-900">{formatPunjabiForDisplay(entry.punjabi)}</p>
-      {entry.romanised ? (
-        <p className="mt-2 text-lg font-medium text-violet-600">{entry.romanised}</p>
-      ) : null}
-    </div>
-  );
-}
 
-export function DictionaryPronunciationSection({ entry }: { entry: DictionaryEntry }) {
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            Pronunciation
-          </p>
-          <p className="mt-1 text-sm text-zinc-600">Listen to this word in Punjabi.</p>
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-3xl text-zinc-900">{formatPunjabiForDisplay(entry.punjabi)}</p>
+          {entry.romanised ? (
+            <p className="mt-2 text-lg font-medium text-violet-600">{entry.romanised}</p>
+          ) : null}
         </div>
         {entry.wordAudioUrl ? (
           <DictionaryAudioPlayButton
@@ -53,58 +50,86 @@ export function DictionaryPronunciationSection({ entry }: { entry: DictionaryEnt
           />
         ) : null}
       </div>
+
       {!entry.wordAudioUrl ? (
         <p className="mt-3 text-sm text-amber-800">
-          Audio is being prepared and will appear here once reviewed and approved.
+          Pronunciation audio is being prepared and will appear here once reviewed.
         </p>
       ) : null}
-    </div>
+
+      {hasExample ? (
+        <div className="mt-5 border-t border-zinc-100 pt-5">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Example sentence
+            </p>
+            {entry.exampleAudioUrl ? (
+              <DictionaryAudioPlayButton
+                audioUrl={entry.exampleAudioUrl}
+                label={`Play example sentence for ${entry.english}`}
+                size="sm"
+              />
+            ) : null}
+          </div>
+
+          {entry.exampleGurmukhi ? (
+            <p className="mt-3 text-xl text-zinc-900">
+              {formatPunjabiForDisplay(entry.exampleGurmukhi)}
+            </p>
+          ) : null}
+          {entry.exampleRomanised ? (
+            <p className="mt-2 text-base font-medium text-violet-600">{entry.exampleRomanised}</p>
+          ) : null}
+          {entry.exampleEnglish ? (
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600">{entry.exampleEnglish}</p>
+          ) : null}
+
+          {!entry.exampleAudioUrl ? (
+            <p className="mt-3 text-sm text-amber-800">
+              Example audio will appear here once it has been reviewed.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-5 border-t border-zinc-100 pt-5 text-sm text-zinc-500">
+          No example sentence for this word yet.
+        </p>
+      )}
+    </article>
   );
 }
 
-export function DictionaryExampleSection({ entry }: { entry: DictionaryEntry }) {
-  if (!dictionaryEntryHasExample(entry)) {
-    return (
-      <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-6 text-center">
-        <p className="text-sm text-zinc-500">No example sentence for this word yet.</p>
-      </div>
-    );
-  }
+export function DictionaryRelatedWords({
+  relatedEntries,
+}: {
+  relatedEntries: DictionaryEntry[];
+}) {
+  if (relatedEntries.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            Example sentence
-          </p>
-          <p className="mt-1 text-sm text-zinc-600">See how this word is used in context.</p>
-        </div>
-        {entry.exampleAudioUrl ? (
-          <DictionaryAudioPlayButton
-            audioUrl={entry.exampleAudioUrl}
-            label={`Play example sentence for ${entry.english}`}
-          />
-        ) : null}
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+        Related words
+      </h2>
+      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x snap-mandatory">
+        {relatedEntries.map((related) => (
+          <Link
+            key={related.id}
+            href={dictionaryEntryHref(related.id)}
+            className="w-[min(72vw,11rem)] shrink-0 snap-start rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition-colors hover:border-violet-200 hover:bg-violet-50/40"
+          >
+            <p className="truncate font-medium text-zinc-900">{related.english}</p>
+            <p className="mt-2 truncate text-lg text-zinc-800">
+              {formatPunjabiForDisplay(related.punjabi)}
+            </p>
+            {related.romanised ? (
+              <p className="mt-1 truncate text-sm font-medium text-violet-600">
+                {related.romanised}
+              </p>
+            ) : null}
+          </Link>
+        ))}
       </div>
-
-      {entry.exampleGurmukhi ? (
-        <p className="mt-4 text-xl text-zinc-900">
-          {formatPunjabiForDisplay(entry.exampleGurmukhi)}
-        </p>
-      ) : null}
-      {entry.exampleRomanised ? (
-        <p className="mt-2 text-base font-medium text-violet-600">{entry.exampleRomanised}</p>
-      ) : null}
-      {entry.exampleEnglish ? (
-        <p className="mt-2 text-sm leading-relaxed text-zinc-600">{entry.exampleEnglish}</p>
-      ) : null}
-
-      {!entry.exampleAudioUrl ? (
-        <p className="mt-4 text-sm text-amber-800">
-          Example audio will be available here once it has been reviewed and approved.
-        </p>
-      ) : null}
-    </div>
+    </section>
   );
 }

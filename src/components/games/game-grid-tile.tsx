@@ -1,6 +1,8 @@
 "use client";
 
 import type { GameCatalogEntry } from "@/lib/games/catalog";
+import { GAMES_TILE_WIDTH_CLASS } from "@/components/games/games-horizontal-row";
+import { GameTileCornerBadge } from "@/components/games/game-tile-corner";
 import { recordLastPlayedGame } from "@/lib/games/last-played";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -9,19 +11,6 @@ type GameGridTileProps = {
   game: GameCatalogEntry;
   personalBest: number | null;
 };
-
-function CornerPlayIcon() {
-  return (
-    <span
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600"
-      aria-hidden="true"
-    >
-      <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-3.5 w-3.5">
-        <path d="M8 5.14v14.72a1 1 0 0 0 1.5.86l11.04-7.36a1 1 0 0 0 0-1.72L9.5 4.28A1 1 0 0 0 8 5.14z" />
-      </svg>
-    </span>
-  );
-}
 
 function scoreLabel(personalBest: number | null): string {
   if (personalBest != null && personalBest > 0) {
@@ -35,7 +24,7 @@ export function GameGridTile({ game, personalBest }: GameGridTileProps) {
     <Link
       href={game.href}
       onClick={() => recordLastPlayedGame(game.type)}
-      className={`${ui.cardBordered} group relative flex min-h-[8.75rem] flex-col p-4 transition-all hover:border-violet-200 hover:shadow-[0_6px_28px_-6px_rgba(124,58,237,0.12)]`}
+      className={`${ui.cardBordered} ${GAMES_TILE_WIDTH_CLASS} group relative flex min-h-[9.25rem] flex-col p-4 transition-all hover:border-violet-200 hover:shadow-[0_6px_28px_-6px_rgba(124,58,237,0.12)]`}
     >
       <div className="flex items-start justify-between gap-2">
         <span
@@ -44,9 +33,9 @@ export function GameGridTile({ game, personalBest }: GameGridTileProps) {
         >
           {game.emoji}
         </span>
-        <CornerPlayIcon />
+        <GameTileCornerBadge personalBest={personalBest} />
       </div>
-      <p className="mt-3 line-clamp-2 font-heading text-sm font-semibold leading-snug text-zinc-900">
+      <p className="mt-3 line-clamp-3 font-heading text-sm font-semibold leading-snug text-zinc-900">
         {game.title}
       </p>
       <p className="mt-auto pt-2 text-xs font-medium text-zinc-500">{scoreLabel(personalBest)}</p>

@@ -2,14 +2,19 @@
 
 import { BackLink } from "@/components/navigation/back-link";
 import { dictionaryEntryHasExample } from "@/components/resources/dictionary-entry-sections";
+import { ui } from "@/lib/ui/styles";
+import { BookOpen } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  countDictionaryExploreCategories,
+  DICTIONARY_EXPLORE_CATEGORIES,
+  filterDictionaryByExploreCategory,
   searchDictionaryEntries,
   type DictionaryEntry,
 } from "@/lib/resources/dictionary";
+import { DictionaryExploreCategories } from "@/components/resources/dictionary-explore-categories";
 import { formatPunjabiForDisplay } from "@/lib/conjugation/format";
-import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 
 const DEBOUNCE_MS = 200;
 
@@ -70,32 +75,69 @@ function DictionaryResultRow({ entry }: { entry: DictionaryEntry }) {
 export function DictionarySearch({ entries, deckFound, rawRowCount }: DictionarySearchProps) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query), DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [query]);
 
+  useEffect(() => {
+    if (debouncedQuery.trim()) {
+      setActiveCategoryId(null);
+    }
+  }, [debouncedQuery]);
+
   const results = useMemo(
     () => searchDictionaryEntries(entries, debouncedQuery),
     [entries, debouncedQuery]
   );
 
+  const categoryCounts = useMemo(
+    () => countDictionaryExploreCategories(entries),
+    [entries]
+  );
+
+  const activeCategory = useMemo(
+    () => DICTIONARY_EXPLORE_CATEGORIES.find((category) => category.id === activeCategoryId),
+    [activeCategoryId]
+  );
+
+  const categoryEntries = useMemo(
+    () =>
+      activeCategoryId ? filterDictionaryByExploreCategory(entries, activeCategoryId) : [],
+    [entries, activeCategoryId]
+  );
+
   const trimmed = debouncedQuery.trim();
   const showEmpty = trimmed.length > 0 && results.length === 0;
-  const showPrompt = trimmed.length === 0;
+  const wordCount = entries.length;
+  const showDeckDetail =
+    deckFound && rawRowCount !== undefined && rawRowCount > wordCount;
+  const showExplore = deckFound && !trimmed && !activeCategoryId;
+  const showCategoryBrowse = deckFound && !trimmed && activeCategoryId && activeCategory;
 
   return (
     <div className="space-y-5">
-      <div>
-        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Games</BackLink>
-        <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900">
-          Punjabi Dictionary
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Search by English, Gurmukhi, romanised pronunciation, or example sentence. Tap a result
-          to open the full entry.
-        </p>
+      <BackLink className="text-sm font-medium text-violet-600 hover:text-violet-500">
+        ← Back
+      </BackLink>
+
+      <div className="flex items-start gap-3.5">
+        <div
+          className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-600"
+          aria-hidden="true"
+        >
+          <BookOpen className="h-6 w-6" strokeWidth={2} />
+        </div>
+        <div className="min-w-0 pt-0.5">
+          <h1 className="font-heading text-2xl font-bold tracking-tight text-zinc-900">
+            Punjabi dictionary
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            {wordCount} word{wordCount === 1 ? "" : "s"}, ready whenever you need them
+          </p>
+        </div>
       </div>
 
       {!deckFound ? (
@@ -104,7 +146,7 @@ export function DictionarySearch({ entries, deckFound, rawRowCount }: Dictionary
           &ldquo;Vocabulary - Master List&rdquo; in admin.
         </div>
       ) : (
-        <>
+        <div className={ui.stack}>
           <label className="block">
             <span className="sr-only">Search dictionary</span>
             <input
@@ -117,15 +159,44 @@ export function DictionarySearch({ entries, deckFound, rawRowCount }: Dictionary
             />
           </label>
 
-          {showPrompt && (
-            <p className="text-center text-sm text-zinc-500">
-              {entries.length} unique words in the dictionary
-              {rawRowCount && rawRowCount > entries.length
-                ? ` (${rawRowCount} cards in the master deck)`
-                : ""}
-              . Start typing to search.
+          {showDeckDetail ? (
+            <p className="text-center text-xs text-zinc-400">
+              {rawRowCount} cards in the master deck
             </p>
-          )}
+          ) : null}
+
+          {showExplore ? (
+            <DictionaryExploreCategories
+              counts={categoryCounts}
+              onSelect={setActiveCategoryId}
+            />
+          ) : null}
+
+          {showCategoryBrowse ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setActiveCategoryId(null)}
+                className="text-sm font-medium text-violet-600 hover:text-violet-500"
+              >
+                ← All topics
+              </button>
+              <div className="mt-3">
+                <h2 className="font-heading text-lg font-semibold text-zinc-900">
+                  {activeCategory.label}
+                </h2>
+                <p className="mt-0.5 text-sm text-zinc-500">{activeCategory.description}</p>
+              </div>
+              <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-wider text-zinc-400">
+                {categoryEntries.length} word{categoryEntries.length === 1 ? "" : "s"}
+              </p>
+              <ul className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+                {categoryEntries.map((entry) => (
+                  <DictionaryResultRow key={entry.id} entry={entry} />
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           {showEmpty && (
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-8 text-center">
@@ -148,7 +219,7 @@ export function DictionarySearch({ entries, deckFound, rawRowCount }: Dictionary
               </ul>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

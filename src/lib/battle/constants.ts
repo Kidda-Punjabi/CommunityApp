@@ -9,3 +9,5 @@ export const BATTLE_INVITE_CODE_LENGTH = 6;
 
 export const BATTLE_GAME_SOURCES = ["gender_sort", "conjugation_challenge"] as const;
 export type BattleGameSource = (typeof BATTLE_GAME_SOURCES)[number];
+
+export const BATTLE_QUICK_MATCH_WAIT_MS = 10_000;

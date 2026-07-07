@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { searchVerbs } from "@/lib/conjugation/conjugate";
 import type { Verb } from "@/lib/conjugation/types";
-import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 
 const DEBOUNCE_MS = 200;
 
@@ -31,12 +30,12 @@ export function VerbConjugatorPicker({ verbs, tableReady }: VerbConjugatorPicker
   return (
     <div className="space-y-5">
       <div>
-        <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Games</BackLink>
+        <BackLink className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back</BackLink>
         <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900">
           Verb Conjugator
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Pick a verb to explore all 15 tense patterns, or try the quiz.
+          Pick a verb to explore all 15 tense patterns.
         </p>
       </div>
 
@@ -59,12 +58,6 @@ export function VerbConjugatorPicker({ verbs, tableReady }: VerbConjugatorPicker
                 className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3.5 text-base text-zinc-900 shadow-sm outline-none ring-violet-500 placeholder:text-zinc-400 focus:border-violet-300 focus:ring-2"
               />
             </label>
-            <Link
-              href="/dashboard/games/verb-conjugator/quiz"
-              className="inline-flex shrink-0 items-center justify-center rounded-xl border border-violet-200 bg-violet-50 px-4 py-3.5 text-sm font-medium text-violet-700 transition-colors hover:bg-violet-100"
-            >
-              Quiz mode
-            </Link>
           </div>
 
           <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">

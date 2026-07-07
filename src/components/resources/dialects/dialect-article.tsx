@@ -63,7 +63,9 @@ export function DialectArticle({ dialect }: { dialect: DialectContent }) {
   return (
     <article className="space-y-8">
       <header className="space-y-3">
-        <BackLink fallbackHref={DIALECTS_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Punjabi dialects</BackLink>
+        <BackLink fallbackHref={DIALECTS_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">
+          ← Back
+        </BackLink>
         {dialect.isAnchor ? (
           <>
             <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">

@@ -10,9 +10,7 @@ import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { isAdmin } from "@/lib/auth/admin";
 import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
 import {
-  formatMembershipPlanLabel,
   getCourseAccessContext,
-  getUserUnlockedCourseIds,
   tiersFromUnlockedCourses,
 } from "@/lib/membership/unlocked";
 import { getDisplayName } from "@/lib/profile/display-name";
@@ -46,11 +44,6 @@ export default async function ProfilePage() {
   const progression = await loadUserProgression(supabase, user!.id);
   const friendsData = await loadFriendsProfileData(supabase, user!.id);
 
-  const realUnlockedCourseIds = access.viewAs?.active
-    ? await getUserUnlockedCourseIds(supabase, user!.id)
-    : access.unlockedCourseIds;
-  const membershipLabel = formatMembershipPlanLabel(access.courses, realUnlockedCourseIds);
-
   const showAdminPanel = await canAccessAdminPanel(user!, supabase);
   const showTutorDashboard = await canAccessTutorDashboard(supabase, user!.id);
 
@@ -79,7 +72,7 @@ export default async function ProfilePage() {
               {displayName || "Your profile"}
             </h1>
             <p className="mt-0.5 truncate text-sm text-zinc-500">{user?.email}</p>
-            <p className="mt-1 text-sm font-medium tabular-nums text-violet-700">
+            <p className="mt-1 text-sm tabular-nums text-zinc-500">
               {progression.totalXp.toLocaleString()} lifetime XP
             </p>
           </div>
@@ -96,7 +89,7 @@ export default async function ProfilePage() {
         {showPlacementReminder && <PlacementReminderBanner />}
         <ProgressSummaryRow progression={progression} />
         <FriendsSummaryRow friends={friendsData.friends} />
-        <AccountCard membershipLabel={membershipLabel} isFreeOnly={access.isFreeOnly} />
+        <AccountCard isFreeOnly={access.isFreeOnly} />
 
         {isAdmin(user) && (
           <ViewAsPanel

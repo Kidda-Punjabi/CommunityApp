@@ -1,9 +1,10 @@
+import { ForumCategoryBadge } from "@/components/forum/forum-category-badge";
 import { ForumLikeButton } from "@/components/forum/forum-like-button";
-import { ForumReportDialog } from "@/components/forum/forum-report-dialog";
 import { ForumReplyForm, ForumReplyItem } from "@/components/forum/forum-reply-section";
+import { ForumReportDialog } from "@/components/forum/forum-report-dialog";
 import { StaffRoleBadge } from "@/components/forum/staff-role-badge";
 import { UserAvatar } from "@/components/profile/user-avatar";
-import { canAccessForum } from "@/lib/forum/access";
+import { canAccessForum, forumComposerPath, loadForumOnboardingState } from "@/lib/forum/access";
 import { loadForumPostDetail } from "@/lib/forum/load-forum";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
@@ -37,6 +38,10 @@ export default async function ForumPostPage({ params }: PageProps) {
   const detail = await loadForumPostDetail(supabase, user.id, postId);
   if (!detail) notFound();
 
+  const onboarding = await loadForumOnboardingState(supabase, user.id);
+  const canReply = onboarding.hasAgreedGuidelines && onboarding.hasCompletedIntro;
+  const composerHref = forumComposerPath(onboarding);
+
   const { post, replies } = detail;
 
   return (
@@ -65,11 +70,11 @@ export default async function ForumPostPage({ params }: PageProps) {
               <span className="text-xs text-zinc-400">{formatForumDate(post.createdAt)}</span>
             </div>
             <h1 className="mt-2 font-heading text-xl font-bold text-zinc-900">{post.title}</h1>
-            {post.category && (
-              <span className="mt-2 inline-flex rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">
-                {post.category}
+            {post.category ? (
+              <span className="mt-2 inline-block">
+                <ForumCategoryBadge category={post.category} />
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -99,7 +104,18 @@ export default async function ForumPostPage({ params }: PageProps) {
       </section>
 
       <div className="mt-6">
-        <ForumReplyForm postId={post.id} />
+        {canReply ? (
+          <ForumReplyForm postId={post.id} />
+        ) : (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <Link href={composerHref} className="font-semibold underline">
+              {!onboarding.hasAgreedGuidelines
+                ? "Accept forum guidelines"
+                : "Introduce yourself"}
+            </Link>{" "}
+            before replying to posts.
+          </div>
+        )}
       </div>
     </div>
   );

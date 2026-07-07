@@ -1,5 +1,5 @@
 /** Display name — change here to rename the game everywhere in UI. */
-export const CHADO_PAURI_DISPLAY_NAME = "Chaṛo Pauṛi";
+export const CHADO_PAURI_DISPLAY_NAME = "Charo Pauri";
 
 export const CHADO_PAURI_GAME_TYPE = "chado_pauri" as const;
 

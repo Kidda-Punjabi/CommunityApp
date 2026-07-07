@@ -1,16 +1,52 @@
 import { GAME_CATALOG, type GameCatalogEntry } from "@/lib/games/catalog";
+import { BATTLE_GAME_SOURCES } from "@/lib/battle/constants";
+import {
+  GROUP_GAME_LABELS,
+  GROUP_GAME_TYPES,
+} from "@/lib/game-rooms/constants";
+import type { GroupGameType } from "@/lib/game-rooms/types";
 import type { GameType } from "@/lib/games/types";
 
-export type GamesFilter = "all" | "vocabulary" | "grammar" | "multiplayer";
-
-export const GAMES_FILTERS: { id: GamesFilter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "vocabulary", label: "Vocabulary" },
-  { id: "grammar", label: "Grammar" },
-  { id: "multiplayer", label: "Multiplayer" },
-];
-
 export type PlayableGameId = GameType | "group_games" | "battle";
+
+export type HubGameTileEntry = {
+  id: string;
+  title: string;
+  emoji: string;
+  href: string;
+};
+
+const GROUP_GAME_EMOJIS: Record<GroupGameType, string> = {
+  buzz_in: "🔔",
+  jeopardy: "❓",
+  chado_pauri_group: "🪜",
+  sentence_builder_group: "🧩",
+  point_race: "🏁",
+};
+
+const BATTLE_GAME_LABELS: Record<(typeof BATTLE_GAME_SOURCES)[number], string> = {
+  gender_sort: "Gender Sort",
+  conjugation_challenge: "Conjugation Challenge",
+};
+
+const BATTLE_GAME_EMOJIS: Record<(typeof BATTLE_GAME_SOURCES)[number], string> = {
+  gender_sort: "↔️",
+  conjugation_challenge: "📝",
+};
+
+export const GROUP_GAME_HUB_ENTRIES: HubGameTileEntry[] = GROUP_GAME_TYPES.map((gameType) => ({
+  id: gameType,
+  title: GROUP_GAME_LABELS[gameType],
+  emoji: GROUP_GAME_EMOJIS[gameType],
+  href: `/dashboard/group-games?game_type=${gameType}`,
+}));
+
+export const BATTLE_GAME_HUB_ENTRIES: HubGameTileEntry[] = BATTLE_GAME_SOURCES.map((gameSource) => ({
+  id: gameSource,
+  title: BATTLE_GAME_LABELS[gameSource],
+  emoji: BATTLE_GAME_EMOJIS[gameSource],
+  href: `/dashboard/battle?game_source=${gameSource}`,
+}));
 
 export type MultiplayerHubEntry = {
   id: "group_games" | "battle";
@@ -44,8 +80,6 @@ export const MULTIPLAYER_HUB_ENTRIES: MultiplayerHubEntry[] = [
 ];
 
 export const DEFAULT_PLAY_AGAIN_GAME: GameType = "lane_runner";
-
-export const INITIAL_GRID_VISIBLE = 4;
 
 const SLUG_TO_GAME_TYPE: Record<string, GameType> = {
   match: "match",

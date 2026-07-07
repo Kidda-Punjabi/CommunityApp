@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { BATTLE_BOT_DISPLAY_NAME } from "@/lib/battle/bot-opponent";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { BattleRoundRow, BattleSessionRow } from "@/lib/battle/types";
 
@@ -97,13 +98,19 @@ export async function loadBattleSessionView(
       displayName: "Player 1",
       avatarUrl: null,
     },
-    playerTwo: session.player_two_id
-      ? (profiles.get(session.player_two_id) ?? {
-          id: session.player_two_id,
-          displayName: "Player 2",
+    playerTwo: session.is_bot_opponent
+      ? {
+          id: "bot",
+          displayName: BATTLE_BOT_DISPLAY_NAME,
           avatarUrl: null,
-        })
-      : null,
+        }
+      : session.player_two_id
+        ? (profiles.get(session.player_two_id) ?? {
+            id: session.player_two_id,
+            displayName: "Player 2",
+            avatarUrl: null,
+          })
+        : null,
     currentRound,
   };
 }
