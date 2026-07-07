@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "sync-stripe": "tsx scripts/sync-stripe-customers.ts",
+    "retry-notion-feedback": "tsx scripts/retry-failed-notion-feedback.ts",
+    "apply-notion-migrations": "tsx scripts/apply-notion-migrations.ts",
     "generate-lesson-audio": "tsx scripts/generate-lesson-audio-batch.ts"
   },
   "dependencies": {

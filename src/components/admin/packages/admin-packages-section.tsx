@@ -288,13 +288,21 @@ export function AdminPackagesSection() {
             Group cohorts, 1-1 runs, and the Kidda Community membership package.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className={ui.btnPrimary}
-        >
-          New package
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/packages/notion"
+            className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            Notion sync
+          </Link>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className={ui.btnPrimary}
+          >
+            New package
+          </button>
+        </div>
       </div>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}

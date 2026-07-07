@@ -12,7 +12,10 @@ export type FeedbackContext = {
   course: NotionCourseOption;
   lessonLabel: string;
   lessonNumber: number | null;
+  /** Preferred or display name shown on the form. */
   tutor: string | null;
+  /** Canonical name sent to the Notion Tutor select field. */
+  notionTutor: string | null;
   tutorUnmatched: boolean;
   lessonId: string | null;
   formVariant: FeedbackFormVariant;

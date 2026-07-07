@@ -7,6 +7,7 @@ export const NOTION_COURSE_OPTIONS = [
 export type NotionCourseOption = (typeof NOTION_COURSE_OPTIONS)[number];
 
 export const NOTION_TUTOR_OPTIONS = [
+  "Adnan Arsalani",
   "Jasleen Kaur",
   "Gurupma Singh",
   "Arshdeep Kaur",

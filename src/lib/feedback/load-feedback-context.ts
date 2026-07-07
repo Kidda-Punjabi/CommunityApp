@@ -45,24 +45,42 @@ function cohortLabel(
   return "N/A";
 }
 
-function matchTutorName(rawName: string | null | undefined): {
-  tutor: string | null;
-  tutorUnmatched: boolean;
-} {
-  if (!rawName?.trim()) {
-    return { tutor: null, tutorUnmatched: false };
-  }
-
+function matchSingleTutorName(rawName: string): string | null {
   const normalized = rawName.trim().toLowerCase();
-  const match = NOTION_TUTOR_OPTIONS.find(
+  const exact = NOTION_TUTOR_OPTIONS.find(
     (option) => option.toLowerCase() === normalized
   );
+  if (exact) return exact;
 
-  if (match) {
-    return { tutor: match, tutorUnmatched: false };
+  const inputFirst = normalized.split(/\s+/)[0];
+  return (
+    NOTION_TUTOR_OPTIONS.find((option) => {
+      const opt = option.toLowerCase();
+      const optFirst = opt.split(/\s+/)[0];
+      return (
+        opt === normalized ||
+        opt.includes(normalized) ||
+        normalized.includes(opt) ||
+        inputFirst === optFirst
+      );
+    }) ?? null
+  );
+}
+
+/** Map profile names to a canonical Notion Tutor select option. */
+export function matchTutorName(
+  ...names: Array<string | null | undefined>
+): { notionTutor: string | null; tutorUnmatched: boolean } {
+  for (const rawName of names) {
+    if (!rawName?.trim()) continue;
+    const match = matchSingleTutorName(rawName);
+    if (match) {
+      return { notionTutor: match, tutorUnmatched: false };
+    }
   }
 
-  return { tutor: rawName.trim(), tutorUnmatched: true };
+  const fallback = names.find((name) => name?.trim())?.trim() ?? null;
+  return { notionTutor: null, tutorUnmatched: !!fallback };
 }
 
 async function loadEnrollmentForCourse(
@@ -77,16 +95,24 @@ async function loadEnrollmentForCourse(
     .eq("course_id", courseId)
     .maybeSingle();
 
-  if (!data) return { tutorName: null as string | null, cohortName: null as string | null };
+  if (!data) {
+    return {
+      tutorDisplayName: null as string | null,
+      tutorFullName: null as string | null,
+      cohortName: null as string | null,
+    };
+  }
 
-  let tutorName: string | null = null;
+  let tutorDisplayName: string | null = null;
+  let tutorFullName: string | null = null;
   if (data.tutor_id) {
     const { data: tutorProfile } = await supabase
       .from("profiles")
       .select("full_name, preferred_name")
       .eq("id", data.tutor_id)
       .maybeSingle();
-    tutorName = tutorProfile ? getDisplayName(tutorProfile) : null;
+    tutorDisplayName = tutorProfile ? getDisplayName(tutorProfile) : null;
+    tutorFullName = tutorProfile?.full_name?.trim() || tutorDisplayName;
   }
 
   const cohortRaw = data.cohorts as { name: string } | { name: string }[] | null;
@@ -94,7 +120,7 @@ async function loadEnrollmentForCourse(
     ? cohortRaw[0]?.name ?? null
     : cohortRaw?.name ?? null;
 
-  return { tutorName, cohortName };
+  return { tutorDisplayName, tutorFullName, cohortName };
 }
 
 async function resolvePrimaryCourseId(
@@ -143,7 +169,8 @@ export async function loadFeedbackContext(
   let lessonNumber: number | null = null;
   let lessonId: string | null = options?.lessonId ?? null;
   let cohortName: string | null = null;
-  let tutorName: string | null = null;
+  let tutorDisplayName: string | null = null;
+  let tutorFullName: string | null = null;
 
   if (lessonId) {
     const { data: lesson } = await supabase
@@ -164,7 +191,8 @@ export async function loadFeedbackContext(
         userId,
         lesson.course_id
       );
-      tutorName = enrollment.tutorName;
+      tutorDisplayName = enrollment.tutorDisplayName;
+      tutorFullName = enrollment.tutorFullName;
       cohortName = enrollment.cohortName;
     }
   } else {
@@ -176,14 +204,18 @@ export async function loadFeedbackContext(
         userId,
         primary.courseId
       );
-      tutorName = enrollment.tutorName;
+      tutorDisplayName = enrollment.tutorDisplayName;
+      tutorFullName = enrollment.tutorFullName;
       cohortName = enrollment.cohortName;
     }
     lessonId = null;
     lessonNumber = null;
   }
 
-  const { tutor, tutorUnmatched } = matchTutorName(tutorName);
+  const { notionTutor, tutorUnmatched } = matchTutorName(
+    tutorFullName,
+    tutorDisplayName
+  );
   const formVariant = isWeek12FeedbackForm(course, lessonNumber) ? "week12" : "standard";
 
   return {
@@ -194,7 +226,8 @@ export async function loadFeedbackContext(
     course,
     lessonLabel: lessonLabelFor(course, lessonNumber),
     lessonNumber,
-    tutor,
+    tutor: tutorDisplayName,
+    notionTutor,
     tutorUnmatched,
     lessonId,
     formVariant,

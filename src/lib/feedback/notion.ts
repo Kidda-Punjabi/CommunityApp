@@ -68,9 +68,9 @@ export function buildNotionFeedbackProperties(
     };
   }
 
-  if (context.tutor && !context.tutorUnmatched) {
+  if (context.notionTutor) {
     properties.Tutor = {
-      select: { name: context.tutor },
+      select: { name: context.notionTutor },
     };
   }
 
@@ -132,6 +132,35 @@ export async function createNotionFeedbackPage(
 
   const data = (await response.json()) as { id: string };
   return { pageId: data.id };
+}
+
+export async function updateNotionFeedbackTutor(
+  pageId: string,
+  tutorName: string
+): Promise<void> {
+  const apiKey = process.env.NOTION_API_KEY;
+  if (!apiKey) {
+    throw new Error("Notion feedback integration is not configured.");
+  }
+
+  const response = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Notion-Version": NOTION_API_VERSION,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      properties: {
+        Tutor: { select: { name: tutorName } },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Notion API error (${response.status}): ${body.slice(0, 500)}`);
+  }
 }
 
 export function validateFutureSupport(

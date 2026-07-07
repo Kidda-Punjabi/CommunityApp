@@ -53,6 +53,15 @@ export async function signup(
       full_name: fullName,
     });
 
+    try {
+      const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
+      const { linkLeadsForProfile } = await import("@/lib/notion/lead-sync");
+      const service = createServiceRoleClient();
+      await linkLeadsForProfile(service, data.user.id, email);
+    } catch {
+      // Notion lead linking is best-effort and should not block signup.
+    }
+
     if (referralCode) {
       await supabase.rpc("register_referral", { p_referral_code: referralCode });
       cookieStore.delete(REFERRAL_COOKIE_NAME);

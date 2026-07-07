@@ -1,0 +1,267 @@
+"use server";
+
+import { requireAdminFromActions, type ActionResult } from "@/app/admin/content/actions";
+import { getDisplayName } from "@/lib/profile/display-name";
+import { linkInboxRowToPackageInstance } from "@/lib/notion/package-sync";
+import { loadLeadLinkAdminSnapshot } from "@/lib/notion/lead-sync";
+import { notionJson } from "@/lib/notion/client";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
+import { revalidatePath } from "next/cache";
+
+const NOTION_SYNC_PATH = "/admin/packages/notion";
+
+function revalidateNotionSync() {
+  revalidatePath(NOTION_SYNC_PATH);
+  revalidatePath("/admin/packages");
+}
+
+export async function fetchNotionSyncInbox(): Promise<{
+  rows: Array<{
+    id: string;
+    notionPageId: string;
+    packageName: string | null;
+    startDate: string | null;
+    endDate: string | null;
+    status: string | null;
+    notionTutorUserId: string | null;
+    createdAt: string;
+  }>;
+  error?: string;
+}> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { data, error } = await supabase
+      .from("notion_sync_inbox")
+      .select(
+        "id, notion_page_id, package_name, start_date, end_date, status, notion_tutor_user_id, created_at"
+      )
+      .eq("resolved", false)
+      .order("created_at", { ascending: false });
+
+    if (error) return { rows: [], error: error.message };
+
+    return {
+      rows: (data ?? []).map((row) => ({
+        id: row.id,
+        notionPageId: row.notion_page_id,
+        packageName: row.package_name,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        status: row.status,
+        notionTutorUserId: row.notion_tutor_user_id,
+        createdAt: row.created_at,
+      })),
+    };
+  } catch (e) {
+    return {
+      rows: [],
+      error: e instanceof Error ? e.message : "Failed to load Notion inbox.",
+    };
+  }
+}
+
+export async function fetchNotionTutorMapData(): Promise<{
+  tutors: Array<{ id: string; name: string }>;
+  mappings: Array<{
+    id: string;
+    tutorId: string;
+    tutorName: string;
+    notionUserId: string;
+    notionUserName: string | null;
+  }>;
+  error?: string;
+}> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+
+    const [{ data: roleRows }, { data: profiles }, { data: mappings, error: mapError }] =
+      await Promise.all([
+        supabase.from("profile_roles").select("user_id").eq("role", "tutor"),
+        supabase.from("profiles").select("id, full_name, preferred_name"),
+        supabase
+          .from("notion_tutor_map")
+          .select("id, tutor_id, notion_user_id, notion_user_name")
+          .order("created_at", { ascending: true }),
+      ]);
+
+    if (mapError) return { tutors: [], mappings: [], error: mapError.message };
+
+    const tutorIds = new Set((roleRows ?? []).map((row) => row.user_id));
+    const profileById = new Map((profiles ?? []).map((row) => [row.id, row] as const));
+
+    const tutors = [...tutorIds]
+      .map((id) => {
+        const profile = profileById.get(id);
+        return {
+          id,
+          name: getDisplayName(profile) ?? id.slice(0, 8),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      tutors,
+      mappings: (mappings ?? []).map((row) => ({
+        id: row.id,
+        tutorId: row.tutor_id,
+        tutorName: getDisplayName(profileById.get(row.tutor_id)) ?? row.tutor_id.slice(0, 8),
+        notionUserId: row.notion_user_id,
+        notionUserName: row.notion_user_name,
+      })),
+    };
+  } catch (e) {
+    return {
+      tutors: [],
+      mappings: [],
+      error: e instanceof Error ? e.message : "Failed to load tutor map.",
+    };
+  }
+}
+
+export async function searchNotionWorkspaceUsers(query: string): Promise<{
+  users: Array<{ id: string; name: string; type: string }>;
+  error?: string;
+}> {
+  try {
+    await requireAdminFromActions();
+    const needle = query.trim().toLowerCase();
+    type NotionUsersPage = {
+      results: Array<{ id: string; name?: string; type?: string }>;
+      has_more: boolean;
+      next_cursor: string | null;
+    };
+
+    const firstPage = await notionJson<NotionUsersPage>("/users");
+
+    const allUsers: Array<{ id: string; name: string; type: string }> = [];
+    let cursor: string | null = null;
+    let page: NotionUsersPage = firstPage;
+
+    while (true) {
+      for (const user of page.results ?? []) {
+        if (user.type !== "person") continue;
+        allUsers.push({
+          id: user.id,
+          name: user.name ?? user.id,
+          type: user.type,
+        });
+      }
+
+      if (!page.has_more || !page.next_cursor) break;
+      cursor = page.next_cursor;
+      page = await notionJson<NotionUsersPage>(`/users?start_cursor=${cursor}`);
+    }
+
+    const users = allUsers
+      .filter((user) => !needle || user.name.toLowerCase().includes(needle))
+      .slice(0, 20);
+
+    return { users };
+  } catch (e) {
+    return {
+      users: [],
+      error: e instanceof Error ? e.message : "Failed to search Notion users.",
+    };
+  }
+}
+
+export async function saveNotionTutorMapping(
+  tutorId: string,
+  notionUserId: string,
+  notionUserName: string | null
+): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { error } = await supabase.from("notion_tutor_map").upsert(
+      {
+        tutor_id: tutorId,
+        notion_user_id: notionUserId.trim(),
+        notion_user_name: notionUserName?.trim() || null,
+      },
+      { onConflict: "tutor_id" }
+    );
+
+    if (error) return { error: error.message };
+    revalidateNotionSync();
+    return { success: "Tutor mapping saved." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to save tutor mapping." };
+  }
+}
+
+export async function deleteNotionTutorMapping(mappingId: string): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { error } = await supabase.from("notion_tutor_map").delete().eq("id", mappingId);
+    if (error) return { error: error.message };
+    revalidateNotionSync();
+    return { success: "Tutor mapping removed." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to delete tutor mapping." };
+  }
+}
+
+export async function linkNotionInboxRow(
+  inboxId: string,
+  packageId: string,
+  courseId: string
+): Promise<ActionResult & { id?: string }> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const result = await linkInboxRowToPackageInstance(supabase, inboxId, packageId, courseId);
+    if (!result.ok) return { error: result.error ?? "Failed to link inbox row." };
+    revalidateNotionSync();
+    return { success: "Package linked and instance created.", id: result.instanceId };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to link inbox row." };
+  }
+}
+
+export async function fetchLeadLinkAdminData() {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    return loadLeadLinkAdminSnapshot(supabase);
+  } catch (e) {
+    return {
+      unlinkedProfiles: [],
+      conflicts: [],
+      error: e instanceof Error ? e.message : "Failed to load lead link data.",
+    };
+  }
+}
+
+export async function fetchNotionLinkFormOptions(): Promise<{
+  packages: Array<{ id: string; name: string; courseId: string }>;
+  courses: Array<{ id: string; name: string }>;
+  error?: string;
+}> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const [{ data: packages }, { data: courses }] = await Promise.all([
+      supabase
+        .from("packages")
+        .select("id, name, course_id, delivery_mode")
+        .neq("delivery_mode", "group")
+        .order("display_order", { ascending: true }),
+      supabase.from("courses").select("id, name").order("display_order", { ascending: true }),
+    ]);
+
+    return {
+      packages: (packages ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        courseId: row.course_id,
+      })),
+      courses: (courses ?? []).map((row) => ({ id: row.id, name: row.name })),
+    };
+  } catch (e) {
+    return { packages: [], courses: [], error: e instanceof Error ? e.message : "Failed to load options." };
+  }
+}
