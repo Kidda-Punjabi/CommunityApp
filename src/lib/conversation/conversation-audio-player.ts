@@ -15,13 +15,25 @@ export class ConversationAudioPlayer {
   private audio: HTMLAudioElement | null = null;
   private playingId: string | null = null;
   private onPlayingIdChange: ((id: string | null) => void) | null = null;
+  private playbackRate = 1;
 
   attach(onPlayingIdChange?: (id: string | null) => void) {
     if (!this.audio) {
       this.audio = new Audio();
     }
+    this.audio.playbackRate = this.playbackRate;
+    (this.audio as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+    (this.audio as HTMLAudioElement & { mozPreservesPitch?: boolean }).mozPreservesPitch = true;
+    (this.audio as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = true;
     this.onPlayingIdChange = onPlayingIdChange ?? null;
     return this.audio;
+  }
+
+  setPlaybackRate(rate: number) {
+    this.playbackRate = rate;
+    if (this.audio) {
+      this.audio.playbackRate = rate;
+    }
   }
 
   dispose() {
@@ -42,6 +54,7 @@ export class ConversationAudioPlayer {
     const audio = this.audio;
     if (!audio || !url?.trim()) return;
 
+    audio.playbackRate = this.playbackRate;
     audio.src = url;
     void audio.play().catch(() => {
       // Unlock attempt — ignore failures; replay control remains available.
@@ -64,6 +77,7 @@ export class ConversationAudioPlayer {
       };
 
       this.setPlayingId(id);
+      audio.playbackRate = this.playbackRate;
       audio.src = url;
       audio.onended = () => {
         cleanup();

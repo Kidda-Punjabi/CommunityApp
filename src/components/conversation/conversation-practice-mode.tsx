@@ -55,6 +55,7 @@ import {
   studentAnswerEntry,
 } from "@/lib/conversation/transcript";
 import { createClient } from "@/lib/supabase/client";
+import { useSpeechPlaybackRate } from "@/lib/audio/speech-playback";
 
 const FEEDBACK_MS = 900;
 
@@ -97,6 +98,8 @@ export function ConversationPracticeMode({
   const [displayPreferences, setDisplayPreferences] = useState<ConversationDisplayPreferences>(
     () => loadConversationDisplayPreferences(null)
   );
+  const { rate: speechRate, isSlow: isSlowAudio, toggleSlow: toggleSlowAudio } =
+    useSpeechPlaybackRate();
 
   const advanceTimerRef = useRef<number | null>(null);
   const answeringRef = useRef(false);
@@ -139,6 +142,10 @@ export function ConversationPracticeMode({
   useEffect(() => {
     exchangeIndexRef.current = exchangeIndex;
   }, [exchangeIndex]);
+
+  useEffect(() => {
+    audioPlayerRef.current.setPlaybackRate(speechRate);
+  }, [speechRate]);
 
   const handleDisplayPreferencesChange = useCallback(
     (next: ConversationDisplayPreferences) => {
@@ -411,6 +418,8 @@ export function ConversationPracticeMode({
           correctCount={correctCount}
           displayPreferences={displayPreferences}
           onDisplayPreferencesChange={handleDisplayPreferencesChange}
+          isSlowAudio={isSlowAudio}
+          onToggleSlowAudio={toggleSlowAudio}
         />
 
         <ConversationTranscript
@@ -703,12 +712,16 @@ function ConversationPlayHeader({
   correctCount,
   displayPreferences,
   onDisplayPreferencesChange,
+  isSlowAudio,
+  onToggleSlowAudio,
 }: {
   exchangeIndex: number;
   totalExchanges: number;
   correctCount: number;
   displayPreferences: ConversationDisplayPreferences;
   onDisplayPreferencesChange: (next: ConversationDisplayPreferences) => void;
+  isSlowAudio: boolean;
+  onToggleSlowAudio: () => void;
 }) {
   const progressPct =
     totalExchanges > 0 ? Math.min(100, ((exchangeIndex + 1) / totalExchanges) * 100) : 0;
@@ -721,6 +734,8 @@ function ConversationPlayHeader({
           <ConversationDisplaySettings
             preferences={displayPreferences}
             onChange={onDisplayPreferencesChange}
+            isSlowAudio={isSlowAudio}
+            onToggleSlowAudio={onToggleSlowAudio}
           />
           <p className="text-right text-xs font-medium text-zinc-600 sm:text-sm">
             Exchange {exchangeIndex + 1} of {totalExchanges}

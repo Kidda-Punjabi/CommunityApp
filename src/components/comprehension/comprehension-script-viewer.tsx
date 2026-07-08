@@ -7,6 +7,11 @@ import {
   type ComprehensionMode,
 } from "@/lib/comprehension/config";
 import type { ComprehensionSentence, ComprehensionViewerPreferences } from "@/lib/comprehension/types";
+import {
+  applySpeechPlaybackRate,
+  SLOW_SPEECH_RATE,
+  useSpeechPlaybackRate,
+} from "@/lib/audio/speech-playback";
 
 type ComprehensionScriptViewerProps = {
   title: string;
@@ -47,6 +52,8 @@ export function ComprehensionScriptViewer({
   const [playingAll, setPlayingAll] = useState(false);
   const [playingSentenceId, setPlayingSentenceId] = useState<string | null>(null);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
+  const { rate: speechRate, isSlow: isSlowAudio, toggleSlow: toggleSlowAudio } =
+    useSpeechPlaybackRate();
 
   useEffect(() => {
     audioRef.current = new Audio();
@@ -58,6 +65,11 @@ export function ComprehensionScriptViewer({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    applySpeechPlaybackRate(audioRef.current, speechRate);
+  }, [speechRate]);
 
   const setShowGurmukhi = useCallback(
     (showGurmukhi: boolean) => {
@@ -86,6 +98,7 @@ export function ComprehensionScriptViewer({
 
     const audio = audioRef.current;
     if (!audio) return;
+    applySpeechPlaybackRate(audio, speechRate);
 
     playAllAbortRef.current = true;
     setPlayingAll(false);
@@ -100,11 +113,12 @@ export function ComprehensionScriptViewer({
     } finally {
       setPlayingSentenceId(null);
     }
-  }, []);
+  }, [speechRate]);
 
   const handlePlayAll = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio || sentences.length === 0) return;
+    applySpeechPlaybackRate(audio, speechRate);
 
     playAllAbortRef.current = false;
     setPlayingAll(true);
@@ -130,7 +144,7 @@ export function ComprehensionScriptViewer({
     }
 
     setPlayingAll(false);
-  }, [sentences]);
+  }, [sentences, speechRate]);
 
   const textHidden = !preferences.showGurmukhi && !preferences.showRomanised;
 
@@ -188,6 +202,19 @@ export function ComprehensionScriptViewer({
             className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:bg-zinc-300"
           >
             {playingAll ? "Playing…" : "Play full passage"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleSlowAudio}
+            aria-label={`Toggle slow audio (${isSlowAudio ? "on" : "off"})`}
+            title={isSlowAudio ? `Slow audio on (${SLOW_SPEECH_RATE.toFixed(1)}x)` : "Use slower audio"}
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm leading-none ${
+              isSlowAudio
+                ? "border-violet-300 bg-violet-50 text-violet-700"
+                : "border-zinc-200 bg-white text-zinc-700"
+            }`}
+          >
+            🐢
           </button>
           {audioNotice ? (
             <p className="text-sm text-amber-800">{audioNotice}</p>

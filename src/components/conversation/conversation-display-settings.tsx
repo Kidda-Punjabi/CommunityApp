@@ -11,6 +11,8 @@ import { useEffect, useRef, useState } from "react";
 type ConversationDisplaySettingsProps = {
   preferences: ConversationDisplayPreferences;
   onChange: (next: ConversationDisplayPreferences) => void;
+  isSlowAudio: boolean;
+  onToggleSlowAudio: () => void;
 };
 
 const PRESET_OPTIONS: {
@@ -38,6 +40,8 @@ const PRESET_OPTIONS: {
 export function ConversationDisplaySettings({
   preferences,
   onChange,
+  isSlowAudio,
+  onToggleSlowAudio,
 }: ConversationDisplaySettingsProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -137,6 +141,25 @@ export function ConversationDisplaySettings({
                 className="h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-500"
               />
             </label>
+          </div>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            Audio speed
+          </p>
+          <div className="mt-2 flex items-center justify-between gap-3 text-sm text-zinc-800">
+            <span>Slow mode</span>
+            <button
+              type="button"
+              onClick={onToggleSlowAudio}
+              aria-label={`Toggle slow audio (${isSlowAudio ? "on" : "off"})`}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm leading-none ${
+                isSlowAudio
+                  ? "border-violet-300 bg-violet-50 text-violet-700"
+                  : "border-zinc-200 bg-white text-zinc-500"
+              }`}
+              title={isSlowAudio ? "Slow audio on (0.8x)" : "Use slower audio"}
+            >
+              🐢
+            </button>
           </div>
         </div>
       ) : null}
