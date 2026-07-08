@@ -10,7 +10,7 @@ export const PACKAGE_TABLE_COLUMNS = [
   { id: "startDate", label: "Start" },
   { id: "endDate", label: "End" },
   { id: "status", label: "Status" },
-  { id: "unlocks", label: "Unlocks" },
+  { id: "unlocks", label: "Lessons unlocked" },
 ] as const;
 
 export type PackageTableColumnId = (typeof PACKAGE_TABLE_COLUMNS)[number]["id"];

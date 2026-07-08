@@ -1,6 +1,7 @@
 import { ensureLeadsAppUserIdProperty } from "@/lib/notion/client";
-import { linkLeadsFromNotion } from "@/lib/notion/lead-sync";
+import { linkLeadsFromNotion, upsertNotionLeadsCache } from "@/lib/notion/lead-sync";
 import { pullPackageInstancesFromNotion } from "@/lib/notion/package-sync";
+import { pullSalesCallsFromNotion } from "@/lib/notion/sales-call-sync";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
 
@@ -30,14 +31,18 @@ export async function GET(request: Request) {
       error instanceof Error ? error.message : "Failed to ensure Leads App User ID property.";
   }
 
-  const [packages, leads] = await Promise.all([
+  const [packages, leads, leadsCache, salesCalls] = await Promise.all([
     pullPackageInstancesFromNotion(client),
     linkLeadsFromNotion(client),
+    upsertNotionLeadsCache(client),
+    pullSalesCallsFromNotion(client),
   ]);
 
   return NextResponse.json({
     packages,
     leads,
+    leadsCache,
+    salesCalls,
     leadsSetupError,
   });
 }

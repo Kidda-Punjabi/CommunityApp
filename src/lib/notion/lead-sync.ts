@@ -2,12 +2,14 @@ import {
   NOTION_LEADS_DATA_SOURCE_ID,
   notionJson,
   plainTextFromRichText,
+  plainTextFromTitle,
 } from "@/lib/notion/client";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type NotionLeadPage = {
   id: string;
+  last_edited_time?: string;
   properties: Record<string, unknown>;
 };
 
@@ -16,6 +18,14 @@ type NotionQueryResponse = {
   has_more: boolean;
   next_cursor: string | null;
 };
+
+function leadNameFromPage(page: NotionLeadPage): string | null {
+  const props = page.properties as Record<
+    string,
+    { title?: Array<{ plain_text?: string }> }
+  >;
+  return plainTextFromTitle(props.Name) || null;
+}
 
 function leadEmailFromPage(page: NotionLeadPage): string | null {
   const props = page.properties as Record<
@@ -29,6 +39,11 @@ function leadEmailFromPage(page: NotionLeadPage): string | null {
   }
   const fromRichText = plainTextFromRichText(emailProp);
   return fromRichText || null;
+}
+
+function leadPhoneFromPage(page: NotionLeadPage): string | null {
+  const props = page.properties as Record<string, { phone_number?: string }>;
+  return props.Phone?.phone_number?.trim() || null;
 }
 
 function appUserIdFromPage(page: NotionLeadPage): string | null {
@@ -70,6 +85,74 @@ async function queryUnlinkedLeadPages(): Promise<NotionLeadPage[]> {
   } while (cursor);
 
   return pages;
+}
+
+async function queryLeadPagesForCache(editedAfter: string | null): Promise<NotionLeadPage[]> {
+  const pages: NotionLeadPage[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const body: Record<string, unknown> = {
+      page_size: 100,
+      sorts: [{ timestamp: "last_edited_time", direction: "ascending" }],
+    };
+    if (editedAfter) {
+      body.filter = {
+        timestamp: "last_edited_time",
+        last_edited_time: { after: editedAfter },
+      };
+    }
+    if (cursor) body.start_cursor = cursor;
+
+    const data = await notionJson<NotionQueryResponse>(
+      `/databases/${NOTION_LEADS_DATA_SOURCE_ID}/query`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      }
+    );
+
+    pages.push(...data.results);
+    cursor = data.has_more ? data.next_cursor : null;
+  } while (cursor);
+
+  return pages;
+}
+
+export async function upsertNotionLeadsCache(
+  supabase: SupabaseClient
+): Promise<{ upserted: number; errors: string[] }> {
+  const { data: watermarkRow } = await supabase
+    .from("notion_leads_cache")
+    .select("updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const editedAfter = (watermarkRow?.updated_at as string | null) ?? null;
+  const pages = await queryLeadPagesForCache(editedAfter);
+  let upserted = 0;
+  const errors: string[] = [];
+
+  for (const page of pages) {
+    const { error } = await supabase.from("notion_leads_cache").upsert(
+      {
+        notion_page_id: page.id,
+        name: leadNameFromPage(page),
+        email: leadEmailFromPage(page),
+        phone: leadPhoneFromPage(page),
+        updated_at: page.last_edited_time ?? new Date().toISOString(),
+      },
+      { onConflict: "notion_page_id" }
+    );
+    if (error) {
+      errors.push(`${page.id}: ${error.message}`);
+      continue;
+    }
+    upserted += 1;
+  }
+
+  return { upserted, errors };
 }
 
 async function buildEmailToProfileMap(

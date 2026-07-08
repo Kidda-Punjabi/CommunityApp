@@ -9,6 +9,10 @@ export const NOTION_PACKAGE_DATA_SOURCE_ID =
 export const NOTION_LEADS_DATA_SOURCE_ID =
   process.env.NOTION_LEADS_DATA_SOURCE_ID ?? "293b5ac4-29c6-807e-bb23-db35b02b3fdf";
 
+/** Notion database ID for Sales Call Log (API database_id, not data-source id). */
+export const NOTION_SALES_CALL_DATA_SOURCE_ID =
+  process.env.NOTION_SALES_CALL_DATA_SOURCE_ID ?? "293b5ac4-29c6-80d0-9f48-c5833fd1ea1b";
+
 export class NotionApiError extends Error {
   constructor(
     readonly status: number,

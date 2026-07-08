@@ -450,9 +450,9 @@ export function AdminPackagesSection() {
                       {isPackageColumnVisible(config, "unlocks") ? (
                         <th
                           className={packageColumnHeaderClass("unlocks")}
-                          title="Lesson unlocks logged for this package run"
-                        >
-                          Unlocks
+title="Lessons unlocked for this package run"
+                      >
+                          Lessons unlocked
                         </th>
                       ) : null}
                       <th className="px-4 py-3 lg:w-[5%]" />
