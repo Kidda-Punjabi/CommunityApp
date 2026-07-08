@@ -19,7 +19,11 @@ export default async function AdminPackageDetailPage({
   const { id } = await params;
   const { roster } = await searchParams;
   const initialRoster =
-    roster === "interested" || roster === "confirmed" ? roster : null;
+    roster === "interested" ||
+    roster === "confirmed" ||
+    roster === "waiting_for_payment"
+      ? roster
+      : null;
   const kind = await resolvePackageKind(id);
   if (!kind) notFound();
 

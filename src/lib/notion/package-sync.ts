@@ -1,4 +1,26 @@
 import type { PackageInstanceStatus } from "@/lib/admin/package-status";
+import { normalizeCalendarDateFromIso } from "@/lib/admin/package-schedule";
+import {
+  cohortDisplayNameFromNotionPage,
+  loadPackageCatalog,
+  readNotionCourseLabel,
+  readNotionDeliveryType,
+  readNotionStartDayOfWeek,
+  resolveNotionSyncTargetFromPage,
+  resolvePackageLinkFromNotionPage,
+  type ResolvedNotionSyncTarget,
+} from "@/lib/notion/resolve-package-link";
+import {
+  cohortNotionColumnsAvailable,
+  getCohortIdForNotionPage,
+  inboxCohortLinkColumnAvailable,
+  listNotionLinkedCohortIds,
+  saveCohortNotionLink,
+} from "@/lib/notion/notion-cohort-link";
+import {
+  syncCohortRosterFromNotion,
+  syncPackageInstanceRosterFromNotion,
+} from "@/lib/notion/package-roster-sync";
 import {
   NOTION_PACKAGE_DATA_SOURCE_ID,
   dateStart,
@@ -6,6 +28,7 @@ import {
   peopleIds,
   plainTextFromTitle,
   selectName,
+  statusName,
 } from "@/lib/notion/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -48,6 +71,7 @@ const NOTION_TO_STATUS = Object.fromEntries(
 type NotionPropertyValue =
   | { title: Array<{ text: { content: string } }> }
   | { select: { name: string } }
+  | { status: { name: string } }
   | { date: { start: string } | null }
   | { people: Array<{ id: string }> };
 
@@ -120,7 +144,7 @@ export async function buildPackageNotionProperties(
       title: [{ text: { content: row.name } }],
     },
     Status: {
-      select: { name: notionStatusFromDb(row.status) },
+      status: { name: notionStatusFromDb(row.status) },
     },
   };
 
@@ -174,9 +198,16 @@ export function parseNotionPackagePage(page: {
       plainTextFromTitle(
         props["Package Name"] as { title?: Array<{ plain_text?: string }> }
       ) || null,
-    startDate: dateStart(props["Start Date"] as { date?: { start?: string } | null }),
-    endDate: dateStart(props["End Date"] as { date?: { start?: string } | null }),
-    status: dbStatusFromNotion(selectName(props.Status as { select?: { name?: string } | null })),
+    startDate: normalizeCalendarDateFromIso(
+      dateStart(props["Start Date"] as { date?: { start?: string } | null })
+    ),
+    endDate: normalizeCalendarDateFromIso(
+      dateStart(props["End Date"] as { date?: { start?: string } | null })
+    ),
+    status: dbStatusFromNotion(
+      statusName(props.Status as { status?: { name?: string } | null }) ??
+        selectName(props.Status as { select?: { name?: string } | null })
+    ),
     notionTutorUserId: tutorIds[0] ?? null,
     rawProperties: page.properties,
   };
@@ -284,12 +315,14 @@ export async function pushPackageInstanceToNotion(
       await updateNotionPackagePage(pageId, properties);
     }
 
+    const notionPage = await notionJson<{ last_edited_time: string }>(`/pages/${pageId}`);
+
     await supabase
       .from("package_instances")
       .update({
         notion_page_id: pageId,
         notion_sync_status: "synced",
-        notion_synced_at: new Date().toISOString(),
+        notion_synced_at: notionPage.last_edited_time,
         notion_sync_error: null,
       })
       .eq("id", instanceId);
@@ -323,7 +356,10 @@ export async function loadPackagePullCursor(
     .maybeSingle();
 
   const cursor = (data?.config as { lastEditedTime?: string } | null)?.lastEditedTime;
-  return cursor?.trim() || null;
+  if (!cursor?.trim()) return null;
+
+  // Overlap so Notion pages edited in the same second as the saved cursor are not missed.
+  return new Date(new Date(cursor).getTime() - 3000).toISOString();
 }
 
 export async function savePackagePullCursor(
@@ -371,6 +407,7 @@ export async function pullPackageInstancesFromNotion(
 ): Promise<{
   pulled: number;
   inboxed: number;
+  autoLinked: number;
   skipped: number;
   errors: string[];
 }> {
@@ -378,30 +415,102 @@ export async function pullPackageInstancesFromNotion(
   const pages = await queryNotionPackagePagesEditedAfter(cursor);
   let pulled = 0;
   let inboxed = 0;
+  let autoLinked = 0;
   let skipped = 0;
   const errors: string[] = [];
   let maxEdited = cursor;
 
   const { byNotionUserId } = await loadNotionTutorMap(supabase);
+  const catalog = await loadPackageCatalog(supabase);
+  const activePackages = catalog.packages.filter(
+    (pkg) => (pkg as { active?: boolean }).active !== false
+  );
 
   for (const page of pages) {
     if (!maxEdited || page.lastEditedTime > maxEdited) {
       maxEdited = page.lastEditedTime;
     }
 
-    const { data: existing } = await supabase
-      .from("package_instances")
-      .select("id, notion_synced_at")
-      .eq("notion_page_id", page.pageId)
-      .maybeSingle();
+    const [{ data: existingInstance }, existingCohortId] = await Promise.all([
+      supabase
+        .from("package_instances")
+        .select("id, notion_synced_at")
+        .eq("notion_page_id", page.pageId)
+        .maybeSingle(),
+      getCohortIdForNotionPage(supabase, page.pageId),
+    ]);
 
-    if (existing) {
-      const notionSyncedAt = existing.notion_synced_at
-        ? new Date(existing.notion_synced_at).getTime()
+    if (existingCohortId) {
+      const notionColumns = await cohortNotionColumnsAvailable(supabase);
+      const { data: existingCohort, error: cohortLoadError } = await supabase
+        .from("cohorts")
+        .select("id")
+        .eq("id", existingCohortId)
+        .maybeSingle();
+
+      if (cohortLoadError || !existingCohort) {
+        errors.push(`${page.pageId}: Linked cohort ${existingCohortId} not found.`);
+        continue;
+      }
+
+      const cohortPatch: Record<string, unknown> = {};
+      if (page.packageName) {
+        cohortPatch.name = cohortDisplayNameFromNotionPage(page);
+      }
+      if (page.startDate !== null) cohortPatch.start_date = page.startDate;
+      if (page.endDate !== null) cohortPatch.end_date = page.endDate;
+      if (page.status) cohortPatch.status = page.status;
+      cohortPatch.start_day_of_week = readNotionStartDayOfWeek(page);
+      if (page.notionTutorUserId) {
+        cohortPatch.tutor_id = byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null;
+      } else {
+        cohortPatch.tutor_id = null;
+      }
+
+      if (await cohortNotionColumnsAvailable(supabase)) {
+        cohortPatch.notion_sync_status = "synced";
+        cohortPatch.notion_synced_at = page.lastEditedTime;
+        cohortPatch.notion_sync_error = null;
+      }
+
+      const { error } = await supabase
+        .from("cohorts")
+        .update(cohortPatch)
+        .eq("id", existingCohort.id);
+
+      if (error) {
+        errors.push(`${page.pageId}: ${error.message}`);
+      } else {
+        pulled += 1;
+        const rosterResult = await syncCohortRosterFromNotion(
+          supabase,
+          existingCohort.id,
+          page.rawProperties,
+          page.pageId
+        );
+        if (rosterResult.error) {
+          errors.push(`${page.pageId} roster: ${rosterResult.error}`);
+        } else {
+          await saveCohortNotionLink(supabase, page.pageId, existingCohort.id, {
+            packageName: page.packageName,
+            startDate: page.startDate,
+            endDate: page.endDate,
+            status: page.status,
+            notionTutorUserId: page.notionTutorUserId,
+            rawProperties: page.rawProperties,
+          });
+        }
+      }
+      continue;
+    }
+
+    if (existingInstance) {
+      const notionSyncedAt = existingInstance.notion_synced_at
+        ? new Date(existingInstance.notion_synced_at).getTime()
         : 0;
       const notionEditedAt = new Date(page.lastEditedTime).getTime();
 
-      if (notionEditedAt <= notionSyncedAt) {
+      if (notionEditedAt < notionSyncedAt) {
         skipped += 1;
         continue;
       }
@@ -410,6 +519,7 @@ export async function pullPackageInstancesFromNotion(
       if (page.packageName) patch.name = page.packageName;
       if (page.startDate !== null) patch.start_date = page.startDate;
       if (page.endDate !== null) patch.end_date = page.endDate;
+      patch.start_day_of_week = readNotionStartDayOfWeek(page);
       if (page.status) patch.status = page.status;
       if (page.notionTutorUserId) {
         const mapped = byNotionUserId.get(page.notionTutorUserId);
@@ -423,17 +533,50 @@ export async function pullPackageInstancesFromNotion(
         .update({
           ...patch,
           notion_sync_status: "synced",
-          notion_synced_at: new Date().toISOString(),
+          notion_synced_at: page.lastEditedTime,
           notion_sync_error: null,
         })
-        .eq("id", existing.id);
+        .eq("id", existingInstance.id);
 
       if (error) {
         errors.push(`${page.pageId}: ${error.message}`);
       } else {
         pulled += 1;
+        const rosterResult = await syncPackageInstanceRosterFromNotion(
+          supabase,
+          existingInstance.id,
+          page.rawProperties,
+          page.pageId
+        );
+        if (rosterResult.error) {
+          errors.push(`${page.pageId} roster: ${rosterResult.error}`);
+        }
       }
       continue;
+    }
+
+    const resolved = resolveNotionSyncTargetFromPage(page, activePackages, catalog.courses);
+    if (resolved.ok) {
+      if (resolved.link.kind === "cohort") {
+        const created = await createOrUpdateCohortFromNotionPage(supabase, page, resolved.link);
+        if (created.ok) {
+          autoLinked += 1;
+          continue;
+        }
+        errors.push(`${page.pageId}: ${created.error ?? "Cohort auto-link failed."}`);
+      } else {
+        const created = await createPackageInstanceFromNotionPage(
+          supabase,
+          page,
+          resolved.link.packageId,
+          resolved.link.courseId
+        );
+        if (created.ok) {
+          autoLinked += 1;
+          continue;
+        }
+        errors.push(`${page.pageId}: ${created.error ?? "Auto-link failed."}`);
+      }
     }
 
     const { error: inboxError } = await supabase.from("notion_sync_inbox").upsert(
@@ -444,7 +587,17 @@ export async function pullPackageInstancesFromNotion(
         end_date: page.endDate,
         status: page.status,
         notion_tutor_user_id: page.notionTutorUserId,
-        raw_properties: page.rawProperties,
+        raw_properties: {
+          ...page.rawProperties,
+          _link_hint: resolved.ok
+            ? null
+            : {
+                reason: resolved.reason,
+                detail: resolved.detail,
+                suggestedCourse: readNotionCourseLabel(page),
+                suggestedDelivery: readNotionDeliveryType(page),
+              },
+        },
         resolved: false,
       },
       { onConflict: "notion_page_id" }
@@ -461,7 +614,423 @@ export async function pullPackageInstancesFromNotion(
     await savePackagePullCursor(supabase, maxEdited);
   }
 
-  return { pulled, inboxed, skipped, errors };
+  return { pulled, inboxed, autoLinked, skipped, errors };
+}
+
+export async function createPackageInstanceFromNotionPage(
+  supabase: SupabaseClient,
+  page: ParsedNotionPackagePage,
+  packageId: string,
+  courseId: string
+): Promise<{ ok: boolean; instanceId?: string; error?: string }> {
+  const status = page.status ?? "pre_scheduling";
+  const { byNotionUserId } = await loadNotionTutorMap(supabase);
+
+  const { data: instance, error: insertError } = await supabase
+    .from("package_instances")
+    .insert({
+      package_id: packageId,
+      course_id: courseId,
+      name: page.packageName?.trim() || "Imported from Notion",
+      status,
+      start_date: page.startDate,
+      end_date: page.endDate,
+      start_day_of_week: readNotionStartDayOfWeek(page),
+      tutor_id: page.notionTutorUserId
+        ? byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null
+        : null,
+      notion_page_id: page.pageId,
+      notion_sync_status: "synced",
+      notion_synced_at: page.lastEditedTime,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !instance) {
+    return { ok: false, error: insertError?.message ?? "Failed to create package instance." };
+  }
+
+  const rosterResult = await syncPackageInstanceRosterFromNotion(
+    supabase,
+    instance.id,
+    page.rawProperties,
+    page.pageId
+  );
+  if (rosterResult.error) {
+    return {
+      ok: false,
+      error: `Package created but roster sync failed: ${rosterResult.error}`,
+      instanceId: instance.id,
+    };
+  }
+
+  await supabase
+    .from("notion_sync_inbox")
+    .update({
+      resolved: true,
+      resolved_package_instance_id: instance.id,
+      ...(await inboxCohortLinkColumnAvailable(supabase)
+        ? { resolved_cohort_id: null }
+        : {}),
+    })
+    .eq("notion_page_id", page.pageId);
+
+  return { ok: true, instanceId: instance.id };
+}
+
+async function findCohortForNotionImport(
+  supabase: SupabaseClient,
+  page: ParsedNotionPackagePage,
+  courseId: string,
+  cohortName: string
+): Promise<string | null> {
+  const linkedId = await getCohortIdForNotionPage(supabase, page.pageId);
+  if (linkedId) return linkedId;
+
+  if (await cohortNotionColumnsAvailable(supabase)) {
+    const { data: byNotion } = await supabase
+      .from("cohorts")
+      .select("id")
+      .eq("notion_page_id", page.pageId)
+      .maybeSingle();
+    if (byNotion) return byNotion.id;
+  }
+
+  const { data: byName } = await supabase
+    .from("cohorts")
+    .select("id")
+    .eq("course_id", courseId)
+    .eq("name", cohortName)
+    .maybeSingle();
+  return byName?.id ?? null;
+}
+
+export async function createOrUpdateCohortFromNotionPage(
+  supabase: SupabaseClient,
+  page: ParsedNotionPackagePage,
+  link: ResolvedNotionSyncTarget
+): Promise<{ ok: boolean; cohortId?: string; error?: string }> {
+  const status = page.status ?? "pre_scheduling";
+  const { byNotionUserId } = await loadNotionTutorMap(supabase);
+  const cohortName = link.cohortName ?? cohortDisplayNameFromNotionPage(page);
+  const startDay = readNotionStartDayOfWeek(page);
+  const notionColumns = await cohortNotionColumnsAvailable(supabase);
+
+  const payload: Record<string, unknown> = {
+    course_id: link.courseId,
+    name: cohortName,
+    status,
+    start_date: page.startDate,
+    end_date: page.endDate,
+    start_day_of_week: startDay,
+    tutor_id: page.notionTutorUserId
+      ? byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null
+      : null,
+    active: true,
+  };
+
+  if (notionColumns) {
+    payload.notion_page_id = page.pageId;
+    payload.notion_sync_status = "synced";
+    payload.notion_synced_at = page.lastEditedTime;
+    payload.notion_sync_error = null;
+  }
+
+  const existingId = await findCohortForNotionImport(supabase, page, link.courseId, cohortName);
+  let cohortId = existingId;
+
+  if (existingId) {
+    const { error: updateError } = await supabase
+      .from("cohorts")
+      .update(payload)
+      .eq("id", existingId);
+    if (updateError) {
+      return { ok: false, error: updateError.message };
+    }
+  } else {
+    const { data: cohort, error: insertError } = await supabase
+      .from("cohorts")
+      .insert(payload)
+      .select("id")
+      .single();
+    if (insertError || !cohort) {
+      return { ok: false, error: insertError?.message ?? "Failed to create cohort." };
+    }
+    cohortId = cohort.id;
+  }
+
+  const rosterResult = await syncCohortRosterFromNotion(
+    supabase,
+    cohortId!,
+    page.rawProperties,
+    page.pageId
+  );
+  if (rosterResult.error) {
+    return {
+      ok: false,
+      error: `Cohort saved but roster sync failed: ${rosterResult.error}`,
+      cohortId: cohortId ?? undefined,
+    };
+  }
+
+  await saveCohortNotionLink(supabase, page.pageId, cohortId!, {
+    packageName: page.packageName,
+    startDate: page.startDate,
+    endDate: page.endDate,
+    status: page.status,
+    notionTutorUserId: page.notionTutorUserId,
+    rawProperties: page.rawProperties,
+  });
+
+  return { ok: true, cohortId: cohortId! };
+}
+
+export async function autoLinkNotionPackagePage(
+  supabase: SupabaseClient,
+  page: ParsedNotionPackagePage
+): Promise<
+  | {
+      ok: true;
+      targetKind: "package_instance" | "cohort";
+      targetId: string;
+      link: { packageName: string; courseName: string };
+    }
+  | { ok: false; reason: string }
+> {
+  const catalog = await loadPackageCatalog(supabase);
+  const resolved = resolveNotionSyncTargetFromPage(
+    page,
+    catalog.packages.filter((pkg) => (pkg as { active?: boolean }).active !== false),
+    catalog.courses
+  );
+
+  if (!resolved.ok) {
+    return { ok: false, reason: resolved.detail };
+  }
+
+  if (resolved.link.kind === "cohort") {
+    const created = await createOrUpdateCohortFromNotionPage(supabase, page, resolved.link);
+    if (!created.ok) {
+      return { ok: false, reason: created.error ?? "Failed to create cohort." };
+    }
+    return {
+      ok: true,
+      targetKind: "cohort",
+      targetId: created.cohortId!,
+      link: {
+        packageName: resolved.link.packageName,
+        courseName: resolved.link.courseName,
+      },
+    };
+  }
+
+  const created = await createPackageInstanceFromNotionPage(
+    supabase,
+    page,
+    resolved.link.packageId,
+    resolved.link.courseId
+  );
+
+  if (!created.ok) {
+    return { ok: false, reason: created.error ?? "Failed to create package instance." };
+  }
+
+  await supabase
+    .from("notion_sync_inbox")
+    .update({
+      resolved: true,
+      resolved_package_instance_id: created.instanceId,
+      ...(await inboxCohortLinkColumnAvailable(supabase)
+        ? { resolved_cohort_id: null }
+        : {}),
+    })
+    .eq("notion_page_id", page.pageId);
+
+  return {
+    ok: true,
+    targetKind: "package_instance",
+    targetId: created.instanceId!,
+    link: {
+      packageName: resolved.link.packageName,
+      courseName: resolved.link.courseName,
+    },
+  };
+}
+
+export async function autoLinkAllUnresolvedInbox(
+  supabase: SupabaseClient
+): Promise<{ linked: number; skipped: number; errors: string[] }> {
+  const { data: rows, error } = await supabase
+    .from("notion_sync_inbox")
+    .select("*")
+    .eq("resolved", false)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  let linked = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const row of rows ?? []) {
+    const page = parsedNotionPackagePageFromInboxRow(row);
+
+    const result = await autoLinkNotionPackagePage(supabase, page);
+    if (result.ok) {
+      if (result.targetKind === "package_instance") {
+        const hasCohortCol = await inboxCohortLinkColumnAvailable(supabase);
+        await supabase
+          .from("notion_sync_inbox")
+          .update({
+            resolved: true,
+            resolved_package_instance_id: result.targetId,
+            ...(hasCohortCol ? { resolved_cohort_id: null } : {}),
+          })
+          .eq("id", row.id);
+      }
+      linked += 1;
+      continue;
+    }
+
+    skipped += 1;
+    errors.push(`${row.package_name ?? row.notion_page_id}: ${result.reason}`);
+  }
+
+  return { linked, skipped, errors };
+}
+
+function parsedNotionPackagePageFromInboxRow(row: {
+  notion_page_id: string;
+  created_at: string;
+  package_name: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: string | null;
+  notion_tutor_user_id: string | null;
+  raw_properties: Record<string, unknown> | null;
+}): ParsedNotionPackagePage {
+  const raw = row.raw_properties ?? {};
+  if (Object.keys(raw).length > 0) {
+    const parsed = parseNotionPackagePage({
+      id: row.notion_page_id,
+      last_edited_time: row.created_at,
+      properties: raw,
+    });
+    return {
+      ...parsed,
+      notionTutorUserId: row.notion_tutor_user_id ?? parsed.notionTutorUserId,
+      status: (row.status as PackageInstanceStatus | null) ?? parsed.status,
+    };
+  }
+
+  return {
+    pageId: row.notion_page_id,
+    lastEditedTime: row.created_at,
+    packageName: row.package_name,
+    startDate: normalizeCalendarDateFromIso(row.start_date),
+    endDate: normalizeCalendarDateFromIso(row.end_date),
+    status: (row.status as PackageInstanceStatus | null) ?? null,
+    notionTutorUserId: row.notion_tutor_user_id,
+    rawProperties: raw,
+  };
+}
+
+export async function resyncAllNotionLinkedPackagesFromNotion(
+  supabase: SupabaseClient
+): Promise<{ updated: number; rosterSynced: number; errors: string[] }> {
+  const [pages, cohortIdByNotionPageId] = await Promise.all([
+    queryNotionPackagePagesEditedAfter(null),
+    listNotionLinkedCohortIds(supabase),
+  ]);
+
+  let updated = 0;
+  let rosterSynced = 0;
+  const errors: string[] = [];
+
+  for (const page of pages) {
+    const schedule = {
+      start_date: page.startDate,
+      end_date: page.endDate,
+      start_day_of_week: readNotionStartDayOfWeek(page),
+    };
+
+    const cohortId = cohortIdByNotionPageId.get(page.pageId);
+    if (cohortId) {
+      const { error } = await supabase
+        .from("cohorts")
+        .update({
+          ...schedule,
+          name: cohortDisplayNameFromNotionPage(page),
+          ...(page.status ? { status: page.status } : {}),
+        })
+        .eq("id", cohortId);
+
+      if (error) {
+        errors.push(`${page.packageName ?? page.pageId}: cohort ${error.message}`);
+        continue;
+      }
+
+      updated += 1;
+      const rosterResult = await syncCohortRosterFromNotion(
+        supabase,
+        cohortId,
+        page.rawProperties,
+        page.pageId
+      );
+      if (rosterResult.error) {
+        errors.push(`${page.packageName ?? page.pageId}: cohort roster ${rosterResult.error}`);
+      } else {
+        rosterSynced += rosterResult.synced;
+      }
+
+      await saveCohortNotionLink(supabase, page.pageId, cohortId, {
+        packageName: page.packageName,
+        startDate: page.startDate,
+        endDate: page.endDate,
+        status: page.status,
+        notionTutorUserId: page.notionTutorUserId,
+        rawProperties: page.rawProperties,
+      });
+      continue;
+    }
+
+    const { data: instance } = await supabase
+      .from("package_instances")
+      .select("id")
+      .eq("notion_page_id", page.pageId)
+      .maybeSingle();
+
+    if (!instance) continue;
+
+    const { error } = await supabase
+      .from("package_instances")
+      .update({
+        ...schedule,
+        ...(page.packageName ? { name: page.packageName } : {}),
+        ...(page.status ? { status: page.status } : {}),
+      })
+      .eq("id", instance.id);
+
+    if (error) {
+      errors.push(`${page.packageName ?? page.pageId}: instance ${error.message}`);
+      continue;
+    }
+
+    updated += 1;
+    const rosterResult = await syncPackageInstanceRosterFromNotion(
+      supabase,
+      instance.id,
+      page.rawProperties,
+      page.pageId
+    );
+    if (rosterResult.error) {
+      errors.push(`${page.packageName ?? page.pageId}: instance roster ${rosterResult.error}`);
+    } else {
+      rosterSynced += rosterResult.synced;
+    }
+  }
+
+  return { updated, rosterSynced, errors };
 }
 
 export async function linkInboxRowToPackageInstance(
@@ -481,39 +1050,26 @@ export async function linkInboxRowToPackageInstance(
     return { ok: false, error: inboxError?.message ?? "Inbox row not found." };
   }
 
-  const status = (inbox.status as PackageInstanceStatus | null) ?? "pre_scheduling";
-  const { byNotionUserId } = await loadNotionTutorMap(supabase);
+  const page = parsedNotionPackagePageFromInboxRow(inbox);
 
-  const { data: instance, error: insertError } = await supabase
-    .from("package_instances")
-    .insert({
-      package_id: packageId,
-      course_id: courseId,
-      name: inbox.package_name?.trim() || "Imported from Notion",
-      status,
-      start_date: inbox.start_date,
-      end_date: inbox.end_date,
-      tutor_id: inbox.notion_tutor_user_id
-        ? byNotionUserId.get(inbox.notion_tutor_user_id)?.tutorId ?? null
-        : null,
-      notion_page_id: inbox.notion_page_id,
-      notion_sync_status: "synced",
-      notion_synced_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
+  const created = await createPackageInstanceFromNotionPage(
+    supabase,
+    page,
+    packageId,
+    courseId
+  );
 
-  if (insertError || !instance) {
-    return { ok: false, error: insertError?.message ?? "Failed to create package instance." };
+  if (!created.ok) {
+    return { ok: false, error: created.error ?? "Failed to create package instance." };
   }
 
   await supabase
     .from("notion_sync_inbox")
     .update({
       resolved: true,
-      resolved_package_instance_id: instance.id,
+      resolved_package_instance_id: created.instanceId,
     })
     .eq("id", inboxId);
 
-  return { ok: true, instanceId: instance.id };
+  return { ok: true, instanceId: created.instanceId };
 }

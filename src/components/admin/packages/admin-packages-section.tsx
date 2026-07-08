@@ -7,18 +7,30 @@ import {
   fetchAdminPackagesList,
   fetchPackagesSavedViews,
   savePackagesView,
+  updatePackagesSavedView,
 } from "@/app/admin/packages/actions";
-import { AdminFilterPill, AdminStatusPill } from "@/components/admin/admin-filter-pills";
+import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
 import { PackageRunFormModal } from "@/components/admin/packages/package-run-form-modal";
+import { PackageRosterCell } from "@/components/admin/packages/package-roster-cell";
+import {
+  AdminPackagesBoardHeader,
+  readStoredActiveViewId,
+  storeActiveViewId,
+} from "@/components/admin/packages/admin-packages-view-tabs";
 import type {
+  AdminPackageKind,
   AdminPackageListRow,
   AdminSavedView,
   PackagesViewConfig,
 } from "@/lib/admin/packages/types";
 import { DEFAULT_PACKAGES_VIEW_CONFIG } from "@/lib/admin/packages/types";
+import { formatPackageCalendarDate } from "@/lib/admin/package-schedule";
 import {
-  PACKAGE_DELIVERY_FORMATS,
-  PACKAGE_INSTANCE_STATUSES,
+  isPackageColumnVisible,
+  packageColumnCellClass,
+  packageColumnHeaderClass,
+} from "@/lib/admin/packages/table-columns";
+import {
   comparePackageDeliveryFormats,
   packageDeliveryFormat,
   packageDeliveryFormatLabel,
@@ -31,50 +43,16 @@ import { ui } from "@/lib/ui/styles";
 import { useEffect } from "react";
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(iso));
+  return formatPackageCalendarDate(iso);
 }
 
-function RosterChips({
-  members,
-  packageId,
-  roster,
-}: {
-  members: AdminPackageListRow["interested"];
-  packageId: string;
-  roster: "interested" | "confirmed";
-}) {
-  const href = `/admin/packages/${packageId}?roster=${roster}`;
-
-  if (members.length === 0) {
-    return (
-      <Link href={href} className="text-xs font-medium text-violet-600 hover:text-violet-500">
-        Add →
-      </Link>
-    );
-  }
-
-  return (
-    <Link href={href} className="block rounded-lg hover:bg-violet-50/80">
-      <div className="flex flex-wrap gap-1 p-0.5">
-        {members.slice(0, 4).map((member) => (
-          <span
-            key={member.studentPackageId}
-            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700"
-            title={member.email ?? member.label}
-          >
-            {member.label}
-          </span>
-        ))}
-        {members.length > 4 && (
-          <span className="text-xs font-medium text-zinc-500">+{members.length - 4}</span>
-        )}
-      </div>
-    </Link>
+function updatePackageRow(
+  rows: AdminPackageListRow[],
+  rowKey: { kind: AdminPackageKind; id: string },
+  updater: (row: AdminPackageListRow) => AdminPackageListRow
+): AdminPackageListRow[] {
+  return rows.map((row) =>
+    row.kind === rowKey.kind && row.id === rowKey.id ? updater(row) : row
   );
 }
 
@@ -141,17 +119,6 @@ const GROUP_BY_OPTIONS: Array<{
   { value: "format", label: "Format" },
 ];
 
-function cycleGroupBy(current: PackagesViewConfig["groupBy"]): PackagesViewConfig["groupBy"] {
-  const index = GROUP_BY_OPTIONS.findIndex((option) => option.value === current);
-  return GROUP_BY_OPTIONS[(index + 1) % GROUP_BY_OPTIONS.length].value;
-}
-
-function groupByPillLabel(groupBy: PackagesViewConfig["groupBy"]): string {
-  if (groupBy === "none") return "Group";
-  const option = GROUP_BY_OPTIONS.find((entry) => entry.value === groupBy);
-  return `Group: ${option?.label ?? groupBy}`;
-}
-
 function groupRows(
   rows: AdminPackageListRow[],
   groupBy: PackagesViewConfig["groupBy"]
@@ -205,17 +172,24 @@ function groupRows(
 export function AdminPackagesSection() {
   const [rows, setRows] = useState<AdminPackageListRow[]>([]);
   const [savedViews, setSavedViews] = useState<AdminSavedView[]>([]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [baselineConfig, setBaselineConfig] = useState<PackagesViewConfig | null>(null);
   const [config, setConfig] = useState<PackagesViewConfig>(DEFAULT_PACKAGES_VIEW_CONFIG);
   const [error, setError] = useState<string | null>(null);
   const [viewsError, setViewsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showStatusFilter, setShowStatusFilter] = useState(false);
-  const [showTutorFilter, setShowTutorFilter] = useState(false);
-  const [showFormatFilter, setShowFormatFilter] = useState(false);
-  const [saveName, setSaveName] = useState("");
+  const [showNewViewForm, setShowNewViewForm] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
   const [pending, startTransition] = useTransition();
   const [showCreate, setShowCreate] = useState(false);
   const [editingRow, setEditingRow] = useState<AdminPackageListRow | null>(null);
+
+  function handleRosterChange(
+    rowKey: { kind: AdminPackageKind; id: string },
+    updater: (row: AdminPackageListRow) => AdminPackageListRow
+  ) {
+    setRows((current) => updatePackageRow(current, rowKey, updater));
+  }
 
   async function reloadList() {
     const list = await fetchAdminPackagesList();
@@ -233,13 +207,36 @@ export function AdminPackagesSection() {
       if (cancelled) return;
       setRows(list.rows);
       setError(list.error ?? null);
-      setSavedViews(views.views);
+      const viewsList = views.views;
+      setSavedViews(viewsList);
       setViewsError(views.error ?? null);
+
+      const storedViewId = readStoredActiveViewId();
+      const storedView = storedViewId
+        ? viewsList.find((view) => view.id === storedViewId) ?? null
+        : null;
+      if (storedView) {
+        setActiveViewId(storedView.id);
+        setConfig(storedView.config);
+        setBaselineConfig(storedView.config);
+      } else {
+        setActiveViewId(null);
+        setBaselineConfig(null);
+      }
+
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === "visible") void reloadList();
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
   const tutors = useMemo(() => {
@@ -254,262 +251,210 @@ export function AdminPackagesSection() {
   const grouped = useMemo(() => groupRows(filteredRows, config.groupBy), [filteredRows, config.groupBy]);
 
   function resetFilters() {
+    if (baselineConfig) {
+      setConfig(baselineConfig);
+      return;
+    }
     setConfig(DEFAULT_PACKAGES_VIEW_CONFIG);
   }
 
-  function cycleGroupBySetting() {
-    setConfig((current) => ({
-      ...current,
-      groupBy: cycleGroupBy(current.groupBy),
-    }));
+  function selectView(view: AdminSavedView | null) {
+    if (!view) {
+      setActiveViewId(null);
+      setConfig(DEFAULT_PACKAGES_VIEW_CONFIG);
+      setBaselineConfig(null);
+      storeActiveViewId(null);
+      return;
+    }
+    setActiveViewId(view.id);
+    setConfig(view.config);
+    setBaselineConfig(view.config);
+    storeActiveViewId(view.id);
+    setShowNewViewForm(false);
+    setNewViewName("");
   }
 
-  function handleSaveView() {
-    const name = saveName.trim() || `View ${savedViews.length + 1}`;
+  async function refreshViews(preferredActiveId?: string | null) {
+    const views = await fetchPackagesSavedViews();
+    setSavedViews(views.views);
+    setViewsError(views.error ?? null);
+
+    const nextActiveId =
+      preferredActiveId !== undefined
+        ? preferredActiveId
+        : activeViewId && views.views.some((view) => view.id === activeViewId)
+          ? activeViewId
+          : null;
+
+    if (nextActiveId) {
+      const view = views.views.find((entry) => entry.id === nextActiveId);
+      if (view) {
+        setActiveViewId(view.id);
+        setConfig(view.config);
+        setBaselineConfig(view.config);
+        storeActiveViewId(view.id);
+        return;
+      }
+    }
+
+    setActiveViewId(null);
+    setConfig(DEFAULT_PACKAGES_VIEW_CONFIG);
+    setBaselineConfig(null);
+    storeActiveViewId(null);
+  }
+
+  function handleCreateView() {
+    const name = newViewName.trim();
+    if (!name) return;
+
     startTransition(async () => {
       const result = await savePackagesView(name, config);
       if (result.error) {
         setViewsError(result.error);
         return;
       }
-      const views = await fetchPackagesSavedViews();
-      setSavedViews(views.views);
-      setViewsError(views.error ?? null);
-      setSaveName("");
+      setViewsError(null);
+      setShowNewViewForm(false);
+      setNewViewName("");
+      await refreshViews(result.id ?? null);
+    });
+  }
+
+  function handleSaveActiveView() {
+    if (!activeViewId) return;
+
+    startTransition(async () => {
+      const result = await updatePackagesSavedView(activeViewId, { config });
+      if (result.error) {
+        setViewsError(result.error);
+        return;
+      }
+      setViewsError(null);
+      setBaselineConfig(config);
+      await refreshViews(activeViewId);
+    });
+  }
+
+  function handleRenameView(viewId: string, name: string) {
+    startTransition(async () => {
+      const result = await updatePackagesSavedView(viewId, { name });
+      if (result.error) {
+        setViewsError(result.error);
+        return;
+      }
+      setViewsError(null);
+      await refreshViews(viewId);
+    });
+  }
+
+  function handleDeleteView(viewId: string) {
+    const view = savedViews.find((entry) => entry.id === viewId);
+    if (!view) return;
+    if (!window.confirm(`Delete the "${view.name}" view? This cannot be undone.`)) return;
+
+    startTransition(async () => {
+      const result = await deletePackagesSavedView(viewId);
+      if (result.error) {
+        setViewsError(result.error);
+        return;
+      }
+      setViewsError(null);
+      await refreshViews(activeViewId === viewId ? null : activeViewId);
     });
   }
 
   return (
     <div className={ui.page}>
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Packages</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Group cohorts, 1-1 runs, and the Kidda Community membership package.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/admin/packages/notion"
-            className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-          >
-            Notion sync
-          </Link>
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className={ui.btnPrimary}
-          >
-            New package
-          </button>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Packages</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          Group cohorts, 1-1 runs, and the Kidda Community membership package.
+        </p>
       </div>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
       {viewsError && <p className="mb-4 text-sm text-amber-700">{viewsError}</p>}
 
-      <div className="mb-4 space-y-3 rounded-2xl border border-zinc-200/80 bg-white p-4">
-        <input
-          type="search"
-          placeholder="Search package name…"
-          value={config.search}
-          onChange={(event) => setConfig((c) => ({ ...c, search: event.target.value }))}
-          className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+      <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white">
+        <AdminPackagesBoardHeader
+          savedViews={savedViews}
+          activeViewId={activeViewId}
+          config={config}
+          baselineConfig={baselineConfig}
+          tutors={tutors}
+          resultCount={filteredRows.length}
+          pending={pending}
+          showNewViewForm={showNewViewForm}
+          newViewName={newViewName}
+          onSetConfig={setConfig}
+          onSelectView={selectView}
+          onShowNewViewForm={() => setShowNewViewForm(true)}
+          onHideNewViewForm={() => {
+            setShowNewViewForm(false);
+            setNewViewName("");
+          }}
+          onNewViewNameChange={setNewViewName}
+          onCreateView={handleCreateView}
+          onSaveView={handleSaveActiveView}
+          onRenameView={handleRenameView}
+          onDeleteView={handleDeleteView}
+          onReset={resetFilters}
+          onNewPackage={() => setShowCreate(true)}
         />
 
-        <div className="flex flex-wrap gap-2">
-          <AdminFilterPill
-            label={groupByPillLabel(config.groupBy)}
-            active={config.groupBy !== "none"}
-            onClick={cycleGroupBySetting}
-          />
-          <AdminFilterPill
-            label="Status"
-            active={config.filters.status.length > 0}
-            onClick={() => setShowStatusFilter((v) => !v)}
-          />
-          <AdminFilterPill
-            label="Tutor"
-            active={config.filters.tutorIds.length > 0}
-            onClick={() => setShowTutorFilter((v) => !v)}
-          />
-          <AdminFilterPill
-            label="Format"
-            active={config.filters.deliveryModes.length > 0}
-            onClick={() => setShowFormatFilter((v) => !v)}
-          />
-          <AdminFilterPill label="Reset" onClick={resetFilters} />
-          <button
-            type="button"
-            onClick={handleSaveView}
-            disabled={pending}
-            className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
-          >
-            Save for everyone
-          </button>
-        </div>
-
-        {showStatusFilter && (
-          <div className="flex flex-wrap gap-2">
-            {PACKAGE_INSTANCE_STATUSES.map((status) => {
-              const active = config.filters.status.includes(status);
-              return (
-                <AdminFilterPill
-                  key={status}
-                  label={packageStatusLabel(status)}
-                  active={active}
-                  onClick={() =>
-                    setConfig((c) => ({
-                      ...c,
-                      filters: {
-                        ...c.filters,
-                        status: active
-                          ? c.filters.status.filter((s) => s !== status)
-                          : [...c.filters.status, status],
-                      },
-                    }))
-                  }
-                />
-              );
-            })}
-          </div>
-        )}
-
-        {showTutorFilter && (
-          <div className="flex flex-wrap gap-2">
-            {tutors.map((tutor) => {
-              const active = config.filters.tutorIds.includes(tutor.id);
-              return (
-                <AdminFilterPill
-                  key={tutor.id}
-                  label={tutor.name}
-                  active={active}
-                  onClick={() =>
-                    setConfig((c) => ({
-                      ...c,
-                      filters: {
-                        ...c.filters,
-                        tutorIds: active
-                          ? c.filters.tutorIds.filter((id) => id !== tutor.id)
-                          : [...c.filters.tutorIds, tutor.id],
-                      },
-                    }))
-                  }
-                />
-              );
-            })}
-          </div>
-        )}
-
-        {showFormatFilter && (
-          <div className="flex flex-wrap gap-2">
-            {PACKAGE_DELIVERY_FORMATS.map((format) => {
-              const active = config.filters.deliveryModes.includes(format);
-              return (
-                <AdminFilterPill
-                  key={format}
-                  label={packageDeliveryFormatLabel(format)}
-                  active={active}
-                  onClick={() =>
-                    setConfig((c) => ({
-                      ...c,
-                      filters: {
-                        ...c.filters,
-                        deliveryModes: active
-                          ? c.filters.deliveryModes.filter((mode) => mode !== format)
-                          : [...c.filters.deliveryModes, format],
-                      },
-                    }))
-                  }
-                />
-              );
-            })}
-          </div>
-        )}
-
-        {savedViews.length > 0 && (
-          <div className="flex flex-wrap gap-2 border-t border-zinc-100 pt-3">
-            {savedViews.map((view) => (
-              <AdminFilterPill
-                key={view.id}
-                label={view.name}
-                onClick={() => setConfig(view.config)}
-                onRemove={() =>
-                  startTransition(async () => {
-                    await deletePackagesSavedView(view.id);
-                    const views = await fetchPackagesSavedViews();
-                    setSavedViews(views.views);
-                  })
-                }
-              />
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-          <button
-            type="button"
-            className="font-semibold text-violet-600"
-            onClick={() =>
-              setConfig((c) => ({
-                ...c,
-                sort: {
-                  field: "startDate",
-                  direction: c.sort.field === "startDate" && c.sort.direction === "desc" ? "asc" : "desc",
-                },
-              }))
-            }
-          >
-            {config.sort.field === "startDate" && config.sort.direction === "desc" ? "↓" : "↑"} Start Date
-          </button>
-          <span>·</span>
-          <button
-            type="button"
-            className="font-semibold text-violet-600"
-            onClick={() =>
-              setConfig((c) => ({
-                ...c,
-                sort: {
-                  field: "format",
-                  direction: c.sort.field === "format" && c.sort.direction === "asc" ? "desc" : "asc",
-                },
-              }))
-            }
-          >
-            {config.sort.field === "format" && config.sort.direction === "asc" ? "↑" : "↓"} Format
-          </button>
-          <span>·</span>
-          <span>{filteredRows.length} package{filteredRows.length === 1 ? "" : "s"}</span>
-        </div>
-      </div>
-
-      {loading ? (
-        <p className="text-sm text-zinc-500">Loading packages…</p>
-      ) : (
-        <div className="space-y-6">
-          {grouped.map((group) => (
-            <section key={group.key}>
-              {config.groupBy !== "none" && (
-                <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500">
-                  {group.label} ({group.rows.length})
-                </h2>
-              )}
-              <div className="overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white lg:overflow-x-visible">
+        {loading ? (
+          <p className="px-4 py-8 text-sm text-zinc-500">Loading packages…</p>
+        ) : (
+          <div className="space-y-0">
+            {grouped.map((group) => (
+              <section key={group.key}>
+                {config.groupBy !== "none" && (
+                  <h2 className="border-t border-zinc-100 bg-zinc-50/80 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    {group.label} ({group.rows.length})
+                  </h2>
+                )}
+                <div className="overflow-x-auto lg:overflow-x-visible">
                 <table className="min-w-full text-left text-sm lg:table-fixed lg:w-full">
                   <thead className="border-b border-zinc-100 bg-zinc-50/80 text-xs font-semibold uppercase tracking-wider text-zinc-500">
                     <tr>
                       <th className="px-4 py-3 lg:w-[16%]">Package</th>
-                      <th className="hidden px-4 py-3 sm:table-cell lg:w-[8%]">Format</th>
-                      <th className="px-4 py-3 lg:w-[12%]">Interested</th>
-                      <th className="px-4 py-3 lg:w-[12%]">Confirmed</th>
-                      <th className="hidden px-4 py-3 md:table-cell lg:w-[8%]">Start day</th>
-                      <th className="px-4 py-3 lg:w-[9%]">Tutor</th>
-                      <th className="px-4 py-3 lg:w-[8%]">Start</th>
-                      <th className="hidden px-4 py-3 sm:table-cell lg:w-[8%]">End</th>
-                      <th className="px-4 py-3 lg:w-[10%]">Status</th>
-                      <th className="hidden px-4 py-3 sm:table-cell lg:w-[5%]" title="Lesson unlocks logged for this package run">
-                        Unlocks
-                      </th>
+                      {isPackageColumnVisible(config, "format") ? (
+                        <th className={packageColumnHeaderClass("format")}>Format</th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "interested") ? (
+                        <th className={packageColumnHeaderClass("interested")}>Interested</th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "waitingForPayment") ? (
+                        <th className={packageColumnHeaderClass("waitingForPayment")}>
+                          Waiting for payment
+                        </th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "confirmed") ? (
+                        <th className={packageColumnHeaderClass("confirmed")}>Confirmed</th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "startDay") ? (
+                        <th className={packageColumnHeaderClass("startDay")}>Start day</th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "tutor") ? (
+                        <th className={packageColumnHeaderClass("tutor")}>Tutor</th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "startDate") ? (
+                        <th className={packageColumnHeaderClass("startDate")}>Start</th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "endDate") ? (
+                        <th className={packageColumnHeaderClass("endDate")}>End</th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "status") ? (
+                        <th className={packageColumnHeaderClass("status")}>Status</th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "unlocks") ? (
+                        <th
+                          className={packageColumnHeaderClass("unlocks")}
+                          title="Lesson unlocks logged for this package run"
+                        >
+                          Unlocks
+                        </th>
+                      ) : null}
                       <th className="px-4 py-3 lg:w-[5%]" />
                     </tr>
                   </thead>
@@ -526,47 +471,89 @@ export function AdminPackagesSection() {
                             {row.name}
                           </Link>
                           <p className="text-xs text-zinc-500">{row.courseName}</p>
-                          <p className="mt-1 sm:hidden">
+                          {isPackageColumnVisible(config, "format") ? (
+                            <p className="mt-1 sm:hidden">
+                              <AdminStatusPill tone={packageDeliveryFormatPillTone(format)}>
+                                {packageDeliveryFormatLabel(format)}
+                              </AdminStatusPill>
+                            </p>
+                          ) : null}
+                        </td>
+                        {isPackageColumnVisible(config, "format") ? (
+                          <td className={packageColumnCellClass("format")}>
                             <AdminStatusPill tone={packageDeliveryFormatPillTone(format)}>
                               {packageDeliveryFormatLabel(format)}
                             </AdminStatusPill>
-                          </p>
-                        </td>
-                        <td className="hidden px-4 py-3 sm:table-cell">
-                          <AdminStatusPill tone={packageDeliveryFormatPillTone(format)}>
-                            {packageDeliveryFormatLabel(format)}
-                          </AdminStatusPill>
-                        </td>
-                        <td className="px-4 py-3">
-                          <RosterChips members={row.interested} packageId={row.id} roster="interested" />
-                        </td>
-                        <td className="px-4 py-3">
-                          <RosterChips members={row.confirmed} packageId={row.id} roster="confirmed" />
-                        </td>
-                        <td className="hidden px-4 py-3 text-zinc-600 md:table-cell">
-                          {row.startDayOfWeek ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-zinc-600">{row.tutorName ?? "—"}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {formatDate(row.startDate)}
-                        </td>
-                        <td className="hidden whitespace-nowrap px-4 py-3 text-zinc-600 sm:table-cell">
-                          {formatDate(row.endDate)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <AdminStatusPill tone={packageStatusPillTone(row.status)}>
-                            {packageStatusLabel(row.status)}
-                          </AdminStatusPill>
-                        </td>
-                        <td className="hidden px-4 py-3 text-zinc-600 sm:table-cell">
-                          {row.lessonUnlockCount > 0 ? (
-                            <span title={row.lastLessonLoggedAt ?? undefined}>
-                              {row.lessonUnlockCount}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "interested") ? (
+                          <td className={packageColumnCellClass("interested")}>
+                            <PackageRosterCell
+                              row={row}
+                              status="interested"
+                              members={row.interested}
+                              onRosterChange={handleRosterChange}
+                            />
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "waitingForPayment") ? (
+                          <td className={packageColumnCellClass("waitingForPayment")}>
+                            <PackageRosterCell
+                              row={row}
+                              status="waiting_for_payment"
+                              members={row.waitingForPayment}
+                              onRosterChange={handleRosterChange}
+                            />
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "confirmed") ? (
+                          <td className={packageColumnCellClass("confirmed")}>
+                            <PackageRosterCell
+                              row={row}
+                              status="confirmed"
+                              members={row.confirmed}
+                              onRosterChange={handleRosterChange}
+                            />
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "startDay") ? (
+                          <td className={packageColumnCellClass("startDay")}>
+                            {row.startDayOfWeek ?? "—"}
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "tutor") ? (
+                          <td className={packageColumnCellClass("tutor")}>
+                            {row.tutorName ?? "—"}
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "startDate") ? (
+                          <td className={packageColumnCellClass("startDate")}>
+                            {formatDate(row.startDate)}
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "endDate") ? (
+                          <td className={packageColumnCellClass("endDate")}>
+                            {formatDate(row.endDate)}
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "status") ? (
+                          <td className={packageColumnCellClass("status")}>
+                            <AdminStatusPill tone={packageStatusPillTone(row.status)}>
+                              {packageStatusLabel(row.status)}
+                            </AdminStatusPill>
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "unlocks") ? (
+                          <td className={packageColumnCellClass("unlocks")}>
+                            {row.lessonUnlockCount > 0 ? (
+                              <span title={row.lastLessonLoggedAt ?? undefined}>
+                                {row.lessonUnlockCount}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        ) : null}
                         <td className="px-4 py-3 text-right">
                           <button
                             type="button"
@@ -587,8 +574,9 @@ export function AdminPackagesSection() {
               </div>
             </section>
           ))}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       {showCreate && (
         <PackageRunFormModal
@@ -604,6 +592,7 @@ export function AdminPackagesSection() {
           initial={editingRow}
           onClose={() => setEditingRow(null)}
           onSaved={reloadList}
+          onDeleted={reloadList}
         />
       )}
     </div>

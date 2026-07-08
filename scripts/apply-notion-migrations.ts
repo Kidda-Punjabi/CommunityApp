@@ -39,6 +39,8 @@ async function runSql(filename: string) {
 async function main() {
   await runSql("supabase/notion-package-sync.sql");
   await runSql("supabase/notion-lead-sync.sql");
+  await runSql("supabase/notion-package-roster.sql");
+  await runSql("supabase/notion-cohort-sync.sql");
   console.log("All Notion migrations applied.");
 }
 

@@ -1,3 +1,6 @@
+import {
+  cohortIdFromInboxRow,
+} from "@/lib/notion/notion-cohort-link";
 import type {
   AdminPackageDetail,
   AdminPackageKind,
@@ -31,8 +34,13 @@ function rosterFromPackages(
   }>,
   profileById: Map<string, ProfileRow>,
   emailById: Map<string, string | null>
-): { interested: PackagesRosterMember[]; confirmed: PackagesRosterMember[] } {
+): {
+  interested: PackagesRosterMember[];
+  waitingForPayment: PackagesRosterMember[];
+  confirmed: PackagesRosterMember[];
+} {
   const interested: PackagesRosterMember[] = [];
+  const waitingForPayment: PackagesRosterMember[] = [];
   const confirmed: PackagesRosterMember[] = [];
 
   for (const row of rows) {
@@ -43,11 +51,14 @@ function rosterFromPackages(
       label: labelForProfile(profileById.get(row.user_id), emailById.get(row.user_id) ?? null),
       email: emailById.get(row.user_id) ?? null,
       avatarUrl: profileById.get(row.user_id)?.avatar_url ?? null,
+      isNotionLead: false,
     };
 
     if (row.status === "confirmed") {
       confirmed.push(member);
-    } else if (row.status === "interested" || row.status === "waiting_for_payment") {
+    } else if (row.status === "waiting_for_payment") {
+      waitingForPayment.push(member);
+    } else if (row.status === "interested") {
       interested.push(member);
     }
   }
@@ -57,6 +68,131 @@ function rosterFromPackages(
 
   return {
     interested: interested.sort(byLabel),
+    waitingForPayment: waitingForPayment.sort(byLabel),
+    confirmed: confirmed.sort(byLabel),
+  };
+}
+
+function mergeRosterSources(
+  fromPackages: {
+    interested: PackagesRosterMember[];
+    waitingForPayment: PackagesRosterMember[];
+    confirmed: PackagesRosterMember[];
+  },
+  fromNotion: {
+    interested: PackagesRosterMember[];
+    waitingForPayment: PackagesRosterMember[];
+    confirmed: PackagesRosterMember[];
+  } | null
+): {
+  interested: PackagesRosterMember[];
+  waitingForPayment: PackagesRosterMember[];
+  confirmed: PackagesRosterMember[];
+} {
+  if (!fromNotion) return fromPackages;
+
+  const byLabel = (a: PackagesRosterMember, b: PackagesRosterMember) =>
+    a.label.localeCompare(b.label);
+
+  const coveredUserIds = new Set<string>();
+  const coveredStudentPackageIds = new Set<string>();
+
+  for (const member of [
+    ...fromPackages.interested,
+    ...fromPackages.waitingForPayment,
+    ...fromPackages.confirmed,
+  ]) {
+    if (member.userId) coveredUserIds.add(member.userId);
+    if (
+      !member.studentPackageId.startsWith("notion-roster:") &&
+      !member.studentPackageId.startsWith("inbox-cache:")
+    ) {
+      coveredStudentPackageIds.add(member.studentPackageId);
+    }
+  }
+
+  function mergeBucket(
+    packagesBucket: PackagesRosterMember[],
+    notionBucket: PackagesRosterMember[]
+  ): PackagesRosterMember[] {
+    const merged = [...packagesBucket];
+    for (const member of notionBucket) {
+      if (member.userId && coveredUserIds.has(member.userId)) continue;
+      if (
+        member.studentPackageId &&
+        !member.studentPackageId.startsWith("notion-roster:") &&
+        !member.studentPackageId.startsWith("inbox-cache:") &&
+        coveredStudentPackageIds.has(member.studentPackageId)
+      ) {
+        continue;
+      }
+      merged.push(member);
+      if (member.userId) coveredUserIds.add(member.userId);
+    }
+    return merged.sort(byLabel);
+  }
+
+  return {
+    interested: mergeBucket(fromPackages.interested, fromNotion.interested),
+    waitingForPayment: mergeBucket(
+      fromPackages.waitingForPayment,
+      fromNotion.waitingForPayment
+    ),
+    confirmed: mergeBucket(fromPackages.confirmed, fromNotion.confirmed),
+  };
+}
+
+function rosterFromNotionMirror(
+  rows: Array<{
+    id: string;
+    lead_name: string;
+    lead_email: string | null;
+    roster_status: PackageMembershipStatus;
+    profile_id: string | null;
+    notion_lead_page_id: string;
+    student_package_id: string | null;
+  }>,
+  profileById: Map<string, ProfileRow>,
+  emailById: Map<string, string | null>
+): {
+  interested: PackagesRosterMember[];
+  waitingForPayment: PackagesRosterMember[];
+  confirmed: PackagesRosterMember[];
+} {
+  const interested: PackagesRosterMember[] = [];
+  const waitingForPayment: PackagesRosterMember[] = [];
+  const confirmed: PackagesRosterMember[] = [];
+
+  for (const row of rows) {
+    const profile = row.profile_id ? profileById.get(row.profile_id) : undefined;
+    const member: PackagesRosterMember = {
+      userId: row.profile_id,
+      notionLeadPageId: row.notion_lead_page_id,
+      isNotionLead: true,
+      studentPackageId: row.student_package_id ?? `notion-roster:${row.id}`,
+      membershipStatus: row.roster_status,
+      label: profile
+        ? labelForProfile(profile, row.lead_email ?? emailById.get(row.profile_id!) ?? null)
+        : row.lead_name,
+      email: row.lead_email ?? (row.profile_id ? emailById.get(row.profile_id) ?? null : null),
+      avatarUrl: profile?.avatar_url ?? null,
+    };
+
+    if (row.roster_status === "confirmed") {
+      confirmed.push(member);
+    } else if (row.roster_status === "waiting_for_payment") {
+      waitingForPayment.push(member);
+    } else if (row.roster_status === "interested") {
+      interested.push(member);
+    }
+  }
+
+  const byLabel = (a: PackagesRosterMember, b: PackagesRosterMember) =>
+    a.label.localeCompare(b.label);
+
+  return {
+    interested: interested.sort(byLabel),
+    waitingForPayment: waitingForPayment.sort(byLabel),
     confirmed: confirmed.sort(byLabel),
   };
 }
@@ -96,7 +232,7 @@ export async function loadAdminPackagesList(
     supabase
       .from("package_instances")
       .select(
-        "id, name, package_id, course_id, tutor_id, status, start_day_of_week, start_date, end_date, capacity, active"
+        "id, name, package_id, course_id, tutor_id, status, start_day_of_week, start_date, end_date, capacity, active, notion_page_id"
       )
       .order("created_at", { ascending: false }),
     supabase.from("courses").select("id, name"),
@@ -113,8 +249,36 @@ export async function loadAdminPackagesList(
 
   const cohortIds = (cohortRows ?? []).map((c) => c.id);
   const instanceIds = (instanceRows ?? []).map((i) => i.id);
+  const notionLinkedInstanceIds = (instanceRows ?? [])
+    .filter((row) => row.notion_page_id)
+    .map((row) => row.id);
 
-  const [{ data: cohortEnrollments }, { data: instancePackages }, { data: cohortUnlocks }] =
+  const { data: resolvedInboxRows } = await supabase
+    .from("notion_sync_inbox")
+    .select("notion_page_id, raw_properties, resolved_package_instance_id")
+    .eq("resolved", true);
+
+  const notionLinkedCohortIds = new Set<string>();
+  const cohortIdByNotionPageId = new Map<string, string>();
+  for (const row of resolvedInboxRows ?? []) {
+    const cohortId = cohortIdFromInboxRow(row);
+    if (cohortId) {
+      notionLinkedCohortIds.add(cohortId);
+      cohortIdByNotionPageId.set(row.notion_page_id, cohortId);
+    }
+  }
+
+  const notionPageIds = [
+    ...new Set([
+      ...(instanceRows ?? [])
+        .map((row) => row.notion_page_id)
+        .filter((id): id is string => Boolean(id)),
+      ...(resolvedInboxRows ?? []).map((row) => row.notion_page_id),
+    ]),
+  ];
+
+  const rosterTargetCount = notionLinkedInstanceIds.length + notionLinkedCohortIds.size;
+  const [{ data: cohortEnrollments }, { data: instancePackages }, { data: cohortUnlocks }, { data: notionRosterRows }, { data: notionInboxRows }] =
     await Promise.all([
     cohortIds.length > 0
       ? supabase
@@ -133,6 +297,28 @@ export async function loadAdminPackagesList(
           .from("cohort_lesson_unlocks")
           .select("cohort_id, unlocked_at")
           .in("cohort_id", cohortIds)
+      : Promise.resolve({ data: [] }),
+    rosterTargetCount > 0
+      ? supabase
+          .from("package_instance_notion_roster")
+          .select(
+            "id, package_instance_id, cohort_id, lead_name, lead_email, roster_status, profile_id, notion_lead_page_id, student_package_id"
+          )
+          .or(
+            [
+              notionLinkedInstanceIds.length > 0
+                ? `package_instance_id.in.(${notionLinkedInstanceIds.join(",")})`
+                : null,
+              notionLinkedCohortIds.size > 0
+                ? `cohort_id.in.(${[...notionLinkedCohortIds].join(",")})`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(",")
+          )
+      : Promise.resolve({ data: [], error: null }),
+    notionPageIds.length > 0
+      ? Promise.resolve({ data: resolvedInboxRows ?? [] })
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -226,11 +412,118 @@ export async function loadAdminPackagesList(
     packagesByInstanceId.set(sp.package_instance_id, list);
   }
 
-  // 1-1 runs: also include confirmed students assigned via enrollment when
-  // package_instance_id was not set on the student_packages row.
-  if (instanceIds.length > 0) {
+  const notionRosterByInstanceId = new Map<
+    string,
+    Array<{
+      id: string;
+      lead_name: string;
+      lead_email: string | null;
+      roster_status: PackageMembershipStatus;
+      profile_id: string | null;
+      notion_lead_page_id: string;
+      student_package_id: string | null;
+    }>
+  >();
+  const notionRosterByCohortId = new Map<
+    string,
+    Array<{
+      id: string;
+      lead_name: string;
+      lead_email: string | null;
+      roster_status: PackageMembershipStatus;
+      profile_id: string | null;
+      notion_lead_page_id: string;
+      student_package_id: string | null;
+    }>
+  >();
+  for (const row of notionRosterRows ?? []) {
+    const entry = {
+      id: row.id,
+      lead_name: row.lead_name,
+      lead_email: row.lead_email,
+      roster_status: row.roster_status as PackageMembershipStatus,
+      profile_id: row.profile_id,
+      notion_lead_page_id: row.notion_lead_page_id,
+      student_package_id: row.student_package_id,
+    };
+    if (row.package_instance_id) {
+      const list = notionRosterByInstanceId.get(row.package_instance_id) ?? [];
+      list.push(entry);
+      notionRosterByInstanceId.set(row.package_instance_id, list);
+    }
+    if (row.cohort_id) {
+      const list = notionRosterByCohortId.get(row.cohort_id) ?? [];
+      list.push(entry);
+      notionRosterByCohortId.set(row.cohort_id, list);
+    }
+  }
+
+  const instanceIdByNotionPageId = new Map(
+    (instanceRows ?? [])
+      .filter((row) => row.notion_page_id)
+      .map((row) => [row.notion_page_id!, row.id] as const)
+  );
+  const cohortIdByNotionPageIdFromInbox = cohortIdByNotionPageId;
+
+  for (const inboxRow of notionInboxRows ?? []) {
+    const instanceId =
+      inboxRow.resolved_package_instance_id ??
+      instanceIdByNotionPageId.get(inboxRow.notion_page_id);
+    const cohortId =
+      cohortIdFromInboxRow(inboxRow) ??
+      cohortIdByNotionPageIdFromInbox.get(inboxRow.notion_page_id);
+
+    const raw = (inboxRow.raw_properties ?? {}) as {
+      _roster_cache?: Array<{
+        notionLeadPageId: string;
+        leadName: string;
+        leadEmail: string | null;
+        rosterStatus: PackageMembershipStatus;
+        profileId: string | null;
+        studentPackageId: string | null;
+      }>;
+    };
+    const cached = raw._roster_cache ?? [];
+    if (cached.length === 0) continue;
+
+    const mapped = cached.map((entry, index) => ({
+      id: `inbox-cache:${index}`,
+      lead_name: entry.leadName,
+      lead_email: entry.leadEmail,
+      roster_status: entry.rosterStatus,
+      profile_id: entry.profileId,
+      notion_lead_page_id: entry.notionLeadPageId,
+      student_package_id: entry.studentPackageId,
+    }));
+
+    if (instanceId && (notionRosterByInstanceId.get(instanceId) ?? []).length === 0) {
+      notionRosterByInstanceId.set(
+        instanceId,
+        mapped.map((entry, index) => ({ ...entry, id: `inbox-cache:${instanceId}:${index}` }))
+      );
+    }
+    if (cohortId && (notionRosterByCohortId.get(cohortId) ?? []).length === 0) {
+      notionRosterByCohortId.set(
+        cohortId,
+        mapped.map((entry, index) => ({ ...entry, id: `inbox-cache:${cohortId}:${index}` }))
+      );
+    }
+  }
+
+  // Legacy 1-1 runs only: include confirmed students assigned via enrollment when
+  // package_instance_id was not set. Skip Notion-linked instances — roster comes from Leads DB.
+  const nonNotionInstanceIds = instanceIds.filter(
+    (id) => !notionLinkedInstanceIds.includes(id)
+  );
+  if (nonNotionInstanceIds.length > 0) {
     const instanceById = new Map((instanceRows ?? []).map((row) => [row.id, row] as const));
-    const instanceCourseIds = [...new Set((instanceRows ?? []).map((row) => row.course_id))];
+    const instanceCourseIds = [
+      ...new Set(
+        (instanceRows ?? [])
+          .filter((row) => !row.notion_page_id)
+          .map((row) => row.course_id)
+      ),
+    ];
 
     const { data: enrollmentLinkedPackages } = await supabase
       .from("student_packages")
@@ -257,7 +550,7 @@ export async function loadAdminPackagesList(
       const enrollment = enrollmentByUserCourse.get(`${sp.user_id}:${sp.course_id}`);
       if (!enrollment || enrollment.delivery_mode === "group") continue;
 
-      for (const instanceId of instanceIds) {
+      for (const instanceId of nonNotionInstanceIds) {
         const instance = instanceById.get(instanceId);
         if (!instance || instance.course_id !== sp.course_id) continue;
         if (instance.tutor_id && enrollment.tutor_id !== instance.tutor_id) continue;
@@ -288,6 +581,9 @@ export async function loadAdminPackagesList(
     ...new Set([
       ...(cohortEnrollments ?? []).map((e) => e.user_id),
       ...(instancePackages ?? []).map((sp) => sp.user_id),
+      ...(notionRosterRows ?? [])
+        .map((row) => row.profile_id)
+        .filter((id): id is string => Boolean(id)),
     ]),
   ];
   const emailById = await loadEmails(supabase, allUserIds);
@@ -295,8 +591,20 @@ export async function loadAdminPackagesList(
   const rows: AdminPackageListRow[] = [];
 
   for (const cohort of cohortRows ?? []) {
-    const spRows = packagesByCohortId.get(cohort.id) ?? [];
-    const roster = rosterFromPackages(spRows, profileById, emailById);
+    const roster = notionLinkedCohortIds.has(cohort.id)
+      ? mergeRosterSources(
+          rosterFromPackages(
+            packagesByCohortId.get(cohort.id) ?? [],
+            profileById,
+            emailById
+          ),
+          rosterFromNotionMirror(
+            notionRosterByCohortId.get(cohort.id) ?? [],
+            profileById,
+            emailById
+          )
+        )
+      : rosterFromPackages(packagesByCohortId.get(cohort.id) ?? [], profileById, emailById);
     const unlockStats = unlockStatsByCohort.get(cohort.id) ?? { count: 0, lastAt: null };
     const groupPkg = [...packageById.values()].find(
       (p) => p.course_id === cohort.course_id && p.delivery_mode === "group"
@@ -326,8 +634,21 @@ export async function loadAdminPackagesList(
 
   for (const instance of instanceRows ?? []) {
     const pkg = packageById.get(instance.package_id);
-    const spRows = packagesByInstanceId.get(instance.id) ?? [];
-    const roster = rosterFromPackages(spRows, profileById, emailById);
+    const packagesRoster = rosterFromPackages(
+      packagesByInstanceId.get(instance.id) ?? [],
+      profileById,
+      emailById
+    );
+    const roster = instance.notion_page_id
+      ? mergeRosterSources(
+          packagesRoster,
+          rosterFromNotionMirror(
+            notionRosterByInstanceId.get(instance.id) ?? [],
+            profileById,
+            emailById
+          )
+        )
+      : packagesRoster;
 
     rows.push({
       kind: "package_instance",

@@ -4,10 +4,10 @@
 export const NOTION_API_VERSION = "2022-06-28";
 
 export const NOTION_PACKAGE_DATA_SOURCE_ID =
-  process.env.NOTION_PACKAGE_DATA_SOURCE_ID ?? "2a2b5ac4-29c6-80e1-9bfa-000b455fcc0e";
+  process.env.NOTION_PACKAGE_DATA_SOURCE_ID ?? "2a2b5ac4-29c6-805d-922b-d93a13be766d";
 
 export const NOTION_LEADS_DATA_SOURCE_ID =
-  process.env.NOTION_LEADS_DATA_SOURCE_ID ?? "293b5ac4-29c6-8029-9f0a-000b0807ce88";
+  process.env.NOTION_LEADS_DATA_SOURCE_ID ?? "293b5ac4-29c6-807e-bb23-db35b02b3fdf";
 
 export class NotionApiError extends Error {
   constructor(
@@ -72,6 +72,12 @@ export function selectName(
   return value?.select?.name?.trim() || null;
 }
 
+export function statusName(
+  value: { status?: { name?: string } | null } | undefined
+): string | null {
+  return value?.status?.name?.trim() || null;
+}
+
 export function dateStart(
   value: { date?: { start?: string } | null } | undefined
 ): string | null {
@@ -83,6 +89,14 @@ export function peopleIds(
 ): string[] {
   return (value?.people ?? [])
     .map((person) => person.id?.trim())
+    .filter((id): id is string => Boolean(id));
+}
+
+export function relationIds(
+  value: { relation?: Array<{ id?: string }> } | undefined
+): string[] {
+  return (value?.relation ?? [])
+    .map((entry) => entry.id?.trim())
     .filter((id): id is string => Boolean(id));
 }
 

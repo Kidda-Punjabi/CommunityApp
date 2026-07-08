@@ -58,17 +58,12 @@ function PackageAssignmentCell({
   const [error, setError] = useState<string | null>(null);
 
   const loadRuns = useCallback(async () => {
-    if (loading || runs.length > 0) return;
     setLoading(true);
     const result = await fetchPackageRunsForOnboarding(row.courseId, row.deliveryMode);
     setRuns(result.runs);
     setError(result.error ?? null);
     setLoading(false);
-  }, [loading, runs.length, row.courseId, row.deliveryMode]);
-
-  useEffect(() => {
-    if (row.packageRunId) void loadRuns();
-  }, [row.packageRunId, loadRuns]);
+  }, [row.courseId, row.deliveryMode]);
 
   async function handleAssign(runId: string) {
     if (!runId || runId === row.packageRunId) return;

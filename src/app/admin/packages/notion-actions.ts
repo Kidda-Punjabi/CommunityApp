@@ -2,7 +2,14 @@
 
 import { requireAdminFromActions, type ActionResult } from "@/app/admin/content/actions";
 import { getDisplayName } from "@/lib/profile/display-name";
-import { linkInboxRowToPackageInstance } from "@/lib/notion/package-sync";
+import {
+  autoLinkAllUnresolvedInbox,
+  linkInboxRowToPackageInstance,
+} from "@/lib/notion/package-sync";
+import {
+  loadPackageCatalog,
+  resolveNotionSyncTargetFromPage,
+} from "@/lib/notion/resolve-package-link";
 import { loadLeadLinkAdminSnapshot } from "@/lib/notion/lead-sync";
 import { notionJson } from "@/lib/notion/client";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -15,7 +22,7 @@ function revalidateNotionSync() {
   revalidatePath("/admin/packages");
 }
 
-export async function fetchNotionSyncInbox(): Promise<{
+export async function refreshNotionPackageInbox(): Promise<{
   rows: Array<{
     id: string;
     notionPageId: string;
@@ -25,40 +32,74 @@ export async function fetchNotionSyncInbox(): Promise<{
     status: string | null;
     notionTutorUserId: string | null;
     createdAt: string;
+    resolvedPackageName: string | null;
+    resolvedCourseName: string | null;
+    skipReason: string | null;
   }>;
+  autoLinked: number;
   error?: string;
 }> {
   try {
     await requireAdminFromActions();
     const supabase = createServiceRoleClient();
+    const autoLink = await autoLinkAllUnresolvedInbox(supabase);
+    if (autoLink.linked > 0) {
+      revalidateNotionSync();
+    }
+    const catalog = await loadPackageCatalog(supabase);
+    const activePackages = catalog.packages.filter((pkg) => pkg.active !== false);
+
     const { data, error } = await supabase
       .from("notion_sync_inbox")
       .select(
-        "id, notion_page_id, package_name, start_date, end_date, status, notion_tutor_user_id, created_at"
+        "id, notion_page_id, package_name, start_date, end_date, status, notion_tutor_user_id, created_at, raw_properties"
       )
       .eq("resolved", false)
       .order("created_at", { ascending: false });
 
-    if (error) return { rows: [], error: error.message };
+    if (error) {
+      return { rows: [], autoLinked: autoLink.linked, error: error.message };
+    }
 
     return {
-      rows: (data ?? []).map((row) => ({
-        id: row.id,
-        notionPageId: row.notion_page_id,
-        packageName: row.package_name,
-        startDate: row.start_date,
-        endDate: row.end_date,
-        status: row.status,
-        notionTutorUserId: row.notion_tutor_user_id,
-        createdAt: row.created_at,
-      })),
+      autoLinked: autoLink.linked,
+      rows: (data ?? []).map((row) => {
+        const resolved = resolveNotionSyncTargetFromPage(
+          {
+            packageName: row.package_name,
+            rawProperties: (row.raw_properties as Record<string, unknown>) ?? {},
+          },
+          activePackages,
+          catalog.courses
+        );
+
+        return {
+          id: row.id,
+          notionPageId: row.notion_page_id,
+          packageName: row.package_name,
+          startDate: row.start_date,
+          endDate: row.end_date,
+          status: row.status,
+          notionTutorUserId: row.notion_tutor_user_id,
+          createdAt: row.created_at,
+          resolvedPackageName: resolved.ok ? resolved.link.packageName : null,
+          resolvedCourseName: resolved.ok ? resolved.link.courseName : null,
+          skipReason: resolved.ok ? null : resolved.detail,
+        };
+      }),
     };
   } catch (e) {
     return {
       rows: [],
+      autoLinked: 0,
       error: e instanceof Error ? e.message : "Failed to load Notion inbox.",
     };
   }
+}
+
+/** @deprecated Use refreshNotionPackageInbox — kept for compatibility. */
+export async function fetchNotionSyncInbox() {
+  return refreshNotionPackageInbox();
 }
 
 export async function fetchNotionTutorMapData(): Promise<{
@@ -237,8 +278,7 @@ export async function fetchLeadLinkAdminData() {
 }
 
 export async function fetchNotionLinkFormOptions(): Promise<{
-  packages: Array<{ id: string; name: string; courseId: string }>;
-  courses: Array<{ id: string; name: string }>;
+  packages: Array<{ id: string; name: string; courseId: string; courseName: string }>;
   error?: string;
 }> {
   try {
@@ -248,20 +288,21 @@ export async function fetchNotionLinkFormOptions(): Promise<{
       supabase
         .from("packages")
         .select("id, name, course_id, delivery_mode")
-        .neq("delivery_mode", "group")
         .order("display_order", { ascending: true }),
       supabase.from("courses").select("id, name").order("display_order", { ascending: true }),
     ]);
+
+    const courseNameById = new Map((courses ?? []).map((row) => [row.id, row.name] as const));
 
     return {
       packages: (packages ?? []).map((row) => ({
         id: row.id,
         name: row.name,
         courseId: row.course_id,
+        courseName: courseNameById.get(row.course_id) ?? "Unknown course",
       })),
-      courses: (courses ?? []).map((row) => ({ id: row.id, name: row.name })),
     };
   } catch (e) {
-    return { packages: [], courses: [], error: e instanceof Error ? e.message : "Failed to load options." };
+    return { packages: [], error: e instanceof Error ? e.message : "Failed to load options." };
   }
 }

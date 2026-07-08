@@ -30,3 +30,33 @@ export function weekdayFromDateInput(value: string): PackageWeekday | "" {
   const index = (date.getUTCDay() + 6) % 7;
   return PACKAGE_WEEKDAYS[index] ?? "";
 }
+
+/** Calendar date at noon UTC — stable across timezones for storage and display. */
+export function normalizeCalendarDateFromIso(
+  iso: string | null | undefined
+): string | null {
+  const dateOnly = dateInputFromIso(iso);
+  return dateOnly ? isoFromDateInput(dateOnly) : null;
+}
+
+export function startDayFromCalendarIso(
+  iso: string | null | undefined
+): PackageWeekday | null {
+  const dateOnly = dateInputFromIso(iso);
+  if (!dateOnly) return null;
+  const day = weekdayFromDateInput(dateOnly);
+  return day || null;
+}
+
+export function formatPackageCalendarDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const dateOnly = dateInputFromIso(iso);
+  if (!dateOnly) return "—";
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  if (!year || !month || !day) return "—";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}

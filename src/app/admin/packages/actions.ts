@@ -15,16 +15,27 @@ import type {
   PackagesViewConfig,
 } from "@/lib/admin/packages/types";
 import { DEFAULT_PACKAGES_VIEW_CONFIG } from "@/lib/admin/packages/types";
+import { parsePackageTableColumnIds } from "@/lib/admin/packages/table-columns";
 import {
   fetchCommunityPackageProduct,
   syncCommunityCourseAccess,
 } from "@/lib/admin/community-package";
+import {
+  setPackageRunRosterStatus,
+  withdrawPackageRunRosterMember as withdrawRosterMember,
+} from "@/lib/admin/packages/roster-membership";
+import {
+  searchPackageRosterCandidates,
+  type PackageRosterCandidateOption,
+} from "@/lib/admin/packages/search-package-candidates";
 import { syncPackageCourseAccess } from "@/lib/admin/package-course-access";
 import { ensureOnboardingChecklistForStudentPackage, markOnboardingPackageAssigned } from "@/lib/stripe/sync-student-packages-from-payment";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin/package-status";
+import { inboxCohortLinkColumnAvailable } from "@/lib/notion/notion-cohort-link";
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
 const PACKAGES_PATH = "/admin/packages";
@@ -145,6 +156,78 @@ export async function updatePackageRunFields(
     return { success: "Package updated." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update package." };
+  }
+}
+
+async function unlinkNotionInboxForDeletedPackageRun(
+  supabase: SupabaseClient,
+  kind: "cohort" | "package_instance",
+  id: string
+): Promise<void> {
+  if (kind === "package_instance") {
+    await supabase
+      .from("notion_sync_inbox")
+      .update({
+        resolved: false,
+        resolved_package_instance_id: null,
+      })
+      .eq("resolved_package_instance_id", id);
+    return;
+  }
+
+  const hasResolvedCohortColumn = await inboxCohortLinkColumnAvailable(supabase);
+  if (hasResolvedCohortColumn) {
+    await supabase
+      .from("notion_sync_inbox")
+      .update({
+        resolved: false,
+        resolved_cohort_id: null,
+        resolved_package_instance_id: null,
+      })
+      .eq("resolved_cohort_id", id);
+  }
+
+  const { data: inboxRows } = await supabase
+    .from("notion_sync_inbox")
+    .select("id, raw_properties")
+    .eq("resolved", true);
+
+  for (const row of inboxRows ?? []) {
+    const raw = (row.raw_properties as Record<string, unknown> | null) ?? {};
+    if (raw._resolved_cohort_id !== id) continue;
+
+    await supabase
+      .from("notion_sync_inbox")
+      .update({
+        resolved: false,
+        resolved_package_instance_id: null,
+        ...(hasResolvedCohortColumn ? { resolved_cohort_id: null } : {}),
+        raw_properties: { ...raw, _resolved_cohort_id: null },
+      })
+      .eq("id", row.id);
+  }
+}
+
+export async function deletePackageRun(
+  kind: AdminPackageKind,
+  id: string
+): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+    if (kind === "community") {
+      return { error: "The Kidda Community package cannot be deleted." };
+    }
+
+    const table = kind === "cohort" ? "cohorts" : "package_instances";
+    await unlinkNotionInboxForDeletedPackageRun(supabase, kind, id);
+
+    const { error } = await supabase.from(table).delete().eq("id", id);
+    if (error) return { error: error.message };
+
+    revalidatePackages();
+    return { success: "Package deleted." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to delete package." };
   }
 }
 
@@ -295,6 +378,56 @@ export async function createPackageRun(input: {
   }
 }
 
+export async function setPackageRunRosterMember(input: {
+  kind: AdminPackageKind;
+  runId: string;
+  userId: string;
+  status: PackageMembershipStatus;
+  courseId: string;
+  packageId: string | null;
+}): Promise<ActionResult & { studentPackageId?: string }> {
+  try {
+    const supabase = await requireAdminFromActions();
+    const result = await setPackageRunRosterStatus(supabase, input);
+    if (result.error) return { error: result.error };
+    revalidatePackages(input.runId);
+    return { success: "Roster updated.", studentPackageId: result.studentPackageId };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update roster." };
+  }
+}
+
+export async function withdrawPackageRunRosterMember(input: {
+  kind: AdminPackageKind;
+  runId: string;
+  userId: string;
+  studentPackageId?: string;
+  courseId: string;
+}): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+    const result = await withdrawRosterMember(supabase, input);
+    if (result.error) return { error: result.error };
+    revalidatePackages(input.runId);
+    return { success: "Member removed from roster." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to remove member." };
+  }
+}
+
+export async function searchPackageRosterCandidatesAction(
+  query: string
+): Promise<{ results?: PackageRosterCandidateOption[]; error?: string }> {
+  try {
+    const supabase = await requireAdminFromActions();
+    return searchPackageRosterCandidates(supabase, query);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Search failed." };
+  }
+}
+
+export type { PackageRosterCandidateOption };
+
 export async function updateStudentPackageMembershipStatus(
   studentPackageId: string,
   status: PackageMembershipStatus
@@ -341,8 +474,8 @@ export async function addPackageRunMember(
   try {
     const supabase = await requireAdminFromActions();
     if (!userId) return { error: "Member is required." };
-    if (status !== "interested" && status !== "confirmed") {
-      return { error: "New members can only be added as Interested or Confirmed." };
+    if (status !== "interested" && status !== "confirmed" && status !== "waiting_for_payment") {
+      return { error: "New members can only be added as Interested, Waiting for payment, or Confirmed." };
     }
 
     if (kind === "community") {
@@ -582,6 +715,11 @@ function parsePackagesViewConfig(raw: unknown): PackagesViewConfig {
           : "startDate",
       direction: config.sort?.direction === "asc" ? "asc" : "desc",
     },
+    columns: {
+      hidden: parsePackageTableColumnIds(
+        (config as PackagesViewConfig).columns?.hidden
+      ),
+    },
   };
 }
 
@@ -622,7 +760,10 @@ export async function fetchPackagesSavedViews(): Promise<{
   }
 }
 
-export async function savePackagesView(name: string, config: PackagesViewConfig): Promise<ActionResult> {
+export async function savePackagesView(
+  name: string,
+  config: PackagesViewConfig
+): Promise<ActionResult & { id?: string }> {
   try {
     const authClient = await createClient();
     const {
@@ -631,17 +772,42 @@ export async function savePackagesView(name: string, config: PackagesViewConfig)
     if (!user) return { error: "Unauthorized" };
 
     const supabase = await requireAdminFromActions();
-    const { error } = await supabase.from("admin_saved_views").insert({
-      name: name.trim(),
-      view_type: "packages",
-      config,
-      created_by: user.id,
-    });
+    const { data, error } = await supabase
+      .from("admin_saved_views")
+      .insert({
+        name: name.trim(),
+        view_type: "packages",
+        config,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
 
     if (error) return { error: error.message };
-    return { success: "View saved for everyone." };
+    return { success: "View saved.", id: data?.id };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to save view." };
+  }
+}
+
+export async function updatePackagesSavedView(
+  viewId: string,
+  updates: { name?: string; config?: PackagesViewConfig }
+): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+    const payload: Record<string, unknown> = {};
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.config !== undefined) payload.config = updates.config;
+    if (Object.keys(payload).length === 0) {
+      return { success: "Nothing to update." };
+    }
+
+    const { error } = await supabase.from("admin_saved_views").update(payload).eq("id", viewId);
+    if (error) return { error: error.message };
+    return { success: "View updated." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update view." };
   }
 }
 

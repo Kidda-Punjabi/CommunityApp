@@ -6,9 +6,9 @@ import {
   deleteNotionTutorMapping,
   fetchLeadLinkAdminData,
   fetchNotionLinkFormOptions,
-  fetchNotionSyncInbox,
   fetchNotionTutorMapData,
   linkNotionInboxRow,
+  refreshNotionPackageInbox,
   saveNotionTutorMapping,
   searchNotionWorkspaceUsers,
 } from "@/app/admin/packages/notion-actions";
@@ -31,7 +31,7 @@ export function AdminNotionSyncSection() {
   const [error, setError] = useState<string | null>(null);
 
   const [inboxRows, setInboxRows] = useState<
-    Awaited<ReturnType<typeof fetchNotionSyncInbox>>["rows"]
+    Awaited<ReturnType<typeof refreshNotionPackageInbox>>["rows"]
   >([]);
   const [tutorData, setTutorData] = useState<
     Awaited<ReturnType<typeof fetchNotionTutorMapData>>
@@ -41,11 +41,9 @@ export function AdminNotionSyncSection() {
   >({ unlinkedProfiles: [], conflicts: [] });
   const [formOptions, setFormOptions] = useState<
     Awaited<ReturnType<typeof fetchNotionLinkFormOptions>>
-  >({ packages: [], courses: [] });
+  >({ packages: [] });
 
-  const [linkDrafts, setLinkDrafts] = useState<
-    Record<string, { packageId: string; courseId: string }>
-  >({});
+  const [packageOverrides, setPackageOverrides] = useState<Record<string, string>>({});
   const [tutorDraft, setTutorDraft] = useState({
     tutorId: "",
     notionUserId: "",
@@ -60,7 +58,7 @@ export function AdminNotionSyncSection() {
     startTransition(async () => {
       setError(null);
       const [inbox, tutors, leads, options] = await Promise.all([
-        fetchNotionSyncInbox(),
+        refreshNotionPackageInbox(),
         fetchNotionTutorMapData(),
         fetchLeadLinkAdminData(),
         fetchNotionLinkFormOptions(),
@@ -68,6 +66,11 @@ export function AdminNotionSyncSection() {
       if (inbox.error) setError(inbox.error);
       if (tutors.error) setError(tutors.error);
       setInboxRows(inbox.rows);
+      if (inbox.autoLinked > 0) {
+        setMessage(
+          `Auto-linked ${inbox.autoLinked} package${inbox.autoLinked === 1 ? "" : "s"} from Notion.`
+        );
+      }
       setTutorData(tutors);
       setLeadData(leads);
       setFormOptions(options);
@@ -78,22 +81,16 @@ export function AdminNotionSyncSection() {
     reload();
   }, []);
 
-  function handleLinkInbox(inboxId: string) {
-    const draft = linkDrafts[inboxId];
-    if (!draft?.packageId || !draft?.courseId) {
-      setError("Choose both a package product and course before linking.");
-      return;
-    }
-
+  function handleImportInbox(inboxId: string, packageId: string, courseId: string) {
     startTransition(async () => {
       setError(null);
       setMessage(null);
-      const result = await linkNotionInboxRow(inboxId, draft.packageId, draft.courseId);
+      const result = await linkNotionInboxRow(inboxId, packageId, courseId);
       if (result.error) {
         setError(result.error);
         return;
       }
-      setMessage(result.success ?? "Linked.");
+      setMessage(result.success ?? "Imported.");
       reload();
     });
   }
@@ -171,90 +168,99 @@ export function AdminNotionSyncSection() {
       {tab === "inbox" && (
         <section className="space-y-4">
           <p className="text-sm text-zinc-600">
-            Packages created directly in Notion appear here until you link them to a catalog
-            package and course.
+            New Notion packages are matched to a catalog product and course automatically from the
+            package title and Notion properties (Course, Delivery Type). Group cohorts are imported
+            into the app as cohorts; 1-1 packages become package instances. Confirmed and interested
+            people are read from Notion lead relations only — nothing is written back to Notion.
           </p>
           {inboxRows.length === 0 ? (
-            <p className="text-sm text-zinc-500">No unresolved inbox rows.</p>
+            <p className="text-sm text-zinc-500">No unresolved inbox rows — everything is linked.</p>
           ) : (
-            inboxRows.map((row) => (
-              <div key={row.id} className="rounded-xl border border-zinc-200 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="font-medium text-zinc-900">
-                      {row.packageName ?? "Untitled package"}
-                    </h2>
-                    <p className="mt-1 text-xs text-zinc-500">Notion page {row.notionPageId}</p>
-                    <p className="mt-2 text-sm text-zinc-600">
-                      {formatDate(row.startDate)} → {formatDate(row.endDate)} ·{" "}
-                      {row.status ?? "No status"}
-                    </p>
+            inboxRows.map((row) => {
+              const matchedPackage = formOptions.packages.find(
+                (pkg) => pkg.name === row.resolvedPackageName
+              );
+              const selectedPackageId = packageOverrides[row.id] ?? matchedPackage?.id ?? "";
+              const selectedPackage = formOptions.packages.find((pkg) => pkg.id === selectedPackageId);
+
+              return (
+                <div key={row.id} className="rounded-xl border border-zinc-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="font-medium text-zinc-900">
+                        {row.packageName ?? "Untitled package"}
+                      </h2>
+                      <p className="mt-1 text-xs text-zinc-500">Notion page {row.notionPageId}</p>
+                      <p className="mt-2 text-sm text-zinc-600">
+                        {formatDate(row.startDate)} → {formatDate(row.endDate)} ·{" "}
+                        {row.status ?? "No status"}
+                      </p>
+                    </div>
                   </div>
+
+                  {row.skipReason && (
+                    <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      {row.skipReason}
+                    </p>
+                  )}
+
+                  {!row.skipReason && row.resolvedPackageName && row.resolvedCourseName && (
+                    <div className="mt-4 rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
+                      <p>
+                        <span className="font-medium text-zinc-900">Course:</span>{" "}
+                        {row.resolvedCourseName}
+                      </p>
+                      <p className="mt-1">
+                        <span className="font-medium text-zinc-900">Package product:</span>{" "}
+                        {row.resolvedPackageName}
+                      </p>
+                      <p className="mt-2 text-xs text-zinc-500">
+                        Could not import automatically — use the override below if needed.
+                      </p>
+                    </div>
+                  )}
+
+                  {(row.skipReason || row.resolvedPackageName) && (
+                    <div className="mt-4">
+                      <label className="block text-sm">
+                        <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+                          Package product
+                        </span>
+                        <select
+                          className="w-full rounded-lg border border-zinc-200 px-3 py-2"
+                          value={selectedPackageId}
+                          onChange={(event) =>
+                            setPackageOverrides((current) => ({
+                              ...current,
+                              [row.id]: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Select package…</option>
+                          {formOptions.packages.map((pkg) => (
+                            <option key={pkg.id} value={pkg.id}>
+                              {pkg.name} ({pkg.courseName})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {selectedPackage && (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() =>
+                            handleImportInbox(row.id, selectedPackage.id, selectedPackage.courseId)
+                          }
+                          className="mt-4 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-60"
+                        >
+                          Import with override
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <label className="block text-sm">
-                    <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Package product
-                    </span>
-                    <select
-                      className="w-full rounded-lg border border-zinc-200 px-3 py-2"
-                      value={linkDrafts[row.id]?.packageId ?? ""}
-                      onChange={(event) => {
-                        const packageId = event.target.value;
-                        const pkg = formOptions.packages.find((item) => item.id === packageId);
-                        setLinkDrafts((current) => ({
-                          ...current,
-                          [row.id]: {
-                            packageId,
-                            courseId: pkg?.courseId ?? current[row.id]?.courseId ?? "",
-                          },
-                        }));
-                      }}
-                    >
-                      <option value="">Select package…</option>
-                      {formOptions.packages.map((pkg) => (
-                        <option key={pkg.id} value={pkg.id}>
-                          {pkg.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-sm">
-                    <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Course
-                    </span>
-                    <select
-                      className="w-full rounded-lg border border-zinc-200 px-3 py-2"
-                      value={linkDrafts[row.id]?.courseId ?? ""}
-                      onChange={(event) =>
-                        setLinkDrafts((current) => ({
-                          ...current,
-                          [row.id]: {
-                            packageId: current[row.id]?.packageId ?? "",
-                            courseId: event.target.value,
-                          },
-                        }))
-                      }
-                    >
-                      <option value="">Select course…</option>
-                      {formOptions.courses.map((course) => (
-                        <option key={course.id} value={course.id}>
-                          {course.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => handleLinkInbox(row.id)}
-                  className="mt-4 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-60"
-                >
-                  Link
-                </button>
-              </div>
-            ))
+              );
+            })
           )}
         </section>
       )}

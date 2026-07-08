@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   createPackageRun,
+  deletePackageRun,
   fetchPackageFormOptions,
   updatePackageInstanceStatus,
   updatePackageRunFields,
@@ -40,9 +41,16 @@ type PackageRunFormModalProps = {
   initial?: AdminPackageListRow;
   onClose: () => void;
   onSaved: () => void;
+  onDeleted?: () => void;
 };
 
-export function PackageRunFormModal({ mode, initial, onClose, onSaved }: PackageRunFormModalProps) {
+export function PackageRunFormModal({
+  mode,
+  initial,
+  onClose,
+  onSaved,
+  onDeleted,
+}: PackageRunFormModalProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -190,10 +198,36 @@ export function PackageRunFormModal({ mode, initial, onClose, onSaved }: Package
     });
   }
 
+  function handleDelete() {
+    if (!initial || initial.kind === "community") return;
+    const label = initial.name.trim() || "this package";
+    if (
+      !window.confirm(
+        `Delete ${label}? Students will be unassigned from this run. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setError(null);
+    startTransition(async () => {
+      const result = await deletePackageRun(initial.kind, initial.id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      onDeleted?.();
+      onSaved();
+      onClose();
+      router.push("/admin/packages");
+      router.refresh();
+    });
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center sm:py-8">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px)+1rem)] sm:items-center sm:py-8 sm:pb-8">
       <div
-        className="flex max-h-[min(90dvh,calc(100dvh-2rem))] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-xl"
+        className="flex min-h-0 max-h-[min(90dvh,100%)] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="package-run-modal-title"
@@ -216,7 +250,7 @@ export function PackageRunFormModal({ mode, initial, onClose, onSaved }: Package
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 pb-6">
           {loadingOptions ? (
             <p className="text-sm text-zinc-500">Loading options…</p>
           ) : (
@@ -412,18 +446,30 @@ export function PackageRunFormModal({ mode, initial, onClose, onSaved }: Package
 
         <div className="shrink-0 border-t border-zinc-100 bg-white px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={submit}
-              disabled={pending || !name.trim() || (loadingOptions && !isCommunity)}
-              className={ui.btnPrimary}
-            >
-              {mode === "create" ? "Create package" : "Save changes"}
-            </button>
-            <button type="button" onClick={onClose} className={ui.btnSecondary}>
-              Cancel
-            </button>
+          <div className="flex flex-wrap items-center gap-3">
+            {mode === "edit" && initial && !isCommunity && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={pending}
+                className="text-sm font-semibold text-red-600 hover:text-red-500 disabled:opacity-50"
+              >
+                Delete package
+              </button>
+            )}
+            <div className="ml-auto flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={submit}
+                disabled={pending || !name.trim() || (loadingOptions && !isCommunity)}
+                className={ui.btnPrimary}
+              >
+                {mode === "create" ? "Create package" : "Save changes"}
+              </button>
+              <button type="button" onClick={onClose} className={ui.btnSecondary}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>

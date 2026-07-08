@@ -2,16 +2,20 @@ import type {
   PackageInstanceStatus,
   PackageMembershipStatus,
 } from "@/lib/admin/package-status";
+import type { PackageTableColumnId } from "@/lib/admin/packages/table-columns";
 
 export type AdminPackageKind = "cohort" | "package_instance" | "community";
 
 export type PackagesRosterMember = {
-  userId: string;
+  userId: string | null;
   label: string;
   email: string | null;
   avatarUrl: string | null;
   studentPackageId: string;
   membershipStatus: PackageMembershipStatus;
+  /** Lead mirrored from Notion — status is read-only in the admin UI. */
+  isNotionLead?: boolean;
+  notionLeadPageId?: string | null;
 };
 
 export type AdminPackageListRow = {
@@ -31,6 +35,7 @@ export type AdminPackageListRow = {
   deliveryMode: "group" | "one_to_one" | null;
   active: boolean;
   interested: PackagesRosterMember[];
+  waitingForPayment: PackagesRosterMember[];
   confirmed: PackagesRosterMember[];
   lessonUnlockCount: number;
   lastLessonLoggedAt: string | null;
@@ -51,6 +56,9 @@ export type PackagesViewConfig = {
     field: "startDate" | "name" | "format";
     direction: "asc" | "desc";
   };
+  columns: {
+    hidden: PackageTableColumnId[];
+  };
 };
 
 export const DEFAULT_PACKAGES_VIEW_CONFIG: PackagesViewConfig = {
@@ -63,6 +71,7 @@ export const DEFAULT_PACKAGES_VIEW_CONFIG: PackagesViewConfig = {
   },
   groupBy: "none",
   sort: { field: "startDate", direction: "desc" },
+  columns: { hidden: [] },
 };
 
 export type AdminSavedView = {

@@ -81,34 +81,42 @@ function RosterSection({
                 {member.email && <p className="text-xs text-zinc-500">{member.email}</p>}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={member.membershipStatus}
-                  onChange={(e) =>
-                    startTransition(async () => {
-                      await updateStudentPackageMembershipStatus(
-                        member.studentPackageId,
-                        e.target.value as PackageMembershipStatus
-                      );
-                      onUpdated();
-                    })
-                  }
-                  disabled={pending}
-                  className="rounded-lg border border-zinc-200 px-2 py-1 text-xs"
-                >
-                  {PACKAGE_MEMBERSHIP_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {membershipStatusLabel(status)}
-                    </option>
-                  ))}
-                </select>
-                {showChecklist && (
-                  <button
-                    type="button"
-                    onClick={() => setChecklistMember(member)}
-                    className="text-xs font-semibold text-violet-600 hover:text-violet-500"
-                  >
-                    Checklist →
-                  </button>
+                {member.isNotionLead ? (
+                  <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600">
+                    {membershipStatusLabel(member.membershipStatus)} · Notion lead
+                  </span>
+                ) : (
+                  <>
+                    <select
+                      value={member.membershipStatus}
+                      onChange={(e) =>
+                        startTransition(async () => {
+                          await updateStudentPackageMembershipStatus(
+                            member.studentPackageId,
+                            e.target.value as PackageMembershipStatus
+                          );
+                          onUpdated();
+                        })
+                      }
+                      disabled={pending}
+                      className="rounded-lg border border-zinc-200 px-2 py-1 text-xs"
+                    >
+                      {PACKAGE_MEMBERSHIP_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {membershipStatusLabel(status)}
+                        </option>
+                      ))}
+                    </select>
+                    {showChecklist && (
+                      <button
+                        type="button"
+                        onClick={() => setChecklistMember(member)}
+                        className="text-xs font-semibold text-violet-600 hover:text-violet-500"
+                      >
+                        Checklist →
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </li>
@@ -208,6 +216,7 @@ function AddPackageRunMemberSection({
             className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
           >
             <option value="interested">Interested</option>
+            <option value="waiting_for_payment">Waiting for payment</option>
             <option value="confirmed">Confirmed</option>
           </select>
         </label>
@@ -252,7 +261,7 @@ function AddPackageRunMemberSection({
 type AdminPackageDetailViewProps = {
   detail: AdminPackageDetail;
   tutors: Array<{ id: string; name: string }>;
-  initialRoster?: "interested" | "confirmed" | null;
+  initialRoster?: "interested" | "confirmed" | "waiting_for_payment" | null;
 };
 
 export function AdminPackageDetailView({
@@ -275,7 +284,11 @@ export function AdminPackageDetailView({
   const isCommunity = detail.kind === "community";
   const checklistType = detail.deliveryMode === "group" ? "group" : "one_to_one";
   const addMemberDefaultStatus: PackageMembershipStatus =
-    initialRoster === "interested" ? "interested" : "confirmed";
+    initialRoster === "interested"
+      ? "interested"
+      : initialRoster === "waiting_for_payment"
+        ? "waiting_for_payment"
+        : "confirmed";
 
   useEffect(() => {
     if (!initialRoster) return;
@@ -488,6 +501,15 @@ export function AdminPackageDetailView({
             onUpdated={() => router.refresh()}
           />
         </div>
+        <div id="roster-waiting_for_payment">
+          <RosterSection
+            title="Waiting for payment"
+            members={detail.waitingForPayment}
+            checklistType={checklistType}
+            showChecklist={!isCommunity}
+            onUpdated={() => router.refresh()}
+          />
+        </div>
         <div id="roster-confirmed">
           <RosterSection
             title="Confirmed"
@@ -537,6 +559,7 @@ export function AdminPackageDetailView({
           initial={detail}
           onClose={() => setShowEditModal(false)}
           onSaved={() => router.refresh()}
+          onDeleted={() => router.refresh()}
         />
       )}
     </div>
