@@ -6,6 +6,7 @@ import {
   searchSalesCallLeadsAction,
   updateSalesCallAction,
 } from "@/app/admin/sales-calls/actions";
+import { AdminFilterPill } from "@/components/admin/admin-filter-pills";
 import {
   SALES_CALL_COURSES,
   SALES_CALL_DELIVERIES,
@@ -21,7 +22,7 @@ import type {
   SalesCallWriteInput,
 } from "@/lib/admin/sales-calls/types";
 import { ui } from "@/lib/ui/styles";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 function dateInputValue(iso: string | null): string {
   if (!iso) return "";
@@ -107,12 +108,19 @@ export function AdminSalesCallsSection() {
   const [search, setSearch] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [courseFilter, setCourseFilter] = useState("");
+  const [deliveryFilter, setDeliveryFilter] = useState("");
+  const [mechanismFilter, setMechanismFilter] = useState("");
+  const [tutorFilter, setTutorFilter] = useState("");
+  const [syncFilter, setSyncFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<SalesCallWriteInput>(emptyForm);
   const [leadLabel, setLeadLabel] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [pending, startTransition] = useTransition();
 
   async function reload() {
@@ -130,15 +138,42 @@ export function AdminSalesCallsSection() {
     return rows.filter((row) => {
       if (outcomeFilter && row.outcome !== outcomeFilter) return false;
       if (statusFilter && row.status !== statusFilter) return false;
+      if (courseFilter && row.course !== courseFilter) return false;
+      if (deliveryFilter && row.delivery !== deliveryFilter) return false;
+      if (mechanismFilter && row.salesMechanism !== mechanismFilter) return false;
+      if (tutorFilter && row.tutorSelect !== tutorFilter) return false;
+      if (syncFilter && row.notionSyncStatus !== syncFilter) return false;
       if (!q) return true;
       return (
         (row.notes ?? "").toLowerCase().includes(q) ||
         (row.leadName ?? "").toLowerCase().includes(q) ||
         (row.leadEmail ?? "").toLowerCase().includes(q) ||
-        (row.outcome ?? "").toLowerCase().includes(q)
+        (row.outcome ?? "").toLowerCase().includes(q) ||
+        (row.course ?? "").toLowerCase().includes(q) ||
+        (row.status ?? "").toLowerCase().includes(q)
       );
     });
-  }, [rows, search, outcomeFilter, statusFilter]);
+  }, [
+    rows,
+    search,
+    outcomeFilter,
+    statusFilter,
+    courseFilter,
+    deliveryFilter,
+    mechanismFilter,
+    tutorFilter,
+    syncFilter,
+  ]);
+
+  const hasFilters = Boolean(
+    outcomeFilter ||
+      statusFilter ||
+      courseFilter ||
+      deliveryFilter ||
+      mechanismFilter ||
+      tutorFilter ||
+      syncFilter
+  );
 
   function openCreate() {
     setEditingId(null);
@@ -180,6 +215,23 @@ export function AdminSalesCallsSection() {
     });
   }
 
+  function applyInlinePatch(
+    id: string,
+    partial: Pick<SalesCallWriteInput, "course" | "outcome">
+  ) {
+    setRows((current) =>
+      current.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              ...("course" in partial ? { course: partial.course ?? null } : null),
+              ...("outcome" in partial ? { outcome: partial.outcome ?? null } : null),
+            }
+          : row
+      )
+    );
+  }
+
   return (
     <div className={ui.page}>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -200,39 +252,187 @@ export function AdminSalesCallsSection() {
         </p>
       ) : null}
 
-      <div className={`mb-4 ${ui.card}`}>
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search notes or lead…"
-            className="min-w-[12rem] flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm"
-          />
-          <select
-            value={outcomeFilter}
-            onChange={(e) => setOutcomeFilter(e.target.value)}
-            className="rounded-xl border border-zinc-200 px-3 py-2 text-sm"
-          >
-            <option value="">All outcomes</option>
-            {SALES_CALL_OUTCOMES.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-zinc-200 px-3 py-2 text-sm"
-          >
-            <option value="">All statuses</option>
-            {SALES_CALL_STATUSES.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+      <div className={`mb-4 overflow-hidden ${ui.card} p-0`}>
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            {showSearch ? (
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search notes, lead, course…"
+                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                autoFocus
+              />
+            ) : (
+              <p className="text-sm text-zinc-500">
+                Search and filter sales calls like the packages board.
+              </p>
+            )}
+          </div>
+
+          <div className="ml-auto flex items-center gap-1">
+            <ToolbarIconButton
+              label="Search"
+              active={Boolean(search)}
+              onClick={() =>
+                setShowSearch((open) => {
+                  if (open) setSearch("");
+                  return !open;
+                })
+              }
+            >
+              <SearchIcon />
+            </ToolbarIconButton>
+            <ToolbarIconButton
+              label="Filter"
+              active={hasFilters}
+              onClick={() => setShowFilterPanel((open) => !open)}
+            >
+              <FilterIcon />
+            </ToolbarIconButton>
+          </div>
+        </div>
+
+        {showFilterPanel ? (
+          <div className="border-t border-zinc-100 bg-zinc-50/50 px-4 py-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <SelectField
+                label="Outcome"
+                value={outcomeFilter || null}
+                options={SALES_CALL_OUTCOMES}
+                onChange={(value) => setOutcomeFilter(value ?? "")}
+              />
+              <SelectField
+                label="Status"
+                value={statusFilter || null}
+                options={SALES_CALL_STATUSES}
+                onChange={(value) => setStatusFilter(value ?? "")}
+              />
+              <SelectField
+                label="Course"
+                value={courseFilter || null}
+                options={SALES_CALL_COURSES}
+                onChange={(value) => setCourseFilter(value ?? "")}
+              />
+              <SelectField
+                label="Delivery"
+                value={deliveryFilter || null}
+                options={SALES_CALL_DELIVERIES}
+                onChange={(value) => setDeliveryFilter(value ?? "")}
+              />
+              <SelectField
+                label="Sales mechanism"
+                value={mechanismFilter || null}
+                options={SALES_CALL_MECHANISMS}
+                onChange={(value) => setMechanismFilter(value ?? "")}
+              />
+              <SelectField
+                label="Tutor"
+                value={tutorFilter || null}
+                options={SALES_CALL_TUTORS}
+                onChange={(value) => setTutorFilter(value ?? "")}
+              />
+            </div>
+
+            <div className="mt-3 max-w-xs">
+              <label className="block text-sm text-zinc-700">
+                Sync status
+                <select
+                  value={syncFilter}
+                  onChange={(e) => setSyncFilter(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                >
+                  <option value="">All sync states</option>
+                  <option value="pending">pending</option>
+                  <option value="synced">synced</option>
+                  <option value="error">error</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        ) : null}
+
+        {(Boolean(search) || hasFilters) && (
+          <div className="flex flex-wrap gap-2 border-t border-zinc-100 px-4 py-3">
+            {search ? (
+              <AdminFilterPill
+                label={`Search: ${search}`}
+                active
+                onRemove={() => setSearch("")}
+              />
+            ) : null}
+            {outcomeFilter ? (
+              <AdminFilterPill
+                label={`Outcome: ${outcomeFilter}`}
+                active
+                onRemove={() => setOutcomeFilter("")}
+              />
+            ) : null}
+            {statusFilter ? (
+              <AdminFilterPill
+                label={`Status: ${statusFilter}`}
+                active
+                onRemove={() => setStatusFilter("")}
+              />
+            ) : null}
+            {courseFilter ? (
+              <AdminFilterPill
+                label={`Course: ${courseFilter}`}
+                active
+                onRemove={() => setCourseFilter("")}
+              />
+            ) : null}
+            {deliveryFilter ? (
+              <AdminFilterPill
+                label={`Delivery: ${deliveryFilter}`}
+                active
+                onRemove={() => setDeliveryFilter("")}
+              />
+            ) : null}
+            {mechanismFilter ? (
+              <AdminFilterPill
+                label={`Mechanism: ${mechanismFilter}`}
+                active
+                onRemove={() => setMechanismFilter("")}
+              />
+            ) : null}
+            {tutorFilter ? (
+              <AdminFilterPill
+                label={`Tutor: ${tutorFilter}`}
+                active
+                onRemove={() => setTutorFilter("")}
+              />
+            ) : null}
+            {syncFilter ? (
+              <AdminFilterPill
+                label={`Sync: ${syncFilter}`}
+                active
+                onRemove={() => setSyncFilter("")}
+              />
+            ) : null}
+            {hasFilters ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setOutcomeFilter("");
+                  setStatusFilter("");
+                  setCourseFilter("");
+                  setDeliveryFilter("");
+                  setMechanismFilter("");
+                  setTutorFilter("");
+                  setSyncFilter("");
+                }}
+                className="text-xs font-medium text-violet-600 hover:text-violet-500"
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        )}
+
+        <div className="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-500">
+          {filtered.length} sales call{filtered.length === 1 ? "" : "s"}
         </div>
       </div>
 
@@ -271,8 +471,26 @@ export function AdminSalesCallsSection() {
                   <td className="max-w-[14rem] truncate px-4 py-3 text-zinc-700">
                     {row.notes || "—"}
                   </td>
-                  <td className="px-4 py-3 text-zinc-700">{row.outcome || "—"}</td>
-                  <td className="px-4 py-3 text-zinc-700">{row.course || "—"}</td>
+                  <td className="px-4 py-3 text-zinc-700">
+                    <InlineSelectCell
+                      rowId={row.id}
+                      field="outcome"
+                      value={row.outcome}
+                      options={SALES_CALL_OUTCOMES}
+                      onSaved={(value) => applyInlinePatch(row.id, { outcome: value })}
+                      onError={setError}
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700">
+                    <InlineSelectCell
+                      rowId={row.id}
+                      field="course"
+                      value={row.course}
+                      options={SALES_CALL_COURSES}
+                      onSaved={(value) => applyInlinePatch(row.id, { course: value })}
+                      onError={setError}
+                    />
+                  </td>
                   <td className="px-4 py-3 text-zinc-700">
                     {row.cashOnCall != null ? row.cashOnCall : "—"}
                   </td>
@@ -320,6 +538,173 @@ export function AdminSalesCallsSection() {
         />
       ) : null}
     </div>
+  );
+}
+
+function ToolbarIconButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`relative rounded-lg p-2 transition-colors ${
+        active
+          ? "bg-violet-50 text-violet-700"
+          : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800"
+      }`}
+    >
+      {children}
+      {active ? (
+        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-violet-500" />
+      ) : null}
+    </button>
+  );
+}
+
+function InlineSelectCell({
+  rowId,
+  field,
+  value,
+  options,
+  onSaved,
+  onError,
+}: {
+  rowId: string;
+  field: "course" | "outcome";
+  value: string | null;
+  options: readonly string[];
+  onSaved: (value: string | null) => void;
+  onError: (value: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+  const [pending, startTransition] = useTransition();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setDraft(value ?? "");
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (panelRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+      setDraft(value ?? "");
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        setDraft(value ?? "");
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, value]);
+
+  function saveInline(nextValue: string | null) {
+    startTransition(async () => {
+      const result = await updateSalesCallAction(rowId, {
+        [field]: nextValue,
+      });
+
+      if (result.error) {
+        onError(result.error);
+        return;
+      }
+
+      onError(null);
+      onSaved(nextValue);
+      setOpen(false);
+    });
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="w-full rounded-md px-2 py-1 text-left hover:bg-violet-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+      >
+        {value || <span className="text-violet-600">Add</span>}
+      </button>
+
+      {open ? (
+        <div
+          ref={panelRef}
+          className="absolute left-0 top-full z-20 mt-1 min-w-[13rem] rounded-xl border border-zinc-200 bg-white p-2 shadow-xl"
+        >
+          <select
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100"
+            autoFocus
+          >
+            <option value="">—</option>
+            {options.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setDraft(value ?? "");
+              }}
+              className="rounded-md px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => saveInline(draft || null)}
+              className="rounded-md bg-violet-600 px-2 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-60"
+            >
+              {pending ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <circle cx="9" cy="9" r="5.5" />
+      <path d="m13.5 13.5 3 3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M3 5h14M6 10h8M9 15h2" strokeLinecap="round" />
+    </svg>
   );
 }
 

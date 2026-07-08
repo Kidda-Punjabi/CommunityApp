@@ -31,11 +31,15 @@ export async function GET(request: Request) {
       error instanceof Error ? error.message : "Failed to ensure Leads App User ID property.";
   }
 
+  const url = new URL(request.url);
+  const fullSalesCallSync = url.searchParams.get("fullSalesCallSync") === "1";
+  const fullLeadsCacheSync = url.searchParams.get("fullLeadsCacheSync") === "1";
+
   const [packages, leads, leadsCache, salesCalls] = await Promise.all([
     pullPackageInstancesFromNotion(client),
     linkLeadsFromNotion(client),
-    upsertNotionLeadsCache(client),
-    pullSalesCallsFromNotion(client),
+    upsertNotionLeadsCache(client, { fullSync: fullLeadsCacheSync }),
+    pullSalesCallsFromNotion(client, { fullSync: fullSalesCallSync }),
   ]);
 
   return NextResponse.json({

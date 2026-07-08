@@ -96,6 +96,7 @@ async function queryLeadPagesForCache(editedAfter: string | null): Promise<Notio
       page_size: 100,
       sorts: [{ timestamp: "last_edited_time", direction: "ascending" }],
     };
+    // Incremental watermark only — omit for full cache backfills so older leads still land.
     if (editedAfter) {
       body.filter = {
         timestamp: "last_edited_time",
@@ -120,16 +121,27 @@ async function queryLeadPagesForCache(editedAfter: string | null): Promise<Notio
 }
 
 export async function upsertNotionLeadsCache(
-  supabase: SupabaseClient
-): Promise<{ upserted: number; errors: string[] }> {
-  const { data: watermarkRow } = await supabase
+  supabase: SupabaseClient,
+  options?: { fullSync?: boolean }
+): Promise<{ upserted: number; notionPageCount: number; errors: string[] }> {
+  const { count: existingCount } = await supabase
     .from("notion_leads_cache")
-    .select("updated_at")
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .select("*", { count: "exact", head: true });
 
-  const editedAfter = (watermarkRow?.updated_at as string | null) ?? null;
+  // Empty cache must always full-crawl; incremental watermark never seeds names/emails.
+  const shouldFullSync = options?.fullSync === true || (existingCount ?? 0) === 0;
+
+  let editedAfter: string | null = null;
+  if (!shouldFullSync) {
+    const { data: watermarkRow } = await supabase
+      .from("notion_leads_cache")
+      .select("updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    editedAfter = (watermarkRow?.updated_at as string | null) ?? null;
+  }
+
   const pages = await queryLeadPagesForCache(editedAfter);
   let upserted = 0;
   const errors: string[] = [];
@@ -152,7 +164,7 @@ export async function upsertNotionLeadsCache(
     upserted += 1;
   }
 
-  return { upserted, errors };
+  return { upserted, notionPageCount: pages.length, errors };
 }
 
 async function buildEmailToProfileMap(

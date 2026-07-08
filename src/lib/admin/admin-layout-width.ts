@@ -2,6 +2,7 @@
 export function getAdminContainerClass(pathname: string): string {
   if (
     pathname.startsWith("/admin/packages") ||
+    pathname.startsWith("/admin/sales-calls") ||
     pathname.startsWith("/admin/onboarding") ||
     pathname.startsWith("/admin/content/calendar")
   ) {

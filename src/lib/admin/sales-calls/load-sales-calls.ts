@@ -155,17 +155,75 @@ async function resolveUserIdForLead(
   return data?.id ?? null;
 }
 
+async function fetchAllSalesCalls(supabase: SupabaseClient): Promise<{
+  data: SalesCallDbRow[];
+  error: { message: string } | null;
+}> {
+  // PostgREST caps a single response at 1000 rows by default — page through
+  // so the admin list includes the full Sales Call Log (>=1250).
+  const pageSize = 1000;
+  const rows: SalesCallDbRow[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("sales_calls")
+      .select("*")
+      .order("call_date", { ascending: false, nullsFirst: false })
+      .order("updated_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    if (error) return { data: rows, error };
+    const batch = (data ?? []) as SalesCallDbRow[];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return { data: rows, error: null };
+}
+
+async function fetchAllNotionLeadsCache(supabase: SupabaseClient): Promise<{
+  data: Array<{
+    notion_page_id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+  }>;
+  error: { message: string } | null;
+}> {
+  const pageSize = 1000;
+  const rows: Array<{
+    notion_page_id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+  }> = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("notion_leads_cache")
+      .select("notion_page_id, name, email, phone")
+      .range(from, from + pageSize - 1);
+
+    if (error) return { data: rows, error };
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return { data: rows, error: null };
+}
+
 export async function loadSalesCallsList(supabase: SupabaseClient): Promise<{
   rows: SalesCallListRow[];
   error?: string;
 }> {
-  const [{ data, error }, { data: leads }] = await Promise.all([
-    supabase
-      .from("sales_calls")
-      .select("*")
-      .order("call_date", { ascending: false, nullsFirst: false })
-      .order("updated_at", { ascending: false }),
-    supabase.from("notion_leads_cache").select("notion_page_id, name, email, phone"),
+  const [{ data, error }, { data: leads, error: leadsError }] = await Promise.all([
+    fetchAllSalesCalls(supabase),
+    fetchAllNotionLeadsCache(supabase),
   ]);
 
   if (error) {
@@ -176,6 +234,10 @@ export async function loadSalesCallsList(supabase: SupabaseClient): Promise<{
       };
     }
     return { rows: [], error: error.message };
+  }
+
+  if (leadsError) {
+    return { rows: [], error: leadsError.message };
   }
 
   const leadById = new Map(
@@ -194,7 +256,7 @@ export async function loadSalesCallsList(supabase: SupabaseClient): Promise<{
   );
 
   return {
-    rows: ((data ?? []) as SalesCallDbRow[]).map((row) => mapRow(row, leadById)),
+    rows: data.map((row) => mapRow(row, leadById)),
   };
 }
 

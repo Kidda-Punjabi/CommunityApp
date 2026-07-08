@@ -324,17 +324,20 @@ type NotionQueryResponse = {
   next_cursor: string | null;
 };
 
-export async function queryNotionSalesCallPagesEditedAfter(
-  editedAfter: string | null
-): Promise<ParsedSalesCallPage[]> {
+export async function queryNotionSalesCallPages(options?: {
+  editedAfter?: string | null;
+}): Promise<ParsedSalesCallPage[]> {
   const pages: ParsedSalesCallPage[] = [];
   let cursor: string | null = null;
+  const editedAfter = options?.editedAfter ?? null;
 
   do {
     const body: Record<string, unknown> = {
       page_size: 100,
       sorts: [{ timestamp: "last_edited_time", direction: "ascending" }],
     };
+    // Only use the watermark for incremental refresh runs. Full syncs omit it
+    // so older pages that never made it through a partial first sync are still created.
     if (editedAfter) {
       body.filter = {
         timestamp: "last_edited_time",
@@ -416,7 +419,8 @@ export async function pushSalesCallToNotion(
 }
 
 export async function pullSalesCallsFromNotion(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  options?: { fullSync?: boolean }
 ): Promise<{
   upserted: number;
   created: number;
@@ -424,21 +428,35 @@ export async function pullSalesCallsFromNotion(
   skipped: number;
   errors: string[];
   dataSourceId: string;
+  notionPageCount: number;
 }> {
   console.info(
     `[notion sales-call sync] Pulling from Sales Call Log ${NOTION_SALES_CALL_DATA_SOURCE_ID}`
   );
 
-  const { data: watermarkRow } = await supabase
+  const { count: existingLinkedCount } = await supabase
     .from("sales_calls")
-    .select("notion_synced_at")
-    .not("notion_synced_at", "is", null)
-    .order("notion_synced_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .select("*", { count: "exact", head: true })
+    .not("notion_page_id", "is", null);
 
-  const editedAfter = (watermarkRow?.notion_synced_at as string | null) ?? null;
-  const pages = await queryNotionSalesCallPagesEditedAfter(editedAfter);
+  // Prefer a full sync when we have no linked rows yet, or when callers ask for one.
+  // Incremental watermark sync can leave older rows permanently missing if a first
+  // crawl timed out after writing a recent notion_synced_at value.
+  const shouldFullSync = options?.fullSync === true || (existingLinkedCount ?? 0) === 0;
+
+  let editedAfter: string | null = null;
+  if (!shouldFullSync) {
+    const { data: watermarkRow } = await supabase
+      .from("sales_calls")
+      .select("notion_synced_at")
+      .not("notion_synced_at", "is", null)
+      .order("notion_synced_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    editedAfter = (watermarkRow?.notion_synced_at as string | null) ?? null;
+  }
+
+  const pages = await queryNotionSalesCallPages({ editedAfter });
   const { byNotionUserId } = await loadNotionTutorMap(supabase);
 
   let upserted = 0;
@@ -518,5 +536,6 @@ export async function pullSalesCallsFromNotion(
     skipped,
     errors,
     dataSourceId: NOTION_SALES_CALL_DATA_SOURCE_ID,
+    notionPageCount: pages.length,
   };
 }
