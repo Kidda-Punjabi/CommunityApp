@@ -2,11 +2,9 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import {
-  searchPackageRosterCandidatesAction,
-  type PackageRosterCandidateOption,
-} from "@/app/admin/packages/actions";
+import { searchPackageRosterCandidatesAction } from "@/app/admin/packages/actions";
 import { UserAvatar } from "@/components/profile/user-avatar";
+import type { PackageRosterCandidateOption } from "@/lib/admin/packages/search-package-candidates";
 
 export type RelationPickerItem = {
   id: string;

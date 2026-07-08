@@ -9,7 +9,7 @@ import {
   RelationPickerPopover,
   type RelationPickerItem,
 } from "@/components/admin/relation-picker-popover";
-import type { PackageRosterCandidateOption } from "@/app/admin/packages/actions";
+import type { PackageRosterCandidateOption } from "@/lib/admin/packages/search-package-candidates";
 import type {
   AdminPackageKind,
   AdminPackageListRow,

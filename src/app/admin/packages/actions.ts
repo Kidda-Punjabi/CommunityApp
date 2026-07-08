@@ -426,8 +426,6 @@ export async function searchPackageRosterCandidatesAction(
   }
 }
 
-export type { PackageRosterCandidateOption };
-
 export async function updateStudentPackageMembershipStatus(
   studentPackageId: string,
   status: PackageMembershipStatus
