@@ -6,11 +6,36 @@ import {
 
 type HomeActionListProps = {
   membersStudiedTodayLabel?: string | null;
+  showLiveTranslate?: boolean;
+  showPhotoTranslate?: boolean;
 };
 
-export function HomeActionList({ membersStudiedTodayLabel }: HomeActionListProps) {
+export function HomeActionList({
+  membersStudiedTodayLabel,
+  showLiveTranslate = false,
+  showPhotoTranslate = false,
+}: HomeActionListProps) {
   return (
     <HubCard className="divide-y divide-zinc-100 py-0">
+      {showLiveTranslate ? (
+        <ActionListRow
+          href="/dashboard/live-translate"
+          icon="🗣️"
+          eyebrow="Utility"
+          title="Live Translate"
+          subtitle="Real-time Punjabi ↔ English for face-to-face conversations"
+          badge={<StatusBadge variant="live">Live</StatusBadge>}
+        />
+      ) : null}
+      {showPhotoTranslate ? (
+        <ActionListRow
+          href="/dashboard/photo-translate"
+          icon="📷"
+          eyebrow="Utility"
+          title="Photo Translate"
+          subtitle="Snap a photo of Punjabi text on signs, menus, or labels"
+        />
+      ) : null}
       <ActionListRow
         href="/dashboard/profile/progress"
         icon="📈"

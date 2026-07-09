@@ -63,6 +63,8 @@ export type HomeDashboardData = {
   };
   hasAnyProgress: boolean;
   showStarterPack: boolean;
+  showLiveTranslate: boolean;
+  showPhotoTranslate: boolean;
   upcomingEvents: DisplayEvent[];
   access: CourseAccessContext;
   motivation: HomeMotivationData;
@@ -484,6 +486,8 @@ export async function getHomeDashboardData(
     },
     hasAnyProgress,
     showStarterPack: isFreeTier && !starterPackCompleted,
+    showLiveTranslate: !isFreeTier,
+    showPhotoTranslate: !isFreeTier,
     upcomingEvents: upcoming.slice(0, 2),
     access,
     motivation,

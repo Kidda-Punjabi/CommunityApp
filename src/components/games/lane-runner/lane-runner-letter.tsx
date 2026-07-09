@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   FALL_MOTION_EASING,
   LETTER_END_SCALE,
@@ -29,6 +29,16 @@ export function LaneRunnerLetter({ letter, fallDurationMs, onArrive }: LaneRunne
     });
     return () => cancelAnimationFrame(frame);
   }, [letter.id]);
+
+  useEffect(() => {
+    if (!fallen || letter.status !== "falling") return;
+    const fallbackTimer = window.setTimeout(() => {
+      if (arrivedRef.current) return;
+      arrivedRef.current = true;
+      onArrive(letter.id);
+    }, fallDurationMs + 80);
+    return () => window.clearTimeout(fallbackTimer);
+  }, [fallen, letter.id, letter.status, fallDurationMs, onArrive]);
 
   const isFalling = letter.status === "falling";
   const progress = fallen ? 1 : 0;

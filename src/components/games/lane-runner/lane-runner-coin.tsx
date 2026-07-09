@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { shuffleArray } from "@/lib/flashcards/utils";
 import {
   COIN_END_SCALE,
@@ -33,6 +33,16 @@ export function LaneRunnerCoin({ coin, fallDurationMs, onArrive }: LaneRunnerCoi
 
     return () => window.clearTimeout(delayTimer);
   }, [coin.id, coin.startDelayMs]);
+
+  useEffect(() => {
+    if (!fallen || coin.status !== "falling") return;
+    const fallbackTimer = window.setTimeout(() => {
+      if (arrivedRef.current) return;
+      arrivedRef.current = true;
+      onArrive(coin.id);
+    }, fallDurationMs + 80);
+    return () => window.clearTimeout(fallbackTimer);
+  }, [fallen, coin.id, coin.status, fallDurationMs, onArrive]);
 
   const isFalling = coin.status === "falling";
   const progress = fallen ? 1 : 0;

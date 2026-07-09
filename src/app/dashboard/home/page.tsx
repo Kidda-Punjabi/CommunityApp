@@ -50,7 +50,11 @@ export default async function HomePage() {
         <HomeStreakBanner />
 
         <section className={ui.section}>
-          <HomeActionList membersStudiedTodayLabel={dashboard.membersStudiedTodayLabel} />
+          <HomeActionList
+            membersStudiedTodayLabel={dashboard.membersStudiedTodayLabel}
+            showLiveTranslate={dashboard.showLiveTranslate}
+            showPhotoTranslate={dashboard.showPhotoTranslate}
+          />
         </section>
 
         {dashboard.showStarterPack && (

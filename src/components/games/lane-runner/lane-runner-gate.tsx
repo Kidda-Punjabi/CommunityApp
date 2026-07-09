@@ -110,6 +110,16 @@ export function LaneRunnerGateView({
     return () => window.clearTimeout(delayTimer);
   }, [gateKey, gate.flashcard_id, startDelayMs, canFall]);
 
+  useEffect(() => {
+    if (!canFall || !fallen) return;
+    const fallbackTimer = window.setTimeout(() => {
+      if (arrivedRef.current) return;
+      arrivedRef.current = true;
+      onArrive();
+    }, fallDurationMs + 80);
+    return () => window.clearTimeout(fallbackTimer);
+  }, [canFall, fallen, fallDurationMs, onArrive]);
+
   return (
     <>
       {gate.laneAnswers.map((answer, lane) => (
