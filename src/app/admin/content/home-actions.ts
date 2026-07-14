@@ -2,11 +2,16 @@
 
 import { fetchAdminOnboardingQueue } from "@/app/admin/onboarding/actions";
 import { fetchAdminTutorOverview } from "@/app/admin/content/tutor-overview-actions";
+import { fetchMonthlyRewardsAttention } from "@/app/admin/monthly-rewards/actions";
 import type { AdminOnboardingRow } from "@/lib/admin/onboarding/types";
 
 export type AdminAttentionItem = {
   id: string;
-  kind: "overdue_onboarding" | "tutor_calendar_disconnected";
+  kind:
+    | "overdue_onboarding"
+    | "tutor_calendar_disconnected"
+    | "monthly_rewards_pending"
+    | "monthly_rewards_uncalculated";
   title: string;
   detail: string;
   href: string;
@@ -40,13 +45,42 @@ export async function fetchAdminHomeAttention(): Promise<{
   items: AdminAttentionItem[];
   error?: string;
 }> {
-  const [onboarding, tutorOverview] = await Promise.all([
+  const [onboarding, tutorOverview, monthlyRewards] = await Promise.all([
     fetchAdminOnboardingQueue(),
     fetchAdminTutorOverview(),
+    fetchMonthlyRewardsAttention(),
   ]);
 
-  const errors = [onboarding.error, tutorOverview.error].filter(Boolean);
+  const errors = [
+    onboarding.error,
+    tutorOverview.error,
+    monthlyRewards.error,
+  ].filter(Boolean);
   const items: AdminAttentionItem[] = [];
+
+  for (const pending of monthlyRewards.attention.pendingMonths) {
+    const cardLabel = pending.pendingCount === 1 ? "gift card" : "gift cards";
+    items.push({
+      id: `monthly-pending-${pending.monthStart}`,
+      kind: "monthly_rewards_pending",
+      title: `${pending.pendingCount} ${cardLabel} still pending for ${pending.monthLabel}`,
+      detail: "Go to Monthly Rewards to mark them as sent",
+      href: `/admin/monthly-rewards?month=${pending.monthStart.slice(0, 7)}`,
+      urgent: true,
+    });
+  }
+
+  if (monthlyRewards.attention.uncalculatedMonth) {
+    const month = monthlyRewards.attention.uncalculatedMonth;
+    items.push({
+      id: `monthly-uncalc-${month.monthStart}`,
+      kind: "monthly_rewards_uncalculated",
+      title: `Calculate monthly winners for ${month.monthLabel}`,
+      detail: "Previous month has ended — no winners saved yet",
+      href: `/admin/monthly-rewards?month=${month.monthStart.slice(0, 7)}`,
+      urgent: false,
+    });
+  }
 
   for (const row of onboarding.rows) {
     if (!row.isOverdue) continue;

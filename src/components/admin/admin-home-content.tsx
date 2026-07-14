@@ -101,6 +101,11 @@ export function AdminHomeContent() {
             description="Create and edit sales call log entries synced with Notion"
           />
           <AdminNavListRow
+            href="/admin/monthly-rewards"
+            title="Monthly Rewards"
+            description="Calculate monthly top 3 and send Prezzee gift cards"
+          />
+          <AdminNavListRow
             href="/admin/content/tutors"
             title="Tutor overview"
             description={

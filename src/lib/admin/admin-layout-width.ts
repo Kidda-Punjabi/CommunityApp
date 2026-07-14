@@ -4,6 +4,7 @@ export function getAdminContainerClass(pathname: string): string {
     pathname.startsWith("/admin/packages") ||
     pathname.startsWith("/admin/sales-calls") ||
     pathname.startsWith("/admin/onboarding") ||
+    pathname.startsWith("/admin/monthly-rewards") ||
     pathname.startsWith("/admin/content/calendar")
   ) {
     return "mx-auto w-full max-w-lg sm:max-w-3xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[88rem]";
