@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { PasswordInput } from "@/components/auth/password-input";
 import { login, type AuthState } from "./actions";
 
 const initialState: AuthState = {};
@@ -39,29 +40,25 @@ export function LoginForm({ defaultEmail, rememberedAccount = false, nextPath }:
         </div>
       )}
 
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-zinc-700">
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          autoFocus={rememberedAccount}
-          className="mt-1.5 block w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-          placeholder="••••••••"
-        />
-        <div className="mt-2 text-right">
-          <Link
-            href="/forgot-password"
-            className="text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            Forgot password?
-          </Link>
-        </div>
-      </div>
+      <PasswordInput
+        id="password"
+        name="password"
+        label="Password"
+        autoComplete="current-password"
+        required
+        autoFocus={rememberedAccount}
+        placeholder="••••••••"
+        footer={
+          <div className="mt-2 text-right">
+            <Link
+              href="/forgot-password"
+              className="text-sm font-medium text-violet-600 hover:text-violet-500"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        }
+      />
 
       {state.error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{state.error}</p>

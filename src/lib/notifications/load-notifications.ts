@@ -231,6 +231,15 @@ export function notificationSummary(item: NotificationItem): string {
       const requestLabel = String(item.payload.request_label ?? "your discount application");
       return `Your ${requestLabel} discount was not approved`;
     }
+    case "cohort_placement_pending":
+      return String(
+        item.payload.message ??
+          "Your payment went through — we’re confirming your cohort placement."
+      );
+    case "cohort_new_student": {
+      const cohortName = item.payload.cohort_name;
+      return `${name} joined cohort ${typeof cohortName === "string" ? cohortName : "group class"}`;
+    }
     default:
       return "New notification";
   }
