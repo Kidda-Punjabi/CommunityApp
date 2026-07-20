@@ -1,6 +1,10 @@
-import { ensureLeadsAppUserIdProperty } from "@/lib/notion/client";
-import { linkLeadsFromNotion, upsertNotionLeadsCache } from "@/lib/notion/lead-sync";
+import { ensureLeadSourceAppSignupOption, ensureLeadsAppUserIdProperty } from "@/lib/notion/client";
+import {
+  linkUnlinkedProfilesFromApp,
+  upsertNotionLeadsCache,
+} from "@/lib/notion/lead-sync";
 import { pullPackageInstancesFromNotion } from "@/lib/notion/package-sync";
+import { syncAllGroupCohortsFromNotion } from "@/lib/notion/sync-group-cohorts-for-checkout";
 import { pullSalesCallsFromNotion } from "@/lib/notion/sales-call-sync";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
@@ -26,25 +30,29 @@ export async function GET(request: Request) {
   let leadsSetupError: string | null = null;
   try {
     await ensureLeadsAppUserIdProperty();
+    await ensureLeadSourceAppSignupOption();
   } catch (error) {
     leadsSetupError =
-      error instanceof Error ? error.message : "Failed to ensure Leads App User ID property.";
+      error instanceof Error ? error.message : "Failed to ensure Leads Notion schema.";
   }
 
   const url = new URL(request.url);
   const fullSalesCallSync = url.searchParams.get("fullSalesCallSync") === "1";
   const fullLeadsCacheSync = url.searchParams.get("fullLeadsCacheSync") === "1";
 
-  const [packages, leads, leadsCache, salesCalls] = await Promise.all([
+  const [packages, groupCohorts, leadsCache, salesCalls] = await Promise.all([
     pullPackageInstancesFromNotion(client),
-    linkLeadsFromNotion(client),
+    syncAllGroupCohortsFromNotion(client),
     upsertNotionLeadsCache(client, { fullSync: fullLeadsCacheSync }),
     pullSalesCallsFromNotion(client, { fullSync: fullSalesCallSync }),
   ]);
 
+  const profileLeads = await linkUnlinkedProfilesFromApp(client);
+
   return NextResponse.json({
     packages,
-    leads,
+    groupCohorts,
+    profileLeads,
     leadsCache,
     salesCalls,
     leadsSetupError,

@@ -4,7 +4,7 @@
 export const NOTION_API_VERSION = "2022-06-28";
 
 export const NOTION_PACKAGE_DATA_SOURCE_ID =
-  process.env.NOTION_PACKAGE_DATA_SOURCE_ID ?? "2a2b5ac4-29c6-805d-922b-d93a13be766d";
+  process.env.NOTION_PACKAGE_DATA_SOURCE_ID ?? "2a2b5ac4-29c6-80e1-9bfa-000b455fcc0e";
 
 export const NOTION_LEADS_DATA_SOURCE_ID =
   process.env.NOTION_LEADS_DATA_SOURCE_ID ?? "293b5ac4-29c6-807e-bb23-db35b02b3fdf";
@@ -128,6 +128,47 @@ export async function ensureLeadsAppUserIdProperty(): Promise<void> {
     body: JSON.stringify({
       properties: {
         "App User ID": { rich_text: {} },
+      },
+    }),
+  });
+}
+
+export const APP_SIGNUP_LEAD_SOURCE = "App Signup";
+
+/** Ensures Lead Source select includes "App Signup" for app-created leads. */
+export async function ensureLeadSourceAppSignupOption(): Promise<void> {
+  const data = await notionJson<{
+    properties?: Record<
+      string,
+      {
+        type: string;
+        select?: { options?: Array<{ id?: string; name: string; color?: string }> };
+      }
+    >;
+  }>(`/databases/${NOTION_LEADS_DATA_SOURCE_ID}`);
+
+  const leadSource = data.properties?.["Lead Source"];
+  if (leadSource?.type !== "select") return;
+
+  const options = leadSource.select?.options ?? [];
+  if (options.some((option) => option.name === APP_SIGNUP_LEAD_SOURCE)) return;
+
+  await notionJson(`/databases/${NOTION_LEADS_DATA_SOURCE_ID}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      properties: {
+        "Lead Source": {
+          select: {
+            options: [
+              ...options.map((option) => ({
+                ...(option.id ? { id: option.id } : {}),
+                name: option.name,
+                ...(option.color ? { color: option.color } : {}),
+              })),
+              { name: APP_SIGNUP_LEAD_SOURCE, color: "blue" },
+            ],
+          },
+        },
       },
     }),
   });

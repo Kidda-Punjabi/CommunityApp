@@ -42,6 +42,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: "no_email" });
   }
 
-  const result = await linkLeadsForProfile(client, profileId, authUser.user.email);
+  const record = payload.record;
+  const fullName =
+    (typeof record.full_name === "string" && record.full_name) ||
+    (typeof record.preferred_name === "string" && record.preferred_name) ||
+    null;
+
+  const result = await linkLeadsForProfile(client, profileId, authUser.user.email, {
+    fullName,
+  });
   return NextResponse.json({ ok: true, ...result });
 }

@@ -57,7 +57,7 @@ export async function signup(
       const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
       const { linkLeadsForProfile } = await import("@/lib/notion/lead-sync");
       const service = createServiceRoleClient();
-      await linkLeadsForProfile(service, data.user.id, email);
+      await linkLeadsForProfile(service, data.user.id, email, { fullName });
     } catch {
       // Notion lead linking is best-effort and should not block signup.
     }
@@ -74,6 +74,28 @@ export async function signup(
 
   if (referralCode) {
     cookieStore.delete(REFERRAL_COOKIE_NAME);
+  }
+
+  // Supabase anti-enumeration: an already-confirmed email yields user + no session
+  // and identities.length === 0, with no confirmation email sent.
+  // UNVERIFIED: existing-but-unconfirmed may return identities.length > 0 with no
+  // session — we fall through below (normal path; Supabase may resend confirmation).
+  const likelyExistingConfirmedAccount =
+    Boolean(data.user) &&
+    !data.session &&
+    (data.user?.identities?.length ?? 0) === 0;
+
+  if (likelyExistingConfirmedAccount) {
+    const redirectTo = `${getPublicAppUrl()}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo,
+    });
+    if (resetError) {
+      console.error(
+        `[signup] resetPasswordForEmail after duplicate signUp failed for ${email.trim()}:`,
+        resetError.message
+      );
+    }
   }
 
   redirect("/login?message=Check your email to confirm your account.");
