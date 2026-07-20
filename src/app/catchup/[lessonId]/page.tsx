@@ -1,5 +1,10 @@
 import { CatchupPlayer } from "@/components/catchup/catchup-player";
 import { canAccessCatchupLesson } from "@/lib/catchup/access";
+import { getCourseRequiredTier } from "@/lib/membership/access";
+import {
+  learnTrackPath,
+  learnTrackPathForPaidTier,
+} from "@/lib/learning/learn-catalog";
 import { catchupDeckIdForLesson, catchupGameRefsForLesson } from "@/lib/catchup/lesson-game-refs";
 import { loadCatchupLesson } from "@/lib/catchup/load-catchup";
 import {
@@ -64,9 +69,24 @@ export default async function CatchupLessonPage({ params, searchParams }: PagePr
 
   const { data: lessonRow } = await supabase
     .from("lessons")
-    .select("course_id")
+    .select("course_id, is_free")
     .eq("id", lessonId)
     .single();
+
+  let learnReturnHref = "/dashboard/learn";
+  if (lessonRow?.is_free) {
+    learnReturnHref = learnTrackPath("free");
+  } else if (lessonRow?.course_id) {
+    const { data: course } = await supabase
+      .from("courses")
+      .select("id, name, required_tier")
+      .eq("id", lessonRow.course_id)
+      .maybeSingle();
+    if (course) {
+      const tier = getCourseRequiredTier(course);
+      learnReturnHref = learnTrackPath(learnTrackPathForPaidTier(tier));
+    }
+  }
 
   const segmentIdByNumber = Object.fromEntries(
     lesson.segments.map((segment) => [segment.segmentNumber, segment.id])
@@ -112,6 +132,7 @@ export default async function CatchupLessonPage({ params, searchParams }: PagePr
           lesson={lesson}
           initialSegmentNumber={initialSegment}
           courseId={lessonRow?.course_id ?? ""}
+          learnReturnHref={learnReturnHref}
           gameRefs={gameRefs}
           deckId={deckId}
           fillBlankBySegmentId={fillBlankBySegmentId}

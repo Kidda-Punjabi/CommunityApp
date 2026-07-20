@@ -56,3 +56,10 @@ export function getLearnTrack(id: string): LearnTrack | undefined {
 export function learnTrackPath(id: LearnTrackId) {
   return `/dashboard/learn/${id}`;
 }
+
+/** Learn list URL after finishing catch-up for a course tier (or free lessons). */
+export function learnTrackPathForPaidTier(tier: PaidCourseTier): LearnTrackId {
+  if (tier === "community") return "community";
+  if (tier === "beginners") return "beginners";
+  return "foundational";
+}

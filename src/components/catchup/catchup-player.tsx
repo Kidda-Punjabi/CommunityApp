@@ -23,6 +23,7 @@ type CatchupPlayerProps = {
   lesson: CatchupLesson;
   initialSegmentNumber: number;
   courseId: string;
+  learnReturnHref: string;
   gameRefs: Record<number, CatchupGameRef | null>;
   deckId: string | null;
   fillBlankBySegmentId: Record<string, FillBlankQuestion[]>;
@@ -35,6 +36,7 @@ export function CatchupPlayer({
   lesson,
   initialSegmentNumber,
   courseId,
+  learnReturnHref,
   gameRefs,
   deckId,
   fillBlankBySegmentId,
@@ -52,6 +54,8 @@ export function CatchupPlayer({
   });
   const [activeBeatIndex, setActiveBeatIndex] = useState(0);
   const [beatsFinished, setBeatsFinished] = useState(false);
+  const [segmentActionError, setSegmentActionError] = useState<string | null>(null);
+  const [segmentActionPending, setSegmentActionPending] = useState(false);
 
   const segment = lesson.segments[segmentIndex];
   const beats = segment?.beats ?? [];
@@ -102,20 +106,47 @@ export function CatchupPlayer({
     setActiveBeatIndex((index) => index + 1);
   }, [activeBeatIndex, beats.length]);
 
-  async function completeSegment() {
-    if (!segment) return;
+  async function completeSegment(): Promise<{ ok: true } | { ok: false; message: string }> {
+    if (!segment) {
+      return { ok: false, message: "This segment could not be saved. Refresh and try again." };
+    }
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
-    await markCatchupSegmentComplete(supabase, user.id, segment.id);
+    if (!user) {
+      return { ok: false, message: "You are signed out. Sign in again to save progress." };
+    }
+    try {
+      await markCatchupSegmentComplete(supabase, user.id, segment.id);
+      return { ok: true };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not save segment progress. Try again.";
+      return { ok: false, message };
+    }
   }
 
   async function goToNextSegment() {
-    await completeSegment();
-    if (segmentIndex + 1 < lesson.segments.length) {
+    if (segmentActionPending) return;
+    setSegmentActionError(null);
+    setSegmentActionPending(true);
+    try {
+      const outcome = await completeSegment();
+      if (!outcome.ok) {
+        setSegmentActionError(outcome.message);
+        return;
+      }
+
+      const onLastSegment = segmentIndex >= lesson.segments.length - 1;
+      if (onLastSegment) {
+        router.push(learnReturnHref);
+        return;
+      }
+
       setSegmentIndex((index) => index + 1);
+    } finally {
+      setSegmentActionPending(false);
     }
   }
 
@@ -191,6 +222,11 @@ export function CatchupPlayer({
 
       {beats.length === 0 || beatsFinished ? (
         <div className={`${ui.cardBordered} space-y-4`}>
+          {segmentActionError ? (
+            <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+              {segmentActionError}
+            </p>
+          ) : null}
           {hasActivity && segment.activityInstructions ? (
             <>
               <h2 className="font-heading text-lg font-semibold text-zinc-900">Your turn</h2>
@@ -212,14 +248,32 @@ export function CatchupPlayer({
                   Do this activity now
                 </a>
               ) : (
-                <button type="button" onClick={() => void goToNextSegment()} className={ui.btnPrimary}>
-                  {isLastSegment ? "Finish lesson" : "Continue to next segment"}
+                <button
+                  type="button"
+                  disabled={segmentActionPending}
+                  onClick={() => void goToNextSegment()}
+                  className={ui.btnPrimary}
+                >
+                  {segmentActionPending
+                    ? "Saving…"
+                    : isLastSegment
+                      ? "Finish lesson"
+                      : "Continue to next segment"}
                 </button>
               )}
             </>
           ) : (
-            <button type="button" onClick={() => void goToNextSegment()} className={ui.btnPrimary}>
-              {isLastSegment ? "Finish lesson" : "Continue to next segment"}
+            <button
+              type="button"
+              disabled={segmentActionPending}
+              onClick={() => void goToNextSegment()}
+              className={ui.btnPrimary}
+            >
+              {segmentActionPending
+                ? "Saving…"
+                : isLastSegment
+                  ? "Finish lesson"
+                  : "Continue to next segment"}
             </button>
           )}
         </div>
