@@ -134,6 +134,57 @@ export async function loadNotionTutorMap(
   return { byTutorId, byNotionUserId };
 }
 
+/** Maps Notion package page Tutor person → app profiles.id via notion_tutor_map.
+ * Returns undefined when Notion has a Tutor but no map row (caller should not clobber existing tutor_id).
+ * Returns null when Notion has no Tutor person (caller may clear).
+ */
+export function tutorIdFromNotionPackagePage(
+  page: ParsedNotionPackagePage,
+  byNotionUserId: Map<string, { tutorId: string; notionUserName: string | null }>
+): string | null | undefined {
+  if (!page.notionTutorUserId) return null;
+  const mapped = byNotionUserId.get(page.notionTutorUserId);
+  if (!mapped) return undefined;
+  return mapped.tutorId;
+}
+
+export function cohortPullPatchFromNotionPage(
+  page: ParsedNotionPackagePage,
+  byNotionUserId: Map<string, { tutorId: string; notionUserName: string | null }>
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {
+    name: cohortDisplayNameFromNotionPage(page),
+    start_date: page.startDate,
+    end_date: page.endDate,
+    start_day_of_week: readNotionStartDayOfWeek(page),
+    ...(page.status ? { status: page.status } : {}),
+    ...cohortWeeklySessionPatchFromNotionPage(page),
+  };
+  const tutorId = tutorIdFromNotionPackagePage(page, byNotionUserId);
+  if (tutorId !== undefined) {
+    patch.tutor_id = tutorId;
+  }
+  return patch;
+}
+
+export function packageInstancePullPatchFromNotionPage(
+  page: ParsedNotionPackagePage,
+  byNotionUserId: Map<string, { tutorId: string; notionUserName: string | null }>
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {
+    start_date: page.startDate,
+    end_date: page.endDate,
+    start_day_of_week: readNotionStartDayOfWeek(page),
+    ...(page.packageName ? { name: page.packageName } : {}),
+    ...(page.status ? { status: page.status } : {}),
+  };
+  const tutorId = tutorIdFromNotionPackagePage(page, byNotionUserId);
+  if (tutorId !== undefined) {
+    patch.tutor_id = tutorId;
+  }
+  return patch;
+}
+
 export async function buildPackageNotionProperties(
   row: Pick<
     PackageInstanceSyncRow,
@@ -466,20 +517,7 @@ export async function pullPackageInstancesFromNotion(
         continue;
       }
 
-      const cohortPatch: Record<string, unknown> = {};
-      if (page.packageName) {
-        cohortPatch.name = cohortDisplayNameFromNotionPage(page);
-      }
-      if (page.startDate !== null) cohortPatch.start_date = page.startDate;
-      if (page.endDate !== null) cohortPatch.end_date = page.endDate;
-      if (page.status) cohortPatch.status = page.status;
-      cohortPatch.start_day_of_week = readNotionStartDayOfWeek(page);
-      Object.assign(cohortPatch, cohortWeeklySessionPatchFromNotionPage(page));
-      if (page.notionTutorUserId) {
-        cohortPatch.tutor_id = byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null;
-      } else {
-        cohortPatch.tutor_id = null;
-      }
+      const cohortPatch: Record<string, unknown> = cohortPullPatchFromNotionPage(page, byNotionUserId);
 
       if (await cohortNotionColumnsAvailable(supabase)) {
         cohortPatch.notion_sync_status = "synced";
@@ -529,18 +567,7 @@ export async function pullPackageInstancesFromNotion(
         continue;
       }
 
-      const patch: Record<string, unknown> = {};
-      if (page.packageName) patch.name = page.packageName;
-      if (page.startDate !== null) patch.start_date = page.startDate;
-      if (page.endDate !== null) patch.end_date = page.endDate;
-      patch.start_day_of_week = readNotionStartDayOfWeek(page);
-      if (page.status) patch.status = page.status;
-      if (page.notionTutorUserId) {
-        const mapped = byNotionUserId.get(page.notionTutorUserId);
-        patch.tutor_id = mapped?.tutorId ?? null;
-      } else {
-        patch.tutor_id = null;
-      }
+      const patch = packageInstancePullPatchFromNotionPage(page, byNotionUserId);
 
       const { error } = await supabase
         .from("package_instances")
@@ -640,6 +667,7 @@ export async function createPackageInstanceFromNotionPage(
   const status = page.status ?? "pre_scheduling";
   const { byNotionUserId } = await loadNotionTutorMap(supabase);
 
+  const mappedTutorId = tutorIdFromNotionPackagePage(page, byNotionUserId);
   const { data: instance, error: insertError } = await supabase
     .from("package_instances")
     .insert({
@@ -650,9 +678,7 @@ export async function createPackageInstanceFromNotionPage(
       start_date: page.startDate,
       end_date: page.endDate,
       start_day_of_week: readNotionStartDayOfWeek(page),
-      tutor_id: page.notionTutorUserId
-        ? byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null
-        : null,
+      tutor_id: mappedTutorId === undefined ? null : mappedTutorId,
       notion_page_id: page.pageId,
       notion_sync_status: "synced",
       notion_synced_at: page.lastEditedTime,
@@ -730,6 +756,9 @@ export async function createOrUpdateCohortFromNotionPage(
   const startDay = readNotionStartDayOfWeek(page);
   const notionColumns = await cohortNotionColumnsAvailable(supabase);
 
+  const existingId = await findCohortForNotionImport(supabase, page, link.courseId, cohortName);
+  let cohortId = existingId;
+
   const payload: Record<string, unknown> = {
     course_id: link.courseId,
     name: cohortName,
@@ -737,12 +766,15 @@ export async function createOrUpdateCohortFromNotionPage(
     start_date: page.startDate,
     end_date: page.endDate,
     start_day_of_week: startDay,
-    tutor_id: page.notionTutorUserId
-      ? byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null
-      : null,
     active: true,
     ...cohortWeeklySessionPatchFromNotionPage(page),
   };
+  const mappedTutorId = tutorIdFromNotionPackagePage(page, byNotionUserId);
+  if (mappedTutorId !== undefined) {
+    payload.tutor_id = mappedTutorId;
+  } else if (!existingId) {
+    payload.tutor_id = null;
+  }
 
   if (notionColumns) {
     payload.notion_page_id = page.pageId;
@@ -750,9 +782,6 @@ export async function createOrUpdateCohortFromNotionPage(
     payload.notion_synced_at = new Date().toISOString();
     payload.notion_sync_error = null;
   }
-
-  const existingId = await findCohortForNotionImport(supabase, page, link.courseId, cohortName);
-  let cohortId = existingId;
 
   if (existingId) {
     const { error: updateError } = await supabase
@@ -961,23 +990,15 @@ export async function resyncAllNotionLinkedPackagesFromNotion(
   let updated = 0;
   let rosterSynced = 0;
   const errors: string[] = [];
+  const { byNotionUserId } = await loadNotionTutorMap(supabase);
 
   for (const page of pages) {
-    const schedule = {
-      start_date: page.startDate,
-      end_date: page.endDate,
-      start_day_of_week: readNotionStartDayOfWeek(page),
-    };
-
     const cohortId = cohortIdByNotionPageId.get(page.pageId);
     if (cohortId) {
       const { error } = await supabase
         .from("cohorts")
         .update({
-          ...schedule,
-          name: cohortDisplayNameFromNotionPage(page),
-          ...(page.status ? { status: page.status } : {}),
-          ...cohortWeeklySessionPatchFromNotionPage(page),
+          ...cohortPullPatchFromNotionPage(page, byNotionUserId),
           notion_sync_status: "synced",
           notion_synced_at: new Date().toISOString(),
           notion_sync_error: null,
@@ -1023,11 +1044,7 @@ export async function resyncAllNotionLinkedPackagesFromNotion(
 
     const { error } = await supabase
       .from("package_instances")
-      .update({
-        ...schedule,
-        ...(page.packageName ? { name: page.packageName } : {}),
-        ...(page.status ? { status: page.status } : {}),
-      })
+      .update(packageInstancePullPatchFromNotionPage(page, byNotionUserId))
       .eq("id", instance.id);
 
     if (error) {
@@ -1078,15 +1095,7 @@ export async function refreshCohortFromNotionPage(
   const { byNotionUserId } = await loadNotionTutorMap(supabase);
 
   const patch: Record<string, unknown> = {
-    name: cohortDisplayNameFromNotionPage(page),
-    start_date: page.startDate,
-    end_date: page.endDate,
-    start_day_of_week: readNotionStartDayOfWeek(page),
-    ...(page.status ? { status: page.status } : {}),
-    tutor_id: page.notionTutorUserId
-      ? byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null
-      : null,
-    ...cohortWeeklySessionPatchFromNotionPage(page),
+    ...cohortPullPatchFromNotionPage(page, byNotionUserId),
     notion_sync_status: "synced",
     notion_synced_at: new Date().toISOString(),
     notion_sync_error: null,
