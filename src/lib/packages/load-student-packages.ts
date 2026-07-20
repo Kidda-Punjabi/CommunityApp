@@ -78,9 +78,16 @@ function sessionBelongsToPackage(
 
 function resolveCatalogEntry(
   tier: PaidCourseTier,
-  enrollment: EnrollmentRow | null
+  enrollment: EnrollmentRow | null,
+  purchasedPackageSlug: string | null
 ): PackageCatalogEntry {
   if (tier === "beginners" && !enrollment) {
+    const fromPurchase =
+      purchasedPackageSlug != null
+        ? getPackageCatalogEntryBySlug(purchasedPackageSlug)
+        : undefined;
+    if (fromPurchase) return fromPurchase;
+
     return (
       PACKAGE_CATALOG.find((entry) => entry.slug === "beginners-1-1") ??
       PACKAGE_CATALOG.find((entry) => entry.tier === "beginners")!
@@ -129,18 +136,31 @@ export async function loadStudentPackages(
 
   const unlockedCourseIds = [...access.unlockedCourseIds];
 
-  const [{ data: accessRows }, { data: enrollmentRows }] = await Promise.all([
-    supabase
-      .from("course_access")
-      .select("course_id, granted_at")
-      .eq("user_id", user.id)
-      .in("course_id", unlockedCourseIds),
-    supabase
-      .from("course_enrollments")
-      .select("id, course_id, tutor_id, delivery_mode, cohort_id")
-      .eq("user_id", user.id)
-      .in("course_id", unlockedCourseIds),
-  ]);
+  const [{ data: accessRows }, { data: enrollmentRows }, { data: studentPackageRows }] =
+    await Promise.all([
+      supabase
+        .from("course_access")
+        .select("course_id, granted_at")
+        .eq("user_id", user.id)
+        .in("course_id", unlockedCourseIds),
+      supabase
+        .from("course_enrollments")
+        .select("id, course_id, tutor_id, delivery_mode, cohort_id")
+        .eq("user_id", user.id)
+        .in("course_id", unlockedCourseIds),
+      supabase
+        .from("student_packages")
+        .select("course_id, packages(slug)")
+        .eq("user_id", user.id)
+        .in("course_id", unlockedCourseIds),
+    ]);
+
+  const purchasedSlugByCourseId = new Map<string, string>();
+  for (const row of studentPackageRows ?? []) {
+    const pkg = Array.isArray(row.packages) ? row.packages[0] : row.packages;
+    const slug = pkg && typeof pkg === "object" && "slug" in pkg ? String(pkg.slug) : null;
+    if (slug && row.course_id) purchasedSlugByCourseId.set(row.course_id, slug);
+  }
 
   const enrollmentByCourseId = new Map(
     (enrollmentRows ?? []).map((row) => [row.course_id, row as EnrollmentRow])
@@ -187,7 +207,11 @@ export async function loadStudentPackages(
 
     const tier = course.required_tier as PaidCourseTier;
     const enrollment = enrollmentByCourseId.get(accessRow.course_id) ?? null;
-    const catalog = resolveCatalogEntry(tier, enrollment);
+    const catalog = resolveCatalogEntry(
+      tier,
+      enrollment,
+      purchasedSlugByCourseId.get(accessRow.course_id) ?? null
+    );
     const status = packageStatus(catalog, enrollment);
 
     const packageSessions = sessionLoad.sessions

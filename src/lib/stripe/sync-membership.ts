@@ -77,7 +77,24 @@ export async function syncMembershipFromCheckoutSession(sessionId: string) {
       session.id
     );
     if (groupResult.error) {
-      console.error("Group purchase completion error:", groupResult.error);
+      console.error(
+        "Group purchase completion error:",
+        groupResult.error,
+        "session=",
+        session.id,
+        "user=",
+        userId
+      );
+    } else if (!groupResult.completed && !groupResult.placementPending) {
+      console.error(
+        "Group purchase completion did not run or returned incomplete:",
+        "session=",
+        session.id,
+        "user=",
+        userId,
+        "cohort_id=",
+        session.metadata?.cohort_id ?? null
+      );
     }
   }
 

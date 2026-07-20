@@ -153,7 +153,16 @@ export async function completeGroupPurchaseAfterPayment(
     .select("id")
     .single();
 
-  if (enrollmentError) return { completed: false, error: enrollmentError.message };
+  if (enrollmentError) {
+    const tutorHint =
+      cohort.tutor_id == null && enrollmentError.message.includes("tutor_id")
+        ? " Run supabase/group-enrollment-null-tutor.sql if cohort has no tutor yet."
+        : "";
+    return {
+      completed: false,
+      error: `${enrollmentError.message}${tutorHint}`,
+    };
+  }
 
   const { error: spUpdateError } = await supabase
     .from("student_packages")
