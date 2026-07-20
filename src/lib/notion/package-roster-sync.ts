@@ -36,6 +36,11 @@ export function parseNotionPackageRosterFromProperties(
   return entries;
 }
 
+export function countNotionConfirmedRelations(rawProperties: Record<string, unknown>): number {
+  const props = rawProperties as Record<string, { relation?: Array<{ id?: string }> }>;
+  return relationIds(props.Confirmed).length;
+}
+
 function leadNameFromPage(page: NotionLeadPage): string {
   const props = page.properties as Record<string, { title?: Array<{ plain_text?: string }> }>;
   for (const [, value] of Object.entries(props)) {
@@ -188,6 +193,14 @@ export async function syncNotionRosterFromPage(
         return { synced: 0, error: inboxError.message };
       }
     }
+  }
+
+  if (target.kind === "cohort") {
+    const confirmedCount = cachedRows.filter((row) => row.roster_status === "confirmed").length;
+    await supabase
+      .from("cohorts")
+      .update({ notion_confirmed_count: confirmedCount })
+      .eq("id", target.id);
   }
 
   return { synced: cachedRows.length };

@@ -12,17 +12,31 @@ export async function POST(request: Request) {
 
   let checkoutKey: string;
   let embedded = false;
+  let cohortId: string | undefined;
+  let cohortSeatHoldId: string | undefined;
 
   try {
-    const body = (await request.json()) as { checkoutKey?: string; embedded?: boolean };
+    const body = (await request.json()) as {
+      checkoutKey?: string;
+      embedded?: boolean;
+      cohortId?: string;
+      cohortSeatHoldId?: string;
+    };
     checkoutKey = body.checkoutKey ?? "";
     embedded = Boolean(body.embedded);
+    cohortId = body.cohortId?.trim();
+    cohortSeatHoldId = body.cohortSeatHoldId?.trim();
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
   try {
-    const result = await createCheckoutSession({ checkoutKey, embedded });
+    const result = await createCheckoutSession({
+      checkoutKey,
+      embedded,
+      cohortId,
+      cohortSeatHoldId,
+    });
 
     if (result.type === "payment_link") {
       const supabase = await createClient();

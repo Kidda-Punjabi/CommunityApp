@@ -17,14 +17,28 @@ export async function getCohortIdForNotionPage(
   supabase: SupabaseClient,
   notionPageId: string
 ): Promise<string | null> {
+  if (await cohortNotionColumnsAvailable(supabase)) {
+    const { data: byPage } = await supabase
+      .from("cohorts")
+      .select("id")
+      .eq("notion_page_id", notionPageId)
+      .maybeSingle();
+    if (byPage?.id) return byPage.id;
+  }
+
   const { data } = await supabase
     .from("notion_sync_inbox")
-    .select("raw_properties")
+    .select("raw_properties, resolved_cohort_id")
     .eq("notion_page_id", notionPageId)
     .maybeSingle();
 
   return cohortIdFromInboxRow(
-    data ? { raw_properties: data.raw_properties as Record<string, unknown> | null } : undefined
+    data
+      ? {
+          raw_properties: data.raw_properties as Record<string, unknown> | null,
+          resolved_cohort_id: data.resolved_cohort_id,
+        }
+      : undefined
   );
 }
 

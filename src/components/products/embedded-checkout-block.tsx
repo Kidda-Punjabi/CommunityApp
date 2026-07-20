@@ -21,9 +21,16 @@ function getStripe() {
 type EmbeddedCheckoutBlockProps = {
   checkoutKey: string;
   className?: string;
+  cohortId?: string;
+  cohortSeatHoldId?: string;
 };
 
-export function EmbeddedCheckoutBlock({ checkoutKey, className }: EmbeddedCheckoutBlockProps) {
+export function EmbeddedCheckoutBlock({
+  checkoutKey,
+  className,
+  cohortId,
+  cohortSeatHoldId,
+}: EmbeddedCheckoutBlockProps) {
   const [error, setError] = useState<string | null>(null);
   const publishableKey = getStripePublishableKey();
 
@@ -33,7 +40,11 @@ export function EmbeddedCheckoutBlock({ checkoutKey, className }: EmbeddedChecko
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ checkoutKey, embedded: true }),
+        body: JSON.stringify({
+          checkoutKey,
+          embedded: true,
+          ...(cohortId && cohortSeatHoldId ? { cohortId, cohortSeatHoldId } : {}),
+        }),
       });
 
       const data = (await response.json()) as {
@@ -53,7 +64,7 @@ export function EmbeddedCheckoutBlock({ checkoutKey, className }: EmbeddedChecko
       setError(message);
       throw new Error(message);
     },
-    [checkoutKey]
+    [checkoutKey, cohortId, cohortSeatHoldId]
   );
 
   if (!publishableKey) {

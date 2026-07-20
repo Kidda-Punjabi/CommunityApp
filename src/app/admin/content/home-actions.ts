@@ -3,6 +3,7 @@
 import { fetchAdminOnboardingQueue } from "@/app/admin/onboarding/actions";
 import { fetchAdminTutorOverview } from "@/app/admin/content/tutor-overview-actions";
 import { fetchMonthlyRewardsAttention } from "@/app/admin/monthly-rewards/actions";
+import { loadGroupPurchaseAttention } from "@/lib/group-purchase/load-group-purchase-attention";
 import type { AdminOnboardingRow } from "@/lib/admin/onboarding/types";
 
 export type AdminAttentionItem = {
@@ -11,7 +12,11 @@ export type AdminAttentionItem = {
     | "overdue_onboarding"
     | "tutor_calendar_disconnected"
     | "monthly_rewards_pending"
-    | "monthly_rewards_uncalculated";
+    | "monthly_rewards_uncalculated"
+    | "group_cohort_setup"
+    | "group_cohort_placement_pending"
+    | "notion_cohort_writeback"
+    | "notion_lead_link";
   title: string;
   detail: string;
   href: string;
@@ -45,18 +50,31 @@ export async function fetchAdminHomeAttention(): Promise<{
   items: AdminAttentionItem[];
   error?: string;
 }> {
-  const [onboarding, tutorOverview, monthlyRewards] = await Promise.all([
+  const [onboarding, tutorOverview, monthlyRewards, groupPurchase] = await Promise.all([
     fetchAdminOnboardingQueue(),
     fetchAdminTutorOverview(),
     fetchMonthlyRewardsAttention(),
+    loadGroupPurchaseAttention(),
   ]);
 
   const errors = [
     onboarding.error,
     tutorOverview.error,
     monthlyRewards.error,
+    groupPurchase.error,
   ].filter(Boolean);
   const items: AdminAttentionItem[] = [];
+
+  for (const row of groupPurchase.items) {
+    items.push({
+      id: row.id,
+      kind: row.kind,
+      title: row.title,
+      detail: row.detail,
+      href: row.href,
+      urgent: row.urgent,
+    });
+  }
 
   for (const pending of monthlyRewards.attention.pendingMonths) {
     const cardLabel = pending.pendingCount === 1 ? "gift card" : "gift cards";

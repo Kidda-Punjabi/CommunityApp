@@ -1,7 +1,9 @@
 import { BookCallWidget } from "@/components/booking/book-call-widget";
 import { KiddaLogo } from "@/components/branding/kidda-logo";
 import { BuyButton } from "@/components/products/buy-button";
+import { GroupCohortCheckout } from "@/components/products/group-cohort-checkout";
 import { ProductCheckoutSection } from "@/components/products/product-checkout-section";
+import { checkoutKeyRequiresCohortSelection } from "@/lib/group-purchase/client-keys";
 import { ProductFaq } from "@/components/products/product-faq";
 import {
   isCheckoutConfigured,
@@ -61,6 +63,16 @@ export function ProductLanding({
   const primaryKey = primaryCheckoutKey(content);
 
   function tierCta(checkoutKey: string, label = "Buy Now") {
+    if (checkoutKeyRequiresCohortSelection(checkoutKey)) {
+      return (
+        <GroupCohortCheckout
+          checkoutKey={checkoutKey}
+          label={label}
+          configured={isCheckoutConfigured(checkoutKey)}
+        />
+      );
+    }
+
     return (
       <BuyButton
         checkoutKey={checkoutKey}
@@ -72,6 +84,17 @@ export function ProductLanding({
 
   function heroCta() {
     if (primaryKey) {
+      if (checkoutKeyRequiresCohortSelection(primaryKey)) {
+        return (
+          <GroupCohortCheckout
+            checkoutKey={primaryKey}
+            label={content.heroCta}
+            configured={isCheckoutConfigured(primaryKey)}
+            className={ui.btnPrimaryBlock}
+          />
+        );
+      }
+
       return (
         <BuyButton
           checkoutKey={primaryKey}

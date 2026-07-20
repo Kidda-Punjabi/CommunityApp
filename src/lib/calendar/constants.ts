@@ -4,7 +4,8 @@ export const RESCHEDULE_CUTOFF_MS = 24 * 60 * 60 * 1000;
 export const COHORT_SWITCH_CUTOFF_MS = 3 * 24 * 60 * 60 * 1000;
 
 export const GOOGLE_CALENDAR_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.readonly",
+  /** Read/write events (required for adding cohort students as attendees). Tutors must reconnect after this scope change. */
+  "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/userinfo.email",
 ] as const;
 

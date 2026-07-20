@@ -8,10 +8,16 @@ import {
 } from "@/lib/products/checkout";
 import { getAppUrl, getStripe } from "@/lib/stripe/server";
 import { createClient } from "@/lib/supabase/server";
+import { isGroupPackageCheckoutKey } from "@/lib/group-purchase/checkout-keys";
+import { getCohortCheckoutRemainingSpots } from "@/lib/group-purchase/cohort-capacity";
+import { isCohortNotionSyncFresh } from "@/lib/group-purchase/cohort-picker-display";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 
 type CreateCheckoutSessionOptions = {
   checkoutKey: string;
   embedded?: boolean;
+  cohortId?: string;
+  cohortSeatHoldId?: string;
 };
 
 async function resolveStripeCustomerId(userId: string, email: string): Promise<string> {
@@ -50,6 +56,8 @@ async function resolveStripeCustomerId(userId: string, email: string): Promise<s
 export async function createCheckoutSession({
   checkoutKey,
   embedded = false,
+  cohortId,
+  cohortSeatHoldId,
 }: CreateCheckoutSessionOptions) {
   const config = getCheckoutConfig(checkoutKey);
   if (!config) {
@@ -67,6 +75,60 @@ export async function createCheckoutSession({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const needsGroupCohort = await isGroupPackageCheckoutKey(supabase, checkoutKey);
+
+  if (needsGroupCohort) {
+    if (!user) {
+      throw new Error("Sign in to purchase a group course and choose a cohort.");
+    }
+    if (!priceId) {
+      throw new Error(
+        "Group checkout requires an configured Stripe Price (not a payment link). Add STRIPE_CHECKOUT_PRICE_BEGINNERS_GROUP."
+      );
+    }
+    if (!cohortId?.trim() || !cohortSeatHoldId?.trim()) {
+      throw new Error("Choose an open cohort before checkout.");
+    }
+
+    const { data: hold, error: holdError } = await supabase
+      .from("cohort_seat_holds")
+      .select("id, cohort_id, user_id, expires_at")
+      .eq("id", cohortSeatHoldId)
+      .maybeSingle();
+
+    if (holdError) throw new Error(holdError.message);
+    if (!hold || hold.user_id !== user.id || hold.cohort_id !== cohortId) {
+      throw new Error("Cohort seat reservation expired or invalid. Choose a cohort again.");
+    }
+
+    if (new Date(hold.expires_at).getTime() <= Date.now()) {
+      throw new Error("Your cohort seat reservation expired. Choose a cohort again.");
+    }
+
+    const admin = createServiceRoleClient();
+    const { data: cohort, error: cohortError } = await admin
+      .from("cohorts")
+      .select("id, capacity, status, notion_synced_at")
+      .eq("id", cohortId)
+      .maybeSingle();
+
+    if (cohortError) throw new Error(cohortError.message);
+    if (!cohort || cohort.status !== "recruiting") {
+      throw new Error("This cohort is no longer open for enrollment.");
+    }
+
+    if (!isCohortNotionSyncFresh(cohort.notion_synced_at)) {
+      throw new Error("Cohort availability is still updating. Choose a cohort again.");
+    }
+
+    const remaining = await getCohortCheckoutRemainingSpots(admin, cohortId, cohort.capacity ?? 7, {
+      honorHoldId: cohortSeatHoldId,
+    });
+    if (remaining <= 0) {
+      throw new Error("This cohort just filled up. Pick another cohort.");
+    }
+  }
 
   if (!priceId && paymentLink) {
     return {
@@ -98,6 +160,9 @@ export async function createCheckoutSession({
     metadata: {
       checkout_key: checkoutKey,
       ...(user?.id ? { app_user_id: user.id } : {}),
+      ...(needsGroupCohort && cohortId && cohortSeatHoldId
+        ? { cohort_id: cohortId, cohort_seat_hold_id: cohortSeatHoldId }
+        : {}),
     },
     ...(customerId ? { customer: customerId } : {}),
   };
@@ -113,6 +178,14 @@ export async function createCheckoutSession({
         success_url: successPath,
         cancel_url: cancelPath,
       });
+
+  if (needsGroupCohort && cohortSeatHoldId) {
+    await supabase
+      .from("cohort_seat_holds")
+      .update({ stripe_checkout_session_id: session.id })
+      .eq("id", cohortSeatHoldId)
+      .eq("user_id", user!.id);
+  }
 
   if (embedded) {
     if (!session.client_secret) {

@@ -145,3 +145,72 @@ export async function listGoogleCalendarEvents(
 
   return result;
 }
+
+type GoogleApiAttendee = { email?: string; responseStatus?: string };
+
+type GoogleApiEventDetail = {
+  id?: string;
+  attendees?: GoogleApiAttendee[];
+};
+
+export async function getGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string
+): Promise<GoogleApiEventDetail> {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?fields=id,attendees(email,responseStatus)`;
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Google Calendar get event failed: ${text}`);
+  }
+
+  return (await res.json()) as GoogleApiEventDetail;
+}
+
+/**
+ * Adds an attendee to a calendar event (typically the master recurring event).
+ * sendUpdates=all triggers Google's invite email.
+ *
+ * Known v1 limitation: detached recurring instances are not updated — see cohort-calendar-invite.ts.
+ * TODO: Removing attendees when a student withdraws is not implemented.
+ */
+export async function addAttendeeToGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  attendeeEmail: string
+): Promise<void> {
+  const normalized = attendeeEmail.trim().toLowerCase();
+  if (!normalized) {
+    throw new Error("Student email is required for a calendar invite.");
+  }
+
+  const event = await getGoogleCalendarEvent(accessToken, calendarId, eventId);
+  const existing = event.attendees ?? [];
+  if (existing.some((a) => a.email?.trim().toLowerCase() === normalized)) {
+    return;
+  }
+
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
+
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      attendees: [...existing, { email: normalized }],
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Google Calendar patch event failed: ${text}`);
+  }
+}

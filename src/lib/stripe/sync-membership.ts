@@ -5,6 +5,8 @@ import {
   tiersFromLineItems,
 } from "./sync-purchases";
 import { syncStudentPackagesFromPurchases } from "./sync-student-packages-from-payment";
+import { completeGroupPurchaseFromCheckoutSession } from "@/lib/group-purchase/complete-group-purchase-after-payment";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { type PaidCourseTier } from "@/lib/membership/access";
 import { tierFromStripeIds } from "./products";
 import { getStripe } from "./server";
@@ -14,7 +16,10 @@ export { syncStripePurchasesForUser };
 
 async function resolveUserIdFromSession(session: Stripe.Checkout.Session) {
   const fromMetadata =
-    session.metadata?.supabase_user_id ?? session.client_reference_id ?? null;
+    session.metadata?.app_user_id ??
+    session.metadata?.supabase_user_id ??
+    session.client_reference_id ??
+    null;
   if (fromMetadata) return fromMetadata;
 
   const email =
@@ -63,6 +68,19 @@ export async function syncMembershipFromCheckoutSession(sessionId: string) {
       mode: session.mode === "subscription" ? "subscription" : "payment",
     }))
   );
+
+  if (session.metadata?.cohort_id) {
+    const admin = createServiceRoleClient();
+    const groupResult = await completeGroupPurchaseFromCheckoutSession(
+      admin,
+      userId,
+      session.id
+    );
+    if (groupResult.error) {
+      console.error("Group purchase completion error:", groupResult.error);
+    }
+  }
+
   return grantResult;
 }
 

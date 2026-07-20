@@ -1,5 +1,7 @@
 import type { PackageInstanceStatus } from "@/lib/admin/package-status";
 import { normalizeCalendarDateFromIso } from "@/lib/admin/package-schedule";
+import { readNotionStartDateDetails } from "@/lib/notion/notion-start-date";
+import { countNotionConfirmedRelations } from "@/lib/notion/package-roster-sync";
 import {
   cohortDisplayNameFromNotionPage,
   loadPackageCatalog,
@@ -190,6 +192,7 @@ export function parseNotionPackagePage(page: {
   >;
 
   const tutorIds = peopleIds(props.Tutor as { people?: Array<{ id?: string }> });
+  const startDateDetails = readNotionStartDateDetails(page.properties);
 
   return {
     pageId: page.id,
@@ -198,9 +201,7 @@ export function parseNotionPackagePage(page: {
       plainTextFromTitle(
         props["Package Name"] as { title?: Array<{ plain_text?: string }> }
       ) || null,
-    startDate: normalizeCalendarDateFromIso(
-      dateStart(props["Start Date"] as { date?: { start?: string } | null })
-    ),
+    startDate: startDateDetails.calendarStartIso,
     endDate: normalizeCalendarDateFromIso(
       dateStart(props["End Date"] as { date?: { start?: string } | null })
     ),
@@ -210,6 +211,18 @@ export function parseNotionPackagePage(page: {
     ),
     notionTutorUserId: tutorIds[0] ?? null,
     rawProperties: page.properties,
+  };
+}
+
+export function cohortWeeklySessionPatchFromNotionPage(
+  page: ParsedNotionPackagePage
+): Record<string, unknown> {
+  const startDateDetails = readNotionStartDateDetails(page.rawProperties);
+  return {
+    weekly_session_start: startDateDetails.weeklySessionStartIso,
+    weekly_session_end: startDateDetails.weeklySessionEndIso,
+    weekly_session_has_time: startDateDetails.weeklySessionHasTime,
+    notion_confirmed_count: countNotionConfirmedRelations(page.rawProperties),
   };
 }
 
@@ -461,6 +474,7 @@ export async function pullPackageInstancesFromNotion(
       if (page.endDate !== null) cohortPatch.end_date = page.endDate;
       if (page.status) cohortPatch.status = page.status;
       cohortPatch.start_day_of_week = readNotionStartDayOfWeek(page);
+      Object.assign(cohortPatch, cohortWeeklySessionPatchFromNotionPage(page));
       if (page.notionTutorUserId) {
         cohortPatch.tutor_id = byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null;
       } else {
@@ -469,7 +483,7 @@ export async function pullPackageInstancesFromNotion(
 
       if (await cohortNotionColumnsAvailable(supabase)) {
         cohortPatch.notion_sync_status = "synced";
-        cohortPatch.notion_synced_at = page.lastEditedTime;
+        cohortPatch.notion_synced_at = new Date().toISOString();
         cohortPatch.notion_sync_error = null;
       }
 
@@ -727,12 +741,13 @@ export async function createOrUpdateCohortFromNotionPage(
       ? byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null
       : null,
     active: true,
+    ...cohortWeeklySessionPatchFromNotionPage(page),
   };
 
   if (notionColumns) {
     payload.notion_page_id = page.pageId;
     payload.notion_sync_status = "synced";
-    payload.notion_synced_at = page.lastEditedTime;
+    payload.notion_synced_at = new Date().toISOString();
     payload.notion_sync_error = null;
   }
 
@@ -962,6 +977,10 @@ export async function resyncAllNotionLinkedPackagesFromNotion(
           ...schedule,
           name: cohortDisplayNameFromNotionPage(page),
           ...(page.status ? { status: page.status } : {}),
+          ...cohortWeeklySessionPatchFromNotionPage(page),
+          notion_sync_status: "synced",
+          notion_synced_at: new Date().toISOString(),
+          notion_sync_error: null,
         })
         .eq("id", cohortId);
 
@@ -1031,6 +1050,71 @@ export async function resyncAllNotionLinkedPackagesFromNotion(
   }
 
   return { updated, rosterSynced, errors };
+}
+
+/** Re-pull a linked cohort row and roster from its Notion package page. */
+export async function refreshCohortFromNotionPage(
+  supabase: SupabaseClient,
+  cohortId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: cohort, error: loadError } = await supabase
+    .from("cohorts")
+    .select("id, notion_page_id")
+    .eq("id", cohortId)
+    .maybeSingle();
+
+  if (loadError) return { ok: false, error: loadError.message };
+  if (!cohort?.notion_page_id) {
+    return { ok: false, error: "Cohort has no notion_page_id." };
+  }
+
+  const pageRaw = await notionJson<{
+    id: string;
+    last_edited_time: string;
+    properties: Record<string, unknown>;
+  }>(`/pages/${cohort.notion_page_id}`);
+
+  const page = parseNotionPackagePage(pageRaw);
+  const { byNotionUserId } = await loadNotionTutorMap(supabase);
+
+  const patch: Record<string, unknown> = {
+    name: cohortDisplayNameFromNotionPage(page),
+    start_date: page.startDate,
+    end_date: page.endDate,
+    start_day_of_week: readNotionStartDayOfWeek(page),
+    ...(page.status ? { status: page.status } : {}),
+    tutor_id: page.notionTutorUserId
+      ? byNotionUserId.get(page.notionTutorUserId)?.tutorId ?? null
+      : null,
+    ...cohortWeeklySessionPatchFromNotionPage(page),
+    notion_sync_status: "synced",
+    notion_synced_at: new Date().toISOString(),
+    notion_sync_error: null,
+  };
+
+  const { error: updateError } = await supabase.from("cohorts").update(patch).eq("id", cohortId);
+  if (updateError) return { ok: false, error: updateError.message };
+
+  const rosterResult = await syncCohortRosterFromNotion(
+    supabase,
+    cohortId,
+    page.rawProperties,
+    page.pageId
+  );
+  if (rosterResult.error) {
+    return { ok: false, error: rosterResult.error };
+  }
+
+  await saveCohortNotionLink(supabase, page.pageId, cohortId, {
+    packageName: page.packageName,
+    startDate: page.startDate,
+    endDate: page.endDate,
+    status: page.status,
+    notionTutorUserId: page.notionTutorUserId,
+    rawProperties: page.rawProperties,
+  });
+
+  return { ok: true };
 }
 
 export async function linkInboxRowToPackageInstance(

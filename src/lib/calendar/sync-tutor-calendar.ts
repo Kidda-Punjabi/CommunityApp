@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listGoogleCalendarEvents } from "@/lib/calendar/google-calendar-api";
-import { refreshGoogleAccessToken } from "@/lib/calendar/google-oauth";
+import { getValidTutorAccessToken } from "@/lib/calendar/tutor-access-token";
 import { loadTutorMatchCandidates } from "@/lib/calendar/load-match-candidates";
 import { matchEventToStudents } from "@/lib/calendar/match-events";
 import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
@@ -53,31 +53,11 @@ async function getValidAccessToken(
   adminClient: SupabaseClient,
   connection: ConnectionRow
 ): Promise<{ accessToken: string; refreshToken: string; expiresAt: string }> {
-  const expiresAtMs = new Date(connection.token_expires_at).getTime();
-  if (expiresAtMs > Date.now() + 60_000) {
-    return {
-      accessToken: connection.access_token,
-      refreshToken: connection.refresh_token,
-      expiresAt: connection.token_expires_at,
-    };
-  }
-
-  const refreshed = await refreshGoogleAccessToken(connection.refresh_token);
-  const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
-
-  await adminClient
-    .from("tutor_google_calendar_connections")
-    .update({
-      access_token: refreshed.access_token,
-      refresh_token: refreshed.refresh_token ?? connection.refresh_token,
-      token_expires_at: newExpiresAt,
-    })
-    .eq("tutor_id", connection.tutor_id);
-
+  const accessToken = await getValidTutorAccessToken(adminClient, connection);
   return {
-    accessToken: refreshed.access_token,
-    refreshToken: refreshed.refresh_token ?? connection.refresh_token,
-    expiresAt: newExpiresAt,
+    accessToken,
+    refreshToken: connection.refresh_token,
+    expiresAt: connection.token_expires_at,
   };
 }
 

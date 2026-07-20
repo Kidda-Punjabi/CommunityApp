@@ -17,6 +17,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { BuyButton } from "@/components/products/buy-button";
+import { GroupCohortCheckout } from "@/components/products/group-cohort-checkout";
+import { checkoutKeyRequiresCohortSelection } from "@/lib/group-purchase/client-keys";
 
 type StudentDiscountSectionProps = {
   isLoggedIn: boolean;
@@ -62,11 +64,19 @@ function StatusCard({ request }: { request: StudentDiscountRequestView }) {
         </p>
         {isCheckoutConfigured(checkoutKey) && (
           <div className="mt-4">
-            <BuyButton
-              checkoutKey={checkoutKey}
-              label={`Buy ${STUDENT_DISCOUNT_FORMAT_LABELS[request.courseFormat].toLowerCase()}`}
-              configured
-            />
+            {checkoutKeyRequiresCohortSelection(checkoutKey) ? (
+              <GroupCohortCheckout
+                checkoutKey={checkoutKey}
+                label={`Buy ${STUDENT_DISCOUNT_FORMAT_LABELS[request.courseFormat].toLowerCase()}`}
+                configured
+              />
+            ) : (
+              <BuyButton
+                checkoutKey={checkoutKey}
+                label={`Buy ${STUDENT_DISCOUNT_FORMAT_LABELS[request.courseFormat].toLowerCase()}`}
+                configured
+              />
+            )}
           </div>
         )}
       </div>
