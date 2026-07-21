@@ -53,12 +53,17 @@ export async function completeGroupPurchaseAfterPayment(
     studentPackageId: string;
   }
 ): Promise<CompleteGroupPurchaseResult> {
-  const cohortId = params.session.metadata?.cohort_id?.trim();
-  const holdId = params.session.metadata?.cohort_seat_hold_id?.trim();
+  const rawCohortId = params.session.metadata?.cohort_id?.trim();
+  const rawHoldId = params.session.metadata?.cohort_seat_hold_id?.trim();
 
-  if (!cohortId || !holdId) {
+  if (!rawCohortId || !rawHoldId) {
     return { completed: false };
   }
+
+  // Narrowed locals so nested closures see `string` (TS does not preserve
+  // control-flow narrowing of outer unions inside nested functions).
+  const cohortId: string = rawCohortId;
+  const holdId: string = rawHoldId;
 
   const { data: studentPackage, error: spLoadError } = await supabase
     .from("student_packages")
