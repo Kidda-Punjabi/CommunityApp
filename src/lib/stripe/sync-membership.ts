@@ -4,7 +4,10 @@ import {
   syncStripePurchasesForUser,
   tiersFromLineItems,
 } from "./sync-purchases";
-import { syncStudentPackagesFromPurchases } from "./sync-student-packages-from-payment";
+import {
+  syncStudentPackagesFromPurchases,
+  type PurchaseForStudentPackage,
+} from "./sync-student-packages-from-payment";
 import { completeGroupPurchaseFromCheckoutSession } from "@/lib/group-purchase/complete-group-purchase-after-payment";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { type PaidCourseTier } from "@/lib/membership/access";
@@ -31,6 +34,47 @@ async function resolveUserIdFromSession(session: Stripe.Checkout.Session) {
   return findUserIdByEmail(email);
 }
 
+/** When STRIPE_TIER_* env is missing on a deploy, line items still map via metadata.checkout_key. */
+function tierFromCheckoutKey(checkoutKey: string): PaidCourseTier | null {
+  if (checkoutKey.startsWith("foundational")) return "foundational";
+  if (checkoutKey === "community") return "community";
+  if (
+    checkoutKey === "beginners" ||
+    checkoutKey === "beginners-group" ||
+    checkoutKey === "beginners-one-to-one" ||
+    checkoutKey.includes("beginners")
+  ) {
+    return "beginners";
+  }
+  return null;
+}
+
+function purchasesForSession(
+  session: Stripe.Checkout.Session,
+  purchasedTiers: PaidCourseTier[]
+): PurchaseForStudentPackage[] {
+  const checkoutKey = session.metadata?.checkout_key ?? null;
+  const purchasedAt = new Date(session.created * 1000).toISOString();
+  const mode = session.mode === "subscription" ? "subscription" : "payment";
+
+  if (purchasedTiers.length > 0) {
+    return purchasedTiers.map((tier) => ({
+      tier,
+      checkoutKey,
+      purchasedAt,
+      sessionId: session.id,
+      mode,
+    }));
+  }
+
+  if (!checkoutKey) return [];
+
+  const tier = tierFromCheckoutKey(checkoutKey);
+  if (!tier) return [];
+
+  return [{ tier, checkoutKey, purchasedAt, sessionId: session.id, mode }];
+}
+
 export async function syncMembershipFromCheckoutSession(sessionId: string) {
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -49,25 +93,23 @@ export async function syncMembershipFromCheckoutSession(sessionId: string) {
   });
 
   const purchasedTiers = tiersFromLineItems(lineItems.data);
+  const purchases = purchasesForSession(session, purchasedTiers);
+
   const customerId =
     typeof session.customer === "string"
       ? session.customer
       : session.customer?.id ?? null;
 
-  const checkoutKey = session.metadata?.checkout_key ?? null;
-  const purchasedAt = new Date(session.created * 1000).toISOString();
-
   const grantResult = await grantCoursesToUser(userId, purchasedTiers, customerId);
-  await syncStudentPackagesFromPurchases(
-    userId,
-    purchasedTiers.map((tier) => ({
-      tier,
-      checkoutKey,
-      purchasedAt,
-      sessionId: session.id,
-      mode: session.mode === "subscription" ? "subscription" : "payment",
-    }))
-  );
+  const packageSync = await syncStudentPackagesFromPurchases(userId, purchases);
+  if (packageSync.errors.length) {
+    console.error(
+      "Student package sync errors:",
+      packageSync.errors.join("; "),
+      "session=",
+      session.id
+    );
+  }
 
   if (session.metadata?.cohort_id) {
     const admin = createServiceRoleClient();
@@ -149,9 +191,6 @@ export async function syncMembershipFromStripeEvent(event: Stripe.Event) {
 
     const customerId =
       typeof full.customer === "string" ? full.customer : full.customer?.id ?? null;
-
-    const checkoutKey = full.metadata?.checkout_key ?? "community";
-    const purchasedAt = new Date(full.created * 1000).toISOString();
 
     const grantResult = await grantCoursesToUser(userId, purchasedTiers, customerId);
     return grantResult;

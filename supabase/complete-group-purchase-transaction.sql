@@ -114,7 +114,6 @@ BEGIN
   UPDATE public.student_packages
   SET status = 'confirmed',
       enrollment_id = v_enrollment_id,
-      stripe_purchase_id = p_stripe_payment_intent,
       last_stripe_checkout_session_id = p_stripe_session_id,
       purchased_at = p_purchased_at
   WHERE id = p_student_package_id;

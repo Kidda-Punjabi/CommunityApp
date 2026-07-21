@@ -2,6 +2,7 @@ import {
   formatUnlockedCourseNames,
   getCourseAccessContext,
 } from "@/lib/membership/unlocked";
+import { formatCheckoutSuccessAccessLabel } from "@/lib/stripe/checkout-success-label";
 import { syncMembershipFromCheckoutSession } from "@/lib/stripe/sync-membership";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
@@ -70,6 +71,10 @@ export default async function CheckoutSuccessPage({
   }
 
   const access = await getCourseAccessContext(supabase, user);
+  const sessionPurchaseLabel = await formatCheckoutSuccessAccessLabel(user.id, sessionId);
+  const accessLabel =
+    sessionPurchaseLabel ??
+    formatUnlockedCourseNames(access.courses, access.unlockedCourseIds);
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-zinc-50 px-4 py-12">
@@ -80,9 +85,7 @@ export default async function CheckoutSuccessPage({
         <h1 className="mt-4 text-2xl font-bold text-zinc-900">Purchase complete!</h1>
         <p className="mt-2 text-sm text-zinc-600">
           You now have access to:{" "}
-          <span className="font-semibold text-violet-700">
-            {formatUnlockedCourseNames(access.courses, access.unlockedCourseIds)}
-          </span>
+          <span className="font-semibold text-violet-700">{accessLabel}</span>
         </p>
         {access.unlockedCourseIds.size > 0 && (
           <ul className="mt-3 space-y-1 text-sm text-zinc-600">
