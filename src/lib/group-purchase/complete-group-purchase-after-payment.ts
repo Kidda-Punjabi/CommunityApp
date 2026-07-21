@@ -52,7 +52,6 @@ export async function completeGroupPurchaseAfterPayment(
 ): Promise<CompleteGroupPurchaseResult> {
   const cohortId = params.session.metadata?.cohort_id?.trim();
   const holdId = params.session.metadata?.cohort_seat_hold_id?.trim();
-  const checkoutKey = params.session.metadata?.checkout_key ?? null;
 
   if (!cohortId || !holdId) {
     return { completed: false };
@@ -124,62 +123,52 @@ export async function completeGroupPurchaseAfterPayment(
   const purchasedAt = new Date(params.session.created * 1000).toISOString();
   const paymentDate = purchasedAt.slice(0, 10);
 
-  const { error: memberError } = await supabase.from("cohort_members").upsert(
-    {
-      cohort_id: cohortId,
-      user_id: params.userId,
-      joined_at: purchasedAt,
-      left_at: null,
-    },
-    { onConflict: "cohort_id,user_id" }
-  );
+  const paymentIntent =
+    params.session.payment_intent != null ? String(params.session.payment_intent) : null;
 
-  if (memberError) return { completed: false, error: memberError.message };
+  const { data: coreResult, error: rpcError } = await supabase.rpc("complete_group_purchase_core", {
+    p_user_id: params.userId,
+    p_student_package_id: params.studentPackageId,
+    p_cohort_id: cohortId,
+    p_hold_id: holdId,
+    p_purchased_at: purchasedAt,
+    p_payment_date: paymentDate,
+    p_stripe_session_id: params.session.id,
+    p_stripe_payment_intent: paymentIntent,
+  });
 
-  const { data: enrollment, error: enrollmentError } = await supabase
-    .from("course_enrollments")
-    .upsert(
-      {
-        user_id: params.userId,
-        course_id: cohort.course_id,
-        tutor_id: cohort.tutor_id,
-        delivery_mode: "group",
-        cohort_id: cohortId,
-        student_package_id: params.studentPackageId,
-        updated_at: purchasedAt,
-      },
-      { onConflict: "user_id,course_id" }
-    )
-    .select("id")
-    .single();
-
-  if (enrollmentError) {
+  if (rpcError) {
     const tutorHint =
-      cohort.tutor_id == null && enrollmentError.message.includes("tutor_id")
+      cohort.tutor_id == null && rpcError.message.includes("tutor_id")
         ? " Run supabase/group-enrollment-null-tutor.sql if cohort has no tutor yet."
         : "";
     return {
       completed: false,
-      error: `${enrollmentError.message}${tutorHint}`,
+      error: `${rpcError.message}${tutorHint}`,
     };
   }
 
-  const { error: spUpdateError } = await supabase
-    .from("student_packages")
-    .update({
-      status: "confirmed",
-      enrollment_id: enrollment.id,
-      stripe_purchase_id: params.session.payment_intent
-        ? String(params.session.payment_intent)
-        : null,
-      last_stripe_checkout_session_id: params.session.id,
-      purchased_at: purchasedAt,
-    })
-    .eq("id", params.studentPackageId);
+  const core = coreResult as {
+    ok?: boolean;
+    error?: string;
+    already_completed?: boolean;
+    enrollment_id?: string;
+    cohort_name?: string;
+    notion_page_id?: string | null;
+  } | null;
 
-  if (spUpdateError) return { completed: false, error: spUpdateError.message };
+  if (!core?.ok) {
+    const message = core?.error ?? "Group purchase transaction failed.";
+    const tutorHint =
+      cohort.tutor_id == null && message.includes("tutor_id")
+        ? " Run supabase/group-enrollment-null-tutor.sql if cohort has no tutor yet."
+        : "";
+    return { completed: false, error: `${message}${tutorHint}` };
+  }
 
-  await supabase.from("cohort_seat_holds").delete().eq("id", holdId);
+  if (core.already_completed) {
+    return { completed: true };
+  }
 
   const gate = await evaluateCohortCalendarGate(supabase, cohortId, cohort.tutor_id);
   let calendarInvite = false;
@@ -209,37 +198,24 @@ export async function completeGroupPurchaseAfterPayment(
     .eq("student_package_id", params.studentPackageId)
     .maybeSingle();
 
-  const checklistPayload = {
-    checklist_type: "group" as const,
-    payment_date: paymentDate,
-    time_assigned: true,
-    package_created: true,
-    welcome_email: false,
+  const checklistExtras = {
     calendar_invite: calendarInvite,
     tutor_notified: tutorNotified,
-    whatsapp_chat_made: false,
-    schedule_whatsapp_chat: false,
-    onboarding_completed: false,
   };
 
   if (existingChecklist) {
     await supabase
       .from("onboarding_checklists")
-      .update(checklistPayload)
+      .update(checklistExtras)
       .eq("id", existingChecklist.id);
-  } else {
-    await supabase.from("onboarding_checklists").insert({
-      student_package_id: params.studentPackageId,
-      ...checklistPayload,
-    });
   }
 
   const { data: authUser } = await supabase.auth.admin.getUserById(params.userId);
   await tryWriteBackCohortConfirmedAfterEnrollment(supabase, {
     userId: params.userId,
     cohortId,
-    cohortName: cohort.name,
-    notionPageId: cohort.notion_page_id ?? null,
+    cohortName: core.cohort_name ?? cohort.name,
+    notionPageId: core.notion_page_id ?? cohort.notion_page_id ?? null,
     email: authUser.user?.email ?? null,
   });
 

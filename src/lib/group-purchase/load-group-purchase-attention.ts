@@ -52,7 +52,7 @@ export async function loadGroupPurchaseAttention(): Promise<{
   const { data: cohorts, error: cohortError } = await supabase
     .from("cohorts")
     .select("id, name, tutor_id, status")
-    .in("status", ["recruiting", "scheduled", "in_progress"]);
+    .in("status", ["recruiting", "pre_scheduling", "scheduled", "in_progress", "paused"]);
 
   if (cohortError) {
     return { items, error: cohortError.message };

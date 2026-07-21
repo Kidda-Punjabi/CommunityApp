@@ -3,6 +3,7 @@ import type {
   PackageMembershipStatus,
 } from "@/lib/admin/package-status";
 import type { PackageTableColumnId } from "@/lib/admin/packages/table-columns";
+import type { TutorIdSource } from "@/lib/notion/tutor-id-source";
 
 export type AdminPackageKind = "cohort" | "package_instance" | "community";
 
@@ -18,6 +19,20 @@ export type PackagesRosterMember = {
   notionLeadPageId?: string | null;
 };
 
+export type CohortCalendarLinkState =
+  | "linked"
+  | "no_tutor"
+  | "no_connection"
+  | "unlinked"
+  | "n_a";
+
+export type CohortCalendarLinkedEvent = {
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  recurringEventId: string;
+};
+
 export type AdminPackageListRow = {
   kind: AdminPackageKind;
   id: string;
@@ -27,6 +42,7 @@ export type AdminPackageListRow = {
   packageId: string | null;
   tutorId: string | null;
   tutorName: string | null;
+  tutorIdSource: TutorIdSource;
   status: PackageInstanceStatus;
   startDayOfWeek: string | null;
   startDate: string | null;
@@ -39,6 +55,15 @@ export type AdminPackageListRow = {
   confirmed: PackagesRosterMember[];
   lessonUnlockCount: number;
   lastLessonLoggedAt: string | null;
+  /** Cohort weekly session (for calendar matching); null for non-cohorts. */
+  weeklySessionStart: string | null;
+  weeklySessionEnd: string | null;
+  calendarLinkState: CohortCalendarLinkState;
+  calendarNeedsAttention: boolean;
+  /** Present when calendarLinkState === "linked". */
+  calendarLinkedEvent: CohortCalendarLinkedEvent | null;
+  /** Tutor Google Calendar last_synced_at, if connected. */
+  tutorCalendarLastSyncedAt: string | null;
 };
 
 export type PackagesFilterField = "status" | "tutor" | "course" | "delivery_mode";

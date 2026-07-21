@@ -5,6 +5,7 @@ import type {
   AdminPackageDetail,
   AdminPackageKind,
   AdminPackageListRow,
+  CohortCalendarLinkState,
   OnboardingChecklistRow,
   PackageLessonLogEntry,
   PackagesRosterMember,
@@ -12,7 +13,17 @@ import type {
 import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin/package-status";
 import { fetchCommunityPackageProduct } from "@/lib/admin/community-package";
 import { getDisplayName } from "@/lib/profile/display-name";
+import type { TutorIdSource } from "@/lib/notion/tutor-id-source";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+/** Statuses that should flag missing calendar link / tutor setup. */
+export const CALENDAR_ATTENTION_STATUSES: PackageInstanceStatus[] = [
+  "pre_scheduling",
+  "recruiting",
+  "scheduled",
+  "in_progress",
+  "paused",
+];
 
 type ProfileRow = {
   id: string;
@@ -20,6 +31,29 @@ type ProfileRow = {
   preferred_name: string | null;
   avatar_url: string | null;
 };
+
+function resolveTutorIdSource(value: string | null | undefined): TutorIdSource {
+  return value === "manual" ? "manual" : "notion";
+}
+
+function resolveCohortCalendarState(params: {
+  tutorId: string | null;
+  hasConnection: boolean;
+  hasRecurringEvent: boolean;
+}): CohortCalendarLinkState {
+  if (!params.tutorId) return "no_tutor";
+  if (params.hasRecurringEvent) return "linked";
+  if (!params.hasConnection) return "no_connection";
+  return "unlinked";
+}
+
+function calendarNeedsAttention(
+  status: PackageInstanceStatus,
+  state: CohortCalendarLinkState
+): boolean {
+  if (!CALENDAR_ATTENTION_STATUSES.includes(status)) return false;
+  return state === "unlinked" || state === "no_tutor" || state === "no_connection";
+}
 
 function labelForProfile(profile: ProfileRow | undefined, email: string | null): string {
   if (!profile) return email ?? "Unknown";
@@ -226,13 +260,13 @@ export async function loadAdminPackagesList(
     supabase
       .from("cohorts")
       .select(
-        "id, name, course_id, tutor_id, status, start_day_of_week, start_date, end_date, capacity, active"
+        "id, name, course_id, tutor_id, tutor_id_source, status, start_day_of_week, start_date, end_date, capacity, active, weekly_session_start, weekly_session_end"
       )
       .order("created_at", { ascending: false }),
     supabase
       .from("package_instances")
       .select(
-        "id, name, package_id, course_id, tutor_id, status, start_day_of_week, start_date, end_date, capacity, active, notion_page_id"
+        "id, name, package_id, course_id, tutor_id, tutor_id_source, status, start_day_of_week, start_date, end_date, capacity, active, notion_page_id"
       )
       .order("created_at", { ascending: false }),
     supabase.from("courses").select("id, name"),
@@ -249,9 +283,57 @@ export async function loadAdminPackagesList(
 
   const cohortIds = (cohortRows ?? []).map((c) => c.id);
   const instanceIds = (instanceRows ?? []).map((i) => i.id);
+  const cohortTutorIds = [
+    ...new Set(
+      (cohortRows ?? []).map((c) => c.tutor_id).filter((id): id is string => Boolean(id))
+    ),
+  ];
   const notionLinkedInstanceIds = (instanceRows ?? [])
     .filter((row) => row.notion_page_id)
     .map((row) => row.id);
+
+  const [{ data: recurringSessions }, { data: calendarConnections }] = await Promise.all([
+    cohortIds.length > 0
+      ? supabase
+          .from("tutor_scheduled_sessions")
+          .select("cohort_id, google_recurring_event_id, title, starts_at, ends_at")
+          .in("cohort_id", cohortIds)
+          .not("google_recurring_event_id", "is", null)
+          .order("starts_at", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    cohortTutorIds.length > 0
+      ? supabase
+          .from("tutor_google_calendar_connections")
+          .select("tutor_id, last_synced_at")
+          .in("tutor_id", cohortTutorIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const linkedEventByCohortId = new Map<
+    string,
+    {
+      title: string;
+      startsAt: string;
+      endsAt: string;
+      recurringEventId: string;
+    }
+  >();
+  for (const row of recurringSessions ?? []) {
+    if (!row.cohort_id || !row.google_recurring_event_id) continue;
+    if (linkedEventByCohortId.has(row.cohort_id)) continue;
+    linkedEventByCohortId.set(row.cohort_id, {
+      title: row.title,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      recurringEventId: row.google_recurring_event_id,
+    });
+  }
+  const connectionByTutorId = new Map(
+    (calendarConnections ?? []).map((row) => [
+      row.tutor_id,
+      row.last_synced_at as string | null,
+    ])
+  );
 
   const { data: resolvedInboxRows } = await supabase
     .from("notion_sync_inbox")
@@ -610,6 +692,14 @@ export async function loadAdminPackagesList(
       (p) => p.course_id === cohort.course_id && p.delivery_mode === "group"
     );
 
+    const calendarLinkState = resolveCohortCalendarState({
+      tutorId: cohort.tutor_id,
+      hasConnection: cohort.tutor_id ? connectionByTutorId.has(cohort.tutor_id) : false,
+      hasRecurringEvent: linkedEventByCohortId.has(cohort.id),
+    });
+    const status = cohort.status as PackageInstanceStatus;
+    const calendarLinkedEvent = linkedEventByCohortId.get(cohort.id) ?? null;
+
     rows.push({
       kind: "cohort",
       id: cohort.id,
@@ -619,7 +709,8 @@ export async function loadAdminPackagesList(
       packageId: groupPkg?.id ?? null,
       tutorId: cohort.tutor_id,
       tutorName: cohort.tutor_id ? labelForProfile(profileById.get(cohort.tutor_id), null) : null,
-      status: cohort.status as PackageInstanceStatus,
+      tutorIdSource: resolveTutorIdSource(cohort.tutor_id_source),
+      status,
       startDayOfWeek: cohort.start_day_of_week,
       startDate: cohort.start_date,
       endDate: cohort.end_date,
@@ -629,6 +720,14 @@ export async function loadAdminPackagesList(
       ...roster,
       lessonUnlockCount: unlockStats.count,
       lastLessonLoggedAt: unlockStats.lastAt,
+      weeklySessionStart: cohort.weekly_session_start ?? null,
+      weeklySessionEnd: cohort.weekly_session_end ?? null,
+      calendarLinkState,
+      calendarNeedsAttention: calendarNeedsAttention(status, calendarLinkState),
+      calendarLinkedEvent,
+      tutorCalendarLastSyncedAt: cohort.tutor_id
+        ? (connectionByTutorId.get(cohort.tutor_id) ?? null)
+        : null,
     });
   }
 
@@ -661,6 +760,7 @@ export async function loadAdminPackagesList(
       tutorName: instance.tutor_id
         ? labelForProfile(profileById.get(instance.tutor_id), null)
         : null,
+      tutorIdSource: resolveTutorIdSource(instance.tutor_id_source),
       status: instance.status as PackageInstanceStatus,
       startDayOfWeek: instance.start_day_of_week,
       startDate: instance.start_date,
@@ -676,6 +776,12 @@ export async function loadAdminPackagesList(
       ...roster,
       lessonUnlockCount: 0,
       lastLessonLoggedAt: null,
+      weeklySessionStart: null,
+      weeklySessionEnd: null,
+      calendarLinkState: "n_a",
+      calendarNeedsAttention: false,
+      calendarLinkedEvent: null,
+      tutorCalendarLastSyncedAt: null,
     });
   }
 
@@ -723,6 +829,7 @@ async function loadCommunityPackageRow(
     packageId: communityProduct.id,
     tutorId: null,
     tutorName: null,
+    tutorIdSource: "notion",
     status: "in_progress",
     startDayOfWeek: null,
     startDate: null,
@@ -733,6 +840,12 @@ async function loadCommunityPackageRow(
     ...roster,
     lessonUnlockCount: 0,
     lastLessonLoggedAt: null,
+    weeklySessionStart: null,
+    weeklySessionEnd: null,
+    calendarLinkState: "n_a",
+    calendarNeedsAttention: false,
+    calendarLinkedEvent: null,
+    tutorCalendarLastSyncedAt: null,
   };
 }
 

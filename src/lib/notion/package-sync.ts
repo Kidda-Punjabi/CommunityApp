@@ -23,6 +23,7 @@ import {
   syncCohortRosterFromNotion,
   syncPackageInstanceRosterFromNotion,
 } from "@/lib/notion/package-roster-sync";
+import { isManualTutorSource, omitTutorFromPullPatchIfManual } from "@/lib/notion/tutor-id-source";
 import {
   NOTION_PACKAGE_DATA_SOURCE_ID,
   dateStart,
@@ -163,6 +164,7 @@ export function cohortPullPatchFromNotionPage(
   const tutorId = tutorIdFromNotionPackagePage(page, byNotionUserId);
   if (tutorId !== undefined) {
     patch.tutor_id = tutorId;
+    patch.tutor_id_source = "notion";
   }
   return patch;
 }
@@ -181,6 +183,7 @@ export function packageInstancePullPatchFromNotionPage(
   const tutorId = tutorIdFromNotionPackagePage(page, byNotionUserId);
   if (tutorId !== undefined) {
     patch.tutor_id = tutorId;
+    patch.tutor_id_source = "notion";
   }
   return patch;
 }
@@ -498,7 +501,7 @@ export async function pullPackageInstancesFromNotion(
     const [{ data: existingInstance }, existingCohortId] = await Promise.all([
       supabase
         .from("package_instances")
-        .select("id, notion_synced_at")
+        .select("id, notion_synced_at, tutor_id_source")
         .eq("notion_page_id", page.pageId)
         .maybeSingle(),
       getCohortIdForNotionPage(supabase, page.pageId),
@@ -508,7 +511,7 @@ export async function pullPackageInstancesFromNotion(
       const notionColumns = await cohortNotionColumnsAvailable(supabase);
       const { data: existingCohort, error: cohortLoadError } = await supabase
         .from("cohorts")
-        .select("id")
+        .select("id, tutor_id_source")
         .eq("id", existingCohortId)
         .maybeSingle();
 
@@ -517,9 +520,12 @@ export async function pullPackageInstancesFromNotion(
         continue;
       }
 
-      const cohortPatch: Record<string, unknown> = cohortPullPatchFromNotionPage(page, byNotionUserId);
+      const cohortPatch: Record<string, unknown> = omitTutorFromPullPatchIfManual(
+        cohortPullPatchFromNotionPage(page, byNotionUserId),
+        existingCohort.tutor_id_source
+      );
 
-      if (await cohortNotionColumnsAvailable(supabase)) {
+      if (notionColumns) {
         cohortPatch.notion_sync_status = "synced";
         cohortPatch.notion_synced_at = new Date().toISOString();
         cohortPatch.notion_sync_error = null;
@@ -567,7 +573,10 @@ export async function pullPackageInstancesFromNotion(
         continue;
       }
 
-      const patch = packageInstancePullPatchFromNotionPage(page, byNotionUserId);
+      const patch = omitTutorFromPullPatchIfManual(
+        packageInstancePullPatchFromNotionPage(page, byNotionUserId),
+        existingInstance.tutor_id_source
+      );
 
       const { error } = await supabase
         .from("package_instances")
@@ -679,6 +688,7 @@ export async function createPackageInstanceFromNotionPage(
       end_date: page.endDate,
       start_day_of_week: readNotionStartDayOfWeek(page),
       tutor_id: mappedTutorId === undefined ? null : mappedTutorId,
+      tutor_id_source: "notion",
       notion_page_id: page.pageId,
       notion_sync_status: "synced",
       notion_synced_at: page.lastEditedTime,
@@ -759,6 +769,16 @@ export async function createOrUpdateCohortFromNotionPage(
   const existingId = await findCohortForNotionImport(supabase, page, link.courseId, cohortName);
   let cohortId = existingId;
 
+  let existingTutorSource: string | null = null;
+  if (existingId) {
+    const { data: existing } = await supabase
+      .from("cohorts")
+      .select("tutor_id_source")
+      .eq("id", existingId)
+      .maybeSingle();
+    existingTutorSource = existing?.tutor_id_source ?? null;
+  }
+
   const payload: Record<string, unknown> = {
     course_id: link.courseId,
     name: cohortName,
@@ -770,10 +790,14 @@ export async function createOrUpdateCohortFromNotionPage(
     ...cohortWeeklySessionPatchFromNotionPage(page),
   };
   const mappedTutorId = tutorIdFromNotionPackagePage(page, byNotionUserId);
-  if (mappedTutorId !== undefined) {
-    payload.tutor_id = mappedTutorId;
-  } else if (!existingId) {
-    payload.tutor_id = null;
+  if (!isManualTutorSource(existingTutorSource)) {
+    if (mappedTutorId !== undefined) {
+      payload.tutor_id = mappedTutorId;
+      payload.tutor_id_source = "notion";
+    } else if (!existingId) {
+      payload.tutor_id = null;
+      payload.tutor_id_source = "notion";
+    }
   }
 
   if (notionColumns) {
@@ -995,10 +1019,19 @@ export async function resyncAllNotionLinkedPackagesFromNotion(
   for (const page of pages) {
     const cohortId = cohortIdByNotionPageId.get(page.pageId);
     if (cohortId) {
+      const { data: existingCohort } = await supabase
+        .from("cohorts")
+        .select("tutor_id_source")
+        .eq("id", cohortId)
+        .maybeSingle();
+
       const { error } = await supabase
         .from("cohorts")
         .update({
-          ...cohortPullPatchFromNotionPage(page, byNotionUserId),
+          ...omitTutorFromPullPatchIfManual(
+            cohortPullPatchFromNotionPage(page, byNotionUserId),
+            existingCohort?.tutor_id_source
+          ),
           notion_sync_status: "synced",
           notion_synced_at: new Date().toISOString(),
           notion_sync_error: null,
@@ -1036,7 +1069,7 @@ export async function resyncAllNotionLinkedPackagesFromNotion(
 
     const { data: instance } = await supabase
       .from("package_instances")
-      .select("id")
+      .select("id, tutor_id_source")
       .eq("notion_page_id", page.pageId)
       .maybeSingle();
 
@@ -1044,7 +1077,12 @@ export async function resyncAllNotionLinkedPackagesFromNotion(
 
     const { error } = await supabase
       .from("package_instances")
-      .update(packageInstancePullPatchFromNotionPage(page, byNotionUserId))
+      .update(
+        omitTutorFromPullPatchIfManual(
+          packageInstancePullPatchFromNotionPage(page, byNotionUserId),
+          instance.tutor_id_source
+        )
+      )
       .eq("id", instance.id);
 
     if (error) {
@@ -1076,7 +1114,7 @@ export async function refreshCohortFromNotionPage(
 ): Promise<{ ok: boolean; error?: string }> {
   const { data: cohort, error: loadError } = await supabase
     .from("cohorts")
-    .select("id, notion_page_id")
+    .select("id, notion_page_id, tutor_id_source")
     .eq("id", cohortId)
     .maybeSingle();
 
@@ -1095,7 +1133,10 @@ export async function refreshCohortFromNotionPage(
   const { byNotionUserId } = await loadNotionTutorMap(supabase);
 
   const patch: Record<string, unknown> = {
-    ...cohortPullPatchFromNotionPage(page, byNotionUserId),
+    ...omitTutorFromPullPatchIfManual(
+      cohortPullPatchFromNotionPage(page, byNotionUserId),
+      cohort.tutor_id_source
+    ),
     notion_sync_status: "synced",
     notion_synced_at: new Date().toISOString(),
     notion_sync_error: null,

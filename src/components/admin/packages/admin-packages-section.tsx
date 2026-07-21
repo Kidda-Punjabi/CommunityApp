@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import {
   deletePackagesSavedView,
   fetchAdminPackagesList,
+  fetchPackageFormOptions,
   fetchPackagesSavedViews,
   savePackagesView,
   updatePackagesSavedView,
@@ -12,6 +13,7 @@ import {
 import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
 import { PackageRunFormModal } from "@/components/admin/packages/package-run-form-modal";
 import { PackageRosterCell } from "@/components/admin/packages/package-roster-cell";
+import { PackageTutorCell } from "@/components/admin/packages/package-tutor-cell";
 import {
   AdminPackagesBoardHeader,
   readStoredActiveViewId,
@@ -183,6 +185,7 @@ export function AdminPackagesSection() {
   const [pending, startTransition] = useTransition();
   const [showCreate, setShowCreate] = useState(false);
   const [editingRow, setEditingRow] = useState<AdminPackageListRow | null>(null);
+  const [tutorOptions, setTutorOptions] = useState<Array<{ id: string; name: string }>>([]);
 
   function handleRosterChange(
     rowKey: { kind: AdminPackageKind; id: string },
@@ -200,13 +203,15 @@ export function AdminPackagesSection() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [list, views] = await Promise.all([
+      const [list, views, formOptions] = await Promise.all([
         fetchAdminPackagesList(),
         fetchPackagesSavedViews(),
+        fetchPackageFormOptions(),
       ]);
       if (cancelled) return;
       setRows(list.rows);
       setError(list.error ?? null);
+      setTutorOptions(formOptions.tutors);
       const viewsList = views.views;
       setSavedViews(viewsList);
       setViewsError(views.error ?? null);
@@ -240,12 +245,12 @@ export function AdminPackagesSection() {
   }, []);
 
   const tutors = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map(tutorOptions.map((t) => [t.id, t.name]));
     for (const row of rows) {
       if (row.tutorId && row.tutorName) map.set(row.tutorId, row.tutorName);
     }
     return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [rows]);
+  }, [rows, tutorOptions]);
 
   const filteredRows = useMemo(() => applyViewConfig(rows, config), [rows, config]);
   const grouped = useMemo(() => groupRows(filteredRows, config.groupBy), [filteredRows, config.groupBy]);
@@ -436,7 +441,7 @@ export function AdminPackagesSection() {
                         <th className={packageColumnHeaderClass("startDay")}>Start day</th>
                       ) : null}
                       {isPackageColumnVisible(config, "tutor") ? (
-                        <th className={packageColumnHeaderClass("tutor")}>Tutor</th>
+                        <th className={packageColumnHeaderClass("tutor")}>Tutor &amp; calendar</th>
                       ) : null}
                       {isPackageColumnVisible(config, "startDate") ? (
                         <th className={packageColumnHeaderClass("startDate")}>Start</th>
@@ -523,7 +528,17 @@ title="Lessons unlocked for this package run"
                         ) : null}
                         {isPackageColumnVisible(config, "tutor") ? (
                           <td className={packageColumnCellClass("tutor")}>
-                            {row.tutorName ?? "—"}
+                            <PackageTutorCell
+                              row={row}
+                              tutors={tutors}
+                              onUpdated={(patch) =>
+                                handleRosterChange(
+                                  { kind: row.kind, id: row.id },
+                                  (current) => ({ ...current, ...patch })
+                                )
+                              }
+                              onCalendarLinked={() => void reloadList()}
+                            />
                           </td>
                         ) : null}
                         {isPackageColumnVisible(config, "startDate") ? (

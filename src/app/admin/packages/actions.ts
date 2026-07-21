@@ -52,7 +52,8 @@ export async function fetchAdminPackagesList(): Promise<{
   error?: string;
 }> {
   try {
-    const supabase = await requireAdminFromActions();
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
     return loadAdminPackagesList(supabase);
   } catch (e) {
     return {
@@ -143,7 +144,10 @@ export async function updatePackageRunFields(
     const table = kind === "cohort" ? "cohorts" : "package_instances";
     const payload: Record<string, unknown> = {};
     if (fields.name !== undefined) payload.name = fields.name;
-    if (fields.tutorId !== undefined) payload.tutor_id = fields.tutorId;
+    if (fields.tutorId !== undefined) {
+      payload.tutor_id = fields.tutorId;
+      payload.tutor_id_source = "manual";
+    }
     if (fields.startDate !== undefined) payload.start_date = fields.startDate;
     if (fields.endDate !== undefined) payload.end_date = fields.endDate;
     if (fields.startDayOfWeek !== undefined) payload.start_day_of_week = fields.startDayOfWeek;
@@ -156,6 +160,193 @@ export async function updatePackageRunFields(
     return { success: "Package updated." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update package." };
+  }
+}
+
+export async function assignPackageTutorInline(
+  kind: AdminPackageKind,
+  id: string,
+  tutorId: string | null
+): Promise<ActionResult> {
+  return updatePackageRunFields(kind, id, { tutorId });
+}
+
+export async function resetPackageTutorToNotion(
+  kind: AdminPackageKind,
+  id: string
+): Promise<ActionResult & { tutorId?: string | null; tutorName?: string | null }> {
+  try {
+    const supabase = await requireAdminFromActions();
+    if (kind === "community") {
+      return { error: "Community package has no tutor assignment." };
+    }
+
+    if (kind === "cohort") {
+      const { refreshCohortFromNotionPage, loadNotionTutorMap, parseNotionPackagePage, tutorIdFromNotionPackagePage } =
+        await import("@/lib/notion/package-sync");
+      const { notionJson } = await import("@/lib/notion/client");
+
+      const { data: cohort, error: loadError } = await supabase
+        .from("cohorts")
+        .select("id, notion_page_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (loadError) return { error: loadError.message };
+      if (!cohort?.notion_page_id) {
+        return { error: "Cohort is not linked to a Notion page." };
+      }
+
+      const pageRaw = await notionJson<{
+        id: string;
+        last_edited_time: string;
+        properties: Record<string, unknown>;
+      }>(`/pages/${cohort.notion_page_id}`);
+      const page = parseNotionPackagePage(pageRaw);
+      const { byNotionUserId } = await loadNotionTutorMap(supabase);
+      const mapped = tutorIdFromNotionPackagePage(page, byNotionUserId);
+      const tutorId = mapped === undefined ? null : mapped;
+
+      const { error } = await supabase
+        .from("cohorts")
+        .update({ tutor_id: tutorId, tutor_id_source: "notion" })
+        .eq("id", id);
+      if (error) return { error: error.message };
+
+      // Refresh other Notion fields without re-locking tutor (source is notion now).
+      await refreshCohortFromNotionPage(supabase, id);
+
+      let tutorName: string | null = null;
+      if (tutorId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, preferred_name")
+          .eq("id", tutorId)
+          .maybeSingle();
+        tutorName = profile ? getDisplayName(profile) : null;
+      }
+
+      revalidatePackages(id);
+      return {
+        success: tutorId
+          ? "Tutor reset from Notion."
+          : "Reset to Notion — no mapped tutor on the page (check Tutor map).",
+        tutorId,
+        tutorName,
+      };
+    }
+
+    const { data: instance, error: loadError } = await supabase
+      .from("package_instances")
+      .select("id, notion_page_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (loadError) return { error: loadError.message };
+    if (!instance?.notion_page_id) {
+      return { error: "Package instance is not linked to a Notion page." };
+    }
+
+    const { loadNotionTutorMap, parseNotionPackagePage, tutorIdFromNotionPackagePage } =
+      await import("@/lib/notion/package-sync");
+    const { notionJson } = await import("@/lib/notion/client");
+
+    const pageRaw = await notionJson<{
+      id: string;
+      last_edited_time: string;
+      properties: Record<string, unknown>;
+    }>(`/pages/${instance.notion_page_id}`);
+    const page = parseNotionPackagePage(pageRaw);
+    const { byNotionUserId } = await loadNotionTutorMap(supabase);
+    const mapped = tutorIdFromNotionPackagePage(page, byNotionUserId);
+    const tutorId = mapped === undefined ? null : mapped;
+
+    const { error } = await supabase
+      .from("package_instances")
+      .update({ tutor_id: tutorId, tutor_id_source: "notion" })
+      .eq("id", id);
+    if (error) return { error: error.message };
+
+    let tutorName: string | null = null;
+    if (tutorId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name, preferred_name")
+        .eq("id", tutorId)
+        .maybeSingle();
+      tutorName = profile ? getDisplayName(profile) : null;
+    }
+
+    revalidatePackages(id);
+    return {
+      success: tutorId
+        ? "Tutor reset from Notion."
+        : "Reset to Notion — no mapped tutor on the page (check Tutor map).",
+      tutorId,
+      tutorName,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to reset tutor from Notion." };
+  }
+}
+
+export async function searchCohortCalendarMatches(cohortId: string): Promise<{
+  candidates: Array<{
+    googleEventId: string;
+    recurringEventId: string;
+    title: string;
+    nextStartsAt: string;
+    nextEndsAt: string;
+    weekday: string;
+    timeLabel: string;
+    score: number;
+    reasons: string[];
+  }>;
+  state?: "ok" | "no_tutor" | "no_connection";
+  error?: string;
+}> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const {
+      searchCohortCalendarCandidates,
+    } = await import("@/lib/admin/packages/cohort-calendar-link");
+    const result = await searchCohortCalendarCandidates(supabase, cohortId);
+    if (!result.ok) return { candidates: [], error: result.error };
+    return { candidates: result.candidates, state: result.state };
+  } catch (e) {
+    return {
+      candidates: [],
+      error: e instanceof Error ? e.message : "Calendar search failed.",
+    };
+  }
+}
+
+export async function linkCohortCalendarMatch(input: {
+  cohortId: string;
+  googleEventId: string;
+  recurringEventId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+}): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { linkCohortRecurringCalendarEvent } = await import(
+      "@/lib/admin/packages/cohort-calendar-link"
+    );
+    const result = await linkCohortRecurringCalendarEvent(supabase, {
+      cohortId: input.cohortId,
+      googleEventId: input.googleEventId,
+      recurringEventId: input.recurringEventId,
+      title: input.title,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+    });
+    if (!result.ok) return { error: result.error ?? "Failed to link calendar event." };
+    revalidatePackages(input.cohortId);
+    return { success: "Calendar event linked." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to link calendar event." };
   }
 }
 
@@ -326,6 +517,7 @@ export async function createPackageRun(input: {
           course_id: courseId,
           name,
           tutor_id: input.tutorId ?? null,
+          tutor_id_source: input.tutorId ? "manual" : "notion",
           status: input.status ?? "pre_scheduling",
           capacity: input.capacity ?? 7,
           start_day_of_week: input.startDayOfWeek ?? null,
@@ -361,6 +553,7 @@ export async function createPackageRun(input: {
         course_id: pkg.course_id,
         name,
         tutor_id: input.tutorId ?? null,
+        tutor_id_source: input.tutorId ? "manual" : "notion",
         status: input.status ?? "pre_scheduling",
         capacity: input.capacity ?? 1,
         start_day_of_week: input.startDayOfWeek ?? null,
@@ -686,6 +879,9 @@ export async function upsertOnboardingChecklist(
 function parsePackagesViewConfig(raw: unknown): PackagesViewConfig {
   if (!raw || typeof raw !== "object") return DEFAULT_PACKAGES_VIEW_CONFIG;
   const config = raw as Partial<PackagesViewConfig>;
+  const hidden = parsePackageTableColumnIds(
+    (config as PackagesViewConfig).columns?.hidden
+  ).filter((id) => (id as string) !== "calendar");
   return {
     search: typeof config.search === "string" ? config.search : "",
     filters: {
@@ -714,9 +910,7 @@ function parsePackagesViewConfig(raw: unknown): PackagesViewConfig {
       direction: config.sort?.direction === "asc" ? "asc" : "desc",
     },
     columns: {
-      hidden: parsePackageTableColumnIds(
-        (config as PackagesViewConfig).columns?.hidden
-      ),
+      hidden,
     },
   };
 }

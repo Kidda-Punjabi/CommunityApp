@@ -6,7 +6,7 @@ export const PACKAGE_TABLE_COLUMNS = [
   { id: "waitingForPayment", label: "Waiting for payment" },
   { id: "confirmed", label: "Confirmed" },
   { id: "startDay", label: "Start day" },
-  { id: "tutor", label: "Tutor" },
+  { id: "tutor", label: "Tutor & calendar" },
   { id: "startDate", label: "Start" },
   { id: "endDate", label: "End" },
   { id: "status", label: "Status" },
@@ -41,7 +41,7 @@ export function packageColumnHeaderClass(columnId: PackageTableColumnId): string
     case "startDay":
       return "hidden px-4 py-3 md:table-cell lg:w-[8%]";
     case "tutor":
-      return "px-4 py-3 lg:w-[9%]";
+      return "px-4 py-3 lg:w-[14%]";
     case "startDate":
       return "px-4 py-3 lg:w-[8%]";
     case "endDate":
@@ -68,7 +68,7 @@ export function packageColumnCellClass(columnId: PackageTableColumnId): string {
     case "startDate":
       return "whitespace-nowrap px-4 py-3 text-zinc-600";
     case "tutor":
-      return "px-4 py-3 text-zinc-600";
+      return "px-4 py-3 text-zinc-600 align-top";
     default:
       return "px-4 py-3";
   }
