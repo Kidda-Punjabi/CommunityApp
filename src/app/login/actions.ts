@@ -5,8 +5,11 @@ import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
+import { resolveSignInError, type SignInErrorKind } from "@/lib/auth/sign-in-errors";
+
 export type AuthState = {
   error?: string;
+  errorKind?: SignInErrorKind;
 };
 
 export async function login(
@@ -28,7 +31,8 @@ export async function login(
   });
 
   if (error) {
-    return { error: error.message };
+    const resolved = await resolveSignInError(email, error);
+    return { error: resolved.message, errorKind: resolved.kind };
   }
 
   await persistLastUser(supabase);

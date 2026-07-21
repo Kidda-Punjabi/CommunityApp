@@ -61,7 +61,16 @@ export function LoginForm({ defaultEmail, rememberedAccount = false, nextPath }:
       />
 
       {state.error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{state.error}</p>
+        <div className="space-y-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+          <p>{state.error}</p>
+          {state.errorKind === "no_account" ? (
+            <p>
+              <Link href="/signup" className="font-medium text-violet-700 underline hover:text-violet-600">
+                Create a Kidda account
+              </Link>
+            </p>
+          ) : null}
+        </div>
       )}
 
       <button
