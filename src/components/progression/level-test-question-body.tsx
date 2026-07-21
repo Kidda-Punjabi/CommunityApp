@@ -17,7 +17,7 @@ type LevelTestQuestionBodyProps = {
   locked: boolean;
   selectedOptionId: string | null;
   onSelectOption: (optionId: string, isCorrect: boolean) => void;
-  onSentenceBuilderAnswer: (isCorrect: boolean) => void;
+  onSentenceBuilderAnswer: (isCorrect: boolean, selectedTiles: string[]) => void;
 };
 
 function PunjabiWithRomanised({
@@ -243,7 +243,7 @@ function SentenceBuilderQuestionBody({
 }: {
   question: LevelTestSentenceBuilderQuestion;
   locked: boolean;
-  onSentenceBuilderAnswer: (isCorrect: boolean) => void;
+  onSentenceBuilderAnswer: (isCorrect: boolean, selectedTiles: string[]) => void;
 }) {
   const [bank, setBank] = useState<LevelTestSentenceTile[]>(question.tiles);
   const [built, setBuilt] = useState<LevelTestSentenceTile[]>([]);
@@ -270,12 +270,10 @@ function SentenceBuilderQuestionBody({
   function handleCheck() {
     if (locked || feedback || built.length === 0) return;
 
-    const isCorrect = answersMatch(
-      built.map((tile) => tile.gurmukhi),
-      question.correctTiles
-    );
+    const selectedTiles = built.map((tile) => tile.gurmukhi);
+    const isCorrect = answersMatch(selectedTiles, question.correctTiles);
     setFeedback(isCorrect ? "correct" : "wrong");
-    onSentenceBuilderAnswer(isCorrect);
+    onSentenceBuilderAnswer(isCorrect, selectedTiles);
   }
 
   return (

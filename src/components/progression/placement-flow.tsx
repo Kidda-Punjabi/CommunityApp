@@ -195,27 +195,32 @@ export function PlacementFlow({ initialClaimedLevel, questionPools }: PlacementF
           questions={firstTestQuestions}
           mode="placement"
           backHref="/dashboard/placement"
-          onComplete={async ({ correctCount, totalCount, scorePct }) => {
+          onComplete={async ({ answers }) => {
             const supabase = createClient();
-            await recordLevelTestAttempt(supabase, {
+            const attempt = await recordLevelTestAttempt(supabase, {
               fromLevel: firstFromLevel,
-              correctCount,
-              totalCount,
+              answers,
               isPlacement: true,
               setLevelOnPass: false,
             });
 
-            setFirstScore(scorePct);
-            const outcome = resolvePlacementAfterFirstTest(claimedLevel, scorePct);
+            setFirstScore(attempt.scorePct);
+            const outcome = resolvePlacementAfterFirstTest(claimedLevel, attempt.scorePct);
             setOutcomeMessage(outcome.message);
             setNeedsFollowUp(outcome.needsFollowUp);
 
             if (!outcome.needsFollowUp) {
               await finalizePlacement(outcome.message);
-              return;
+            } else {
+              setPhase("first-result");
             }
 
-            setPhase("first-result");
+            return {
+              scorePct: attempt.scorePct,
+              passed: attempt.passed,
+              correctCount: attempt.correctCount,
+              totalCount: attempt.totalCount,
+            };
           }}
         />
       </div>
@@ -252,18 +257,24 @@ export function PlacementFlow({ initialClaimedLevel, questionPools }: PlacementF
           questions={poolQuestions(questionPools, followUpFromLevel)}
           mode="placement"
           backHref="/dashboard/placement"
-          onComplete={async ({ correctCount, totalCount }) => {
+          onComplete={async ({ answers }) => {
             const supabase = createClient();
             const attempt = await recordLevelTestAttempt(supabase, {
               fromLevel: followUpFromLevel,
-              correctCount,
-              totalCount,
+              answers,
               isPlacement: true,
               setLevelOnPass: false,
             });
 
             const outcome = resolvePlacementAfterFollowUp(attempt.passed);
             await finalizePlacement(outcome.message);
+
+            return {
+              scorePct: attempt.scorePct,
+              passed: attempt.passed,
+              correctCount: attempt.correctCount,
+              totalCount: attempt.totalCount,
+            };
           }}
         />
       </div>

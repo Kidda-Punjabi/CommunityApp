@@ -53,17 +53,22 @@ export function LevelTestClient({
       questions={questions}
       mode="progression"
       backHref="/dashboard/profile"
-      onComplete={async ({ correctCount, totalCount }) => {
+      onComplete={async ({ answers }) => {
         const supabase = createClient();
-        await recordLevelTestAttempt(supabase, {
+        const attempt = await recordLevelTestAttempt(supabase, {
           fromLevel,
-          correctCount,
-          totalCount,
+          answers,
           isPlacement: false,
           setLevelOnPass: true,
         });
         router.push("/dashboard/profile");
         router.refresh();
+        return {
+          scorePct: attempt.scorePct,
+          passed: attempt.passed,
+          correctCount: attempt.correctCount,
+          totalCount: attempt.totalCount,
+        };
       }}
     />
   );

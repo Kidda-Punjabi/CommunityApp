@@ -1,7 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/navigation/back-link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
@@ -13,6 +13,7 @@ import {
   LEVEL_TEST_QUESTION_COUNT,
   type LevelTestQuestion,
 } from "@/lib/progression/level-tests";
+import type { LevelTestSubmittedAnswer } from "@/lib/progression/level-test-service";
 import { levelTestLabel } from "@/lib/progression/tiers";
 import { ui } from "@/lib/ui/styles";
 
@@ -22,14 +23,44 @@ type LevelTestPlayerProps = {
   mode: "placement" | "progression";
   backHref: string;
   onComplete: (result: {
+    answers: LevelTestSubmittedAnswer[];
+  }) => Promise<{
+    scorePct: number;
+    passed: boolean;
     correctCount: number;
     totalCount: number;
-    scorePct: number;
-  }) => Promise<void>;
+  }>;
 };
 
 const LIGHT_SURFACE = "bg-white text-zinc-900 [color-scheme:light]";
 const ADVANCE_MS = 450;
+
+function buildSubmittedAnswer(
+  question: LevelTestQuestion,
+  optionId: string | null,
+  selectedTiles?: string[]
+): LevelTestSubmittedAnswer {
+  if (question.kind === "sentence_builder") {
+    return {
+      question_id: question.id,
+      selected_tiles: selectedTiles ?? [],
+    };
+  }
+
+  if (question.kind === "conjugation_fill_blank") {
+    const option = question.options.find((entry) => entry.id === optionId);
+    return {
+      question_id: question.id,
+      selected_gurmukhi: option?.gurmukhi ?? "",
+    };
+  }
+
+  const selectedIndex = Number.parseInt(optionId ?? "", 10);
+  return {
+    question_id: question.id,
+    selected_index: Number.isInteger(selectedIndex) ? selectedIndex : -1,
+  };
+}
 
 export function LevelTestPlayer({
   fromLevel,
@@ -45,7 +76,6 @@ export function LevelTestPlayer({
 
   const [index, setIndex] = useState(0);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
-  const [correctCount, setCorrectCount] = useState(0);
   const [finished, setFinished] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{
@@ -54,42 +84,45 @@ export function LevelTestPlayer({
     correctCount: number;
     totalCount: number;
   } | null>(null);
+  const answersRef = useRef<LevelTestSubmittedAnswer[]>([]);
 
   const question = sessionQuestions[index];
   const locked = selectedOptionId !== null;
   const { playSound } = useAudioManager();
 
-  function advanceAfterAnswer(isCorrect: boolean, optionId: string | null) {
+  function advanceAfterAnswer(
+    isCorrect: boolean,
+    optionId: string | null,
+    selectedTiles?: string[]
+  ) {
     if (!question || locked || finished) return;
 
     playSound(isCorrect ? "correct" : "incorrect");
-
     setSelectedOptionId(optionId ?? "__answered__");
-    const nextCorrect = correctCount + (isCorrect ? 1 : 0);
+    answersRef.current = [
+      ...answersRef.current,
+      buildSubmittedAnswer(question, optionId, selectedTiles),
+    ];
 
     window.setTimeout(async () => {
       if (index + 1 >= sessionQuestions.length) {
-        const totalCount = sessionQuestions.length;
-        const scorePct = Math.round((nextCorrect / totalCount) * 100);
-        setCorrectCount(nextCorrect);
         setFinished(true);
         setSubmitting(true);
-        setResult({
-          scorePct,
-          passed: scorePct >= LEVEL_TEST_PASS_PCT,
-          correctCount: nextCorrect,
-          totalCount,
-        });
-        await onComplete({
-          correctCount: nextCorrect,
-          totalCount,
-          scorePct,
-        });
+        try {
+          const graded = await onComplete({ answers: answersRef.current });
+          setResult(graded);
+        } catch {
+          setResult({
+            scorePct: 0,
+            passed: false,
+            correctCount: 0,
+            totalCount: answersRef.current.length,
+          });
+        }
         setSubmitting(false);
         return;
       }
 
-      setCorrectCount(nextCorrect);
       setIndex((current) => current + 1);
       setSelectedOptionId(null);
     }, ADVANCE_MS);
@@ -99,8 +132,8 @@ export function LevelTestPlayer({
     advanceAfterAnswer(isCorrect, optionId);
   }
 
-  function handleSentenceBuilderAnswer(isCorrect: boolean) {
-    advanceAfterAnswer(isCorrect, "__answered__");
+  function handleSentenceBuilderAnswer(isCorrect: boolean, selectedTiles: string[]) {
+    advanceAfterAnswer(isCorrect, "__answered__", selectedTiles);
   }
 
   if (questions.length === 0) {
@@ -117,6 +150,14 @@ export function LevelTestPlayer({
   if (finished && result) {
     return (
       <LevelTestResultScreen mode={mode} fromLevel={fromLevel} result={result} submitting={submitting} />
+    );
+  }
+
+  if (finished && submitting) {
+    return (
+      <div className={`relative ${ui.card} ${LIGHT_SURFACE} space-y-4 text-center`}>
+        <p className="text-sm text-zinc-600">Saving your result…</p>
+      </div>
     );
   }
 

@@ -62,10 +62,20 @@ export async function loadLatestTestAttempt(
   };
 }
 
+export type LevelTestSubmittedAnswer = {
+  question_id: string;
+  selected_index?: number;
+  selected_gurmukhi?: string;
+  selected_tiles?: string[];
+  selected_option?: string;
+};
+
 export type RecordAttemptResult = {
   attemptId: string;
   scorePct: number;
   passed: boolean;
+  correctCount: number;
+  totalCount: number;
   learnerLevel: number | null;
 };
 
@@ -73,16 +83,14 @@ export async function recordLevelTestAttempt(
   supabase: SupabaseClient,
   options: {
     fromLevel: number;
-    correctCount: number;
-    totalCount: number;
+    answers: LevelTestSubmittedAnswer[];
     isPlacement?: boolean;
     setLevelOnPass?: boolean;
   }
 ): Promise<RecordAttemptResult> {
   const { data, error } = await supabase.rpc("record_level_test_attempt", {
     p_from_level: options.fromLevel,
-    p_correct_count: options.correctCount,
-    p_total_count: options.totalCount,
+    p_answers: options.answers,
     p_is_placement: options.isPlacement ?? false,
     p_set_level_on_pass: options.setLevelOnPass ?? true,
   });
@@ -93,6 +101,8 @@ export async function recordLevelTestAttempt(
     attempt_id: string;
     score_pct: number;
     passed: boolean;
+    correct_count?: number;
+    total_count?: number;
     learner_level: number | null;
   };
 
@@ -100,6 +110,8 @@ export async function recordLevelTestAttempt(
     attemptId: result.attempt_id,
     scorePct: result.score_pct,
     passed: result.passed,
+    correctCount: result.correct_count ?? 0,
+    totalCount: result.total_count ?? options.answers.length,
     learnerLevel: result.learner_level,
   };
 }
