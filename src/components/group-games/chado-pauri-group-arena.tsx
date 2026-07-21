@@ -43,6 +43,11 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const voteCloseCalledRef = useRef(false);
+  const activeRunIdRef = useRef(activeRun?.id ?? null);
+
+  useEffect(() => {
+    activeRunIdRef.current = activeRun?.id ?? null;
+  }, [activeRun?.id]);
 
   const { currentUserId } = state;
   const isHotSeat = activeRun?.player_id === currentUserId;
@@ -54,6 +59,8 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
 
   const playerName = (userId: string) =>
     state.scoreboard.find((e) => e.userId === userId)?.displayName ?? "Player";
+
+  const handleVotesChange = useCallback(() => {}, []);
 
   const refreshScoreboard = useCallback(async () => {
     const supabase = createClient();
@@ -94,11 +101,11 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
     setRuns((prev) => prev.map((r) => (r.id === run.id ? run : r)));
     if (run.status === "active") {
       setActiveRun(run);
-    } else if (activeRun?.id === run.id && run.status === "completed") {
+    } else if (activeRunIdRef.current === run.id && run.status === "completed") {
       setActiveRun(null);
       setQuestion(null);
     }
-  }, [activeRun?.id]);
+  }, []);
 
   const syncQuestion = useCallback((q: LadderQuestionRow) => {
     setQuestion(q);
@@ -146,7 +153,7 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
     onRoomChange: handleRoomChange,
     onRunChange: handleRunChange,
     onQuestionChange: syncQuestion,
-    onVotesChange: () => {},
+    onVotesChange: handleVotesChange,
     onParticipantsChange: refreshScoreboard,
   });
 

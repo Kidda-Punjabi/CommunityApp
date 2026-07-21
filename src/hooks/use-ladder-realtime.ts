@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { LadderQuestionRow, LadderRunRow } from "@/lib/chado-pauri-group/types";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
@@ -16,6 +16,11 @@ type UseLadderRealtimeOptions = {
   onParticipantsChange: () => void;
 };
 
+/**
+ * Realtime subscriptions remount only when room / run / question IDs change.
+ * Callbacks are kept in refs so parent re-renders (or unstable inline handlers)
+ * do not tear down Supabase channels.
+ */
 export function useLadderRealtime({
   roomId,
   activeRunId,
@@ -26,6 +31,32 @@ export function useLadderRealtime({
   onVotesChange,
   onParticipantsChange,
 }: UseLadderRealtimeOptions) {
+  const onRoomChangeRef = useRef(onRoomChange);
+  const onRunChangeRef = useRef(onRunChange);
+  const onQuestionChangeRef = useRef(onQuestionChange);
+  const onVotesChangeRef = useRef(onVotesChange);
+  const onParticipantsChangeRef = useRef(onParticipantsChange);
+
+  useEffect(() => {
+    onRoomChangeRef.current = onRoomChange;
+  }, [onRoomChange]);
+
+  useEffect(() => {
+    onRunChangeRef.current = onRunChange;
+  }, [onRunChange]);
+
+  useEffect(() => {
+    onQuestionChangeRef.current = onQuestionChange;
+  }, [onQuestionChange]);
+
+  useEffect(() => {
+    onVotesChangeRef.current = onVotesChange;
+  }, [onVotesChange]);
+
+  useEffect(() => {
+    onParticipantsChangeRef.current = onParticipantsChange;
+  }, [onParticipantsChange]);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -35,7 +66,7 @@ export function useLadderRealtime({
         "postgres_changes",
         { event: "*", schema: "public", table: "game_rooms", filter: `id=eq.${roomId}` },
         (payload) => {
-          if (payload.new) onRoomChange(payload.new as GameRoomRow);
+          if (payload.new) onRoomChangeRef.current(payload.new as GameRoomRow);
         }
       )
       .on(
@@ -47,7 +78,7 @@ export function useLadderRealtime({
           filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
-          if (payload.new) onRunChange(payload.new as LadderRunRow);
+          if (payload.new) onRunChangeRef.current(payload.new as LadderRunRow);
         }
       )
       .on(
@@ -58,14 +89,14 @@ export function useLadderRealtime({
           table: "game_room_participants",
           filter: `room_id=eq.${roomId}`,
         },
-        () => onParticipantsChange()
+        () => onParticipantsChangeRef.current()
       )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [roomId, onRoomChange, onRunChange, onParticipantsChange]);
+  }, [roomId]);
 
   useEffect(() => {
     if (!activeRunId) return;
@@ -82,7 +113,7 @@ export function useLadderRealtime({
           filter: `run_id=eq.${activeRunId}`,
         },
         (payload) => {
-          if (payload.new) onQuestionChange(payload.new as LadderQuestionRow);
+          if (payload.new) onQuestionChangeRef.current(payload.new as LadderQuestionRow);
         }
       )
       .subscribe();
@@ -90,7 +121,7 @@ export function useLadderRealtime({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [activeRunId, onQuestionChange]);
+  }, [activeRunId]);
 
   useEffect(() => {
     if (!activeQuestionId) return;
@@ -106,12 +137,12 @@ export function useLadderRealtime({
           table: "game_room_ladder_votes",
           filter: `question_id=eq.${activeQuestionId}`,
         },
-        () => onVotesChange()
+        () => onVotesChangeRef.current()
       )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [activeQuestionId, onVotesChange]);
+  }, [activeQuestionId]);
 }

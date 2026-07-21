@@ -48,8 +48,12 @@ export function useContinuousVad({ enabled, onUtterance, onError }: UseContinuou
   const lastSpeechAtRef = useRef<number | null>(null);
   const recordingRef = useRef(false);
   const processingRef = useRef(false);
+  const listeningRef = useRef(false);
+  const startingRef = useRef(false);
   const onUtteranceRef = useRef(onUtterance);
   const onErrorRef = useRef(onError);
+  const startListeningRef = useRef<() => Promise<void>>(async () => {});
+  const stopListeningRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     onUtteranceRef.current = onUtterance;
@@ -81,6 +85,8 @@ export function useContinuousVad({ enabled, onUtterance, onError }: UseContinuou
     recordingRef.current = false;
     speechStartedAtRef.current = null;
     lastSpeechAtRef.current = null;
+    listeningRef.current = false;
+    startingRef.current = false;
     setListening(false);
   }, [stopMonitor]);
 
@@ -172,8 +178,11 @@ export function useContinuousVad({ enabled, onUtterance, onError }: UseContinuou
   }, [finishRecording, startRecorder]);
 
   const startListening = useCallback(async () => {
-    if (listening || processingRef.current) return;
+    // Guard with refs — never put `listening` in this callback's deps, or the
+    // enable effect will tear down and restart the mic in a loop.
+    if (listeningRef.current || startingRef.current || processingRef.current) return;
 
+    startingRef.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -195,14 +204,17 @@ export function useContinuousVad({ enabled, onUtterance, onError }: UseContinuou
 
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
+      listeningRef.current = true;
       setListening(true);
       stopMonitor();
       monitorTimerRef.current = window.setInterval(monitorLevels, ANALYSIS_INTERVAL_MS);
     } catch {
       stopStream();
       onErrorRef.current?.("Microphone access is required for Live Translate.");
+    } finally {
+      startingRef.current = false;
     }
-  }, [listening, monitorLevels, stopMonitor, stopStream]);
+  }, [monitorLevels, stopMonitor, stopStream]);
 
   const stopListening = useCallback(() => {
     if (recordingRef.current) {
@@ -212,16 +224,24 @@ export function useContinuousVad({ enabled, onUtterance, onError }: UseContinuou
   }, [finishRecording, stopStream]);
 
   useEffect(() => {
+    startListeningRef.current = startListening;
+  }, [startListening]);
+
+  useEffect(() => {
+    stopListeningRef.current = stopListening;
+  }, [stopListening]);
+
+  useEffect(() => {
     if (!enabled) {
-      stopListening();
+      stopListeningRef.current();
       return;
     }
 
-    void startListening();
+    void startListeningRef.current();
     return () => {
-      stopListening();
+      stopListeningRef.current();
     };
-  }, [enabled, startListening, stopListening]);
+  }, [enabled]);
 
   return {
     listening,
