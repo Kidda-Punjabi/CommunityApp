@@ -57,6 +57,11 @@ export function learnTrackPath(id: LearnTrackId) {
   return `/dashboard/learn/${id}`;
 }
 
+/** Community lessons have no quiz/deck completion — hide misleading course progress UI. */
+export function shouldShowLearnCourseProgress(trackId: LearnTrackId): boolean {
+  return trackId !== "community";
+}
+
 /** Learn list URL after finishing catch-up for a course tier (or free lessons). */
 export function learnTrackPathForPaidTier(tier: PaidCourseTier): LearnTrackId {
   if (tier === "community") return "community";

@@ -41,6 +41,8 @@ type LearnLessonListProps = {
   catchupLessonIds?: Set<string>;
   homeworkFocusLessonId?: string | null;
   catchupReturn?: string | null;
+  /** When false, hides the course-level “X of Y lessons complete” bar (Community). */
+  showCourseProgress?: boolean;
 };
 
 export function LearnLessonList({
@@ -64,6 +66,7 @@ export function LearnLessonList({
   catchupLessonIds,
   homeworkFocusLessonId,
   catchupReturn,
+  showCourseProgress = true,
 }: LearnLessonListProps) {
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
   const defaultExpandedLessonId =
@@ -122,7 +125,7 @@ export function LearnLessonList({
       <div className="mb-8 mt-4">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
         <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
-        {accessibleLessons.length > 0 && (
+        {showCourseProgress && accessibleLessons.length > 0 && (
           <CourseProgressBar
             className="mt-4"
             completed={progressSummary.completed}

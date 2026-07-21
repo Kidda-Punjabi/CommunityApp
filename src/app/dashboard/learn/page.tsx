@@ -10,7 +10,7 @@ import {
   isLearnTrackUnlocked,
   lessonCountForTrack,
 } from "@/lib/learning/learn-access";
-import { LEARN_TRACKS } from "@/lib/learning/learn-catalog";
+import { LEARN_TRACKS, shouldShowLearnCourseProgress } from "@/lib/learning/learn-catalog";
 import {
   getCachedAuthSession,
   getCachedCourseAccess,
@@ -78,7 +78,9 @@ export default async function LearnPage() {
         : 0,
       courseProgress: locked
         ? undefined
-        : (() => {
+        : !shouldShowLearnCourseProgress(track.id)
+          ? undefined
+          : (() => {
             const progress = summarizeCourseProgress(accessibleLessons, completionMap);
             return {
               completed: progress.completedLessons,

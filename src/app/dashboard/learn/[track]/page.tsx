@@ -17,7 +17,7 @@ import {
   isLearnTrackUnlocked,
   isLessonContentUnlockedForUser,
 } from "@/lib/learning/learn-access";
-import { getLearnTrack } from "@/lib/learning/learn-catalog";
+import { getLearnTrack, shouldShowLearnCourseProgress } from "@/lib/learning/learn-catalog";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import {
   fetchLessonCompletionMap,
@@ -86,7 +86,6 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       );
       return canBrowse && contentUnlocked;
     });
-    const courseProgress = summarizeCourseProgress(lessons, completionMap);
 
     return (
       <LearnLessonList
@@ -101,10 +100,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
         contentUnlockedMap={contentUnlockedMap}
         recordingMap={recordingMap}
         catchupLessonIds={catchupLessonIds}
-        courseProgress={{
-          completed: courseProgress.completedLessons,
-          total: courseProgress.totalLessons,
-        }}
+        showCourseProgress={shouldShowLearnCourseProgress(track.id)}
       />
     );
   }
@@ -176,10 +172,15 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       flashcardProgressMap={flashcardProgressMap}
       quizProgressMap={quizProgressMap}
       completionMap={completionMap}
-      courseProgress={{
-        completed: courseProgress.completedLessons,
-        total: courseProgress.totalLessons,
-      }}
+      showCourseProgress={shouldShowLearnCourseProgress(track.id)}
+      courseProgress={
+        shouldShowLearnCourseProgress(track.id)
+          ? {
+              completed: courseProgress.completedLessons,
+              total: courseProgress.totalLessons,
+            }
+          : undefined
+      }
       staffSection={staffSection}
       footerSection={
         studentPackage ? <BuyExtraOneToOneCard pkg={studentPackage} /> : null
