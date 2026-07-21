@@ -1,6 +1,10 @@
 "use client";
 
 import { BackLink } from "@/components/navigation/back-link";
+import {
+  photoCaptureInputClass,
+  TranslatePrimaryButton,
+} from "@/components/translate/translate-primary-button";
 import { useContinuousVad } from "@/hooks/use-continuous-vad";
 import type { LiveTranslateSide } from "@/lib/live-translate/config";
 import { formatSecondsRemaining } from "@/lib/live-translate/month-key";
@@ -194,40 +198,42 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
 
   if (phase === "ready") {
     return (
-      <div className="space-y-6">
-        <div>
-          <BackLink fallbackHref="/dashboard/home">← Back</BackLink>
-          <h1 className="mt-4 text-2xl font-bold text-zinc-900">Live Translate</h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            Real-time Punjabi ↔ English for face-to-face conversations. Nothing is saved — end the
-            session and it&apos;s gone.
-          </p>
+      <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 space-y-6">
+          <div>
+            <BackLink fallbackHref="/dashboard/home">← Back</BackLink>
+            <h1 className="mt-4 text-2xl font-bold text-zinc-900">Live Translate</h1>
+            <p className="mt-2 text-sm text-zinc-500">
+              Real-time Punjabi ↔ English for face-to-face conversations. Nothing is saved — end the
+              session and it&apos;s gone.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600">
+            {formatSecondsRemaining(usage.secondsRemaining)}
+          </div>
+
+          {usage.secondsRemaining <= 0 ? (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              You&apos;ve used your 15 minutes for this month. Your allowance resets on {usage.resetsOn}.
+            </p>
+          ) : null}
+
+          {statusMessage ? (
+            <p className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+              {statusMessage}
+            </p>
+          ) : null}
         </div>
 
-        <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600">
-          {formatSecondsRemaining(usage.secondsRemaining)}
+        <div className="relative z-[51] shrink-0 border-t border-zinc-200/80 bg-zinc-50/95 px-0 pb-1 pt-4 backdrop-blur-sm">
+          <TranslatePrimaryButton
+            disabled={usage.secondsRemaining <= 0}
+            onActivate={handleStart}
+          >
+            Start conversation
+          </TranslatePrimaryButton>
         </div>
-
-        {usage.secondsRemaining <= 0 ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            You&apos;ve used your 15 minutes for this month. Your allowance resets on {usage.resetsOn}.
-          </p>
-        ) : null}
-
-        {statusMessage ? (
-          <p className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
-            {statusMessage}
-          </p>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={handleStart}
-          disabled={usage.secondsRemaining <= 0}
-          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-        >
-          Start conversation
-        </button>
       </div>
     );
   }

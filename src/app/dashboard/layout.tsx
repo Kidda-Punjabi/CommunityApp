@@ -58,7 +58,7 @@ export default async function DashboardLayout({
             {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
             {showKidsExit && <KidsExitButton />}
             <div
-              className={`mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance}`}
+              className={`mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance} relative isolate`}
             >
               {children}
             </div>

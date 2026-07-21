@@ -8,6 +8,7 @@ import { syncPackageCourseAccess } from "@/lib/admin/package-course-access";
 import type { AdminPackageKind } from "@/lib/admin/packages/types";
 import { isPersistedStudentPackageId } from "@/lib/admin/packages/roster-utils";
 import type { PackageMembershipStatus } from "@/lib/admin/package-status";
+import { tryWriteBackCohortWithdrawalFromNotion } from "@/lib/notion/cohort-notion-writeback";
 import {
   ensureOnboardingChecklistForStudentPackage,
   markOnboardingPackageAssigned,
@@ -368,7 +369,7 @@ export async function withdrawPackageRunRosterMember(
 
   const { data: row, error: loadError } = await supabase
     .from("student_packages")
-    .select("id, user_id, course_id, status")
+    .select("id, user_id, course_id, status, enrollment_id")
     .eq("id", targetId)
     .maybeSingle();
 
@@ -390,5 +391,56 @@ export async function withdrawPackageRunRosterMember(
   );
   if (sync.error) return { error: sync.error };
 
+  // Keep cohort_members in sync with package withdrawal — capacity/rosters read left_at.
+  const cohortId = await resolveCohortIdForWithdrawnPackage(supabase, {
+    kind: input.kind,
+    runId: input.runId,
+    enrollmentId: row.enrollment_id,
+  });
+  if (cohortId.error) return { error: cohortId.error };
+
+  if (cohortId.id) {
+    const now = new Date().toISOString();
+    const { error: leftAtError } = await supabase
+      .from("cohort_members")
+      .update({ left_at: now })
+      .eq("cohort_id", cohortId.id)
+      .eq("user_id", row.user_id)
+      .is("left_at", null);
+    if (leftAtError) return { error: leftAtError.message };
+
+    // Best-effort Notion push — app withdrawal already committed; don't fail the action.
+    await tryWriteBackCohortWithdrawalFromNotion(supabase, {
+      userId: row.user_id,
+      cohortId: cohortId.id,
+    });
+  }
+
   return {};
+}
+
+async function resolveCohortIdForWithdrawnPackage(
+  supabase: SupabaseClient,
+  input: {
+    kind: AdminPackageKind;
+    runId: string;
+    enrollmentId: string | null;
+  }
+): Promise<{ id: string | null; error?: string }> {
+  if (input.kind === "cohort") {
+    return { id: input.runId };
+  }
+
+  if (!input.enrollmentId) return { id: null };
+
+  const { data: enrollment, error } = await supabase
+    .from("course_enrollments")
+    .select("cohort_id, delivery_mode")
+    .eq("id", input.enrollmentId)
+    .maybeSingle();
+  if (error) return { id: null, error: error.message };
+  if (enrollment?.delivery_mode === "group" && enrollment.cohort_id) {
+    return { id: enrollment.cohort_id };
+  }
+  return { id: null };
 }

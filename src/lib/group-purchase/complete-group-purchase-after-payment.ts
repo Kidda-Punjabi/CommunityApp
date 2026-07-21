@@ -4,7 +4,10 @@ import {
   evaluateCohortCalendarGate,
   trySendCohortCalendarInvite,
 } from "@/lib/group-purchase/cohort-calendar-invite";
-import { tryWriteBackCohortConfirmedAfterEnrollment } from "@/lib/notion/cohort-notion-writeback";
+import {
+  hasOpenCohortWriteBackAttention,
+  tryWriteBackCohortConfirmedAfterEnrollment,
+} from "@/lib/notion/cohort-notion-writeback";
 import { getCohortCheckoutRemainingSpots } from "@/lib/group-purchase/cohort-capacity";
 import { packageSlugFromCheckoutKey } from "@/lib/stripe/sync-student-packages-from-payment";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -76,7 +79,38 @@ export async function completeGroupPurchaseAfterPayment(
     return { completed: false };
   }
 
+  const { data: cohort, error: cohortError } = await supabase
+    .from("cohorts")
+    .select("id, course_id, name, tutor_id, capacity, status, notion_page_id")
+    .eq("id", cohortId)
+    .maybeSingle();
+
+  if (cohortError) return { completed: false, error: cohortError.message };
+  if (!cohort) return { completed: false, error: "Cohort not found." };
+
+  async function writeBackNotionConfirmed(options?: { suppressDuplicateAttention?: boolean }) {
+    const { data: authUser } = await supabase.auth.admin.getUserById(params.userId);
+    await tryWriteBackCohortConfirmedAfterEnrollment(supabase, {
+      userId: params.userId,
+      cohortId,
+      cohortName: cohort!.name,
+      notionPageId: cohort!.notion_page_id ?? null,
+      email: authUser.user?.email ?? null,
+      suppressDuplicateAttention: options?.suppressDuplicateAttention,
+    });
+  }
+
+  // Enrollment already done (e.g. reconcile after RPC fix) — still retry Notion
+  // Confirmed write-back when a prior attempt left open attention (e.g. no_lead race).
   if (studentPackage.enrollment_id && studentPackage.status === "confirmed") {
+    const needsWriteBackRetry = await hasOpenCohortWriteBackAttention(
+      supabase,
+      params.userId,
+      cohortId
+    );
+    if (needsWriteBackRetry) {
+      await writeBackNotionConfirmed({ suppressDuplicateAttention: true });
+    }
     return { completed: true };
   }
 
@@ -90,15 +124,6 @@ export async function completeGroupPurchaseAfterPayment(
   if (!hold || hold.user_id !== params.userId || hold.cohort_id !== cohortId) {
     return { completed: false, error: "Cohort seat hold is invalid for this checkout." };
   }
-
-  const { data: cohort, error: cohortError } = await supabase
-    .from("cohorts")
-    .select("id, course_id, name, tutor_id, capacity, status, notion_page_id")
-    .eq("id", cohortId)
-    .maybeSingle();
-
-  if (cohortError) return { completed: false, error: cohortError.message };
-  if (!cohort) return { completed: false, error: "Cohort not found." };
 
   const capacity = cohort.capacity ?? 7;
   const remaining = await getCohortCheckoutRemainingSpots(supabase, cohortId, capacity, {
@@ -167,6 +192,14 @@ export async function completeGroupPurchaseAfterPayment(
   }
 
   if (core.already_completed) {
+    const needsWriteBackRetry = await hasOpenCohortWriteBackAttention(
+      supabase,
+      params.userId,
+      cohortId
+    );
+    if (needsWriteBackRetry) {
+      await writeBackNotionConfirmed({ suppressDuplicateAttention: true });
+    }
     return { completed: true };
   }
 
@@ -210,6 +243,8 @@ export async function completeGroupPurchaseAfterPayment(
       .eq("id", existingChecklist.id);
   }
 
+  // Lead create/link is awaited inside tryWriteBack → resolveLeadPageIdForCohortWriteBack
+  // before any Confirmed PATCH — never fire write-back concurrently with lead resolution.
   const { data: authUser } = await supabase.auth.admin.getUserById(params.userId);
   await tryWriteBackCohortConfirmedAfterEnrollment(supabase, {
     userId: params.userId,

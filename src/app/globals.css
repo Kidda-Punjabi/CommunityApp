@@ -31,13 +31,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Readable labels on white/light interactive surfaces (avoids dark-mode inherit) */
-button,
-[role="button"] {
-  -webkit-text-fill-color: currentColor;
-}
-
+/* Readable labels on pressable controls (avoids dark-mode inherit; scoped — global button rule caused iOS Safari tap issues) */
 .kidda-pressable {
+  -webkit-text-fill-color: currentColor;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition:

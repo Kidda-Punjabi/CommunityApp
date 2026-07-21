@@ -23,6 +23,7 @@ import {
   COLLECTIBLE_REMOVE_MS,
   CORRECT_ANSWER_COIN_REWARD,
   GATE_ADVANCE_MS,
+  GATE_OVERLAP_LEAD_MS,
   KIDDA_CELEBRATION_MS,
   KIDDA_SPELL_COIN_BONUS,
   LANE_PICKUP_COIN_REWARD,
@@ -51,7 +52,6 @@ import type {
   LaneRunnerGateResult,
   LaneRunnerRoundSummary,
   QueuedLaneRunnerGate,
-  LaneRunnerRoadBeat,
 } from "@/lib/games/lane-runner/types";
 import { useActivePlayTime } from "@/lib/games/lane-runner/use-active-play-time";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
@@ -74,7 +74,7 @@ export function LaneRunnerMode({
 }: LaneRunnerModeProps) {
   const [phase, setPhase] = useState<Phase>("ready");
   const [gateQueue, setGateQueue] = useState<QueuedLaneRunnerGate[]>([]);
-  const [roadBeat, setRoadBeat] = useState<LaneRunnerRoadBeat>("collectibles");
+  const [headGateFallEnabled, setHeadGateFallEnabled] = useState(false);
   const [activeCoins, setActiveCoins] = useState<ActiveCoin[]>([]);
   const [collectibleFallMs, setCollectibleFallMs] = useState(BASE_COLLECTIBLE_FALL_MS);
   const [gateResults, setGateResults] = useState<LaneRunnerGateResult[]>([]);
@@ -104,7 +104,8 @@ export function LaneRunnerMode({
   const gateIdRef = useRef(0);
   const gateQueueRef = useRef<QueuedLaneRunnerGate[]>([]);
   const pendingGateArrivalRef = useRef<string | null>(null);
-  const roadBeatRef = useRef<LaneRunnerRoadBeat>("collectibles");
+  const headGateFallEnabledRef = useRef(false);
+  const overlapTimerRef = useRef<number | null>(null);
   const letterSlotsRef = useRef<LetterSlot[]>(createEmptyLetterSlots());
   const letterIdRef = useRef(0);
   const usedFlashcardIdsRef = useRef<Set<string>>(new Set());
@@ -148,8 +149,8 @@ export function LaneRunnerMode({
   }, [phase]);
 
   useEffect(() => {
-    roadBeatRef.current = roadBeat;
-  }, [roadBeat]);
+    headGateFallEnabledRef.current = headGateFallEnabled;
+  }, [headGateFallEnabled]);
 
   useEffect(() => {
     letterSlotsRef.current = letterSlots;
@@ -165,7 +166,24 @@ export function LaneRunnerMode({
   useEffect(() => {
     return () => {
       if (flashTimeoutRef.current) window.clearTimeout(flashTimeoutRef.current);
+      if (overlapTimerRef.current) window.clearTimeout(overlapTimerRef.current);
     };
+  }, []);
+
+  const scheduleHeadGateOverlap = useCallback(() => {
+    headGateFallEnabledRef.current = false;
+    setHeadGateFallEnabled(false);
+    if (overlapTimerRef.current) window.clearTimeout(overlapTimerRef.current);
+    overlapTimerRef.current = window.setTimeout(() => {
+      headGateFallEnabledRef.current = true;
+      setHeadGateFallEnabled(true);
+      overlapTimerRef.current = null;
+    }, GATE_OVERLAP_LEAD_MS);
+  }, []);
+
+  const clearCollectiblesFromRoad = useCallback(() => {
+    setActiveCoins([]);
+    setActiveLetter(null);
   }, []);
 
   const triggerRoadFlash = useCallback((type: "hit" | "miss") => {
@@ -221,21 +239,15 @@ export function LaneRunnerMode({
 
   const finishCollectibleBeatRef = useRef<() => void>(() => {});
 
-  const finishCollectibleBeat = useCallback(() => {
-    setActiveCoins([]);
-    setActiveLetter(null);
-    setRoadBeat("answering");
-  }, []);
-
   useEffect(() => {
-    finishCollectibleBeatRef.current = finishCollectibleBeat;
-  }, [finishCollectibleBeat]);
+    finishCollectibleBeatRef.current = clearCollectiblesFromRoad;
+  }, [clearCollectiblesFromRoad]);
 
   const startCollectibleBeat = useCallback(() => {
     if (phaseRef.current !== "playing") return;
 
     applyFallSpeed();
-    setRoadBeat("collectibles");
+    scheduleHeadGateOverlap();
 
     const letter = nextSpawnableLetter(letterSlotsRef.current);
     if (letter && activePlayMsRef.current >= nextLetterAtRef.current) {
@@ -251,7 +263,7 @@ export function LaneRunnerMode({
     }
 
     setActiveCoins(spawnCoinsForBeat());
-  }, [applyFallSpeed, spawnCoinsForBeat]);
+  }, [applyFallSpeed, scheduleHeadGateOverlap, spawnCoinsForBeat]);
 
   const enqueueGate = useCallback(() => {
     const { gateMs } = applyFallSpeed();
@@ -412,7 +424,7 @@ export function LaneRunnerMode({
         );
 
         const allResolved = next.every((item) => item.status !== "falling");
-        if (allResolved && roadBeatRef.current === "collectibles") {
+        if (allResolved) {
           window.setTimeout(() => {
             finishCollectibleBeatRef.current();
           }, COLLECTIBLE_REMOVE_MS);
@@ -445,11 +457,9 @@ export function LaneRunnerMode({
         }
 
         const nextStatus: CollectibleStatus = caught ? "caught" : "missed";
-        if (roadBeatRef.current === "collectibles") {
-          window.setTimeout(() => {
-            finishCollectibleBeatRef.current();
-          }, COLLECTIBLE_REMOVE_MS);
-        }
+        window.setTimeout(() => {
+          finishCollectibleBeatRef.current();
+        }, COLLECTIBLE_REMOVE_MS);
 
         return { ...prev, status: nextStatus };
       });
@@ -539,8 +549,13 @@ export function LaneRunnerMode({
     setKiddaCelebration(false);
     setGateQueue([]);
     gateQueueRef.current = [];
-    setRoadBeat("collectibles");
     setActiveCoins([]);
+    headGateFallEnabledRef.current = false;
+    setHeadGateFallEnabled(false);
+    if (overlapTimerRef.current) {
+      window.clearTimeout(overlapTimerRef.current);
+      overlapTimerRef.current = null;
+    }
     pendingGateArrivalRef.current = null;
     gateResolvingRef.current = false;
     coinIdRef.current = 0;
@@ -557,6 +572,7 @@ export function LaneRunnerMode({
 
   function handleStart() {
     resetRoundState();
+    phaseRef.current = "playing";
     setPhase("playing");
     enqueueGate();
     startCollectibleBeat();
@@ -565,13 +581,25 @@ export function LaneRunnerMode({
   function handlePlayAgain() {
     resetRoundState();
     setRoundSummary(null);
+    phaseRef.current = "playing";
     setPhase("playing");
     enqueueGate();
     startCollectibleBeat();
   }
 
   const currentPromptGate = gateQueue[0]?.gate ?? null;
-  const showAnswerPrompt = roadBeat === "answering";
+  const showQuestionPrompt = Boolean(headGateFallEnabled && currentPromptGate);
+  const hasCollectiblesOnRoad =
+    activeCoins.some((c) => c.status === "falling") ||
+    activeLetter?.status === "falling";
+
+  const promptLine = showQuestionPrompt
+    ? (currentPromptGate?.prompt ?? "")
+    : activeLetter?.status === "falling"
+      ? "Catch the KIDDA letter!"
+      : hasCollectiblesOnRoad
+        ? "Collect the coins!"
+        : currentPromptGate?.prompt ?? "Keep running!";
 
   if (phase === "ready") {
     return (
@@ -597,13 +625,7 @@ export function LaneRunnerMode({
         </div>
       ) : null}
 
-      <p className="text-center text-lg font-bold text-zinc-900">
-        {showAnswerPrompt
-          ? (currentPromptGate?.prompt ?? "")
-          : activeLetter
-            ? "Catch the KIDDA letter!"
-            : "Collect the coins!"}
-      </p>
+      <p className="text-center text-lg font-bold text-zinc-900">{promptLine}</p>
 
       <div
         ref={playAreaRef}
@@ -611,7 +633,7 @@ export function LaneRunnerMode({
         style={{ touchAction: "pan-y" }}
       >
         <LaneRunnerRoad flash={roadFlash}>
-          {roadBeat === "collectibles" && activeLetter ? (
+          {activeLetter ? (
             <LaneRunnerLetter
               key={activeLetter.id}
               letter={activeLetter}
@@ -620,30 +642,26 @@ export function LaneRunnerMode({
             />
           ) : null}
 
-          {roadBeat === "collectibles"
-            ? activeCoins.map((coin) => (
-                <LaneRunnerCoin
-                  key={coin.id}
-                  coin={coin}
-                  fallDurationMs={collectibleFallMs}
-                  onArrive={handleCoinArrive}
-                />
-              ))
-            : null}
+          {activeCoins.map((coin) => (
+            <LaneRunnerCoin
+              key={coin.id}
+              coin={coin}
+              fallDurationMs={collectibleFallMs}
+              onArrive={handleCoinArrive}
+            />
+          ))}
 
-          {roadBeat === "answering"
-            ? gateQueue.map((queued, index) => (
-                <LaneRunnerGateView
-                  key={queued.id}
-                  gate={queued.gate}
-                  gateKey={queued.renderKey}
-                  fallDurationMs={queued.fallDurationMs}
-                  canFall={index === 0}
-                  onArrive={() => handleGateArrive(queued.id)}
-                  onFallStart={() => handleGateFallStart(queued.id)}
-                />
-              ))
-            : null}
+          {gateQueue.map((queued, index) => (
+            <LaneRunnerGateView
+              key={queued.id}
+              gate={queued.gate}
+              gateKey={queued.renderKey}
+              fallDurationMs={queued.fallDurationMs}
+              canFall={index === 0 && headGateFallEnabled}
+              onArrive={() => handleGateArrive(queued.id)}
+              onFallStart={() => handleGateFallStart(queued.id)}
+            />
+          ))}
 
           <LaneRunnerRunner lane={playerLane} lean={lean} landing={landing} />
         </LaneRunnerRoad>

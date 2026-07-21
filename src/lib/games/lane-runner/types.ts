@@ -52,7 +52,7 @@ export type LaneRunnerRoundSummary = {
   gatesCorrect: number;
 };
 
-/** One gate question in the conveyor queue — may overlap with the next gate on screen. */
+/** One gate question in the conveyor queue — may overlap with collectibles and the next gate. */
 export type QueuedLaneRunnerGate = {
   id: string;
   /** Stable key for gate fall animation lifecycle. */
@@ -60,6 +60,3 @@ export type QueuedLaneRunnerGate = {
   gate: LaneRunnerGate;
   fallDurationMs: number;
 };
-
-/** Alternating road activity — collectibles and answers never overlap. */
-export type LaneRunnerRoadBeat = "collectibles" | "answering";

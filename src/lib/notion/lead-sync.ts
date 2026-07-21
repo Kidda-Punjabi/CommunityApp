@@ -278,6 +278,8 @@ export type LinkLeadsForProfileResult = {
   skipped: number;
   conflicts: number;
   ambiguous: number;
+  /** Notion lead page id when linked, created, or already on the profile. */
+  leadPageId: string | null;
 };
 
 /**
@@ -295,6 +297,7 @@ export async function linkLeadsForProfile(
     skipped: 0,
     conflicts: 0,
     ambiguous: 0,
+    leadPageId: null,
   };
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -316,6 +319,7 @@ export async function linkLeadsForProfile(
 
   if (profile.notion_lead_page_id) {
     result.skipped = 1;
+    result.leadPageId = profile.notion_lead_page_id;
     return result;
   }
 
@@ -365,6 +369,7 @@ export async function linkLeadsForProfile(
 
       await linkProfileToNotionLead(supabase, profileId, leadPageId);
       result.linked = 1;
+      result.leadPageId = leadPageId;
     } catch (error) {
       console.error(
         `[notion lead link] link existing lead failed profile=${profileId} lead=${leadPageId}:`,
@@ -377,11 +382,34 @@ export async function linkLeadsForProfile(
 
   try {
     const newPageId = await createAppSignupLeadPage(profileId, displayName, normalizedEmail);
-    await supabase
+    // Prefer unconditional set after create so callers (cohort write-back) can trust
+    // leadPageId without racing a concurrent null-only update that matches 0 rows.
+    const { error: linkError } = await supabase
       .from("profiles")
       .update({ notion_lead_page_id: newPageId })
       .eq("id", profileId)
       .is("notion_lead_page_id", null);
+
+    if (linkError) {
+      throw new Error(linkError.message);
+    }
+
+    const { data: afterCreate } = await supabase
+      .from("profiles")
+      .select("notion_lead_page_id")
+      .eq("id", profileId)
+      .maybeSingle();
+
+    // If another request linked first, keep that id; otherwise use the page we created.
+    result.leadPageId = afterCreate?.notion_lead_page_id ?? newPageId;
+    if (!afterCreate?.notion_lead_page_id) {
+      const { error: forceError } = await supabase
+        .from("profiles")
+        .update({ notion_lead_page_id: newPageId })
+        .eq("id", profileId);
+      if (forceError) throw new Error(forceError.message);
+      result.leadPageId = newPageId;
+    }
     result.created = 1;
   } catch (error) {
     console.error(

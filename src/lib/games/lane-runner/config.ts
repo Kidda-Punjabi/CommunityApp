@@ -21,7 +21,10 @@ export const BASE_GATE_FALL_MS = 4500;
 /** Coin/letter travel time at base speed (ms). */
 export const BASE_COLLECTIBLE_FALL_MS = 4200;
 
-/** Delay before gate fall starts — 0 when collectibles run in a separate beat first. */
+/** Ms after a coin/letter wave starts before the head gate begins falling (overlap with collectibles). */
+export const GATE_OVERLAP_LEAD_MS = 1100;
+
+/** Delay before gate fall starts when no collectibles precede it. */
 export const GATE_START_DELAY_MS = 0;
 
 /** Lane gold pickups spawned per gate question. */
