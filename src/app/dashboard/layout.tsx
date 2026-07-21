@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { KidsExitButton } from "@/components/kids/kids-exit-button";
 import { KidSessionProvider } from "@/components/kids/kid-session-provider";
+import { KidsShellRouteGuard } from "@/components/kids/kids-shell-route-guard";
 import { TabNavProvider } from "@/components/navigation/tab-nav-provider";
 import { LastPlayedGameTracker } from "@/components/games/last-played-tracker";
 import { ActivityDateSync } from "@/components/activity-date-sync";
@@ -40,6 +41,7 @@ export default async function DashboardLayout({
   ]);
 
   const kid = kidSession.activeKidProfile;
+  const kidsShellActive = Boolean(kid && usesKidsShell(kid.age_tier));
   const showKidsExit =
     kid && !usesKidsShell(kid.age_tier) && !access.viewAs?.active;
 
@@ -52,13 +54,24 @@ export default async function DashboardLayout({
         <AudioManagerProvider initialSettings={soundSettings}>
         <PointsToastProvider />
         <TabNavProvider>
-          <div className={`flex min-h-dvh flex-1 flex-col ${ui.pageBg}`}>
+          <KidsShellRouteGuard />
+          <div
+            className={`flex min-h-dvh flex-1 flex-col ${
+              kidsShellActive
+                ? "bg-gradient-to-b from-sky-100 via-violet-50 to-amber-50"
+                : ui.pageBg
+            }`}
+          >
             <ActivityDateSync />
             <LastPlayedGameTracker />
             {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
             {showKidsExit && <KidsExitButton />}
             <div
-              className={`mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance} relative isolate`}
+              className={
+                kidsShellActive
+                  ? "relative isolate flex w-full flex-1 flex-col"
+                  : `relative isolate mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance}`
+              }
             >
               {children}
             </div>

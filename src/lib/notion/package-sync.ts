@@ -20,6 +20,10 @@ import {
   saveCohortNotionLink,
 } from "@/lib/notion/notion-cohort-link";
 import {
+  dismissalFromInboxRaw,
+  isInboxRowDismissed,
+} from "@/lib/notion/notion-inbox-dismiss";
+import {
   syncCohortRosterFromNotion,
   syncPackageInstanceRosterFromNotion,
 } from "@/lib/notion/package-roster-sync";
@@ -629,33 +633,47 @@ export async function pullPackageInstancesFromNotion(
       }
     }
 
-    const { error: inboxError } = await supabase.from("notion_sync_inbox").upsert(
-      {
-        notion_page_id: page.pageId,
-        package_name: page.packageName,
-        start_date: page.startDate,
-        end_date: page.endDate,
-        status: page.status,
-        notion_tutor_user_id: page.notionTutorUserId,
-        raw_properties: {
-          ...page.rawProperties,
-          _link_hint: resolved.ok
-            ? null
-            : {
-                reason: resolved.reason,
-                detail: resolved.detail,
-                suggestedCourse: readNotionCourseLabel(page),
-                suggestedDelivery: readNotionDeliveryType(page),
-              },
-        },
-        resolved: false,
+    const { data: existingInbox } = await supabase
+      .from("notion_sync_inbox")
+      .select("id, resolved, raw_properties")
+      .eq("notion_page_id", page.pageId)
+      .maybeSingle();
+
+    const existingRaw =
+      (existingInbox?.raw_properties as Record<string, unknown> | null) ?? null;
+    const alreadyDismissed = isInboxRowDismissed({ raw_properties: existingRaw });
+    const existingDismissal = dismissalFromInboxRaw(existingRaw);
+
+    const inboxPayload: Record<string, unknown> = {
+      notion_page_id: page.pageId,
+      package_name: page.packageName,
+      start_date: page.startDate,
+      end_date: page.endDate,
+      status: page.status,
+      notion_tutor_user_id: page.notionTutorUserId,
+      raw_properties: {
+        ...page.rawProperties,
+        ...(existingDismissal ? { _dismissal: existingDismissal } : {}),
+        _link_hint: resolved.ok
+          ? null
+          : {
+              reason: resolved.reason,
+              detail: resolved.detail,
+              suggestedCourse: readNotionCourseLabel(page),
+              suggestedDelivery: readNotionDeliveryType(page),
+            },
       },
-      { onConflict: "notion_page_id" }
-    );
+      // Keep dismissed junk out of the unresolved inbox on later pulls.
+      resolved: alreadyDismissed ? true : false,
+    };
+
+    const { error: inboxError } = await supabase.from("notion_sync_inbox").upsert(inboxPayload, {
+      onConflict: "notion_page_id",
+    });
 
     if (inboxError) {
       errors.push(`${page.pageId}: ${inboxError.message}`);
-    } else {
+    } else if (!alreadyDismissed) {
       inboxed += 1;
     }
   }

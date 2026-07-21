@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   deleteNotionTutorMapping,
+  dismissNotionInboxRow,
   fetchLeadLinkAdminData,
   fetchNotionLinkFormOptions,
   fetchNotionTutorMapData,
@@ -91,6 +92,20 @@ export function AdminNotionSyncSection() {
         return;
       }
       setMessage(result.success ?? "Imported.");
+      reload();
+    });
+  }
+
+  function handleDismissInbox(inboxId: string) {
+    startTransition(async () => {
+      setError(null);
+      setMessage(null);
+      const result = await dismissNotionInboxRow(inboxId);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setMessage(result.success ?? "Dismissed.");
       reload();
     });
   }
@@ -196,6 +211,14 @@ export function AdminNotionSyncSection() {
                         {row.status ?? "No status"}
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => handleDismissInbox(row.id)}
+                      className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                    >
+                      Dismiss — not a real package
+                    </button>
                   </div>
 
                   {row.skipReason && (
@@ -244,18 +267,20 @@ export function AdminNotionSyncSection() {
                           ))}
                         </select>
                       </label>
-                      {selectedPackage && (
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() =>
-                            handleImportInbox(row.id, selectedPackage.id, selectedPackage.courseId)
-                          }
-                          className="mt-4 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-60"
-                        >
-                          Import with override
-                        </button>
-                      )}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {selectedPackage && (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() =>
+                              handleImportInbox(row.id, selectedPackage.id, selectedPackage.courseId)
+                            }
+                            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-60"
+                          >
+                            Import with override
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

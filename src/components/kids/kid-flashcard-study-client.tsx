@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FlashcardStudyMode } from "@/components/flashcards/study-mode";
 import { useKidActivityComplete } from "@/components/kids/use-kid-activity-complete";
@@ -10,6 +10,11 @@ export function KidFlashcardStudyClient({ deck }: { deck: FlashcardDeckContext }
   const router = useRouter();
   const { completeActivity, celebration } = useKidActivityComplete();
   const [done, setDone] = useState(false);
+
+  const handleKidsComplete = useCallback(async () => {
+    await completeActivity("flashcard_study", { deck: deck.deckName });
+    setDone(true);
+  }, [completeActivity, deck.deckName]);
 
   if (done && !celebration) {
     router.push("/dashboard/kids");
@@ -21,10 +26,7 @@ export function KidFlashcardStudyClient({ deck }: { deck: FlashcardDeckContext }
         deck={deck}
         initialProgress={[]}
         kidsMode
-        onKidsComplete={async () => {
-          await completeActivity("flashcard_study", { deck: deck.deckName });
-          setDone(true);
-        }}
+        onKidsComplete={handleKidsComplete}
       />
       {celebration}
     </>

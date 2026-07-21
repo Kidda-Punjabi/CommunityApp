@@ -19,5 +19,13 @@ export default async function KidMatchPage() {
   const cards = await loadKidFriendlyFlashcards(supabase, 8);
   const deck = buildKidDeckContext(cards, "Kids memory match");
 
+  if (deck.cards.length === 0) {
+    return (
+      <p className="text-center text-zinc-600">
+        No kid-friendly cards yet. Ask a grown-up to add vocab with topics like Animals or Food.
+      </p>
+    );
+  }
+
   return <KidMatchClient deck={deck} />;
 }

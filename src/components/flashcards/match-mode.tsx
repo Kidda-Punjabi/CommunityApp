@@ -55,6 +55,7 @@ export function FlashcardMatchMode({
   const userIdRef = useRef<string | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const savedRef = useRef(false);
+  const kidsCompleteRef = useRef(false);
   const { playSound } = useAudioManager();
 
   const [tiles, setTiles] = useState<Tile[]>([]);
@@ -116,7 +117,8 @@ export function FlashcardMatchMode({
   }, [phase]);
 
   useEffect(() => {
-    if (!kidsMode || phase !== "finished") return;
+    if (!kidsMode || phase !== "finished" || kidsCompleteRef.current) return;
+    kidsCompleteRef.current = true;
     void onKidsComplete?.(pairsMatched);
   }, [kidsMode, phase, pairsMatched, onKidsComplete]);
 
@@ -159,6 +161,7 @@ export function FlashcardMatchMode({
 
   function startGame() {
     savedRef.current = false;
+    kidsCompleteRef.current = false;
     setTiles(buildTiles());
     setPhase("playing");
     setSecondsLeft(GAME_SECONDS);

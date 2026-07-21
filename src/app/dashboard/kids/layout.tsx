@@ -22,10 +22,10 @@ export default async function KidsLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-b from-sky-100 via-violet-50 to-amber-50 pb-24">
+    <div className="flex min-h-dvh w-full flex-1 flex-col bg-gradient-to-b from-sky-100 via-violet-50 to-amber-50 pb-24">
       <KidsExitButton />
       <FloatingSoundToggle placement="top-left" />
-      <div className="mx-auto max-w-lg px-4 pt-12">{children}</div>
+      <div className="mx-auto w-full max-w-lg flex-1 px-4 pt-12">{children}</div>
       <KidsShellNav ageTier={kid.age_tier} />
     </div>
   );

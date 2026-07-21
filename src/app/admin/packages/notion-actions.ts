@@ -7,6 +7,10 @@ import {
   linkInboxRowToPackageInstance,
 } from "@/lib/notion/package-sync";
 import {
+  dismissNotionInboxRows,
+  INBOX_DISMISSAL_REASON_NOT_A_REAL_PACKAGE,
+} from "@/lib/notion/notion-inbox-dismiss";
+import {
   loadPackageCatalog,
   resolveNotionSyncTargetFromPage,
 } from "@/lib/notion/resolve-package-link";
@@ -260,6 +264,24 @@ export async function linkNotionInboxRow(
     return { success: "Package linked and instance created.", id: result.instanceId };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to link inbox row." };
+  }
+}
+
+export async function dismissNotionInboxRow(
+  inboxId: string
+): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const result = await dismissNotionInboxRows(supabase, [inboxId], INBOX_DISMISSAL_REASON_NOT_A_REAL_PACKAGE);
+    if (result.error) return { error: result.error };
+    if (result.dismissed === 0) {
+      return { error: "Inbox row not found or already resolved." };
+    }
+    revalidateNotionSync();
+    return { success: "Dismissed — marked as not a real package." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to dismiss inbox row." };
   }
 }
 
