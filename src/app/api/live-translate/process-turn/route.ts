@@ -5,7 +5,7 @@ import { synthesizeSpeech } from "@/lib/elevenlabs/server";
 import { transcribeSpeech } from "@/lib/elevenlabs/speech-to-text";
 import { canAccessLiveTranslate } from "@/lib/live-translate/access";
 import { LIVE_TRANSLATE_MONTHLY_CAP_SECONDS } from "@/lib/live-translate/config";
-import { resolveTranslationDirection } from "@/lib/live-translate/direction";
+import { resolveTranslationDirectionWithSource } from "@/lib/live-translate/direction";
 import { currentMonthKeyUtc } from "@/lib/live-translate/month-key";
 import { translateLiveUtterance } from "@/lib/live-translate/translate";
 import {
@@ -119,11 +119,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const stt = await transcribeSpeech(audio, {
-      languageCode: activeSide === "member" ? "en" : "pan",
-    });
+    // Auto-detect spike: omit language_code so Scribe detects language; My/Their
+    // toggle remains as resolveTranslationDirection fallback only.
+    const stt = await transcribeSpeech(audio);
 
-    const direction = resolveTranslationDirection({
+    const { direction, source: direction_source } = resolveTranslationDirectionWithSource({
       languageCode: stt.languageCode,
       activeSide,
       transcript: stt.text,
@@ -151,8 +151,10 @@ export async function POST(request: Request) {
       translated_text: translatedText,
       audio_base64: audioBase64,
       direction,
+      direction_source,
       side: activeSide,
       language_code: stt.languageCode,
+      language_probability: stt.languageProbability,
       seconds_remaining_this_month: updatedUsage.secondsRemaining,
       seconds_used_this_month: updatedUsage.secondsUsed,
       month_key: updatedUsage.monthKey,

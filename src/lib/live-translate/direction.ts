@@ -31,16 +31,33 @@ export function directionFromTranscriptText(text: string): LiveTranslateDirectio
   return null;
 }
 
+export type TranslationDirectionSource = "language_code" | "transcript" | "active_side";
+
 export function resolveTranslationDirection(options: {
   languageCode: string | null;
   activeSide: LiveTranslateSide;
   transcript: string;
 }): LiveTranslateDirection {
-  return (
-    directionFromLanguageCode(options.languageCode) ??
-    directionFromTranscriptText(options.transcript) ??
-    directionFromActiveSide(options.activeSide)
-  );
+  return resolveTranslationDirectionWithSource(options).direction;
+}
+
+export function resolveTranslationDirectionWithSource(options: {
+  languageCode: string | null;
+  activeSide: LiveTranslateSide;
+  transcript: string;
+}): { direction: LiveTranslateDirection; source: TranslationDirectionSource } {
+  const fromCode = directionFromLanguageCode(options.languageCode);
+  if (fromCode) {
+    return { direction: fromCode, source: "language_code" };
+  }
+  const fromText = directionFromTranscriptText(options.transcript);
+  if (fromText) {
+    return { direction: fromText, source: "transcript" };
+  }
+  return {
+    direction: directionFromActiveSide(options.activeSide),
+    source: "active_side",
+  };
 }
 
 export function displaySideForDirection(direction: LiveTranslateDirection): LiveTranslateSide {

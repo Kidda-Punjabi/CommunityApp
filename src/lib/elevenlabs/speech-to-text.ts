@@ -12,6 +12,8 @@ export type TranscribeSpeechOptions = {
 export type TranscribeSpeechResult = {
   text: string;
   languageCode: string | null;
+  /** Scribe confidence for detected language (0–1), when auto-detect is used. */
+  languageProbability: number | null;
 };
 
 /**
@@ -64,6 +66,7 @@ export async function transcribeSpeech(
   const payload = (await response.json()) as {
     text?: string;
     language_code?: string;
+    language_probability?: number;
   };
 
   const text = payload.text?.trim() ?? "";
@@ -71,8 +74,13 @@ export async function transcribeSpeech(
     throw new Error("No speech detected — try speaking a little louder.");
   }
 
+  const prob = payload.language_probability;
+  const languageProbability =
+    typeof prob === "number" && Number.isFinite(prob) ? prob : null;
+
   return {
     text,
     languageCode: payload.language_code ?? null,
+    languageProbability,
   };
 }

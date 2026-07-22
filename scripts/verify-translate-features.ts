@@ -153,11 +153,18 @@ async function testElevenLabsStt() {
 
   const tts = await synthesizeSpeech({ text: "Hello, how are you today?" });
   const blob = new Blob([tts.audio], { type: "audio/mpeg" });
-  const stt = await transcribeSpeech(blob, { languageCode: "en" });
+  const sttHinted = await transcribeSpeech(blob, { languageCode: "en" });
   record(
-    "live translate ElevenLabs STT",
-    stt.text.length > 0,
-    `${stt.text} (${stt.languageCode ?? "no lang"})`
+    "live translate ElevenLabs STT (hinted en)",
+    sttHinted.text.length > 0,
+    `${sttHinted.text} (${sttHinted.languageCode ?? "no lang"}, p=${sttHinted.languageProbability ?? "n/a"})`
+  );
+
+  const sttAuto = await transcribeSpeech(blob);
+  record(
+    "live translate ElevenLabs STT (auto-detect)",
+    sttAuto.text.length > 0,
+    `${sttAuto.text} (${sttAuto.languageCode ?? "no lang"}, p=${sttAuto.languageProbability ?? "n/a"})`
   );
 }
 
