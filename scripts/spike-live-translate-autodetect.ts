@@ -88,10 +88,17 @@ const TEXT_CASES: TextCase[] = [
     activeSide: "member",
   },
   {
-    label: "DESIRED pa-to-en: wrong STT eng + Gurmukhi (resolver currently fails this)",
+    label: "Wrong STT eng + Gurmukhi transcript → Punjabi direction",
     expected: "pa-to-en",
     languageCode: "eng",
     transcript: "ਮੈਂ office ਜਾ ਰਿਹਾ ਹਾਂ",
+    activeSide: "other",
+  },
+  {
+    label: "Wrong STT hin (untrusted) + Latin only → English direction",
+    expected: "en-to-pa",
+    languageCode: "hin",
+    transcript: "Meeting late",
     activeSide: "other",
   },
   {

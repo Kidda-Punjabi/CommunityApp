@@ -31,6 +31,11 @@ export function directionFromTranscriptText(text: string): LiveTranslateDirectio
   return null;
 }
 
+function directionFromLatinTranscript(text: string): LiveTranslateDirection | null {
+  if (/[a-z]/i.test(text)) return "en-to-pa";
+  return null;
+}
+
 export type TranslationDirectionSource = "language_code" | "transcript" | "active_side";
 
 export function resolveTranslationDirection(options: {
@@ -46,14 +51,23 @@ export function resolveTranslationDirectionWithSource(options: {
   activeSide: LiveTranslateSide;
   transcript: string;
 }): { direction: LiveTranslateDirection; source: TranslationDirectionSource } {
+  const transcript = options.transcript;
+
+  // Gurmukhi in the transcript beats STT language_code (e.g. mis-tagged eng/hin).
+  if (GURMUKHI.test(transcript)) {
+    return { direction: "pa-to-en", source: "transcript" };
+  }
+
   const fromCode = directionFromLanguageCode(options.languageCode);
   if (fromCode) {
     return { direction: fromCode, source: "language_code" };
   }
-  const fromText = directionFromTranscriptText(options.transcript);
-  if (fromText) {
-    return { direction: fromText, source: "transcript" };
+
+  const fromLatin = directionFromLatinTranscript(transcript);
+  if (fromLatin) {
+    return { direction: fromLatin, source: "transcript" };
   }
+
   return {
     direction: directionFromActiveSide(options.activeSide),
     source: "active_side",

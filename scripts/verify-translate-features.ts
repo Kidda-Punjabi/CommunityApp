@@ -123,6 +123,17 @@ function testDirectionResolution() {
     transcript: "???",
   });
   record("direction side fallback", sideFallback === "pa-to-en", sideFallback);
+
+  const gurmukhiBeatsEng = resolveTranslationDirection({
+    languageCode: "eng",
+    activeSide: "member",
+    transcript: "ਮੈਂ office ਜਾ ਰਿਹਾ ਹਾਂ",
+  });
+  record(
+    "direction Gurmukhi beats eng language_code",
+    gurmukhiBeatsEng === "pa-to-en",
+    gurmukhiBeatsEng
+  );
 }
 
 async function testUsageTables(admin: ReturnType<typeof createClient>, userId: string) {
