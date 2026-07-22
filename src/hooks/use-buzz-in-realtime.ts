@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { BuzzInRoundRow } from "@/lib/buzz-in/types";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
@@ -12,12 +12,29 @@ type UseBuzzInRealtimeOptions = {
   onParticipantsChange: () => void;
 };
 
+/** In-game buzz-in channel — callback refs avoid remount churn. */
 export function useBuzzInRealtime({
   roomId,
   onRoomChange,
   onRoundChange,
   onParticipantsChange,
 }: UseBuzzInRealtimeOptions) {
+  const onRoomChangeRef = useRef(onRoomChange);
+  const onRoundChangeRef = useRef(onRoundChange);
+  const onParticipantsChangeRef = useRef(onParticipantsChange);
+
+  useEffect(() => {
+    onRoomChangeRef.current = onRoomChange;
+  }, [onRoomChange]);
+
+  useEffect(() => {
+    onRoundChangeRef.current = onRoundChange;
+  }, [onRoundChange]);
+
+  useEffect(() => {
+    onParticipantsChangeRef.current = onParticipantsChange;
+  }, [onParticipantsChange]);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -33,7 +50,7 @@ export function useBuzzInRealtime({
         },
         (payload) => {
           if (payload.new) {
-            onRoomChange(payload.new as GameRoomRow);
+            onRoomChangeRef.current(payload.new as GameRoomRow);
           }
         }
       )
@@ -47,7 +64,7 @@ export function useBuzzInRealtime({
         },
         (payload) => {
           if (payload.new) {
-            onRoundChange(payload.new as BuzzInRoundRow);
+            onRoundChangeRef.current(payload.new as BuzzInRoundRow);
           }
         }
       )
@@ -60,7 +77,7 @@ export function useBuzzInRealtime({
           filter: `room_id=eq.${roomId}`,
         },
         () => {
-          onParticipantsChange();
+          onParticipantsChangeRef.current();
         }
       )
       .subscribe();
@@ -68,5 +85,5 @@ export function useBuzzInRealtime({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [roomId, onRoomChange, onRoundChange, onParticipantsChange]);
+  }, [roomId]);
 }

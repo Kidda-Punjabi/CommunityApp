@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { SentenceRoundRow } from "@/lib/sentence-builder-group/types";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
@@ -12,12 +12,29 @@ type UseSentenceBuilderRealtimeOptions = {
   onParticipantsChange: () => void;
 };
 
+/** In-game sentence-builder channel — callback refs avoid remount churn. */
 export function useSentenceBuilderRealtime({
   roomId,
   onRoomChange,
   onRoundChange,
   onParticipantsChange,
 }: UseSentenceBuilderRealtimeOptions) {
+  const onRoomChangeRef = useRef(onRoomChange);
+  const onRoundChangeRef = useRef(onRoundChange);
+  const onParticipantsChangeRef = useRef(onParticipantsChange);
+
+  useEffect(() => {
+    onRoomChangeRef.current = onRoomChange;
+  }, [onRoomChange]);
+
+  useEffect(() => {
+    onRoundChangeRef.current = onRoundChange;
+  }, [onRoundChange]);
+
+  useEffect(() => {
+    onParticipantsChangeRef.current = onParticipantsChange;
+  }, [onParticipantsChange]);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -32,7 +49,7 @@ export function useSentenceBuilderRealtime({
           filter: `id=eq.${roomId}`,
         },
         (payload) => {
-          if (payload.new) onRoomChange(payload.new as GameRoomRow);
+          if (payload.new) onRoomChangeRef.current(payload.new as GameRoomRow);
         }
       )
       .on(
@@ -44,7 +61,7 @@ export function useSentenceBuilderRealtime({
           filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
-          if (payload.new) onRoundChange(payload.new as SentenceRoundRow);
+          if (payload.new) onRoundChangeRef.current(payload.new as SentenceRoundRow);
         }
       )
       .on(
@@ -55,12 +72,12 @@ export function useSentenceBuilderRealtime({
           table: "game_room_participants",
           filter: `room_id=eq.${roomId}`,
         },
-        () => onParticipantsChange()
+        () => onParticipantsChangeRef.current()
       )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [roomId, onRoomChange, onRoundChange, onParticipantsChange]);
+  }, [roomId]);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { BattleRoundRow, BattleSessionRow } from "@/lib/battle/types";
 
@@ -10,11 +10,27 @@ type UseBattleRealtimeOptions = {
   onRoundChange: (round: BattleRoundRow) => void;
 };
 
+/**
+ * Battle session channel. Callbacks are stored in refs so parent re-renders
+ * (e.g. handleRoundChange closing over phase/round) do not tear down the
+ * channel and miss opponent-join or round-start events.
+ */
 export function useBattleRealtime({
   sessionId,
   onSessionChange,
   onRoundChange,
 }: UseBattleRealtimeOptions) {
+  const onSessionChangeRef = useRef(onSessionChange);
+  const onRoundChangeRef = useRef(onRoundChange);
+
+  useEffect(() => {
+    onSessionChangeRef.current = onSessionChange;
+  }, [onSessionChange]);
+
+  useEffect(() => {
+    onRoundChangeRef.current = onRoundChange;
+  }, [onRoundChange]);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -30,7 +46,7 @@ export function useBattleRealtime({
         },
         (payload) => {
           if (payload.new) {
-            onSessionChange(payload.new as BattleSessionRow);
+            onSessionChangeRef.current(payload.new as BattleSessionRow);
           }
         }
       )
@@ -44,14 +60,26 @@ export function useBattleRealtime({
         },
         (payload) => {
           if (payload.new) {
-            onRoundChange(payload.new as BattleRoundRow);
+            onRoundChangeRef.current(payload.new as BattleRoundRow);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          // Recover any session transition missed while the channel was down.
+          void supabase
+            .from("battle_sessions")
+            .select("*")
+            .eq("id", sessionId)
+            .maybeSingle()
+            .then(({ data }) => {
+              if (data) onSessionChangeRef.current(data as BattleSessionRow);
+            });
+        }
+      });
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [sessionId, onSessionChange, onRoundChange]);
+  }, [sessionId]);
 }

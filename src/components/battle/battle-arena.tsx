@@ -276,6 +276,13 @@ export function BattleArena({
     void poll();
     const pollId = window.setInterval(() => void poll(), 1000);
 
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void poll();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     const countdownId = window.setInterval(() => {
       const elapsed = Date.now() - startedAt;
       const remaining = Math.max(0, Math.ceil((BATTLE_QUICK_MATCH_WAIT_MS - elapsed) / 1000));
@@ -289,6 +296,7 @@ export function BattleArena({
     return () => {
       window.clearInterval(pollId);
       window.clearInterval(countdownId);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [phase, session.id, session.is_quick_match, handleSessionChange]);
 

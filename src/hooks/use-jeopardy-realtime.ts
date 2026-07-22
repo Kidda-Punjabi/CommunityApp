@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { JeopardyTileRow } from "@/lib/jeopardy/types";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
@@ -12,12 +12,29 @@ type UseJeopardyRealtimeOptions = {
   onParticipantsChange: () => void;
 };
 
+/** In-game Jeopardy channel — callback refs avoid remount churn. */
 export function useJeopardyRealtime({
   roomId,
   onRoomChange,
   onTileChange,
   onParticipantsChange,
 }: UseJeopardyRealtimeOptions) {
+  const onRoomChangeRef = useRef(onRoomChange);
+  const onTileChangeRef = useRef(onTileChange);
+  const onParticipantsChangeRef = useRef(onParticipantsChange);
+
+  useEffect(() => {
+    onRoomChangeRef.current = onRoomChange;
+  }, [onRoomChange]);
+
+  useEffect(() => {
+    onTileChangeRef.current = onTileChange;
+  }, [onTileChange]);
+
+  useEffect(() => {
+    onParticipantsChangeRef.current = onParticipantsChange;
+  }, [onParticipantsChange]);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -32,7 +49,7 @@ export function useJeopardyRealtime({
           filter: `id=eq.${roomId}`,
         },
         (payload) => {
-          if (payload.new) onRoomChange(payload.new as GameRoomRow);
+          if (payload.new) onRoomChangeRef.current(payload.new as GameRoomRow);
         }
       )
       .on(
@@ -44,7 +61,7 @@ export function useJeopardyRealtime({
           filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
-          if (payload.new) onTileChange(payload.new as JeopardyTileRow);
+          if (payload.new) onTileChangeRef.current(payload.new as JeopardyTileRow);
         }
       )
       .on(
@@ -55,12 +72,12 @@ export function useJeopardyRealtime({
           table: "game_room_participants",
           filter: `room_id=eq.${roomId}`,
         },
-        () => onParticipantsChange()
+        () => onParticipantsChangeRef.current()
       )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [roomId, onRoomChange, onTileChange, onParticipantsChange]);
+  }, [roomId]);
 }

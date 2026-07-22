@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RaceStateRow } from "@/lib/point-race/types";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
@@ -13,6 +13,7 @@ type UsePointRaceRealtimeOptions = {
   onStandingsChange: () => void;
 };
 
+/** In-game Point Race channel — callback refs avoid remount churn. */
 export function usePointRaceRealtime({
   roomId,
   currentUserId,
@@ -20,6 +21,22 @@ export function usePointRaceRealtime({
   onMyRaceStateChange,
   onStandingsChange,
 }: UsePointRaceRealtimeOptions) {
+  const onRoomChangeRef = useRef(onRoomChange);
+  const onMyRaceStateChangeRef = useRef(onMyRaceStateChange);
+  const onStandingsChangeRef = useRef(onStandingsChange);
+
+  useEffect(() => {
+    onRoomChangeRef.current = onRoomChange;
+  }, [onRoomChange]);
+
+  useEffect(() => {
+    onMyRaceStateChangeRef.current = onMyRaceStateChange;
+  }, [onMyRaceStateChange]);
+
+  useEffect(() => {
+    onStandingsChangeRef.current = onStandingsChange;
+  }, [onStandingsChange]);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -34,7 +51,7 @@ export function usePointRaceRealtime({
           filter: `id=eq.${roomId}`,
         },
         (payload) => {
-          if (payload.new) onRoomChange(payload.new as GameRoomRow);
+          if (payload.new) onRoomChangeRef.current(payload.new as GameRoomRow);
         }
       )
       .on(
@@ -48,10 +65,10 @@ export function usePointRaceRealtime({
         (payload) => {
           const row = payload.new as RaceStateRow | undefined;
           if (row?.player_id === currentUserId) {
-            onMyRaceStateChange(row);
+            onMyRaceStateChangeRef.current(row);
           }
           if (row && row.player_id !== currentUserId) {
-            onStandingsChange();
+            onStandingsChangeRef.current();
           }
         }
       )
@@ -63,12 +80,12 @@ export function usePointRaceRealtime({
           table: "game_room_participants",
           filter: `room_id=eq.${roomId}`,
         },
-        () => onStandingsChange()
+        () => onStandingsChangeRef.current()
       )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [roomId, currentUserId, onRoomChange, onMyRaceStateChange, onStandingsChange]);
+  }, [roomId, currentUserId]);
 }
