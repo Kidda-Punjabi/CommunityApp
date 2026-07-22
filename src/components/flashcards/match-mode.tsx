@@ -51,8 +51,8 @@ export function FlashcardMatchMode({
     isNewBest: boolean;
     currentBest: number;
   } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const userIdRef = useRef<string | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const savedRef = useRef(false);
   const kidsCompleteRef = useRef(false);
@@ -93,13 +93,6 @@ export function FlashcardMatchMode({
   }, [challenge?.id]);
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      userIdRef.current = user?.id ?? null;
-    });
-  }, []);
-
-  useEffect(() => {
     if (phase !== "playing") return;
 
     const timer = window.setInterval(() => {
@@ -132,26 +125,38 @@ export function FlashcardMatchMode({
     setElapsedSeconds(timeUsed);
 
     const persist = async () => {
-      const userId = userIdRef.current;
-      if (!userId) return;
-
+      setSaveError(null);
       const supabase = createClient();
-      const outcome = await saveMatchScoreIfBest(
-        supabase,
-        userId,
-        deck.deckName,
-        pairsMatched,
-        timeUsed,
-        deck.cards.length
-      );
-      setResult({
-        isNewBest: outcome.isNewBest,
-        currentBest: outcome.currentBest,
-      });
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setSaveError("Could not save your score — please sign in and try again.");
+        return;
+      }
+
+      try {
+        const outcome = await saveMatchScoreIfBest(
+          supabase,
+          user.id,
+          deck.deckName,
+          pairsMatched,
+          timeUsed,
+          deck.cards.length
+        );
+        setResult({
+          isNewBest: outcome.isNewBest,
+          currentBest: outcome.currentBest,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Could not save score";
+        console.error("Match score save failed:", message);
+        setSaveError("We couldn't save this round. Your pairs still count locally — try again soon.");
+      }
     };
 
     void persist();
-  }, [phase, pairsMatched, deck.deckName]);
+  }, [phase, pairsMatched, deck.deckName, deck.cards.length]);
 
   useEffect(() => {
     if (pairsMatched === deck.cards.length && phase === "playing") {
@@ -170,6 +175,7 @@ export function FlashcardMatchMode({
     setWrongTileId(null);
     setPairsMatched(0);
     setResult(null);
+    setSaveError(null);
     startedAtRef.current = Date.now();
   }
 
@@ -253,6 +259,7 @@ export function FlashcardMatchMode({
         deck={deck}
         elapsedSeconds={elapsedSeconds}
         result={result}
+        saveError={saveError}
         deckHubHref={deckHubHref}
         onPlayAgain={startGame}
         kidsMode={kidsMode}
@@ -309,6 +316,7 @@ function MatchFinishedScreen({
   deck,
   elapsedSeconds,
   result,
+  saveError,
   deckHubHref,
   onPlayAgain,
   kidsMode,
@@ -319,6 +327,7 @@ function MatchFinishedScreen({
   deck: FlashcardDeckContext;
   elapsedSeconds: number;
   result: { isNewBest: boolean; currentBest: number } | null;
+  saveError: string | null;
   deckHubHref: string;
   onPlayAgain: () => void;
   kidsMode: boolean;
@@ -348,6 +357,9 @@ function MatchFinishedScreen({
         {result && !result.isNewBest && result.currentBest > 0 && (
           <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest} pairs</p>
         )}
+        {saveError ? (
+          <p className="mt-3 text-sm font-medium text-rose-600">{saveError}</p>
+        ) : null}
       </div>
       {!challenge && (
         <button

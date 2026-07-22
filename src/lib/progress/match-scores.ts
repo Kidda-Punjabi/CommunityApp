@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { updateUserGameStats } from "@/lib/games/game-scores";
 import {
   awardGameSessionPoints,
   buildGameAccuracyMetadata,
@@ -41,8 +42,13 @@ export type SaveMatchScoreResult = {
   previousBest: number;
   currentBest: number;
   pointsEarned: number;
+  saved: boolean;
 };
 
+/**
+ * Persists every completed Match session to game_scores (session history).
+ * `isNewBest` reflects deck personal best; UI uses it for “new PB” messaging.
+ */
 export async function saveMatchScoreIfBest(
   supabase: SupabaseClient,
   userId: string,
@@ -63,11 +69,6 @@ export async function saveMatchScoreIfBest(
     time_seconds: timeSeconds,
     ...buildGameAccuracyMetadata(score, totalPairs),
   };
-  const pointsEarned = await awardGameSessionPoints(supabase, metadata);
-
-  if (!isNewBest) {
-    return { isNewBest: false, previousBest, currentBest: previousBest, pointsEarned };
-  }
 
   const { error } = await supabase.from("game_scores").insert({
     user_id: userId,
@@ -79,5 +80,14 @@ export async function saveMatchScoreIfBest(
 
   if (error) throw error;
 
-  return { isNewBest: true, previousBest, currentBest: score, pointsEarned };
+  const pointsEarned = await awardGameSessionPoints(supabase, metadata);
+  await updateUserGameStats(supabase, userId, "match", score, isNewBest);
+
+  return {
+    isNewBest,
+    previousBest,
+    currentBest: isNewBest ? score : previousBest,
+    pointsEarned,
+    saved: true,
+  };
 }

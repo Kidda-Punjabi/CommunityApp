@@ -134,7 +134,7 @@ export async function saveGameScoreIfBest(
   return { isNewBest: true, previousBest, currentBest: score, pointsEarned };
 }
 
-async function updateUserGameStats(
+export async function updateUserGameStats(
   supabase: SupabaseClient,
   userId: string,
   gameType: GameType,
