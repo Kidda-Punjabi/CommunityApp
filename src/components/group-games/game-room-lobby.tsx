@@ -95,6 +95,27 @@ export function GameRoomLobby({ initialView }: GameRoomLobbyProps) {
     onParticipantsChange: refreshParticipants,
   });
 
+  // Belt-and-suspenders while in lobby: catches missed realtime during channel churn.
+  useEffect(() => {
+    if (room.status !== "lobby") return;
+
+    const interval = window.setInterval(() => {
+      void refreshParticipants();
+    }, 4000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshParticipants();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [room.status, refreshParticipants]);
+
   useEffect(() => {
     if (room.status === "in_progress") {
       router.push(`/dashboard/group-games/room/${room.id}/play`);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
 
@@ -10,11 +10,27 @@ type UseGameRoomRealtimeOptions = {
   onParticipantsChange: () => void;
 };
 
+/**
+ * Lobby + in-game room channel. Callbacks are stored in refs so parent
+ * re-renders (e.g. unstable `router` in onRoomChange deps) do not tear
+ * down and miss participant INSERT events on the host.
+ */
 export function useGameRoomRealtime({
   roomId,
   onRoomChange,
   onParticipantsChange,
 }: UseGameRoomRealtimeOptions) {
+  const onRoomChangeRef = useRef(onRoomChange);
+  const onParticipantsChangeRef = useRef(onParticipantsChange);
+
+  useEffect(() => {
+    onRoomChangeRef.current = onRoomChange;
+  }, [onRoomChange]);
+
+  useEffect(() => {
+    onParticipantsChangeRef.current = onParticipantsChange;
+  }, [onParticipantsChange]);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -30,7 +46,7 @@ export function useGameRoomRealtime({
         },
         (payload) => {
           if (payload.new) {
-            onRoomChange(payload.new as GameRoomRow);
+            onRoomChangeRef.current(payload.new as GameRoomRow);
           }
         }
       )
@@ -43,13 +59,17 @@ export function useGameRoomRealtime({
           filter: `room_id=eq.${roomId}`,
         },
         () => {
-          onParticipantsChange();
+          onParticipantsChangeRef.current();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          onParticipantsChangeRef.current();
+        }
+      });
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [roomId, onRoomChange, onParticipantsChange]);
+  }, [roomId]);
 }
