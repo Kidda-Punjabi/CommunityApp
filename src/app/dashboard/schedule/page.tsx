@@ -87,7 +87,10 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
         schemaReady={bookingContextLoad.schemaReady && studentBookingsLoad.schemaReady && creditsLoad.schemaReady}
       />
 
-      <UpcomingLessonsList sessions={sessions} />
+      <UpcomingLessonsList
+        sessions={sessions}
+        hasBookingCredit={creditsLoad.credits.length > 0}
+      />
     </div>
   );
 }

@@ -13,6 +13,8 @@ import {
 } from "@/lib/tutoring/availability/load-availability";
 import { generateBookableSlots } from "@/lib/tutoring/availability/slots";
 import { isAvailabilitySchemaMissingError } from "@/lib/tutoring/availability/schema";
+import { createOneToOneCalendarSession } from "@/lib/tutoring/one-to-one-calendar-booking";
+import { getDisplayName } from "@/lib/profile/display-name";
 import type { BookableSlot } from "@/lib/tutoring/availability/types";
 
 export type BookingActionResult = { error?: string; success?: string; bookingId?: string };
@@ -46,7 +48,7 @@ export async function fetchBookableSlots(tutorId: string): Promise<{
     if (!user) return { slots: [], error: "Sign in to book a lesson." };
 
     const { context } = await loadStudentBookingContext(supabase, user.id);
-    if (!context || context.tutorId !== tutorId) {
+    if (!context || context.tutorUnresolved || context.tutorId !== tutorId) {
       return { slots: [], error: "You are not enrolled for 1-to-1 with this tutor." };
     }
     if (!context.bookingEnabled || !context.settings) {
@@ -89,7 +91,13 @@ export async function createOneToOneBooking(
     }
 
     const { context } = await loadStudentBookingContext(supabase, user.id);
-    if (!context || context.tutorId !== tutorId || !context.settings) {
+    if (
+      !context ||
+      context.tutorUnresolved ||
+      context.tutorId !== tutorId ||
+      !context.settings ||
+      !context.bookingEnabled
+    ) {
       return { error: "You are not eligible to book with this tutor." };
     }
 
@@ -185,9 +193,72 @@ export async function createOneToOneBooking(
       return { error: "Could not apply your session credit. Please try again." };
     }
 
+    const studentEmail = user.email?.trim();
+    if (!studentEmail) {
+      await admin
+        .from("tutor_one_to_one_booking_credits")
+        .update({ status: "available", booking_id: null, used_at: null })
+        .eq("id", creditId)
+        .eq("student_id", user.id);
+      await admin
+        .from("tutor_one_to_one_bookings")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("id", bookingId);
+      return { error: "Add an email to your account before booking a calendar lesson." };
+    }
+
+    const { data: studentProfile } = await supabase
+      .from("profiles")
+      .select("full_name, preferred_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    const studentName = studentProfile ? getDisplayName(studentProfile) : null;
+    const lessonTitle = studentName
+      ? `1-to-1 lesson with ${studentName}`
+      : "1-to-1 Kidda lesson";
+
+    const calendarResult = await createOneToOneCalendarSession(admin, {
+      tutorId,
+      studentId: user.id,
+      studentEmail,
+      startsAt,
+      endsAt,
+      courseId: context.courseId,
+      title: lessonTitle,
+      notes,
+      timeZone: context.settings.timezone,
+    });
+
+    if (!calendarResult.ok) {
+      await admin
+        .from("tutor_one_to_one_booking_credits")
+        .update({ status: "available", booking_id: null, used_at: null })
+        .eq("id", creditId)
+        .eq("student_id", user.id);
+      await admin
+        .from("tutor_one_to_one_bookings")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("id", bookingId);
+      return { error: calendarResult.error };
+    }
+
+    const { error: linkSessionError } = await admin
+      .from("tutor_one_to_one_bookings")
+      .update({
+        session_id: calendarResult.sessionId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", bookingId);
+
+    if (linkSessionError) {
+      console.error("booked lesson calendar link failed:", linkSessionError.message);
+    }
+
     revalidatePath("/dashboard/schedule");
     return {
-      success: "Lesson booked! Your tutor will see it on their calendar.",
+      success: calendarResult.meetLink
+        ? "Lesson booked! Check Upcoming lessons for your join link and calendar invite."
+        : "Lesson booked! You should receive a calendar invite shortly — check Upcoming lessons.",
       bookingId,
     };
   } catch (e) {

@@ -214,3 +214,75 @@ export async function addAttendeeToGoogleCalendarEvent(
     throw new Error(`Google Calendar patch event failed: ${text}`);
   }
 }
+
+export type CreateGoogleCalendarEventParams = {
+  summary: string;
+  description?: string;
+  startsAt: string;
+  endsAt: string;
+  timeZone: string;
+  attendeeEmails: string[];
+};
+
+export type CreateGoogleCalendarEventResult = {
+  eventId: string;
+  meetLink: string | null;
+  attendeeEmails: string[];
+};
+
+/**
+ * Creates a timed event on the tutor calendar with a Google Meet link and sends invites.
+ */
+export async function createGoogleCalendarEventWithMeet(
+  accessToken: string,
+  calendarId: string,
+  params: CreateGoogleCalendarEventParams
+): Promise<CreateGoogleCalendarEventResult> {
+  const attendees = params.attendeeEmails
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+    .map((email) => ({ email }));
+
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=all`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      summary: params.summary,
+      description: params.description,
+      start: { dateTime: params.startsAt, timeZone: params.timeZone },
+      end: { dateTime: params.endsAt, timeZone: params.timeZone },
+      attendees,
+      conferenceData: {
+        createRequest: {
+          requestId: crypto.randomUUID(),
+          conferenceSolutionKey: { type: "hangoutsMeet" },
+        },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Google Calendar create event failed: ${text}`);
+  }
+
+  const event = (await res.json()) as GoogleApiEvent;
+  if (!event.id) {
+    throw new Error("Google Calendar create event returned no event id.");
+  }
+
+  const attendeeEmails = (event.attendees ?? [])
+    .map((a) => a.email?.trim().toLowerCase())
+    .filter((email): email is string => Boolean(email));
+
+  return {
+    eventId: event.id,
+    meetLink: extractMeetLink(event),
+    attendeeEmails,
+  };
+}

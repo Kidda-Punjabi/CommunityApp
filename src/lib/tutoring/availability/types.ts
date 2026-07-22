@@ -45,11 +45,13 @@ export type TutorOneToOneBooking = {
 export type StudentBookingContext = {
   tutorId: string;
   tutorName: string;
-  enrollmentId: string;
-  courseId: string;
+  enrollmentId: string | null;
+  courseId: string | null;
   bookingEnabled: boolean;
   settings: TutorAvailabilitySettings | null;
   availableCredits: number;
+  /** True when the student has credits but no tutor could be resolved for booking. */
+  tutorUnresolved?: boolean;
 };
 
 export type TutorBookingCredit = {

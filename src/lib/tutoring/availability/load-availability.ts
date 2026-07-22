@@ -8,6 +8,7 @@ import type {
   TutorOneToOneBooking,
 } from "./types";
 import { getDisplayName } from "@/lib/profile/display-name";
+import { resolveStudentBookingTutor } from "./resolve-booking-tutor";
 
 import { DEFAULT_WEEKLY_CAPACITY_HOURS } from "./constants";
 
@@ -88,45 +89,46 @@ export async function loadStudentBookingContext(
   supabase: SupabaseClient,
   studentId: string
 ): Promise<{ context: StudentBookingContext | null; schemaReady: boolean }> {
-  const { data: enrollment, error: enrollmentError } = await supabase
-    .from("course_enrollments")
-    .select("id, course_id, tutor_id, delivery_mode")
-    .eq("user_id", studentId)
-    .eq("delivery_mode", "one_to_one")
-    .not("tutor_id", "is", null)
-    .limit(1)
-    .maybeSingle();
+  const availableCredits = await countAvailableBookingCredits(supabase, studentId);
+  const resolved = await resolveStudentBookingTutor(supabase, studentId);
 
-  if (enrollmentError) throw enrollmentError;
-  if (!enrollment?.tutor_id) {
-    return { context: null, schemaReady: true };
+  if (!resolved) {
+    if (availableCredits < 1) {
+      return { context: null, schemaReady: true };
+    }
+
+    return {
+      schemaReady: true,
+      context: {
+        tutorId: "",
+        tutorName: "Your tutor",
+        enrollmentId: null,
+        courseId: null,
+        bookingEnabled: false,
+        settings: null,
+        availableCredits,
+        tutorUnresolved: true,
+      },
+    };
   }
 
-  const [{ data: tutorProfile }, availability] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, full_name, preferred_name")
-      .eq("id", enrollment.tutor_id)
-      .maybeSingle(),
-    loadTutorAvailability(supabase, enrollment.tutor_id),
-  ]);
-
+  const availability = await loadTutorAvailability(supabase, resolved.tutorId);
   if (!availability.schemaReady) {
     return { context: null, schemaReady: false };
   }
 
   const bookingEnabled =
-    availability.settings.oneToOneBookingEnabled && availability.windows.length > 0;
-
-  const availableCredits = await countAvailableBookingCredits(supabase, studentId);
+    resolved.bookingEnabled &&
+    availability.settings.oneToOneBookingEnabled &&
+    availability.windows.length > 0;
 
   return {
     schemaReady: true,
     context: {
-      tutorId: enrollment.tutor_id,
-      tutorName: tutorProfile ? (getDisplayName(tutorProfile) ?? "Your tutor") : "Your tutor",
-      enrollmentId: enrollment.id,
-      courseId: enrollment.course_id,
+      tutorId: resolved.tutorId,
+      tutorName: resolved.tutorName,
+      enrollmentId: resolved.enrollmentId,
+      courseId: resolved.courseId,
       bookingEnabled,
       settings: availability.settings,
       availableCredits,

@@ -20,19 +20,28 @@ const initial: CalendarActionResult = {};
 
 type UpcomingLessonsListProps = {
   sessions: StudentScheduledSession[];
+  hasBookingCredit?: boolean;
 };
 
-export function UpcomingLessonsList({ sessions }: UpcomingLessonsListProps) {
+export function UpcomingLessonsList({ sessions, hasBookingCredit = false }: UpcomingLessonsListProps) {
   const [viewMode, setViewMode] = useState<LessonsViewMode>("list");
 
   if (sessions.length === 0) {
     return (
       <div className={ui.emptyState}>
         <p className="font-semibold text-zinc-900">No upcoming live lessons</p>
-        <p className="mt-2 text-sm text-zinc-500">
-          When your tutor adds you to a Google Calendar invite, your live lessons will show up here
-          with a join link.
-        </p>
+        {hasBookingCredit ? (
+          <p className="mt-2 text-sm text-zinc-500">
+            You have a paid 1-to-1 session credit — use the booking section above to choose a time.
+            After you confirm a slot, your lesson and Google Meet join link will appear here.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-zinc-500">
+            When your tutor adds you to a Google Calendar invite, your live lessons will show up here
+            with a join link. For 1-to-1 packages, you can also book a time yourself once your tutor
+            has opened self-serve scheduling.
+          </p>
+        )}
       </div>
     );
   }

@@ -45,30 +45,47 @@ export function BookOneToOneSection({
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
 
   const activeCredit = credits[0] ?? null;
-  const canBook = Boolean(context?.bookingEnabled && activeCredit);
+  const showSection = credits.length > 0 || Boolean(context);
+  const canBook = Boolean(context?.bookingEnabled && activeCredit && !context.tutorUnresolved);
+  const tutorLabel = context?.tutorName ?? "your tutor";
 
   useEffect(() => {
-    if (!canBook || !context) return;
+    if (!canBook || !context?.tutorId) return;
     startLoadSlots(async () => {
       const result = await fetchBookableSlots(context.tutorId);
       setSlots(result.slots);
       setSlotsError(result.error ?? null);
     });
-  }, [canBook, context]);
+  }, [canBook, context?.tutorId]);
 
   if (!schemaReady) return null;
-  if (!context) return null;
+  if (!showSection) return null;
 
   return (
     <section className={`${ui.cardBordered} mb-8 space-y-4 p-4`}>
       <div>
-        <h2 className={ui.sectionTitle}>Book a 1-to-1 with {context.tutorName}</h2>
+        <h2 className={ui.sectionTitle}>
+          {context?.tutorUnresolved
+            ? "Book a 1-to-1 lesson"
+            : `Book a 1-to-1 with ${tutorLabel}`}
+        </h2>
         {paymentMessage ? (
           <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
             {paymentMessage}
           </p>
         ) : null}
-        {!context.bookingEnabled ? (
+        {context?.tutorUnresolved ? (
+          <p className="mt-1 text-sm text-zinc-500">
+            You have a paid session credit, but we could not match you to a tutor for self-serve
+            booking. Contact support and we will get you scheduled.
+          </p>
+        ) : !context?.bookingEnabled && activeCredit ? (
+          <p className="mt-1 text-sm text-zinc-500">
+            You have {credits.length} paid session credit{credits.length === 1 ? "" : "s"}.{" "}
+            {tutorLabel} hasn&apos;t opened self-serve booking yet — message them to schedule, or
+            check back here when booking is enabled.
+          </p>
+        ) : !context?.bookingEnabled ? (
           <p className="mt-1 text-sm text-zinc-500">
             Your tutor hasn&apos;t opened self-serve booking yet. Contact them to schedule a lesson.
           </p>
@@ -95,7 +112,7 @@ export function BookOneToOneSection({
                 <p className="font-medium text-zinc-900">
                   {formatSessionWhen(booking.startsAt, booking.endsAt)}
                 </p>
-                <p className="text-xs text-zinc-500">Confirmed with {context.tutorName}</p>
+                <p className="text-xs text-zinc-500">Confirmed with {tutorLabel}</p>
               </div>
               <button
                 type="button"
@@ -115,7 +132,7 @@ export function BookOneToOneSection({
 
       {cancelMessage ? <p className="text-sm text-zinc-600">{cancelMessage}</p> : null}
 
-      {context.bookingEnabled && !activeCredit ? (
+      {context && !context.tutorUnresolved && context.bookingEnabled && !activeCredit ? (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
           <p className="mb-3 text-sm text-violet-900">
             Pay securely with Stripe to unlock the calendar and book your lesson.
@@ -157,7 +174,7 @@ export function BookOneToOneSection({
             </div>
           )}
 
-          {selectedSlot && activeCredit ? (
+          {selectedSlot && activeCredit && context ? (
             <form action={formAction} className="space-y-3 border-t border-zinc-100 pt-4">
               <input type="hidden" name="tutor_id" value={context.tutorId} />
               <input type="hidden" name="starts_at" value={selectedSlot.startsAt} />

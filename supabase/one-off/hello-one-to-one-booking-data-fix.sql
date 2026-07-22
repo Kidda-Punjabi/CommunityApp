@@ -1,0 +1,21 @@
+-- One-off data fixes for hello@kidda.app (b4755c02-… user id) — DO NOT RUN until product confirms tutor.
+--
+-- Current production picture (Jul 2026):
+--   • Foundational enrollment → tutor d99dbb59-… (adnan@kidda.app), delivery_mode NULL
+--   • Standalone one-to-one-session credit (available)
+--   • adnan: no availability windows / booking not enabled
+--   • hello's own tutor profile (b4755c02-…): 6 windows — likely admin self-test, NOT student assignment
+--
+-- Before running anything:
+--   1. Confirm assigned tutor should remain Adnan (expected) vs another tutor.
+--   2. If Adnan: enable booking + add windows on Adnan's account (preferred), not re-point enrollment to hello.
+--   3. Optionally set delivery_mode after confirmation:
+--
+-- UPDATE public.course_enrollments
+-- SET delivery_mode = 'one_to_one'
+-- WHERE user_id = '<hello-user-uuid>'
+--   AND tutor_id = 'd99dbb59-…'
+--   AND delivery_mode IS NULL;
+--
+-- Optional cleanup of test windows on hello's tutor profile (only if product confirms they are stray):
+-- DELETE FROM public.tutor_availability_windows WHERE tutor_id = '<hello-user-uuid>';
