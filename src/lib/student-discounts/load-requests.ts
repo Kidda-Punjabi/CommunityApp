@@ -14,10 +14,16 @@ function toView(row: StudentDiscountRequestRow): StudentDiscountRequestView {
   };
 }
 
+export type StudentDiscountRequestsLoadResult = {
+  requests: StudentDiscountRequestView[];
+  /** True when the table exists but the read failed (RLS, network, etc.). */
+  loadFailed: boolean;
+};
+
 export async function loadUserStudentDiscountRequests(
   supabase: SupabaseClient,
   userId: string
-): Promise<StudentDiscountRequestView[]> {
+): Promise<StudentDiscountRequestsLoadResult> {
   const { data, error } = await supabase
     .from("student_discount_requests")
     .select("*")
@@ -26,12 +32,15 @@ export async function loadUserStudentDiscountRequests(
 
   if (error) {
     if (error.message.toLowerCase().includes("student_discount_requests")) {
-      return [];
+      return { requests: [], loadFailed: false };
     }
-    throw error;
+    return { requests: [], loadFailed: true };
   }
 
-  return ((data ?? []) as StudentDiscountRequestRow[]).map(toView);
+  return {
+    requests: ((data ?? []) as StudentDiscountRequestRow[]).map(toView),
+    loadFailed: false,
+  };
 }
 
 export function studentDiscountSchemaReady(errorMessage: string | undefined): boolean {

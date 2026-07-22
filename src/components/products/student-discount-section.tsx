@@ -15,7 +15,7 @@ import { isCheckoutConfigured } from "@/lib/products/checkout";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { BuyButton } from "@/components/products/buy-button";
 import { GroupCohortCheckout } from "@/components/products/group-cohort-checkout";
 import { checkoutKeyRequiresCohortSelection } from "@/lib/group-purchase/client-keys";
@@ -23,7 +23,24 @@ import { checkoutKeyRequiresCohortSelection } from "@/lib/group-purchase/client-
 type StudentDiscountSectionProps = {
   isLoggedIn: boolean;
   requests: StudentDiscountRequestView[];
+  requestsLoadFailed?: boolean;
 };
+
+function optimisticPendingRequest(
+  courseFormat: StudentDiscountCourseFormat,
+  discountType: VerifiedDiscountType
+): StudentDiscountRequestView {
+  return {
+    id: `local-pending-${courseFormat}-${discountType}`,
+    courseFormat,
+    discountType,
+    status: "pending",
+    discountCode: null,
+    adminNotes: null,
+    createdAt: new Date().toISOString(),
+    reviewedAt: null,
+  };
+}
 
 function requestFor(
   requests: StudentDiscountRequestView[],
@@ -99,17 +116,43 @@ function StatusCard({ request }: { request: StudentDiscountRequestView }) {
   return null;
 }
 
-export function StudentDiscountSection({ isLoggedIn, requests }: StudentDiscountSectionProps) {
+export function StudentDiscountSection({
+  isLoggedIn,
+  requests,
+  requestsLoadFailed = false,
+}: StudentDiscountSectionProps) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [discountType, setDiscountType] = useState<VerifiedDiscountType>("student");
   const [courseFormat, setCourseFormat] = useState<StudentDiscountCourseFormat>("group");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [localPending, setLocalPending] = useState<{
+    courseFormat: StudentDiscountCourseFormat;
+    discountType: VerifiedDiscountType;
+  } | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const displayRequests = useMemo(() => {
+    if (!localPending) return requests;
+    if (requestFor(requests, localPending.courseFormat, localPending.discountType)) {
+      return requests;
+    }
+    return [
+      ...requests,
+      optimisticPendingRequest(localPending.courseFormat, localPending.discountType),
+    ];
+  }, [requests, localPending]);
+
+  useEffect(() => {
+    if (!localPending) return;
+    const synced = requestFor(requests, localPending.courseFormat, localPending.discountType);
+    if (synced) setLocalPending(null);
+  }, [requests, localPending]);
+
   const existingForSelection = useMemo(
-    () => requestFor(requests, courseFormat, discountType),
-    [requests, courseFormat, discountType]
+    () => requestFor(displayRequests, courseFormat, discountType),
+    [displayRequests, courseFormat, discountType]
   );
 
   const canApply = !existingForSelection || existingForSelection.status === "rejected";
@@ -134,8 +177,11 @@ export function StudentDiscountSection({ isLoggedIn, requests }: StudentDiscount
         setError(result.error);
         return;
       }
+      const submittedFormat = courseFormat;
+      const submittedType = discountType;
       setSuccess(result.success ?? "Application submitted.");
-      event.currentTarget.reset();
+      setLocalPending({ courseFormat: submittedFormat, discountType: submittedType });
+      formRef.current?.reset();
       router.refresh();
     });
   }
@@ -151,9 +197,16 @@ export function StudentDiscountSection({ isLoggedIn, requests }: StudentDiscount
       </p>
 
       <div className={`mx-auto mt-6 max-w-lg ${ui.stack}`}>
-        {requests.length > 0 && (
+        {requestsLoadFailed && (
+          <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            We couldn&apos;t refresh your application status right now. If you just submitted,
+            check your email — or reload this page in a moment.
+          </p>
+        )}
+
+        {displayRequests.length > 0 && (
           <div className="space-y-3">
-            {requests.map((request) => (
+            {displayRequests.map((request) => (
               <StatusCard key={request.id} request={request} />
             ))}
           </div>
@@ -172,7 +225,7 @@ export function StudentDiscountSection({ isLoggedIn, requests }: StudentDiscount
             </Link>
           </div>
         ) : canApply ? (
-          <form onSubmit={handleSubmit} className={ui.card}>
+          <form ref={formRef} onSubmit={handleSubmit} className={ui.card}>
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
               Apply for a discount
             </p>

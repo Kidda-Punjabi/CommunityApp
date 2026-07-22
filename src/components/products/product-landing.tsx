@@ -20,6 +20,7 @@ type ProductLandingProps = {
   isLoggedIn: boolean;
   owned?: boolean;
   studentDiscountRequests?: StudentDiscountRequestView[];
+  studentDiscountRequestsLoadFailed?: boolean;
 };
 
 function checkoutOptionsForContent(content: ProductPageContent) {
@@ -55,6 +56,7 @@ export function ProductLanding({
   isLoggedIn,
   owned = false,
   studentDiscountRequests = [],
+  studentDiscountRequestsLoadFailed = false,
 }: ProductLandingProps) {
   const checkoutOptions = checkoutOptionsForContent(content);
   const showEmbeddedCheckout = checkoutOptions.some((option) =>
@@ -334,6 +336,7 @@ export function ProductLanding({
           <StudentDiscountSection
             isLoggedIn={isLoggedIn}
             requests={studentDiscountRequests}
+            requestsLoadFailed={studentDiscountRequestsLoadFailed}
           />
         )}
 

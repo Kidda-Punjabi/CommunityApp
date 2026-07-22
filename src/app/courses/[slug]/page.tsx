@@ -7,6 +7,7 @@ import {
   type ProductSlug,
 } from "@/lib/products/content";
 import { loadUserStudentDiscountRequests } from "@/lib/student-discounts/load-requests";
+import type { StudentDiscountRequestView } from "@/lib/student-discounts/types";
 import { createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -53,9 +54,12 @@ export default async function CoursePage({ params }: CoursePageProps) {
     owned = [...ids].some((id) => access.unlockedCourseIds.has(id));
   }
 
-  let studentDiscountRequests: Awaited<ReturnType<typeof loadUserStudentDiscountRequests>> = [];
+  let studentDiscountRequests: StudentDiscountRequestView[] = [];
+  let studentDiscountRequestsLoadFailed = false;
   if (user && slug === "beginners") {
-    studentDiscountRequests = await loadUserStudentDiscountRequests(supabase, user.id);
+    const discountLoad = await loadUserStudentDiscountRequests(supabase, user.id);
+    studentDiscountRequests = discountLoad.requests;
+    studentDiscountRequestsLoadFailed = discountLoad.loadFailed;
   }
 
   return (
@@ -64,6 +68,7 @@ export default async function CoursePage({ params }: CoursePageProps) {
       isLoggedIn={Boolean(user)}
       owned={owned}
       studentDiscountRequests={studentDiscountRequests}
+      studentDiscountRequestsLoadFailed={studentDiscountRequestsLoadFailed}
     />
   );
 }
