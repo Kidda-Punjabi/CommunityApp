@@ -1,5 +1,6 @@
 "use client";
 
+import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useRef, useState } from "react";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
@@ -21,6 +22,7 @@ type Tile = {
   id: string;
   cardId: string;
   text: string;
+  romanised: string | null;
 };
 
 type FlashcardMatchModeProps = {
@@ -77,8 +79,18 @@ export function FlashcardMatchMode({
   function buildTiles() {
     const list: Tile[] = [];
     for (const card of deck.cards) {
-      list.push({ id: `${card.id}-front`, cardId: card.id, text: card.front_text });
-      list.push({ id: `${card.id}-back`, cardId: card.id, text: card.back_text });
+      list.push({
+        id: `${card.id}-front`,
+        cardId: card.id,
+        text: card.front_text,
+        romanised: card.romanised,
+      });
+      list.push({
+        id: `${card.id}-back`,
+        cardId: card.id,
+        text: card.back_text,
+        romanised: card.romanised,
+      });
     }
     return challenge?.config.seed != null
       ? shuffleSeeded(list, challenge.config.seed)
@@ -300,7 +312,7 @@ export function FlashcardMatchMode({
                       : "border-zinc-200 bg-white text-zinc-900 hover:border-violet-300"
               }`}
             >
-              {tile.text}
+              <FlashcardBilingualLine text={tile.text} romanised={tile.romanised} />
             </button>
           );
         })}

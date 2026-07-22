@@ -7,7 +7,8 @@ import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { createClient } from "@/lib/supabase/client";
-import type { FlashcardDeckContext } from "@/lib/flashcards/types";
+import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
+import type { FlashcardDeckCard, FlashcardDeckContext } from "@/lib/flashcards/types";
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 import { shuffleSeeded } from "@/lib/challenges/seeded-random";
 import { saveGameScoreIfBest } from "@/lib/games/game-scores";
@@ -29,6 +30,11 @@ function pointsForCorrectAnswer(elapsedMs: number): number {
   if (elapsedMs <= MEDIUM_MS) return 12;
   if (elapsedMs <= 8000) return 10;
   return 8;
+}
+
+function romanisedForDeckText(cards: FlashcardDeckCard[], text: string): string | null {
+  const card = cards.find((c) => c.front_text === text || c.back_text === text);
+  return card?.romanised ?? null;
 }
 
 type SpeedTranslateModeProps = {
@@ -239,7 +245,13 @@ export function SpeedTranslateMode({
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Translate</p>
-        <p className="mt-3 text-2xl font-bold text-zinc-900">{currentCard?.front_text}</p>
+        <div className="mt-3 text-2xl">
+          <FlashcardBilingualLine
+            text={currentCard?.front_text ?? ""}
+            romanised={currentCard ? romanisedForDeckText(deck.cards, currentCard.front_text) : null}
+            gurmukhiClassName="text-2xl font-bold text-zinc-900"
+          />
+        </div>
       </div>
 
       <div className="grid gap-2">
@@ -248,9 +260,12 @@ export function SpeedTranslateMode({
             key={option}
             type="button"
             onClick={() => handleAnswer(option)}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm font-medium text-zinc-900 hover:border-violet-300 hover:bg-violet-50"
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm hover:border-violet-300 hover:bg-violet-50"
           >
-            {option}
+            <FlashcardBilingualLine
+              text={option}
+              romanised={romanisedForDeckText(deck.cards, option)}
+            />
           </button>
         ))}
       </div>

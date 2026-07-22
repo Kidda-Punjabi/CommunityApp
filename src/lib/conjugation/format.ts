@@ -135,6 +135,57 @@ export function glossVerb(english: string): string {
   return english.replace(/^to\s+/i, "");
 }
 
+function isEnglishToBe(english: string): boolean {
+  const t = english.trim().toLowerCase();
+  return t === "to be" || t === "be";
+}
+
+const TO_BE_PRESENT: Record<Person, string> = {
+  I: "am",
+  you: "are",
+  you_plural: "are",
+  he_she: "is",
+  we: "are",
+  they: "are",
+};
+
+const TO_BE_PAST: Record<Person, string> = {
+  I: "was",
+  you: "were",
+  you_plural: "were",
+  he_she: "was",
+  we: "were",
+  they: "were",
+};
+
+/** Present/past finite form for English gloss (e.g. “I am”, not “I be”). */
+export function englishFiniteVerbGloss(
+  person: Person,
+  verbEnglish: string,
+  tense: "present" | "past" | "infinitive"
+): string {
+  if (isEnglishToBe(verbEnglish)) {
+    if (tense === "present") return TO_BE_PRESENT[person];
+    if (tense === "past") return TO_BE_PAST[person];
+    return "be";
+  }
+  return glossVerb(verbEnglish);
+}
+
+export function englishPastProgressiveAux(person: Person): string {
+  return person === "I" || person === "he_she" ? "was" : "were";
+}
+
+export function englishPerfectParticiple(verbEnglish: string): string {
+  if (isEnglishToBe(verbEnglish)) return "been";
+  return `${glossVerb(verbEnglish)}ed`;
+}
+
+export function englishPresentParticiple(verbEnglish: string): string {
+  if (isEnglishToBe(verbEnglish)) return "being";
+  return `${glossVerb(verbEnglish)}ing`;
+}
+
 /** Legacy display helper for dictionary entries stored as a single fused string. */
 export function formatPunjabiForDisplay(text: string): string {
   const trimmed = text.trim();

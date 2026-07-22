@@ -37,7 +37,7 @@ import type {
   Verb,
   VerbWordLayout,
 } from "./types";
-import { englishPersonLabel, glossVerb, verbWordDisplay, verbWordLayoutForTense } from "./format";
+import { englishPersonLabel, glossVerb, verbWordDisplay, verbWordLayoutForTense, englishFiniteVerbGloss, englishPastProgressiveAux, englishPerfectParticiple, englishPresentParticiple } from "./format";
 import {
   latinRomanised,
   resolveEndingRomanised,
@@ -276,7 +276,9 @@ export function conjugate(
   const subject = SUBJECT_PRONOUNS[person];
   const oblique = OBLIQUE_PRONOUNS[person];
   const personLabel = englishPersonLabel(person, gender);
-  const verbGloss = glossVerb(verb.english);
+  const verbPresent = englishFiniteVerbGloss(person, verb.english, "present");
+  const verbPast = englishFiniteVerbGloss(person, verb.english, "past");
+  const verbInfinitive = englishFiniteVerbGloss(person, verb.english, "infinitive");
   const layout = verbWordLayoutForTense(tenseId);
 
   switch (tenseId) {
@@ -293,7 +295,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} ${verbGloss}`,
+        englishGloss: `${personLabel} ${verbPresent}`,
         verbWordLayout: layout,
         explanation,
       });
@@ -311,7 +313,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} ${verbGloss} (right now)`,
+        englishGloss: `${personLabel} ${verbPresent} (right now)`,
         verbWordLayout: layout,
         explanation: "Present continuous: root + ਰਿਹਾ/ਰਹੀ family + present auxiliary",
       });
@@ -329,7 +331,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} can ${verbGloss}`,
+        englishGloss: `${personLabel} can ${verbInfinitive}`,
         verbWordLayout: layout,
         explanation: "Present ability: root + ਸਕਦਾ/ਸਕਦੀ family + present auxiliary",
       });
@@ -347,7 +349,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} want to ${verbGloss}`,
+        englishGloss: `${personLabel} want to ${verbInfinitive}`,
         verbWordLayout: layout,
         explanation: "Present want: full infinitive + ਚਾਹੁੰਦਾ family + present auxiliary",
       });
@@ -365,7 +367,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} have to ${verbGloss}`,
+        englishGloss: `${personLabel} have to ${verbInfinitive}`,
         verbWordLayout: layout,
         explanation: "Present necessity: oblique pronoun + infinitive + paindaa-family + hai/han",
       });
@@ -384,7 +386,7 @@ export function conjugate(
           endingRomanised: "",
           auxiliary: aux.punjabi,
           auxiliaryRomanised: aux.romanised,
-          englishGloss: `${personLabel} ${verbGloss} (past)`,
+          englishGloss: `${personLabel} ${verbPast} (past)`,
           verbWordLayout: layout,
         explanation: "Simple past: irregular past stem override + ਸੀ/ਸਨ",
         });
@@ -399,7 +401,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} ${verbGloss} (past)`,
+        englishGloss: `${personLabel} ${verbPast} (past)`,
         verbWordLayout: layout,
         explanation: pastSimpleExplanation(verb.rootClass),
       });
@@ -417,7 +419,7 @@ export function conjugate(
         endingRomanised: participle.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} had ${verbGloss}ed`,
+        englishGloss: `${personLabel} had ${englishPerfectParticiple(verb.english)}`,
         verbWordLayout: layout,
         explanation: "Past perfect: root + ਚੁੱਕਾ participle + ਸੀ/ਸਨ",
       });
@@ -436,7 +438,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} used to ${verbGloss}`,
+        englishGloss: `${personLabel} used to ${verbInfinitive}`,
         verbWordLayout: layout,
         explanation: explanation.replace("Present habitual", "Past habitual") + " + past auxiliary",
       });
@@ -454,7 +456,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} was ${verbGloss}ing`,
+        englishGloss: `${personLabel} ${englishPastProgressiveAux(person)} ${englishPresentParticiple(verb.english)}`,
         verbWordLayout: layout,
         explanation: "Past continuous: root + ਰਿਹਾ/ਰਹੀ family + ਸੀ/ਸਨ",
       });
@@ -472,7 +474,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} could ${verbGloss}`,
+        englishGloss: `${personLabel} could ${verbInfinitive}`,
         verbWordLayout: layout,
         explanation: "Past ability: root + ਸਕਦਾ family + ਸੀ/ਸਨ",
       });
@@ -490,7 +492,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} had to ${verbGloss}`,
+        englishGloss: `${personLabel} had to ${verbInfinitive}`,
         verbWordLayout: layout,
         explanation: "Past necessity: oblique pronoun + infinitive + piaa-family + see/san",
       });
@@ -515,7 +517,7 @@ export function conjugate(
         endingRomanised: withGlide.endingRomanised,
         auxiliary: null,
         auxiliaryRomanised: null,
-        englishGloss: `${personLabel} will ${verbGloss}`,
+        englishGloss: `${personLabel} will ${verbInfinitive}`,
         verbWordLayout: layout,
         explanation: "Future simple: root + fused future ending (no separate auxiliary)",
       });
@@ -533,7 +535,7 @@ export function conjugate(
         endingRomanised: participle.romanised,
         auxiliary: aux.punjabi,
         auxiliaryRomanised: aux.romanised,
-        englishGloss: `${personLabel} will have ${verbGloss}ed`,
+        englishGloss: `${personLabel} will have ${englishPerfectParticiple(verb.english)}`,
         verbWordLayout: layout,
         explanation: "Future perfect: root + ਚੁੱਕਾ participle + ਹੋਵੇਗਾ auxiliary",
       });
@@ -558,7 +560,7 @@ export function conjugate(
         endingRomanised: withGlide.endingRomanised,
         auxiliary: null,
         auxiliaryRomanised: null,
-        englishGloss: `${personLabel} will be able to ${verbGloss}`,
+        englishGloss: `${personLabel} will be able to ${verbInfinitive}`,
         verbWordLayout: layout,
         explanation: "Future ability: root + fused ਸਕਾਂਗਾ/ਸਕੇਗਾ ending",
       });
@@ -575,7 +577,7 @@ export function conjugate(
         endingRomanised: ending.romanised,
         auxiliary: null,
         auxiliaryRomanised: null,
-        englishGloss: `${personLabel} will have to ${verbGloss}`,
+        englishGloss: `${personLabel} will have to ${verbInfinitive}`,
         verbWordLayout: layout,
         explanation: "Future necessity: oblique + infinitive + fused ਪਵੇਗਾ ending",
       });

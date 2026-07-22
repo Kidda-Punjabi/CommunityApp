@@ -14,6 +14,7 @@ import {
   CONJUGATION_PROMPTS,
   getConjugationForm,
 } from "@/lib/games/types";
+import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 import { saveGameScore } from "@/lib/games/game-scores";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
@@ -110,6 +111,11 @@ function buildVerbQuestion(verbs: VerbConjugation[]): VerbQuestion | null {
     answer,
     options: shuffleArray([answer, ...distractors]),
   };
+}
+
+function romanisedForDeckBack(cards: FlashcardDeckCard[], backText: string): string | null {
+  const card = cards.find((c) => c.back_text === backText);
+  return card?.romanised ?? null;
 }
 
 export function StreakSurvivalMode({
@@ -307,7 +313,14 @@ export function StreakSurvivalMode({
             onClick={() => handleAnswer(option)}
             className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm font-medium capitalize text-zinc-900 hover:border-violet-300 hover:bg-violet-50"
           >
-            {option}
+            {question?.kind === "deck" ? (
+              <FlashcardBilingualLine
+                text={option}
+                romanised={romanisedForDeckBack(cards, option)}
+              />
+            ) : (
+              option
+            )}
           </button>
         ))}
       </div>

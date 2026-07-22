@@ -21,6 +21,7 @@ export type MemoryGridTile = {
   id: string;
   cardId: string;
   text: string;
+  romanised: string | null;
   side: "front" | "back";
 };
 
@@ -32,12 +33,14 @@ export function buildGridTilesFromPairs(cards: FlashcardDeckCard[]): MemoryGridT
       id: `${card.id}-front`,
       cardId: card.id,
       text: card.front_text,
+      romanised: null,
       side: "front",
     });
     list.push({
       id: `${card.id}-back`,
       cardId: card.id,
       text: card.back_text,
+      romanised: card.romanised,
       side: "back",
     });
   }

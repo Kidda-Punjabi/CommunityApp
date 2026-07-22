@@ -22,6 +22,7 @@ export function buildKidDeckContext(
       id: card.id,
       front_text: card.front_text,
       back_text: card.back_text,
+      romanised: null,
       deck_id: null,
       deck_name: deckName,
       icon_name: card.icon_name,

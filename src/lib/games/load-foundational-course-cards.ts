@@ -25,6 +25,7 @@ export async function loadFoundationalCourseCards(
     id: row.id,
     front_text: row.front_text,
     back_text: row.back_text,
+    romanised: row.romanised?.trim() || null,
     deck_id: row.deck_id,
     deck_name: foundationalDecks.find((deck) => deck.deckId === row.deck_id)?.setName ?? "Foundational",
   }));

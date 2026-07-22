@@ -10,7 +10,7 @@ import type { FlashcardDeckCard, FlashcardDeckContext } from "./types";
 import { resolveDeckName } from "./utils";
 
 const CARD_SELECT =
-  "id, front_text, back_text, deck_id, deck_name, icon_name, flashcard_sets(name)";
+  "id, front_text, back_text, romanised, deck_id, deck_name, icon_name, flashcard_sets(name)";
 
 type CardRow = FlashcardDeckCard & {
   flashcard_sets: { name: string } | { name: string }[] | null;
@@ -24,7 +24,10 @@ type LessonAccess =
 function normalizeCards(rows: CardRow[] | null): FlashcardDeckCard[] {
   return (rows ?? []).map((row) => {
     const { flashcard_sets: _set, ...card } = row;
-    return card;
+    return {
+      ...card,
+      romanised: card.romanised?.trim() || null,
+    };
   });
 }
 

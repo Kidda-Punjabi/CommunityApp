@@ -1,5 +1,6 @@
 "use client";
 
+import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { BackLink } from "@/components/navigation/back-link";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -283,7 +284,16 @@ export function MemoryGridMode({
                       : "border-zinc-200 bg-violet-600 text-white hover:bg-violet-500"
               }`}
             >
-              {isFlipped ? card.text : "?"}
+              {isFlipped ? (
+                <FlashcardBilingualLine
+                  text={card.text}
+                  romanised={card.romanised}
+                  gurmukhiClassName="text-inherit font-medium"
+                  romanisedClassName="mt-0.5 block text-[10px] font-normal text-violet-600 sm:text-xs"
+                />
+              ) : (
+                "?"
+              )}
             </button>
           );
         })}

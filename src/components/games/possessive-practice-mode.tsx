@@ -6,6 +6,7 @@ import Link from "next/link";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 import { GameSessionReview } from "@/components/games/game-session-review";
 import { GameSessionSettings } from "@/components/games/game-session-settings";
 import { SessionProgressBar } from "@/components/session-progress-bar";
@@ -79,6 +80,10 @@ export function PossessivePracticeMode({
   );
 
   const current = questions[questionIndex];
+  const currentNoun = useMemo(
+    () => (current ? nouns.find((n) => n.id === current.nounId) ?? null : null),
+    [current, nouns]
+  );
   const correctCount = results.filter((result) => result.correct).length;
 
   useEffect(() => {
@@ -261,6 +266,16 @@ export function PossessivePracticeMode({
           text={current?.promptEnglish ?? ""}
           className="mt-2 text-center text-lg font-semibold leading-snug text-zinc-900"
         />
+        {currentNoun ? (
+          <p className="mt-2 text-center">
+            <span className="text-lg font-semibold text-zinc-900">{currentNoun.punjabi_word}</span>
+            {currentNoun.romanised ? (
+              <span className="mt-0.5 block text-sm font-normal text-violet-600">
+                {latinRomanised(currentNoun.romanised) ?? currentNoun.romanised}
+              </span>
+            ) : null}
+          </p>
+        ) : null}
         {current?.tier === "oblique" ? (
           <p className="mt-1 text-center text-xs font-medium uppercase tracking-wider text-violet-600">
             Oblique

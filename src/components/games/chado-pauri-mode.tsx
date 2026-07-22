@@ -1,6 +1,8 @@
 "use client";
 
+import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { BackLink } from "@/components/navigation/back-link";
+import { buildBackTextRomanisedMap } from "@/lib/chado-pauri-group/option-romanised";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChadoPauriLadder } from "@/components/games/chado-pauri-ladder";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
@@ -72,6 +74,7 @@ export function ChadoPauriMode({
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
 
+  const backTextRomanised = useMemo(() => buildBackTextRomanisedMap(cards), [cards]);
   const difficultyCounts = useMemo(() => countCardsByDifficulty(cards), [cards]);
   const sparseTiers = useMemo(
     () => [2, 3, 4, 5].filter((tier) => (difficultyCounts[tier] ?? 0) < 4),
@@ -382,7 +385,10 @@ export function ChadoPauriMode({
                       : "border-zinc-200 bg-white text-zinc-800 hover:border-violet-200 hover:bg-violet-50/50"
               }`}
             >
-              {option.text}
+              <FlashcardBilingualLine
+                text={option.text}
+                romanised={backTextRomanised[option.text.trim()] ?? null}
+              />
             </button>
           );
         })}
