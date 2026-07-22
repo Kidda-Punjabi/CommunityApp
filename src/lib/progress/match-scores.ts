@@ -67,18 +67,26 @@ export async function saveMatchScoreIfBest(
   const metadata = {
     deck_name: deckName,
     time_seconds: timeSeconds,
+    save_via: "always_insert_v2",
     ...buildGameAccuracyMetadata(score, totalPairs),
   };
 
-  const { error } = await supabase.from("game_scores").insert({
-    user_id: userId,
-    game_type: "match",
-    score,
-    metadata,
-    achieved_at: new Date().toISOString(),
-  });
+  const { data: inserted, error } = await supabase
+    .from("game_scores")
+    .insert({
+      user_id: userId,
+      game_type: "match",
+      score,
+      metadata,
+      achieved_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
 
   if (error) throw error;
+  if (!inserted?.id) {
+    throw new Error("Match score insert returned no row id");
+  }
 
   const pointsEarned = await awardGameSessionPoints(supabase, metadata);
   await updateUserGameStats(supabase, userId, "match", score, isNewBest);

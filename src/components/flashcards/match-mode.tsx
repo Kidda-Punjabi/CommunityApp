@@ -6,11 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
-import { createClient } from "@/lib/supabase/client";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { gameDeckHubHref, shuffleArray } from "@/lib/flashcards/utils";
 import { shuffleSeeded } from "@/lib/challenges/seeded-random";
-import { saveMatchScoreIfBest } from "@/lib/progress/match-scores";
 import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
@@ -54,6 +52,9 @@ export function FlashcardMatchMode({
     currentBest: number;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle"
+  );
 
   const startedAtRef = useRef<number | null>(null);
   const savedRef = useRef(false);
@@ -138,37 +139,47 @@ export function FlashcardMatchMode({
 
     const persist = async () => {
       setSaveError(null);
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setSaveError("Could not save your score — please sign in and try again.");
-        return;
-      }
+      setSaveState("saving");
 
       try {
-        const outcome = await saveMatchScoreIfBest(
-          supabase,
-          user.id,
-          deck.deckName,
-          pairsMatched,
-          timeUsed,
-          deck.cards.length
-        );
-        setResult({
-          isNewBest: outcome.isNewBest,
-          currentBest: outcome.currentBest,
+        const response = await fetch("/api/games/match-score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            deckName: deck.deckName,
+            score: pairsMatched,
+            timeSeconds: timeUsed,
+            totalPairs: deck.cards.length,
+          }),
         });
+        const payload = (await response.json()) as {
+          isNewBest?: boolean;
+          currentBest?: number;
+          saved?: boolean;
+          error?: string;
+        };
+
+        if (!response.ok || !payload.saved) {
+          throw new Error(payload.error ?? "Could not save score");
+        }
+
+        setResult({
+          isNewBest: Boolean(payload.isNewBest),
+          currentBest: payload.currentBest ?? initialBestScore,
+        });
+        setSaveState("saved");
       } catch (err) {
         const message = err instanceof Error ? err.message : "Could not save score";
         console.error("Match score save failed:", message);
-        setSaveError("We couldn't save this round. Your pairs still count locally — try again soon.");
+        setSaveState("error");
+        setSaveError(
+          "We couldn't save this round. Your pairs still count locally — try again soon."
+        );
       }
     };
 
     void persist();
-  }, [phase, pairsMatched, deck.deckName, deck.cards.length]);
+  }, [phase, pairsMatched, deck.deckName, deck.cards.length, initialBestScore]);
 
   useEffect(() => {
     if (pairsMatched === deck.cards.length && phase === "playing") {
@@ -188,6 +199,7 @@ export function FlashcardMatchMode({
     setPairsMatched(0);
     setResult(null);
     setSaveError(null);
+    setSaveState("idle");
     startedAtRef.current = Date.now();
   }
 
@@ -272,6 +284,8 @@ export function FlashcardMatchMode({
         elapsedSeconds={elapsedSeconds}
         result={result}
         saveError={saveError}
+        saveState={saveState}
+        initialBestScore={initialBestScore}
         deckHubHref={deckHubHref}
         onPlayAgain={startGame}
         kidsMode={kidsMode}
@@ -329,6 +343,8 @@ function MatchFinishedScreen({
   elapsedSeconds,
   result,
   saveError,
+  saveState,
+  initialBestScore,
   deckHubHref,
   onPlayAgain,
   kidsMode,
@@ -340,11 +356,14 @@ function MatchFinishedScreen({
   elapsedSeconds: number;
   result: { isNewBest: boolean; currentBest: number } | null;
   saveError: string | null;
+  saveState: "idle" | "saving" | "saved" | "error";
+  initialBestScore: number;
   deckHubHref: string;
   onPlayAgain: () => void;
   kidsMode: boolean;
 }) {
   usePlaySoundOnce("game_complete");
+  const personalBest = result?.currentBest ?? initialBestScore;
 
   return (
     <div className="relative space-y-6">
@@ -366,9 +385,15 @@ function MatchFinishedScreen({
         {result?.isNewBest && (
           <p className="mt-3 text-sm font-semibold text-green-700">New personal best!</p>
         )}
-        {result && !result.isNewBest && result.currentBest > 0 && (
-          <p className="mt-3 text-sm text-zinc-500">Personal best: {result.currentBest} pairs</p>
+        {!result?.isNewBest && personalBest > 0 && (
+          <p className="mt-3 text-sm text-zinc-500">Personal best: {personalBest} pairs</p>
         )}
+        {!kidsMode && saveState === "saving" ? (
+          <p className="mt-3 text-sm text-zinc-500">Saving score…</p>
+        ) : null}
+        {!kidsMode && saveState === "saved" ? (
+          <p className="mt-3 text-sm font-medium text-emerald-700">Score saved</p>
+        ) : null}
         {saveError ? (
           <p className="mt-3 text-sm font-medium text-rose-600">{saveError}</p>
         ) : null}
