@@ -8,6 +8,8 @@ type UseGameRoomRealtimeOptions = {
   roomId: string;
   onRoomChange: (room: GameRoomRow) => void;
   onParticipantsChange: () => void;
+  /** Room row + roster — run on SUBSCRIBED and periodic lobby sync. */
+  onLobbySync?: () => void;
 };
 
 /**
@@ -19,9 +21,11 @@ export function useGameRoomRealtime({
   roomId,
   onRoomChange,
   onParticipantsChange,
+  onLobbySync,
 }: UseGameRoomRealtimeOptions) {
   const onRoomChangeRef = useRef(onRoomChange);
   const onParticipantsChangeRef = useRef(onParticipantsChange);
+  const onLobbySyncRef = useRef(onLobbySync);
 
   useEffect(() => {
     onRoomChangeRef.current = onRoomChange;
@@ -30,6 +34,10 @@ export function useGameRoomRealtime({
   useEffect(() => {
     onParticipantsChangeRef.current = onParticipantsChange;
   }, [onParticipantsChange]);
+
+  useEffect(() => {
+    onLobbySyncRef.current = onLobbySync;
+  }, [onLobbySync]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -64,7 +72,11 @@ export function useGameRoomRealtime({
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          onParticipantsChangeRef.current();
+          if (onLobbySyncRef.current) {
+            onLobbySyncRef.current();
+          } else {
+            onParticipantsChangeRef.current();
+          }
         }
       });
 

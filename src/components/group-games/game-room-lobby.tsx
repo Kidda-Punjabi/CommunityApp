@@ -11,7 +11,7 @@ import {
 } from "@/app/dashboard/group-games/actions";
 import { useGameRoomRealtime } from "@/hooks/use-game-room-realtime";
 import { GROUP_GAME_LABELS } from "@/lib/game-rooms/constants";
-import { loadActiveParticipants } from "@/lib/game-rooms/load-room";
+import { loadActiveParticipants, loadGameRoom } from "@/lib/game-rooms/load-room";
 import type { GameRoomParticipantView, GameRoomRow, GameRoomView } from "@/lib/game-rooms/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createClient } from "@/lib/supabase/client";
@@ -75,7 +75,7 @@ export function GameRoomLobby({ initialView }: GameRoomLobbyProps) {
     setParticipants(next);
   }, [room.id, currentUserId]);
 
-  const handleRoomChange = useCallback(
+  const applyRoomUpdate = useCallback(
     (next: GameRoomRow) => {
       setRoom(next);
       if (next.status === "in_progress") {
@@ -89,23 +89,36 @@ export function GameRoomLobby({ initialView }: GameRoomLobbyProps) {
     [router]
   );
 
+  const syncLobby = useCallback(async () => {
+    const supabase = createClient();
+    const [nextRoom, nextParticipants] = await Promise.all([
+      loadGameRoom(supabase, room.id),
+      fetchParticipantViews(room.id, currentUserId),
+    ]);
+    if (nextRoom) applyRoomUpdate(nextRoom);
+    setParticipants(nextParticipants);
+  }, [room.id, currentUserId, applyRoomUpdate]);
+
+  const handleRoomChange = applyRoomUpdate;
+
   useGameRoomRealtime({
     roomId: room.id,
     onRoomChange: handleRoomChange,
     onParticipantsChange: refreshParticipants,
+    onLobbySync: syncLobby,
   });
 
-  // Belt-and-suspenders while in lobby: catches missed realtime during channel churn.
+  // Full lobby sync while waiting: recovers missed game_rooms status updates.
   useEffect(() => {
     if (room.status !== "lobby") return;
 
     const interval = window.setInterval(() => {
-      void refreshParticipants();
+      void syncLobby();
     }, 4000);
 
     const onVisible = () => {
       if (document.visibilityState === "visible") {
-        void refreshParticipants();
+        void syncLobby();
       }
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -114,7 +127,7 @@ export function GameRoomLobby({ initialView }: GameRoomLobbyProps) {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [room.status, refreshParticipants]);
+  }, [room.status, syncLobby]);
 
   useEffect(() => {
     if (room.status === "in_progress") {
