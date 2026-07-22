@@ -5,8 +5,13 @@ import { synthesizeSpeech } from "@/lib/elevenlabs/server";
 import { transcribeSpeech } from "@/lib/elevenlabs/speech-to-text";
 import { canAccessLiveTranslate } from "@/lib/live-translate/access";
 import { LIVE_TRANSLATE_MONTHLY_CAP_SECONDS } from "@/lib/live-translate/config";
-import { resolveTranslationDirectionWithSource } from "@/lib/live-translate/direction";
 import { currentMonthKeyUtc } from "@/lib/live-translate/month-key";
+import {
+  directionFromSpokenLanguage,
+  isNonSpeechTranscript,
+  sttLanguageCode,
+  type LiveTranslateSpokenLanguage,
+} from "@/lib/live-translate/speech";
 import { translateLiveUtterance } from "@/lib/live-translate/translate";
 import {
   capReachedMessage,
@@ -16,14 +21,15 @@ import {
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
-import type { LiveTranslateSide } from "@/lib/live-translate/config";
 
 const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 const MAX_DURATION_SECONDS = 30;
 
-function parseActiveSide(value: FormDataEntryValue | null): LiveTranslateSide | null {
-  const side = String(value ?? "").trim();
-  if (side === "member" || side === "other") return side;
+function parseSpokenLanguage(
+  value: FormDataEntryValue | null
+): LiveTranslateSpokenLanguage | null {
+  const language = String(value ?? "").trim();
+  if (language === "en" || language === "pan") return language;
   return null;
 }
 
@@ -68,19 +74,28 @@ export async function POST(request: Request) {
   }
 
   const audio = formData.get("audio");
-  const activeSide = parseActiveSide(formData.get("active_side"));
+  const spokenLanguage = parseSpokenLanguage(
+    formData.get("language_code") ?? formData.get("spoken_language")
+  );
   if (!(audio instanceof Blob) || audio.size === 0) {
     return NextResponse.json({ error: "Missing audio recording." }, { status: 400 });
   }
-  if (!activeSide) {
-    return NextResponse.json({ error: "Missing active side." }, { status: 400 });
+  if (!spokenLanguage) {
+    return NextResponse.json(
+      { error: "Missing language_code (en or pan)." },
+      { status: 400 }
+    );
   }
   if (audio.size > MAX_AUDIO_BYTES) {
-    return NextResponse.json({ error: "Recording is too long — try a shorter phrase." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Recording is too long — try a shorter phrase." },
+      { status: 400 }
+    );
   }
 
   const durationSeconds = parseDurationSeconds(formData.get("duration_seconds"));
   const monthKey = currentMonthKeyUtc();
+  const direction = directionFromSpokenLanguage(spokenLanguage);
 
   let usage;
   try {
@@ -119,21 +134,33 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Auto-detect spike: omit language_code so Scribe detects language; My/Their
-    // toggle remains as resolveTranslationDirection fallback only.
-    const stt = await transcribeSpeech(audio);
-
-    const { direction, source: direction_source } = resolveTranslationDirectionWithSource({
-      languageCode: stt.languageCode,
-      activeSide,
-      transcript: stt.text,
+    const stt = await transcribeSpeech(audio, {
+      languageCode: sttLanguageCode(spokenLanguage),
     });
+
+    if (isNonSpeechTranscript(stt.text)) {
+      return NextResponse.json({
+        skipped: true,
+        reason: "non_speech",
+        original_text: "",
+        translated_text: "",
+        audio_base64: null,
+        direction,
+        language_code: spokenLanguage,
+        seconds_remaining_this_month: usage.secondsRemaining,
+        seconds_used_this_month: usage.secondsUsed,
+        month_key: usage.monthKey,
+        resets_on: usage.resetsOn,
+      });
+    }
 
     const translatedText = await translateLiveUtterance(stt.text, direction);
 
     let audioBase64: string | null = null;
     if (direction === "en-to-pa") {
-      const pronunciationDictionaryLocators = await getPronunciationDictionaryLocator(adminClient);
+      const pronunciationDictionaryLocators = await getPronunciationDictionaryLocator(
+        adminClient
+      );
       const tts = await synthesizeSpeech({
         text: translatedText,
         voiceId: PUNJABI_LESSON_VOICE_ID,
@@ -144,17 +171,18 @@ export async function POST(request: Request) {
       audioBase64 = arrayBufferToBase64(tts.audio);
     }
 
-    const updatedUsage = await incrementLiveTranslateUsage(adminClient, user.id, durationSeconds);
+    const updatedUsage = await incrementLiveTranslateUsage(
+      adminClient,
+      user.id,
+      durationSeconds
+    );
 
     return NextResponse.json({
       original_text: stt.text,
       translated_text: translatedText,
       audio_base64: audioBase64,
       direction,
-      direction_source,
-      side: activeSide,
-      language_code: stt.languageCode,
-      language_probability: stt.languageProbability,
+      language_code: spokenLanguage,
       seconds_remaining_this_month: updatedUsage.secondsRemaining,
       seconds_used_this_month: updatedUsage.secondsUsed,
       month_key: updatedUsage.monthKey,

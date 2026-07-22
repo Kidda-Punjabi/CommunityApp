@@ -1,29 +1,32 @@
 "use client";
 
 import { BackLink } from "@/components/navigation/back-link";
-import {
-  photoCaptureInputClass,
-  TranslatePrimaryButton,
-} from "@/components/translate/translate-primary-button";
-import { useContinuousVad } from "@/hooks/use-continuous-vad";
-import type { LiveTranslateSide } from "@/lib/live-translate/config";
+import { TranslatePrimaryButton } from "@/components/translate/translate-primary-button";
+import { useLiveTranslatePtt } from "@/hooks/use-live-translate-ptt";
+import { containsGurmukhi } from "@/lib/conjugation/romanised";
 import { formatSecondsRemaining } from "@/lib/live-translate/month-key";
+import type { LiveTranslateSpokenLanguage } from "@/lib/live-translate/speech";
 import type { LiveTranslateUsageSnapshot } from "@/lib/live-translate/usage";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 
-type TurnMessage = {
+type ChatMessage = {
   id: string;
+  spokenLanguage: LiveTranslateSpokenLanguage;
   originalText: string;
   translatedText: string;
-};
-
-type ProcessedTurn = {
-  member: TurnMessage | null;
-  other: TurnMessage | null;
   audioBase64: string | null;
 };
 
 type ProcessTurnResponse = {
+  skipped?: boolean;
+  reason?: string;
   original_text?: string;
   translated_text?: string;
   audio_base64?: string | null;
@@ -38,52 +41,40 @@ type LiveTranslateSessionProps = {
   initialUsage: LiveTranslateUsageSnapshot;
 };
 
-function playBase64Audio(base64: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const audio = new Audio(`data:audio/mpeg;base64,${base64}`);
-    audio.onended = () => resolve();
-    audio.onerror = () => reject(new Error("Could not play translated audio."));
-    void audio.play().catch(reject);
-  });
-}
-
 export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps) {
   const [phase, setPhase] = useState<"ready" | "active">("ready");
-  const [activeSide, setActiveSide] = useState<LiveTranslateSide>("member");
   const [usage, setUsage] = useState(initialUsage);
-  const [memberTurns, setMemberTurns] = useState<TurnMessage[]>([]);
-  const [otherTurns, setOtherTurns] = useState<TurnMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [processingTurn, setProcessingTurn] = useState(false);
 
-  const activeSideRef = useRef(activeSide);
   const turnIdRef = useRef(0);
-  const memberFeedRef = useRef<HTMLDivElement>(null);
-  const otherFeedRef = useRef<HTMLDivElement>(null);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const playBase64AudioRef = useRef<(base64: string) => Promise<void>>(async () => {});
 
   useEffect(() => {
-    activeSideRef.current = activeSide;
-  }, [activeSide]);
+    feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, processingTurn]);
 
-  useEffect(() => {
-    memberFeedRef.current?.scrollTo({ top: memberFeedRef.current.scrollHeight, behavior: "smooth" });
-  }, [memberTurns]);
-
-  useEffect(() => {
-    otherFeedRef.current?.scrollTo({ top: otherFeedRef.current.scrollHeight, behavior: "smooth" });
-  }, [otherTurns]);
-
-  const endSession = useCallback((message?: string) => {
-    setPhase("ready");
-    setStatusMessage(message ?? null);
-    setMemberTurns([]);
-    setOtherTurns([]);
-    setActiveSide("member");
+  const playTranslatedAudio = useCallback(async (base64: string) => {
+    try {
+      await playBase64AudioRef.current(base64);
+    } catch {
+      // Autoplay may still fail on some browsers — bubble replay is the fallback.
+    }
   }, []);
 
-  const handleUtterance = useCallback(
-    async ({ blob, durationSeconds }: { blob: Blob; durationSeconds: number }) => {
+  const handleClip = useCallback(
+    async ({
+      blob,
+      durationSeconds,
+      language,
+    }: {
+      blob: Blob;
+      durationSeconds: number;
+      language: LiveTranslateSpokenLanguage;
+    }) => {
       if (phase !== "active") return;
 
       setProcessingTurn(true);
@@ -91,7 +82,7 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
 
       const formData = new FormData();
       formData.append("audio", blob, "utterance.webm");
-      formData.append("active_side", activeSideRef.current);
+      formData.append("language_code", language);
       formData.append("duration_seconds", String(durationSeconds));
 
       try {
@@ -107,7 +98,9 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
             secondsRemaining: 0,
             secondsUsed: payload.seconds_used_this_month ?? current.capSeconds,
           }));
-          endSession(
+          setPhase("ready");
+          setMessages([]);
+          setStatusMessage(
             payload.message ??
               `You've used your 15 minutes for this month. Resets on ${
                 payload.resets_on ?? usage.resetsOn
@@ -120,31 +113,26 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
           throw new Error(payload.error ?? payload.message ?? "Live Translate failed.");
         }
 
-        const side = activeSideRef.current;
+        if (payload.skipped) {
+          return;
+        }
+
+        const originalText = payload.original_text?.trim() ?? "";
+        const translatedText = payload.translated_text?.trim() ?? "";
+        if (!originalText || !translatedText) return;
+
         turnIdRef.current += 1;
-        const turnId = `turn-${turnIdRef.current}`;
-        const originalText = payload.original_text ?? "";
-        const translatedText = payload.translated_text ?? "";
-
-        const processed: ProcessedTurn =
-          side === "member"
-            ? {
-                member: { id: `${turnId}-member`, originalText, translatedText: "" },
-                other: { id: `${turnId}-other`, originalText: "", translatedText },
-                audioBase64: payload.audio_base64 ?? null,
-              }
-            : {
-                member: { id: `${turnId}-member`, originalText: "", translatedText },
-                other: { id: `${turnId}-other`, originalText, translatedText: "" },
-                audioBase64: null,
-              };
-
-        if (processed.member?.originalText || processed.member?.translatedText) {
-          setMemberTurns((current) => [...current, processed.member!]);
-        }
-        if (processed.other?.originalText || processed.other?.translatedText) {
-          setOtherTurns((current) => [...current, processed.other!]);
-        }
+        const audioBase64 = payload.audio_base64 ?? null;
+        setMessages((current) => [
+          ...current,
+          {
+            id: `turn-${turnIdRef.current}`,
+            spokenLanguage: language,
+            originalText,
+            translatedText,
+            audioBase64,
+          },
+        ]);
 
         if (typeof payload.seconds_remaining_this_month === "number") {
           setUsage((current) => ({
@@ -156,8 +144,8 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
           }));
         }
 
-        if (processed.audioBase64) {
-          await playBase64Audio(processed.audioBase64);
+        if (audioBase64) {
+          await playTranslatedAudio(audioBase64);
         }
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Live Translate failed.");
@@ -165,35 +153,63 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
         setProcessingTurn(false);
       }
     },
-    [endSession, phase, usage.resetsOn]
+    [phase, playTranslatedAudio, usage.resetsOn]
   );
 
-  const { listening, processing } = useContinuousVad({
+  const {
+    micReady,
+    holdingLanguage,
+    processing,
+    beginHold,
+    endHold,
+    cancelHold,
+    playBase64Audio,
+  } = useLiveTranslatePtt({
     enabled: phase === "active" && usage.secondsRemaining > 0,
-    onUtterance: handleUtterance,
+    onClip: handleClip,
     onError: setError,
   });
 
+  useEffect(() => {
+    playBase64AudioRef.current = playBase64Audio;
+  }, [playBase64Audio]);
+
   function handleStart() {
     if (usage.secondsRemaining <= 0) {
-      endSession(`You've used your 15 minutes for this month. Resets on ${usage.resetsOn}.`);
+      setStatusMessage(`You've used your 15 minutes for this month. Resets on ${usage.resetsOn}.`);
       return;
     }
     setError(null);
     setStatusMessage(null);
-    setMemberTurns([]);
-    setOtherTurns([]);
-    setActiveSide("member");
+    setMessages([]);
     setPhase("active");
   }
 
   function handleEnd() {
     setError(null);
     setStatusMessage(null);
-    setMemberTurns([]);
-    setOtherTurns([]);
-    setActiveSide("member");
+    setMessages([]);
     setPhase("ready");
+  }
+
+  function bindHoldHandlers(language: LiveTranslateSpokenLanguage) {
+    return {
+      onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        void beginHold(language);
+      },
+      onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        endHold();
+      },
+      onPointerCancel: () => {
+        cancelHold();
+      },
+      onContextMenu: (event: MouseEvent) => {
+        event.preventDefault();
+      },
+    };
   }
 
   if (phase === "ready") {
@@ -204,8 +220,8 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
             <BackLink fallbackHref="/dashboard/home">← Back</BackLink>
             <h1 className="mt-4 text-2xl font-bold text-zinc-900">Live Translate</h1>
             <p className="mt-2 text-sm text-zinc-500">
-              Real-time Punjabi ↔ English for face-to-face conversations. Nothing is saved — end the
-              session and it&apos;s gone.
+              Hold English or Punjabi while someone speaks that language. Nothing is saved — end
+              the session and it&apos;s gone.
             </p>
           </div>
 
@@ -215,7 +231,8 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
 
           {usage.secondsRemaining <= 0 ? (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              You&apos;ve used your 15 minutes for this month. Your allowance resets on {usage.resetsOn}.
+              You&apos;ve used your 15 minutes for this month. Your allowance resets on{" "}
+              {usage.resetsOn}.
             </p>
           ) : null}
 
@@ -238,99 +255,84 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
     );
   }
 
+  const busy = processing || processingTurn;
+
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-zinc-950 text-white">
-      <header className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+    <div className="fixed inset-0 z-[70] flex flex-col bg-zinc-50 text-zinc-900">
+      <header className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 py-3">
         <div>
-          <p className="text-sm font-semibold">Live Translate</p>
-          <p className="text-xs text-zinc-400">
-            {listening ? "Listening…" : "Starting mic…"}
-            {processing || processingTurn ? " · Processing" : ""}
+          <p className="text-sm font-semibold text-zinc-900">Live Translate</p>
+          <p className="text-xs text-zinc-500">
+            {!micReady ? "Starting mic…" : holdingLanguage ? "Recording…" : "Hold a language to speak"}
+            {busy ? " · Processing" : ""}
           </p>
         </div>
-        <div className="text-right text-xs text-zinc-400">
+        <div className="text-right text-xs text-zinc-500">
           {formatSecondsRemaining(usage.secondsRemaining)}
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-rows-2">
-        <section className="flex min-h-0 flex-col border-b border-white/10 bg-zinc-900">
-          <div className="flex items-center justify-between px-4 py-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-violet-300">You</p>
-            <button
-              type="button"
-              onClick={() => setActiveSide("member")}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                activeSide === "member" ? "bg-violet-600 text-white" : "bg-white/10 text-zinc-300"
-              }`}
-            >
-              My turn
-            </button>
-          </div>
-          <div ref={memberFeedRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4">
-            {memberTurns.length === 0 ? (
-              <p className="text-sm text-zinc-500">Speak English — Punjabi appears here with audio.</p>
-            ) : (
-              memberTurns.map((turn) => (
-                <TurnBubble
-                  key={turn.id}
-                  turn={turn}
-                  mode={turn.translatedText ? "translation" : "original"}
-                />
-              ))
-            )}
-          </div>
-        </section>
-
-        <section className="flex min-h-0 flex-col bg-zinc-950">
-          <div className="flex items-center justify-between px-4 py-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
-              Other person
-            </p>
-            <button
-              type="button"
-              onClick={() => setActiveSide("other")}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                activeSide === "other" ? "bg-emerald-600 text-white" : "bg-white/10 text-zinc-300"
-              }`}
-            >
-              Their turn
-            </button>
-          </div>
-          <div ref={otherFeedRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4">
-            {otherTurns.length === 0 ? (
-              <p className="text-sm text-zinc-500">They speak Punjabi — English appears here.</p>
-            ) : (
-              otherTurns.map((turn) => (
-                <TurnBubble
-                  key={turn.id}
-                  turn={turn}
-                  inverted
-                  mode={turn.translatedText ? "translation" : "original"}
-                />
-              ))
-            )}
-          </div>
-        </section>
+      <div ref={feedRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        {messages.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-zinc-200 bg-white px-4 py-6 text-center text-sm text-zinc-500">
+            Hold <span className="font-semibold text-zinc-700">English</span> or{" "}
+            <span className="font-semibold text-zinc-700">Punjabi</span> while that language is
+            spoken. Release to translate.
+          </p>
+        ) : (
+          messages.map((message) => (
+            <ChatBubble
+              key={message.id}
+              message={message}
+              onReplay={
+                message.audioBase64
+                  ? () => {
+                      void playTranslatedAudio(message.audioBase64!);
+                    }
+                  : undefined
+              }
+            />
+          ))
+        )}
       </div>
 
       {error ? (
-        <p className="border-t border-red-500/30 bg-red-950/60 px-4 py-2 text-sm text-red-200">
-          {error}
-        </p>
+        <p className="border-t border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>
       ) : null}
 
-      {statusMessage ? (
-        <p className="border-t border-amber-500/30 bg-amber-950/50 px-4 py-2 text-sm text-amber-100">
-          {statusMessage}
-        </p>
-      ) : null}
-
-      <footer className="border-t border-white/10 px-4 py-3">
+      <footer className="border-t border-zinc-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            disabled={busy || (!!holdingLanguage && holdingLanguage !== "en")}
+            className={`select-none rounded-2xl px-4 py-5 text-base font-semibold touch-none transition ${
+              holdingLanguage === "en"
+                ? "bg-violet-700 text-white ring-4 ring-violet-300"
+                : "bg-violet-600 text-white active:bg-violet-700 disabled:opacity-50"
+            }`}
+            aria-pressed={holdingLanguage === "en"}
+            {...bindHoldHandlers("en")}
+          >
+            English
+          </button>
+          <button
+            type="button"
+            disabled={busy || (!!holdingLanguage && holdingLanguage !== "pan")}
+            className={`select-none rounded-2xl px-4 py-5 text-base font-semibold touch-none transition ${
+              holdingLanguage === "pan"
+                ? "bg-emerald-700 text-white ring-4 ring-emerald-300"
+                : "bg-emerald-600 text-white active:bg-emerald-700 disabled:opacity-50"
+            }`}
+            aria-pressed={holdingLanguage === "pan"}
+            {...bindHoldHandlers("pan")}
+          >
+            Punjabi
+          </button>
+        </div>
         <button
           type="button"
           onClick={handleEnd}
-          className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white"
+          className="mt-3 w-full rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700"
         >
           End conversation
         </button>
@@ -339,32 +341,41 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
   );
 }
 
-function TurnBubble({
-  turn,
-  inverted = false,
-  mode,
+function ChatBubble({
+  message,
+  onReplay,
 }: {
-  turn: TurnMessage;
-  inverted?: boolean;
-  mode: "original" | "translation";
+  message: ChatMessage;
+  onReplay?: () => void;
 }) {
-  const text = mode === "original" ? turn.originalText : turn.translatedText;
-  if (!text) return null;
+  const spokenLabel = message.spokenLanguage === "en" ? "English" : "Punjabi";
+  const originalIsGurmukhi = containsGurmukhi(message.originalText);
 
   return (
-    <article
-      className={`rounded-2xl border border-white/10 bg-white/5 px-4 py-3 ${
-        inverted ? "rotate-180" : ""
-      }`}
-    >
+    <article className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+          {spokenLabel}
+        </p>
+        {onReplay ? (
+          <button
+            type="button"
+            onClick={onReplay}
+            className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-50"
+          >
+            Replay audio
+          </button>
+        ) : null}
+      </div>
       <p
-        className={
-          mode === "original"
-            ? "text-xs text-zinc-400"
-            : "text-lg font-semibold leading-snug text-white"
-        }
+        className={`mt-2 leading-snug text-zinc-900 ${
+          originalIsGurmukhi ? "text-lg font-semibold" : "text-base font-medium"
+        }`}
       >
-        {text}
+        {message.originalText}
+      </p>
+      <p className="mt-2 border-t border-zinc-100 pt-2 text-sm leading-snug text-zinc-600">
+        {message.translatedText}
       </p>
     </article>
   );
