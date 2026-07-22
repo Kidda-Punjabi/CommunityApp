@@ -92,35 +92,8 @@ export async function useAskTutorAction(questionId: string): Promise<LadderActio
 
 export async function useAskRoomAction(questionId: string): Promise<LadderActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("use_ask_room", { p_question_id: questionId });
+  const { data, error } = await supabase.rpc("use_ask_room", { p_question_id: questionId });
   if (error) return { error: error.message };
-  return {};
-}
-
-export async function submitRoomVoteAction(
-  questionId: string,
-  option: string
-): Promise<LadderActionResult> {
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("submit_room_vote", {
-    p_question_id: questionId,
-    p_option: option,
-  });
-  if (error) return { error: error.message };
-  return {};
-}
-
-export async function closeRoomVotingAction(questionId: string): Promise<LadderActionResult> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("close_ladder_room_voting", {
-    p_question_id: questionId,
-  });
-
-  if (error) {
-    if (error.message.includes("has not elapsed")) return {};
-    return { error: error.message };
-  }
-
   const payload = data as { tally?: Record<string, number> };
   return { tally: payload.tally };
 }

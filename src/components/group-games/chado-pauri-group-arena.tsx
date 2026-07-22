@@ -2,18 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
-  closeRoomVotingAction,
   submitLadderAnswerAction,
-  submitRoomVoteAction,
   useAskRoomAction,
   useAskTutorAction,
   useHalfHalfAction,
 } from "@/app/dashboard/group-games/ladder-actions";
-import { ChadoPauriLadder } from "@/components/games/chado-pauri-ladder";
+import { AskRoomAudienceChart } from "@/components/group-games/ask-room-audience-chart";
+import { ChadoPauriGroupOptionLabel } from "@/components/group-games/chado-pauri-group-option-label";
 import { ChadoPauriGroupPlayerChips } from "@/components/group-games/chado-pauri-group-player-chips";
+import { ChadoPauriLadder } from "@/components/games/chado-pauri-ladder";
 import { GroupGameLeaderboard } from "@/components/group-games/group-game-leaderboard";
 import { useLadderRealtime } from "@/hooks/use-ladder-realtime";
-import { LADDER_FEEDBACK_MS, LADDER_ROOM_VOTE_WINDOW_MS } from "@/lib/chado-pauri-group/constants";
+import {
+  LADDER_FEEDBACK_MS,
+  ladderAskRoomUsesRemaining,
+} from "@/lib/chado-pauri-group/constants";
+import { resolveOptionRomanised } from "@/lib/chado-pauri-group/option-romanised";
 import type { LadderGameState, LadderQuestionRow, LadderRunRow } from "@/lib/chado-pauri-group/types";
 import { CHADO_PAURI_RUNG_POINTS } from "@/lib/games/chado-pauri/config";
 import { LIFELINE_LABELS } from "@/lib/games/chado-pauri/config";
@@ -22,18 +26,19 @@ import type { GameRoomRow } from "@/lib/game-rooms/types";
 import { createClient } from "@/lib/supabase/client";
 import { ui } from "@/lib/ui/styles";
 
+const OPTION_LABELS = ["A", "B", "C", "D"] as const;
+
 type ChadoPauriGroupArenaProps = {
   initialState: LadderGameState;
   initialRoom: GameRoomRow;
+  optionRomanisedByBackText: Record<string, string>;
 };
 
-const GROUP_LIFELINES = [
-  { id: "half_half" as const, label: LIFELINE_LABELS.half_half },
-  { id: "ask_tutor" as const, label: LIFELINE_LABELS.ask_tutor },
-  { id: "ask_room" as const, label: "Ask the Room" },
-];
-
-export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGroupArenaProps) {
+export function ChadoPauriGroupArena({
+  initialState,
+  initialRoom,
+  optionRomanisedByBackText,
+}: ChadoPauriGroupArenaProps) {
   const [room, setRoom] = useState(initialRoom);
   const [state, setState] = useState(initialState);
   const [runs, setRuns] = useState(initialState.runs);
@@ -42,7 +47,6 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const voteCloseCalledRef = useRef(false);
   const activeRunIdRef = useRef(activeRun?.id ?? null);
 
   useEffect(() => {
@@ -51,6 +55,7 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
 
   const { currentUserId } = state;
   const isHotSeat = activeRun?.player_id === currentUserId;
+  const askRoomUsesRemaining = ladderAskRoomUsesRemaining(room.settings);
   const lockedInScore =
     activeRun && activeRun.current_rung > 0
       ? CHADO_PAURI_RUNG_POINTS[activeRun.current_rung - 1] ?? 0
@@ -59,6 +64,23 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
 
   const playerName = (userId: string) =>
     state.scoreboard.find((e) => e.userId === userId)?.displayName ?? "Player";
+
+  const romanisedForOption = useCallback(
+    (optionText: string) =>
+      resolveOptionRomanised(
+        question?.question_payload ?? {
+          flashcard_id: "",
+          prompt: "",
+          correct_answer: "",
+          options: [],
+          category: null,
+          topic_tags: [],
+        },
+        optionText,
+        optionRomanisedByBackText
+      ),
+    [question?.question_payload, optionRomanisedByBackText]
+  );
 
   const handleVotesChange = useCallback(() => {}, []);
 
@@ -157,44 +179,13 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
     onParticipantsChange: refreshScoreboard,
   });
 
-  useEffect(() => {
-    if (!question?.ask_room_opened_at || question.room_vote_tally) return;
-
-    voteCloseCalledRef.current = false;
-    const opened = new Date(question.ask_room_opened_at).getTime();
-    const msLeft = opened + LADDER_ROOM_VOTE_WINDOW_MS - Date.now();
-
-    const fire = () => {
-      if (voteCloseCalledRef.current) return;
-      voteCloseCalledRef.current = true;
-      startTransition(async () => {
-        await closeRoomVotingAction(question.id);
-      });
-    };
-
-    if (msLeft <= 0) {
-      fire();
-      return;
-    }
-
-    const timer = window.setTimeout(fire, msLeft + 50);
-    return () => window.clearTimeout(timer);
-  }, [question?.id, question?.ask_room_opened_at, question?.room_vote_tally]);
-
   const visibleOptions = useMemo(() => {
     if (!question) return [];
     const eliminated = new Set(question.eliminated_options ?? []);
     return question.question_payload.options.filter((opt) => !eliminated.has(opt));
   }, [question]);
 
-  const votingOpen =
-    Boolean(question?.ask_room_opened_at) && !question?.room_vote_tally && !question?.resolved_at;
-
-  const canVote =
-    votingOpen &&
-    !isHotSeat &&
-    state.isPlaying &&
-    activeRun !== null;
+  const displayOptions = isHotSeat ? visibleOptions : question?.question_payload.options ?? [];
 
   const handleAnswer = (answer: string) => {
     if (!question || !isHotSeat || pending || feedback) return;
@@ -205,7 +196,7 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
     });
   };
 
-  const handleLifeline = (id: typeof GROUP_LIFELINES[number]["id"]) => {
+  const handleLifeline = (id: "half_half" | "ask_tutor" | "ask_room") => {
     if (!question || !isHotSeat || pending || feedback) return;
     setError(null);
     startTransition(async () => {
@@ -222,12 +213,21 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
     });
   };
 
-  const handleVote = (option: string) => {
-    if (!question || !canVote || pending) return;
-    startTransition(async () => {
-      await submitRoomVoteAction(question.id, option);
-    });
-  };
+  const lifelines = useMemo(
+    () =>
+      [
+        { id: "half_half" as const, label: LIFELINE_LABELS.half_half },
+        { id: "ask_tutor" as const, label: LIFELINE_LABELS.ask_tutor },
+        {
+          id: "ask_room" as const,
+          label:
+            askRoomUsesRemaining > 0
+              ? `Ask the Room (${askRoomUsesRemaining} left)`
+              : "Ask the Room (none left)",
+        },
+      ] as const,
+    [askRoomUsesRemaining]
+  );
 
   if (room.status === "completed") {
     return (
@@ -270,20 +270,28 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
           {isHotSeat ? (
             <div className="space-y-2">
               <div className="flex flex-wrap gap-2">
-                {GROUP_LIFELINES.map((lifeline) => {
+                {lifelines.map((lifeline) => {
                   const used =
                     lifeline.id === "half_half"
                       ? activeRun.half_half_used
                       : lifeline.id === "ask_tutor"
                         ? activeRun.ask_tutor_used
                         : activeRun.ask_room_used;
+                  const poolExhausted =
+                    lifeline.id === "ask_room" && askRoomUsesRemaining <= 0;
                   return (
                     <button
                       key={lifeline.id}
                       type="button"
-                      disabled={used || pending || Boolean(feedback)}
+                      disabled={
+                        used ||
+                        poolExhausted ||
+                        pending ||
+                        Boolean(feedback) ||
+                        Boolean(question.room_vote_tally && lifeline.id === "ask_room")
+                      }
                       onClick={() => handleLifeline(lifeline.id)}
-                      className={`${ui.btnSecondary} flex-1 min-w-[6.5rem] px-2 py-2 text-xs disabled:opacity-40`}
+                      className={`${ui.btnSecondary} min-w-[6.5rem] flex-1 px-2 py-2 text-xs disabled:opacity-40`}
                     >
                       {lifeline.label}
                     </button>
@@ -296,19 +304,15 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
                   {activeRun.tutor_hint}
                 </p>
               ) : null}
-              {question.room_vote_tally ? (
-                <div className="rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-900">
-                  <p className="font-semibold">Ask the Room results</p>
-                  <ul className="mt-1 space-y-0.5">
-                    {Object.entries(question.room_vote_tally).map(([opt, pct]) => (
-                      <li key={opt}>
-                        {opt}: {pct}%
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
             </div>
+          ) : null}
+
+          {question.room_vote_tally ? (
+            <AskRoomAudienceChart
+              options={question.question_payload.options}
+              tally={question.room_vote_tally}
+              romanisedForOption={romanisedForOption}
+            />
           ) : null}
 
           <section className={`${ui.card} space-y-3`}>
@@ -318,47 +322,47 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
               </p>
             </div>
 
-            {canVote ? (
-              <div className="space-y-2">
-                <p className="text-center text-sm font-medium text-violet-700">
-                  Vote — which answer do you think is correct?
-                </p>
-                <div className="grid gap-2">
-                  {question.question_payload.options.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      disabled={pending}
-                      onClick={() => handleVote(option)}
-                      className={`${ui.cardBordered} px-4 py-3 text-sm font-medium`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
             {isHotSeat && !feedback ? (
               <div className="grid gap-2">
-                {visibleOptions.map((option) => (
+                {visibleOptions.map((option, index) => (
                   <button
                     key={option}
                     type="button"
                     disabled={pending}
                     onClick={() => handleAnswer(option)}
-                    className={`${ui.cardBordered} px-4 py-3 text-center text-base font-semibold enabled:hover:border-violet-300 enabled:hover:bg-violet-50 sm:py-3.5 sm:text-lg`}
+                    className={`${ui.cardBordered} px-4 py-3 text-center enabled:hover:border-violet-300 enabled:hover:bg-violet-50 sm:py-3.5`}
                   >
-                    {option}
+                    <ChadoPauriGroupOptionLabel
+                      gurmukhi={option}
+                      romanised={romanisedForOption(option)}
+                      label={OPTION_LABELS[index] ?? String(index + 1)}
+                    />
                   </button>
                 ))}
               </div>
             ) : null}
 
-            {!isHotSeat && !canVote ? (
-              <p className="text-center text-sm text-zinc-500">
-                Spectating — waiting for {playerName(activeRun.player_id)} to answer…
-              </p>
+            {!isHotSeat && !feedback ? (
+              <div className="space-y-2">
+                <div className="grid gap-2">
+                  {displayOptions.map((option, index) => (
+                    <div
+                      key={option}
+                      className={`${ui.cardBordered} px-4 py-3 text-center opacity-95`}
+                      aria-disabled
+                    >
+                      <ChadoPauriGroupOptionLabel
+                        gurmukhi={option}
+                        romanised={romanisedForOption(option)}
+                        label={OPTION_LABELS[index] ?? String(index + 1)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-center text-xs text-zinc-500">
+                  Spectating — waiting for {playerName(activeRun.player_id)} to answer…
+                </p>
+              </div>
             ) : null}
 
             {feedback ? (

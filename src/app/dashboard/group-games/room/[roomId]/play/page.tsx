@@ -7,6 +7,8 @@ import { ChadoPauriGroupArena } from "@/components/group-games/chado-pauri-group
 import { SentenceBuilderGroupArena } from "@/components/group-games/sentence-builder-group-arena";
 import { PointRaceArena } from "@/components/group-games/point-race-arena";
 import { ensureLadderInitialized, loadLadderGameState } from "@/lib/chado-pauri-group/load-ladder";
+import { buildBackTextRomanisedMap } from "@/lib/chado-pauri-group/option-romanised";
+import { loadChadoPauriFlashcards } from "@/lib/games/chado-pauri/load-flashcards";
 import { ensureJeopardyInitialized, loadJeopardyGameState } from "@/lib/jeopardy/load-jeopardy";
 import {
   ensureSentenceBuilderContinued,
@@ -73,9 +75,16 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
     const ladderState = await loadLadderGameState(supabase, room, user.id);
     if (!ladderState) notFound();
 
+    const { cards } = await loadChadoPauriFlashcards(supabase);
+    const optionRomanisedByBackText = buildBackTextRomanisedMap(cards);
+
     return (
       <div className={ui.page}>
-        <ChadoPauriGroupArena initialState={ladderState} initialRoom={room} />
+        <ChadoPauriGroupArena
+          initialState={ladderState}
+          initialRoom={room}
+          optionRomanisedByBackText={optionRomanisedByBackText}
+        />
       </div>
     );
   }

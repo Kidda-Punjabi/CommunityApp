@@ -8,12 +8,15 @@ import type {
   ChadoPauriQuestion,
 } from "@/lib/games/chado-pauri/types";
 import { buildTutorHint } from "@/lib/games/chado-pauri/hints";
+import { enrichLadderPayloadRomanisation } from "@/lib/chado-pauri-group/option-romanised";
 
 export type LadderQuestionPayload = {
   flashcard_id: string;
   prompt: string;
   correct_answer: string;
   options: string[];
+  /** Gurmukhi option text → house-style romanisation (no diacritics). */
+  option_romanised?: Record<string, string>;
   category: string | null;
   topic_tags: string[];
 };
@@ -58,7 +61,7 @@ export function buildLadderQuestion(
 ): LadderQuestionPayload | null {
   const question = buildChadoPauriQuestion(cards, rungIndex, excludeIds);
   if (!question) return null;
-  return chadoPauriQuestionToPayload(question);
+  return enrichLadderPayloadRomanisation(chadoPauriQuestionToPayload(question), cards);
 }
 
 export function computeHalfAndHalfEliminated(
