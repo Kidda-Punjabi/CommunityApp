@@ -58,4 +58,6 @@ export type LadderGameState = {
   roomStatus: "in_progress" | "completed" | "cancelled";
   currentUserId: string;
   isPlaying: boolean;
+  turnOrder: string[];
+  hotSeatPlayerId: string | null;
 };

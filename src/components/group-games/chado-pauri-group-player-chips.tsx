@@ -1,10 +1,11 @@
 "use client";
 
-import type { LadderRunRow, LadderScoreboardEntry } from "@/lib/chado-pauri-group/types";
+import type { LadderScoreboardEntry } from "@/lib/chado-pauri-group/types";
 
 type ChadoPauriGroupPlayerChipsProps = {
-  runs: LadderRunRow[];
+  turnOrder: string[];
   entries: LadderScoreboardEntry[];
+  hotSeatPlayerId: string | null;
   currentUserId: string;
 };
 
@@ -14,32 +15,30 @@ function chipInitial(displayName: string): string {
 }
 
 export function ChadoPauriGroupPlayerChips({
-  runs,
+  turnOrder,
   entries,
+  hotSeatPlayerId,
   currentUserId,
 }: ChadoPauriGroupPlayerChipsProps) {
-  const scoreByUser = new Map(entries.map((e) => [e.userId, e]));
-  const ordered = [...runs].sort((a, b) => a.turn_order - b.turn_order);
+  const nameByUser = new Map(entries.map((e) => [e.userId, e.displayName]));
 
-  if (ordered.length === 0) return null;
+  if (turnOrder.length === 0) return null;
 
   return (
     <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {ordered.map((run) => {
-        const entry = scoreByUser.get(run.player_id);
-        const name = entry?.displayName ?? "Player";
-        const isActive = run.status === "active";
-        const isYou = run.player_id === currentUserId;
-        const isDone = run.status === "completed";
+      {turnOrder.map((userId) => {
+        const name = nameByUser.get(userId) ?? "Player";
+        const isActive = userId === hotSeatPlayerId;
+        const isYou = userId === currentUserId;
 
         return (
           <div
-            key={run.id}
-            className={`flex min-w-0 shrink-0 items-center gap-2 rounded-full border px-2 py-1.5 ${
+            key={userId}
+            className={`flex min-w-0 shrink-0 items-center gap-2 rounded-full border px-2.5 py-1.5 ${
               isActive
                 ? "border-violet-300 bg-violet-600 text-white"
                 : "border-zinc-200 bg-white text-zinc-800"
-            } ${isDone && !isActive ? "opacity-55" : ""}`}
+            }`}
           >
             <span
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
@@ -49,23 +48,14 @@ export function ChadoPauriGroupPlayerChips({
             >
               {chipInitial(name)}
             </span>
-            <div className="min-w-0 pr-0.5">
-              <p
-                className={`max-w-[5.5rem] truncate text-xs font-semibold sm:max-w-[7rem] ${
-                  isActive ? "text-white" : "text-zinc-800"
-                }`}
-              >
-                {name}
-                {isYou ? " (you)" : ""}
-              </p>
-              <p
-                className={`text-[11px] font-bold tabular-nums ${
-                  isActive ? "text-violet-100" : "text-violet-600"
-                }`}
-              >
-                {entry?.score ?? 0} pts
-              </p>
-            </div>
+            <p
+              className={`max-w-[6rem] truncate text-xs font-semibold sm:max-w-[7.5rem] ${
+                isActive ? "text-white" : "text-zinc-800"
+              }`}
+            >
+              {name}
+              {isYou ? " (you)" : ""}
+            </p>
           </div>
         );
       })}

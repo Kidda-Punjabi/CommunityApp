@@ -16,6 +16,9 @@ import { useLadderRealtime } from "@/hooks/use-ladder-realtime";
 import {
   LADDER_FEEDBACK_MS,
   ladderAskRoomUsesRemaining,
+  ladderAskTutorUsed,
+  ladderHalfHalfUsed,
+  parseLadderTurnOrder,
 } from "@/lib/chado-pauri-group/constants";
 import { resolveOptionRomanised } from "@/lib/chado-pauri-group/option-romanised";
 import type { LadderGameState, LadderQuestionRow, LadderRunRow } from "@/lib/chado-pauri-group/types";
@@ -43,6 +46,8 @@ export function ChadoPauriGroupArena({
   const [state, setState] = useState(initialState);
   const [runs, setRuns] = useState(initialState.runs);
   const [activeRun, setActiveRun] = useState(initialState.activeRun);
+  const [turnOrder, setTurnOrder] = useState(initialState.turnOrder);
+  const [hotSeatPlayerId, setHotSeatPlayerId] = useState(initialState.hotSeatPlayerId);
   const [question, setQuestion] = useState(initialState.currentQuestion);
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,8 +59,10 @@ export function ChadoPauriGroupArena({
   }, [activeRun?.id]);
 
   const { currentUserId } = state;
-  const isHotSeat = activeRun?.player_id === currentUserId;
+  const isHotSeat = hotSeatPlayerId === currentUserId;
   const askRoomUsesRemaining = ladderAskRoomUsesRemaining(room.settings);
+  const halfHalfUsed = ladderHalfHalfUsed(room.settings);
+  const askTutorUsed = ladderAskTutorUsed(room.settings);
   const lockedInScore =
     activeRun && activeRun.current_rung > 0
       ? CHADO_PAURI_RUNG_POINTS[activeRun.current_rung - 1] ?? 0
@@ -123,11 +130,18 @@ export function ChadoPauriGroupArena({
     setRuns((prev) => prev.map((r) => (r.id === run.id ? run : r)));
     if (run.status === "active") {
       setActiveRun(run);
+      setHotSeatPlayerId((prev) => run.player_id ?? prev);
     } else if (activeRunIdRef.current === run.id && run.status === "completed") {
       setActiveRun(null);
       setQuestion(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (question && !question.resolved_at) {
+      setFeedback(null);
+    }
+  }, [question?.id, question?.resolved_at]);
 
   const syncQuestion = useCallback((q: LadderQuestionRow) => {
     setQuestion(q);
@@ -154,6 +168,10 @@ export function ChadoPauriGroupArena({
   const handleRoomChange = useCallback(
     (next: GameRoomRow) => {
       setRoom(next);
+      setTurnOrder(parseLadderTurnOrder(next.settings as Record<string, unknown>));
+      if (next.current_picker_id) {
+        setHotSeatPlayerId(next.current_picker_id);
+      }
       if (next.status === "completed") void refreshScoreboard();
     },
     [refreshScoreboard]
@@ -239,23 +257,33 @@ export function ChadoPauriGroupArena({
     );
   }
 
+  const legacySequentialRoom =
+    runs.length > 1 && runs.some((r) => r.status === "active" || r.status === "pending");
+
   return (
     <div className="space-y-3">
+      {legacySequentialRoom ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          This room was started with an older game format. Please leave and create a new Chaṛo Pauṛi
+          room after today&apos;s update.
+        </p>
+      ) : null}
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600">
           Chado Pauri — Group
         </p>
         <h1 className="text-base font-bold leading-snug text-zinc-900">
-          {activeRun
-            ? `${playerName(activeRun.player_id)} is in the hot seat`
+          {hotSeatPlayerId
+            ? `${playerName(hotSeatPlayerId)} is in the hot seat`
             : "Waiting for the next player…"}
           {isHotSeat ? " (you)" : ""}
         </h1>
       </div>
 
       <ChadoPauriGroupPlayerChips
-        runs={runs}
+        turnOrder={turnOrder}
         entries={state.scoreboard}
+        hotSeatPlayerId={hotSeatPlayerId}
         currentUserId={currentUserId}
       />
 
@@ -273,10 +301,10 @@ export function ChadoPauriGroupArena({
                 {lifelines.map((lifeline) => {
                   const used =
                     lifeline.id === "half_half"
-                      ? activeRun.half_half_used
+                      ? halfHalfUsed
                       : lifeline.id === "ask_tutor"
-                        ? activeRun.ask_tutor_used
-                        : activeRun.ask_room_used;
+                        ? askTutorUsed
+                        : false;
                   const poolExhausted =
                     lifeline.id === "ask_room" && askRoomUsesRemaining <= 0;
                   return (
@@ -360,7 +388,8 @@ export function ChadoPauriGroupArena({
                   ))}
                 </div>
                 <p className="text-center text-xs text-zinc-500">
-                  Spectating — waiting for {playerName(activeRun.player_id)} to answer…
+                  Spectating — waiting for {playerName(hotSeatPlayerId ?? activeRun.player_id)} to
+                  answer…
                 </p>
               </div>
             ) : null}
@@ -371,7 +400,7 @@ export function ChadoPauriGroupArena({
                   feedback === "correct" ? "text-green-600" : "text-rose-600"
                 }`}
               >
-                {feedback === "correct" ? "Correct!" : "Wrong — run over."}
+                {feedback === "correct" ? "Correct!" : "Wrong — game over."}
               </p>
             ) : null}
           </section>

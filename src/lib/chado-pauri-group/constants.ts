@@ -11,3 +11,17 @@ export function ladderAskRoomUsesFromSettings(settings: Record<string, unknown> 
 export function ladderAskRoomUsesRemaining(settings: Record<string, unknown> | null | undefined): number {
   return Math.max(0, LADDER_ASK_ROOM_MAX_USES_PER_GAME - ladderAskRoomUsesFromSettings(settings));
 }
+
+export function ladderHalfHalfUsed(settings: Record<string, unknown> | null | undefined): boolean {
+  return settings?.ladder_half_half_used === true;
+}
+
+export function ladderAskTutorUsed(settings: Record<string, unknown> | null | undefined): boolean {
+  return settings?.ladder_ask_tutor_used === true;
+}
+
+export function parseLadderTurnOrder(settings: Record<string, unknown> | null | undefined): string[] {
+  const raw = settings?.ladder_turn_order;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((id): id is string => typeof id === "string" && id.length > 0);
+}

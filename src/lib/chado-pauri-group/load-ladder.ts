@@ -7,6 +7,7 @@ import type {
   LadderRunRow,
 } from "@/lib/chado-pauri-group/types";
 import { getDisplayName } from "@/lib/profile/display-name";
+import { parseLadderTurnOrder } from "@/lib/chado-pauri-group/constants";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
 
 export async function loadLadderRuns(
@@ -144,6 +145,10 @@ export async function loadLadderGameState(
     ? await loadActiveLadderQuestion(supabase, activeRun.id)
     : null;
 
+  const turnOrder = parseLadderTurnOrder(room.settings as Record<string, unknown>);
+  const hotSeatPlayerId =
+    room.current_picker_id ?? activeRun?.player_id ?? turnOrder[0] ?? null;
+
   return {
     roomId: room.id,
     runs,
@@ -159,5 +164,7 @@ export async function loadLadderGameState(
     roomStatus: room.status as LadderGameState["roomStatus"],
     currentUserId,
     isPlaying: self?.is_playing ?? false,
+    turnOrder,
+    hotSeatPlayerId,
   };
 }
