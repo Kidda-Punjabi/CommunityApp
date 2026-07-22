@@ -10,8 +10,8 @@ import {
   useHalfHalfAction,
 } from "@/app/dashboard/group-games/ladder-actions";
 import { ChadoPauriLadder } from "@/components/games/chado-pauri-ladder";
+import { ChadoPauriGroupPlayerChips } from "@/components/group-games/chado-pauri-group-player-chips";
 import { GroupGameLeaderboard } from "@/components/group-games/group-game-leaderboard";
-import { GroupGameScoreboard } from "@/components/group-games/group-game-scoreboard";
 import { useLadderRealtime } from "@/hooks/use-ladder-realtime";
 import { LADDER_FEEDBACK_MS, LADDER_ROOM_VOTE_WINDOW_MS } from "@/lib/chado-pauri-group/constants";
 import type { LadderGameState, LadderQuestionRow, LadderRunRow } from "@/lib/chado-pauri-group/types";
@@ -240,12 +240,12 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600">
           Chado Pauri — Group
         </p>
-        <h1 className="text-lg font-bold text-zinc-900">
+        <h1 className="text-base font-bold leading-snug text-zinc-900">
           {activeRun
             ? `${playerName(activeRun.player_id)} is in the hot seat`
             : "Waiting for the next player…"}
@@ -253,41 +253,22 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
         </h1>
       </div>
 
-      <GroupGameScoreboard entries={state.scoreboard} currentUserId={currentUserId} />
-
-      <section className={`${ui.card} space-y-2`}>
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Turn order</p>
-        <ol className="space-y-1">
-          {runs.map((run) => (
-            <li
-              key={run.id}
-              className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
-                run.status === "active"
-                  ? "bg-violet-100 font-semibold text-violet-900"
-                  : run.status === "completed"
-                    ? "text-zinc-400"
-                    : "text-zinc-600"
-              }`}
-            >
-              <span>
-                {run.turn_order}. {playerName(run.player_id)}
-                {run.player_id === currentUserId ? " (you)" : ""}
-              </span>
-              <span className="text-xs capitalize">{run.status}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <ChadoPauriGroupPlayerChips
+        runs={runs}
+        entries={state.scoreboard}
+        currentUserId={currentUserId}
+      />
 
       {activeRun && question ? (
         <>
-          <ChadoPauriLadder currentRungIndex={rungIndex} lockedInScore={lockedInScore} />
+          <ChadoPauriLadder
+            variant="compact"
+            currentRungIndex={rungIndex}
+            lockedInScore={lockedInScore}
+          />
 
           {isHotSeat ? (
-            <section className={`${ui.card} space-y-3`}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Lifelines
-              </p>
+            <div className="space-y-2">
               <div className="flex flex-wrap gap-2">
                 {GROUP_LIFELINES.map((lifeline) => {
                   const used =
@@ -302,7 +283,7 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
                       type="button"
                       disabled={used || pending || Boolean(feedback)}
                       onClick={() => handleLifeline(lifeline.id)}
-                      className={`${ui.btnSecondary} text-xs disabled:opacity-40`}
+                      className={`${ui.btnSecondary} flex-1 min-w-[6.5rem] px-2 py-2 text-xs disabled:opacity-40`}
                     >
                       {lifeline.label}
                     </button>
@@ -310,15 +291,15 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
                 })}
               </div>
               {activeRun.tutor_hint ? (
-                <p className="rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900">
                   <span className="font-semibold">Tutor hint: </span>
                   {activeRun.tutor_hint}
                 </p>
               ) : null}
               {question.room_vote_tally ? (
-                <div className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-900">
+                <div className="rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-900">
                   <p className="font-semibold">Ask the Room results</p>
-                  <ul className="mt-2 space-y-1">
+                  <ul className="mt-1 space-y-0.5">
                     {Object.entries(question.room_vote_tally).map(([opt, pct]) => (
                       <li key={opt}>
                         {opt}: {pct}%
@@ -327,15 +308,12 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
                   </ul>
                 </div>
               ) : null}
-            </section>
+            </div>
           ) : null}
 
-          <section className={`${ui.card} space-y-4`}>
+          <section className={`${ui.card} space-y-3`}>
             <div className="text-center">
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Rung {question.rung} · {CHADO_PAURI_RUNG_POINTS[question.rung - 1]} pts
-              </p>
-              <p className="mt-3 text-2xl font-bold text-zinc-900">
+              <p className="text-lg font-bold leading-snug text-zinc-900 sm:text-xl">
                 {question.question_payload.prompt}
               </p>
             </div>
@@ -369,7 +347,7 @@ export function ChadoPauriGroupArena({ initialState, initialRoom }: ChadoPauriGr
                     type="button"
                     disabled={pending}
                     onClick={() => handleAnswer(option)}
-                    className={`${ui.cardBordered} px-4 py-4 text-center text-lg font-semibold enabled:hover:border-violet-300 enabled:hover:bg-violet-50`}
+                    className={`${ui.cardBordered} px-4 py-3 text-center text-base font-semibold enabled:hover:border-violet-300 enabled:hover:bg-violet-50 sm:py-3.5 sm:text-lg`}
                   >
                     {option}
                   </button>
