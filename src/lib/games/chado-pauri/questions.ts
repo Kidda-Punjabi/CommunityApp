@@ -4,6 +4,24 @@ import type { ChadoPauriFlashcard, ChadoPauriOption, ChadoPauriQuestion } from "
 
 const MIN_POOL_SIZE = 4;
 
+/** Word-class tags used to keep distractors the same part of speech. */
+const WORD_TYPE_TAGS = new Set([
+  "noun",
+  "verb",
+  "adjective",
+  "adverb",
+  "phrase",
+  "connector",
+  "question_word",
+  "number",
+  "pronoun",
+  "postposition",
+  "preposition",
+]);
+
+/** Metadata tags that should not drive semantic similarity. */
+const META_TAG_PREFIXES = ["week_", "gender_", "lesson_"];
+
 function poolsByDifficulty(cards: ChadoPauriFlashcard[]): Map<number, ChadoPauriFlashcard[]> {
   const pools = new Map<number, ChadoPauriFlashcard[]>();
   for (let tier = 1; tier <= 5; tier += 1) {
@@ -72,6 +90,133 @@ function uniqueBackTexts(cards: ChadoPauriFlashcard[]): ChadoPauriFlashcard[] {
   return result;
 }
 
+function normalizeTags(tags: string[]): string[] {
+  return tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+}
+
+export function wordTypeTags(tags: string[]): Set<string> {
+  return new Set(normalizeTags(tags).filter((tag) => WORD_TYPE_TAGS.has(tag)));
+}
+
+export function topicalTags(tags: string[]): Set<string> {
+  return new Set(
+    normalizeTags(tags).filter(
+      (tag) =>
+        !WORD_TYPE_TAGS.has(tag) &&
+        !META_TAG_PREFIXES.some((prefix) => tag.startsWith(prefix))
+    )
+  );
+}
+
+function sharesAny(a: Set<string>, b: Set<string>): boolean {
+  for (const value of a) {
+    if (b.has(value)) return true;
+  }
+  return false;
+}
+
+function isEligibleDistractor(
+  candidate: ChadoPauriFlashcard,
+  question: ChadoPauriFlashcard,
+  alreadyPicked: string[]
+): boolean {
+  if (candidate.id === question.id) return false;
+  const back = candidate.back_text.trim().toLowerCase();
+  if (!back || back === question.back_text.trim().toLowerCase()) return false;
+  if (alreadyPicked.some((text) => text.trim().toLowerCase() === back)) return false;
+  return true;
+}
+
+/**
+ * Prefer distractors that match word type, then topical tags, then category.
+ * Falls back to the remaining pool so we still always fill 3 options when possible.
+ */
+export function pickDistractorTexts(
+  question: ChadoPauriFlashcard,
+  preferredPool: ChadoPauriFlashcard[],
+  fallbackPool: ChadoPauriFlashcard[],
+  count = 3
+): string[] {
+  const questionWordTypes = wordTypeTags(question.topic_tags);
+  const questionTopics = topicalTags(question.topic_tags);
+  const questionCategory = question.category?.trim().toLowerCase() || null;
+
+  const picked: string[] = [];
+  const usedIds = new Set<string>([question.id]);
+
+  function takeFrom(candidates: ChadoPauriFlashcard[], needed: number) {
+    if (needed <= 0) return;
+    const eligible = candidates.filter(
+      (card) =>
+        !usedIds.has(card.id) && isEligibleDistractor(card, question, picked)
+    );
+    for (const card of pickRandomItems(eligible, needed)) {
+      picked.push(card.back_text);
+      usedIds.add(card.id);
+    }
+  }
+
+  function hasConflictingWordType(card: ChadoPauriFlashcard): boolean {
+    if (questionWordTypes.size === 0) return false;
+    const cardWordTypes = wordTypeTags(card.topic_tags);
+    if (cardWordTypes.size === 0) return false;
+    return !sharesAny(questionWordTypes, cardWordTypes);
+  }
+
+  function partition(pool: ChadoPauriFlashcard[]) {
+    const sameWordType: ChadoPauriFlashcard[] = [];
+    const sameTopic: ChadoPauriFlashcard[] = [];
+    const sameCategory: ChadoPauriFlashcard[] = [];
+    const compatibleRemainder: ChadoPauriFlashcard[] = [];
+    const conflicting: ChadoPauriFlashcard[] = [];
+
+    for (const card of uniqueBackTexts(pool)) {
+      if (!isEligibleDistractor(card, question, picked) || usedIds.has(card.id)) continue;
+
+      const cardWordTypes = wordTypeTags(card.topic_tags);
+      const cardTopics = topicalTags(card.topic_tags);
+      const cardCategory = card.category?.trim().toLowerCase() || null;
+      const conflictingType = hasConflictingWordType(card);
+
+      if (questionWordTypes.size > 0 && sharesAny(questionWordTypes, cardWordTypes)) {
+        sameWordType.push(card);
+      } else if (
+        !conflictingType &&
+        questionTopics.size > 0 &&
+        sharesAny(questionTopics, cardTopics)
+      ) {
+        sameTopic.push(card);
+      } else if (!conflictingType && questionCategory && cardCategory === questionCategory) {
+        sameCategory.push(card);
+      } else if (!conflictingType) {
+        compatibleRemainder.push(card);
+      } else {
+        conflicting.push(card);
+      }
+    }
+
+    return { sameWordType, sameTopic, sameCategory, compatibleRemainder, conflicting };
+  }
+
+  for (const pool of [preferredPool, fallbackPool]) {
+    if (picked.length >= count) break;
+    const {
+      sameWordType,
+      sameTopic,
+      sameCategory,
+      compatibleRemainder,
+      conflicting,
+    } = partition(pool);
+    takeFrom(sameWordType, count - picked.length);
+    takeFrom(sameTopic, count - picked.length);
+    takeFrom(sameCategory, count - picked.length);
+    takeFrom(compatibleRemainder, count - picked.length);
+    takeFrom(conflicting, count - picked.length);
+  }
+
+  return picked.slice(0, count);
+}
+
 export function buildChadoPauriQuestion(
   cards: ChadoPauriFlashcard[],
   rungIndex: number,
@@ -92,12 +237,7 @@ export function buildChadoPauriQuestion(
     if (global.length < MIN_POOL_SIZE) return null;
 
     const questionCard = pickRandomItems(global, 1)[0];
-    const distractorPool = global.filter(
-      (card) =>
-        card.id !== questionCard.id &&
-        card.back_text.trim().toLowerCase() !== questionCard.back_text.trim().toLowerCase()
-    );
-    const distractors = pickRandomItems(distractorPool, 3).map((card) => card.back_text);
+    const distractors = pickDistractorTexts(questionCard, global, [], 3);
     const options = buildOptions(questionCard.back_text, distractors);
 
     return {
@@ -114,30 +254,15 @@ export function buildChadoPauriQuestion(
   }
 
   const questionCard = pickRandomItems(eligible, 1)[0];
-  const distractorCards = pickRandomItems(
-    eligible.filter(
-      (card) =>
-        card.id !== questionCard.id &&
-        card.back_text.trim().toLowerCase() !== questionCard.back_text.trim().toLowerCase()
-    ),
-    Math.min(3, eligible.length - 1)
+  const globalFallback = uniqueBackTexts(
+    cards.filter((card) => !excludeIds.has(card.id))
   );
-
-  let distractorTexts = distractorCards.map((card) => card.back_text);
-  if (distractorTexts.length < 3) {
-    const extraPool = uniqueBackTexts(cards).filter(
-      (card) =>
-        card.id !== questionCard.id &&
-        card.back_text.trim().toLowerCase() !== questionCard.back_text.trim().toLowerCase() &&
-        !distractorTexts.some(
-          (text) => text.trim().toLowerCase() === card.back_text.trim().toLowerCase()
-        )
-    );
-    distractorTexts = [
-      ...distractorTexts,
-      ...pickRandomItems(extraPool, 3 - distractorTexts.length).map((card) => card.back_text),
-    ];
-  }
+  const distractorTexts = pickDistractorTexts(
+    questionCard,
+    eligible,
+    globalFallback,
+    3
+  );
 
   const options = buildOptions(questionCard.back_text, distractorTexts);
 
