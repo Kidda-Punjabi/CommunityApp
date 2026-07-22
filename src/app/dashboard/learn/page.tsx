@@ -11,6 +11,7 @@ import {
   lessonCountForTrack,
 } from "@/lib/learning/learn-access";
 import { LEARN_TRACKS, shouldShowLearnCourseProgress } from "@/lib/learning/learn-catalog";
+import { loadStudentNextLiveLesson } from "@/lib/lessons/load-student-next-live-lesson";
 import {
   getCachedAuthSession,
   getCachedCourseAccess,
@@ -36,10 +37,11 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap] = await Promise.all([
+  const [access, allLessons, completionMap, nextLiveLesson] = await Promise.all([
     getCachedCourseAccess(supabase, user),
     lessonsPromise,
     lessonsPromise.then((lessons) => fetchLessonCompletionMap(supabase, user.id, lessons)),
+    loadStudentNextLiveLesson(supabase, user.id),
   ]);
 
   const tracks = LEARN_TRACKS.map((track) => {
@@ -97,6 +99,27 @@ export default async function LearnPage() {
         <p className="mt-1 text-sm text-zinc-500">
           Browse courses, track your progress, and pick up reference tools when you need them.
         </p>
+        {nextLiveLesson ? (
+          <p className="mt-3 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+            Next live lesson ({nextLiveLesson.cohortName}):{" "}
+            <span className="font-semibold">
+              {new Date(nextLiveLesson.nextLessonAt).toLocaleString("en-GB", {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "UTC",
+              })}
+            </span>
+            {nextLiveLesson.totalLessons > 0 ? (
+              <span className="text-violet-700">
+                {" "}
+                · {nextLiveLesson.completedCount}/{nextLiveLesson.totalLessons} logged
+              </span>
+            ) : null}
+          </p>
+        ) : null}
       </div>
 
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">

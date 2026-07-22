@@ -55,6 +55,16 @@ export type AdminPackageListRow = {
   confirmed: PackagesRosterMember[];
   lessonUnlockCount: number;
   lastLessonLoggedAt: string | null;
+  /** Group cohort Lessons Log progress (Notion-synced). Null for non-cohorts / no data. */
+  lessonLogCompleted: number | null;
+  lessonLogTotal: number | null;
+  lessonLogNextAt: string | null;
+  lessonLogEntries: Array<{
+    id: string;
+    weekNumber: number;
+    lessonDate: string;
+    lessonTitle: string | null;
+  }>;
   /** Cohort weekly session (for calendar matching); null for non-cohorts. */
   weeklySessionStart: string | null;
   weeklySessionEnd: string | null;

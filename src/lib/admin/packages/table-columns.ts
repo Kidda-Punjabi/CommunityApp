@@ -10,6 +10,7 @@ export const PACKAGE_TABLE_COLUMNS = [
   { id: "startDate", label: "Start" },
   { id: "endDate", label: "End" },
   { id: "status", label: "Status" },
+  { id: "progress", label: "Lesson progress" },
   { id: "unlocks", label: "Lessons unlocked" },
 ] as const;
 
@@ -48,6 +49,8 @@ export function packageColumnHeaderClass(columnId: PackageTableColumnId): string
       return "hidden px-4 py-3 sm:table-cell lg:w-[8%]";
     case "status":
       return "px-4 py-3 lg:w-[10%]";
+    case "progress":
+      return "hidden px-4 py-3 sm:table-cell lg:w-[12%]";
     case "unlocks":
       return "hidden px-4 py-3 sm:table-cell lg:w-[5%]";
     default:
@@ -65,6 +68,8 @@ export function packageColumnCellClass(columnId: PackageTableColumnId): string {
       return "hidden whitespace-nowrap px-4 py-3 text-zinc-600 sm:table-cell";
     case "unlocks":
       return "hidden px-4 py-3 text-zinc-600 sm:table-cell";
+    case "progress":
+      return "hidden px-4 py-3 text-zinc-600 sm:table-cell align-top";
     case "startDate":
       return "whitespace-nowrap px-4 py-3 text-zinc-600";
     case "tutor":

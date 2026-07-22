@@ -3,6 +3,7 @@ import {
   linkUnlinkedProfilesFromApp,
   upsertNotionLeadsCache,
 } from "@/lib/notion/lead-sync";
+import { pullLessonLogFromNotion } from "@/lib/notion/lesson-log-sync";
 import { pullPackageInstancesFromNotion } from "@/lib/notion/package-sync";
 import { syncAllGroupCohortsFromNotion } from "@/lib/notion/sync-group-cohorts-for-checkout";
 import { pullSalesCallsFromNotion } from "@/lib/notion/sales-call-sync";
@@ -39,12 +40,18 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const fullSalesCallSync = url.searchParams.get("fullSalesCallSync") === "1";
   const fullLeadsCacheSync = url.searchParams.get("fullLeadsCacheSync") === "1";
+  const fullLessonLogSync = url.searchParams.get("fullLessonLogSync") === "1";
 
-  const [packages, groupCohorts, leadsCache, salesCalls] = await Promise.all([
+  const [packages, groupCohorts, leadsCache, salesCalls, lessonLog] = await Promise.all([
     pullPackageInstancesFromNotion(client),
     syncAllGroupCohortsFromNotion(client),
     upsertNotionLeadsCache(client, { fullSync: fullLeadsCacheSync }),
     pullSalesCallsFromNotion(client, { fullSync: fullSalesCallSync }),
+    pullLessonLogFromNotion(client, { fullSync: fullLessonLogSync }).catch((error) => ({
+      pulled: 0,
+      skipped: 0,
+      errors: [error instanceof Error ? error.message : "Lesson log pull failed."],
+    })),
   ]);
 
   const profileLeads = await linkUnlinkedProfilesFromApp(client);
@@ -55,6 +62,7 @@ export async function GET(request: Request) {
     profileLeads,
     leadsCache,
     salesCalls,
+    lessonLog,
     leadsSetupError,
   });
 }

@@ -13,6 +13,7 @@ import {
 import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
 import { PackageRunFormModal } from "@/components/admin/packages/package-run-form-modal";
 import { PackageRosterCell } from "@/components/admin/packages/package-roster-cell";
+import { PackageLessonProgressCell } from "@/components/admin/packages/package-lesson-progress-cell";
 import { PackageTutorCell } from "@/components/admin/packages/package-tutor-cell";
 import {
   AdminPackagesBoardHeader,
@@ -452,11 +453,19 @@ export function AdminPackagesSection() {
                       {isPackageColumnVisible(config, "status") ? (
                         <th className={packageColumnHeaderClass("status")}>Status</th>
                       ) : null}
+                      {isPackageColumnVisible(config, "progress") ? (
+                        <th
+                          className={packageColumnHeaderClass("progress")}
+                          title="Lessons Log progress (completed / total · next weekly session)"
+                        >
+                          Lesson progress
+                        </th>
+                      ) : null}
                       {isPackageColumnVisible(config, "unlocks") ? (
                         <th
                           className={packageColumnHeaderClass("unlocks")}
-title="Lessons unlocked for this package run"
-                      >
+                          title="Lessons unlocked for this package run"
+                        >
                           Lessons unlocked
                         </th>
                       ) : null}
@@ -556,6 +565,11 @@ title="Lessons unlocked for this package run"
                             <AdminStatusPill tone={packageStatusPillTone(row.status)}>
                               {packageStatusLabel(row.status)}
                             </AdminStatusPill>
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "progress") ? (
+                          <td className={packageColumnCellClass("progress")}>
+                            <PackageLessonProgressCell row={row} />
                           </td>
                         ) : null}
                         {isPackageColumnVisible(config, "unlocks") ? (

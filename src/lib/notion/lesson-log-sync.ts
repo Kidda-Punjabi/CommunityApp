@@ -1,0 +1,396 @@
+import "server-only";
+
+import {
+  NOTION_LESSONS_LOG_DATA_SOURCE_ID,
+  dateStart,
+  notionJson,
+  peopleIds,
+  plainTextFromRichText,
+  plainTextFromTitle,
+  relationIds,
+} from "@/lib/notion/client";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+type NotionQueryResponse = {
+  results: Array<{
+    id: string;
+    last_edited_time: string;
+    properties: Record<string, unknown>;
+  }>;
+  has_more: boolean;
+  next_cursor: string | null;
+};
+
+export type ParsedLessonLogPage = {
+  pageId: string;
+  lastEditedTime: string;
+  title: string | null;
+  lessonDate: string | null;
+  packageNotionPageId: string | null;
+  recordingUrl: string | null;
+  slidesUrl: string | null;
+  flashcardsUrl: string | null;
+  notes: string | null;
+  notionTutorUserId: string | null;
+};
+
+const LESSON_LOG_PULL_CURSOR_VIEW_TYPE = "notion_lesson_log_pull_cursor";
+const LESSON_LOG_PULL_CURSOR_NAME = "cohort_lesson_log_entries";
+
+function urlProp(value: { url?: string | null } | undefined): string | null {
+  const url = value?.url?.trim();
+  return url || null;
+}
+
+function calendarDateOnly(isoOrDate: string | null): string | null {
+  if (!isoOrDate?.trim()) return null;
+  const trimmed = isoOrDate.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? null;
+}
+
+export function parseNotionLessonLogPage(page: {
+  id: string;
+  last_edited_time: string;
+  properties: Record<string, unknown>;
+}): ParsedLessonLogPage {
+  const props = page.properties;
+  const packageIds = relationIds(
+    props["New Package DB"] as { relation?: Array<{ id?: string }> }
+  );
+  const tutorIds = peopleIds(
+    props["Actual Tutor (New)"] as { people?: Array<{ id?: string }> }
+  );
+
+  return {
+    pageId: page.id,
+    lastEditedTime: page.last_edited_time,
+    title:
+      plainTextFromTitle(props.Lesson as { title?: Array<{ plain_text?: string }> }) ||
+      null,
+    lessonDate: calendarDateOnly(
+      dateStart(props["Lesson Date"] as { date?: { start?: string } | null })
+    ),
+    packageNotionPageId: packageIds[0] ?? null,
+    recordingUrl: urlProp(props["Recording Link"] as { url?: string | null }),
+    slidesUrl: urlProp(props.Slides as { url?: string | null }),
+    flashcardsUrl: urlProp(props.Flashcards as { url?: string | null }),
+    notes:
+      plainTextFromRichText(props.notes as { rich_text?: Array<{ plain_text?: string }> }) ||
+      null,
+    notionTutorUserId: tutorIds[0] ?? null,
+  };
+}
+
+export async function queryNotionLessonLogPagesEditedAfter(
+  editedAfter: string | null
+): Promise<ParsedLessonLogPage[]> {
+  const pages: ParsedLessonLogPage[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const body: Record<string, unknown> = {
+      page_size: 100,
+      sorts: [{ timestamp: "last_edited_time", direction: "ascending" }],
+    };
+
+    if (editedAfter) {
+      body.filter = {
+        timestamp: "last_edited_time",
+        last_edited_time: { after: editedAfter },
+      };
+    }
+
+    if (cursor) body.start_cursor = cursor;
+
+    const data = await notionJson<NotionQueryResponse>(
+      `/databases/${NOTION_LESSONS_LOG_DATA_SOURCE_ID}/query`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      }
+    );
+
+    for (const result of data.results) {
+      pages.push(parseNotionLessonLogPage(result));
+    }
+
+    cursor = data.has_more ? data.next_cursor : null;
+  } while (cursor);
+
+  return pages;
+}
+
+async function loadLessonLogPullCursor(
+  supabase: SupabaseClient
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("admin_saved_views")
+    .select("config")
+    .eq("view_type", LESSON_LOG_PULL_CURSOR_VIEW_TYPE)
+    .eq("name", LESSON_LOG_PULL_CURSOR_NAME)
+    .maybeSingle();
+
+  const cursor = (data?.config as { lastEditedTime?: string } | null)?.lastEditedTime;
+  if (!cursor?.trim()) return null;
+  return new Date(new Date(cursor).getTime() - 3000).toISOString();
+}
+
+async function saveLessonLogPullCursor(
+  supabase: SupabaseClient,
+  lastEditedTime: string
+): Promise<void> {
+  const { data: existing } = await supabase
+    .from("admin_saved_views")
+    .select("id")
+    .eq("view_type", LESSON_LOG_PULL_CURSOR_VIEW_TYPE)
+    .eq("name", LESSON_LOG_PULL_CURSOR_NAME)
+    .maybeSingle();
+
+  if (existing?.id) {
+    await supabase
+      .from("admin_saved_views")
+      .update({ config: { lastEditedTime } })
+      .eq("id", existing.id);
+    return;
+  }
+
+  const { data: admin } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("app_role", "master_admin")
+    .limit(1)
+    .maybeSingle();
+
+  const createdBy =
+    admin?.id ??
+    (await supabase.from("profiles").select("id").limit(1).maybeSingle()).data?.id;
+
+  if (!createdBy) return;
+
+  await supabase.from("admin_saved_views").insert({
+    name: LESSON_LOG_PULL_CURSOR_NAME,
+    view_type: LESSON_LOG_PULL_CURSOR_VIEW_TYPE,
+    config: { lastEditedTime },
+    created_by: createdBy,
+  });
+}
+
+async function resolvePackageTarget(
+  supabase: SupabaseClient,
+  packageNotionPageId: string
+): Promise<{ cohortId: string | null; packageInstanceId: string | null }> {
+  const [{ data: cohort }, { data: instance }] = await Promise.all([
+    supabase
+      .from("cohorts")
+      .select("id")
+      .eq("notion_page_id", packageNotionPageId)
+      .maybeSingle(),
+    supabase
+      .from("package_instances")
+      .select("id")
+      .eq("notion_page_id", packageNotionPageId)
+      .maybeSingle(),
+  ]);
+
+  return {
+    cohortId: cohort?.id ?? null,
+    packageInstanceId: instance?.id ?? null,
+  };
+}
+
+export async function upsertLessonLogEntryFromNotion(
+  supabase: SupabaseClient,
+  page: ParsedLessonLogPage
+): Promise<"upserted" | "skipped"> {
+  if (!page.lessonDate || !page.packageNotionPageId) {
+    return "skipped";
+  }
+
+  const target = await resolvePackageTarget(supabase, page.packageNotionPageId);
+  if (!target.cohortId && !target.packageInstanceId) {
+    return "skipped";
+  }
+
+  const { error } = await supabase.from("cohort_lesson_log_entries").upsert(
+    {
+      notion_page_id: page.pageId,
+      cohort_id: target.cohortId,
+      package_instance_id: target.packageInstanceId,
+      lesson_title: page.title,
+      lesson_date: page.lessonDate,
+      recording_url: page.recordingUrl,
+      slides_url: page.slidesUrl,
+      flashcards_url: page.flashcardsUrl,
+      notes: page.notes,
+      notion_tutor_user_id: page.notionTutorUserId,
+      notion_last_edited_at: page.lastEditedTime,
+      source: "notion",
+    },
+    { onConflict: "notion_page_id" }
+  );
+
+  if (error) throw new Error(error.message);
+  return "upserted";
+}
+
+export async function pullLessonLogFromNotion(
+  supabase: SupabaseClient,
+  options?: { fullSync?: boolean }
+): Promise<{ pulled: number; skipped: number; errors: string[] }> {
+  const cursor = options?.fullSync ? null : await loadLessonLogPullCursor(supabase);
+  const pages = await queryNotionLessonLogPagesEditedAfter(cursor);
+  let pulled = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+  let maxEdited = cursor;
+
+  for (let i = 0; i < pages.length; i += 25) {
+    const chunk = pages.slice(i, i + 25);
+    const results = await Promise.all(
+      chunk.map(async (page) => {
+        try {
+          const result = await upsertLessonLogEntryFromNotion(supabase, page);
+          return { page, result, error: null as string | null };
+        } catch (error) {
+          return {
+            page,
+            result: "skipped" as const,
+            error: `${page.pageId}: ${error instanceof Error ? error.message : "upsert failed"}`,
+          };
+        }
+      })
+    );
+
+    for (const item of results) {
+      if (item.error) errors.push(item.error);
+      else if (item.result === "upserted") pulled += 1;
+      else skipped += 1;
+      if (!maxEdited || item.page.lastEditedTime > maxEdited) {
+        maxEdited = item.page.lastEditedTime;
+      }
+    }
+  }
+
+  if (maxEdited && maxEdited !== cursor) {
+    await saveLessonLogPullCursor(supabase, maxEdited);
+  }
+
+  return { pulled, skipped, errors };
+}
+
+export type CreateLessonLogInput = {
+  cohortId: string;
+  lessonDate: string;
+  notes?: string | null;
+  recordingUrl?: string | null;
+  slidesUrl?: string | null;
+  flashcardsUrl?: string | null;
+  loggedBy: string;
+  notionTutorUserId?: string | null;
+};
+
+export async function createLessonLogInNotionAndSupabase(
+  supabase: SupabaseClient,
+  input: CreateLessonLogInput
+): Promise<{ ok: true; entryId: string; notionPageId: string } | { ok: false; error: string }> {
+  const lessonDate = calendarDateOnly(input.lessonDate);
+  if (!lessonDate) {
+    return { ok: false, error: "Lesson date is required." };
+  }
+
+  const { data: cohort, error: cohortError } = await supabase
+    .from("cohorts")
+    .select("id, name, notion_page_id")
+    .eq("id", input.cohortId)
+    .maybeSingle();
+
+  if (cohortError) {
+    return { ok: false, error: cohortError.message };
+  }
+  if (!cohort?.notion_page_id) {
+    return { ok: false, error: "This cohort is not linked to Notion yet." };
+  }
+
+  const title = `${cohort.name}  - ${lessonDate} `;
+  const properties: Record<string, unknown> = {
+    Lesson: {
+      title: [{ type: "text", text: { content: title.slice(0, 2000) } }],
+    },
+    "Lesson Date": {
+      date: { start: lessonDate },
+    },
+    "New Package DB": {
+      relation: [{ id: cohort.notion_page_id }],
+    },
+  };
+
+  if (input.notes?.trim()) {
+    properties.notes = {
+      rich_text: [{ type: "text", text: { content: input.notes.trim().slice(0, 2000) } }],
+    };
+  }
+  if (input.recordingUrl?.trim()) {
+    properties["Recording Link"] = { url: input.recordingUrl.trim() };
+  }
+  if (input.slidesUrl?.trim()) {
+    properties.Slides = { url: input.slidesUrl.trim() };
+  }
+  if (input.flashcardsUrl?.trim()) {
+    properties.Flashcards = { url: input.flashcardsUrl.trim() };
+  }
+  if (input.notionTutorUserId?.trim()) {
+    properties["Actual Tutor (New)"] = {
+      people: [{ id: input.notionTutorUserId.trim() }],
+    };
+  }
+
+  let notionPageId: string;
+  try {
+    const created = await notionJson<{ id: string }>("/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { database_id: NOTION_LESSONS_LOG_DATA_SOURCE_ID },
+        properties,
+      }),
+    });
+    notionPageId = created.id;
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed to create Notion Lessons Log page.",
+    };
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("cohort_lesson_log_entries")
+    .insert({
+      notion_page_id: notionPageId,
+      cohort_id: cohort.id,
+      package_instance_id: null,
+      lesson_title: title.trim(),
+      lesson_date: lessonDate,
+      recording_url: input.recordingUrl?.trim() || null,
+      slides_url: input.slidesUrl?.trim() || null,
+      flashcards_url: input.flashcardsUrl?.trim() || null,
+      notes: input.notes?.trim() || null,
+      notion_tutor_user_id: input.notionTutorUserId?.trim() || null,
+      logged_by: input.loggedBy,
+      source: "app",
+      notion_last_edited_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !inserted) {
+    return {
+      ok: false,
+      error:
+        insertError?.message ??
+        "Notion page was created, but saving the local log row failed. It should appear after the next sync.",
+    };
+  }
+
+  return { ok: true, entryId: inserted.id, notionPageId };
+}

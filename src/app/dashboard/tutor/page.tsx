@@ -114,6 +114,13 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
                 description="Record who attended a group live session"
               />
             ) : null}
+            {cohortCount > 0 ? (
+              <QuickTaskLink
+                href="/dashboard/tutor/log-lesson"
+                title="Log a lesson"
+                description="Create a Lessons Log entry after a group session"
+              />
+            ) : null}
             {todayLessons.length > 0 ? (
               <QuickTaskLink
                 href="/dashboard/tutor/calendar"

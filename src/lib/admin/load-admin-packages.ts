@@ -12,6 +12,7 @@ import type {
 } from "@/lib/admin/packages/types";
 import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin/package-status";
 import { fetchCommunityPackageProduct } from "@/lib/admin/community-package";
+import { loadCohortLessonProgressMap } from "@/lib/lessons/load-lesson-log-progress";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { TutorIdSource } from "@/lib/notion/tutor-id-source";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -670,6 +671,16 @@ export async function loadAdminPackagesList(
   ];
   const emailById = await loadEmails(supabase, allUserIds);
 
+  const lessonProgressByCohort = await loadCohortLessonProgressMap(
+    supabase,
+    (cohortRows ?? []).map((cohort) => ({
+      id: cohort.id,
+      courseId: cohort.course_id,
+      weeklySessionStart: cohort.weekly_session_start ?? null,
+      startDayOfWeek: cohort.start_day_of_week ?? null,
+    }))
+  );
+
   const rows: AdminPackageListRow[] = [];
 
   for (const cohort of cohortRows ?? []) {
@@ -699,6 +710,7 @@ export async function loadAdminPackagesList(
     });
     const status = cohort.status as PackageInstanceStatus;
     const calendarLinkedEvent = linkedEventByCohortId.get(cohort.id) ?? null;
+    const progress = lessonProgressByCohort.get(cohort.id);
 
     rows.push({
       kind: "cohort",
@@ -720,6 +732,15 @@ export async function loadAdminPackagesList(
       ...roster,
       lessonUnlockCount: unlockStats.count,
       lastLessonLoggedAt: unlockStats.lastAt,
+      lessonLogCompleted: progress?.completedCount ?? 0,
+      lessonLogTotal: progress?.totalLessons ?? 0,
+      lessonLogNextAt: progress?.nextLessonAt ?? null,
+      lessonLogEntries: (progress?.entries ?? []).map((entry) => ({
+        id: entry.id,
+        weekNumber: entry.weekNumber,
+        lessonDate: entry.lessonDate,
+        lessonTitle: entry.lessonTitle,
+      })),
       weeklySessionStart: cohort.weekly_session_start ?? null,
       weeklySessionEnd: cohort.weekly_session_end ?? null,
       calendarLinkState,
@@ -776,6 +797,10 @@ export async function loadAdminPackagesList(
       ...roster,
       lessonUnlockCount: 0,
       lastLessonLoggedAt: null,
+      lessonLogCompleted: null,
+      lessonLogTotal: null,
+      lessonLogNextAt: null,
+      lessonLogEntries: [],
       weeklySessionStart: null,
       weeklySessionEnd: null,
       calendarLinkState: "n_a",
@@ -840,6 +865,10 @@ async function loadCommunityPackageRow(
     ...roster,
     lessonUnlockCount: 0,
     lastLessonLoggedAt: null,
+    lessonLogCompleted: null,
+    lessonLogTotal: null,
+    lessonLogNextAt: null,
+    lessonLogEntries: [],
     weeklySessionStart: null,
     weeklySessionEnd: null,
     calendarLinkState: "n_a",
