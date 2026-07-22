@@ -45,7 +45,12 @@ export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps
             View course & buy
           </a>
         )}
-        <BackLink fallbackHref={BOOK_CALL_PATH} className="mt-3 text-sm font-medium text-violet-600 hover:text-violet-500">Book a call with our team</BackLink>
+        <Link
+          href={BOOK_CALL_PATH}
+          className="mt-3 text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
+          Book a call with our team
+        </Link>
         <Link
           href="/dashboard/profile/billing"
           className="mt-2 text-sm font-medium text-zinc-500 hover:text-violet-600"

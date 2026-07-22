@@ -93,7 +93,12 @@ export function CreateChallengeWizard({ friends, decks }: CreateChallengeWizardP
       {friends.length === 0 ? (
         <div className={ui.emptyState}>
           <p className="text-sm text-zinc-500">Add friends first to send a challenge.</p>
-          <BackLink fallbackHref="/dashboard/friends" className="mt-3 text-sm font-semibold text-violet-600">Go to friends →</BackLink>
+          <Link
+            href="/dashboard/friends"
+            className="mt-3 text-sm font-semibold text-violet-600"
+          >
+            Go to friends →
+          </Link>
         </div>
       ) : (
         <>

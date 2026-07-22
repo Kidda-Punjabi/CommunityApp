@@ -697,9 +697,9 @@ export function BattleArena({
             <p className="mt-4 text-sm font-medium text-zinc-700">Searching for a live opponent…</p>
             <p className="mt-2 font-mono text-3xl font-bold text-violet-600">{quickMatchSecondsLeft}s</p>
           </div>
-          <BackLink fallbackHref="/dashboard/community" className={`mt-6 inline-block ${ui.btnGhost}`}>
+          <Link href="/dashboard/battle" className={`mt-6 inline-block ${ui.btnGhost}`}>
             ← Cancel
-          </BackLink>
+          </Link>
         </div>
       );
     }
@@ -763,9 +763,9 @@ export function BattleArena({
             {opponentDisconnectBanner ??
               "Your opponent disconnected. You can head back to the dashboard."}
           </p>
-          <BackLink fallbackHref="/dashboard/home" className={`mt-6 ${ui.btnPrimary}`}>
-            ← Back
-          </BackLink>
+          <Link href="/dashboard/battle" className={`mt-6 ${ui.btnPrimary}`}>
+            Back to battle lobby
+          </Link>
         </div>
       </div>
     );

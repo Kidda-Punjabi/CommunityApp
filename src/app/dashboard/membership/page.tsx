@@ -90,7 +90,12 @@ export default async function MembershipPage() {
                   </Link>
                 </div>
               ) : (
-                <BackLink fallbackHref={productPage} className="mt-4 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500">View {TIER_LABELS[course.tier]} →</BackLink>
+                <Link
+                  href={productPage}
+                  className="mt-4 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
+                >
+                  View {TIER_LABELS[course.tier]} →
+                </Link>
               )}
             </div>
           );

@@ -65,12 +65,12 @@ function TestAvailableSection({
           <p className="text-sm font-medium text-zinc-900">{whatsNext.headline}</p>
           <p className="mt-1 text-sm text-zinc-600">{whatsNext.detail}</p>
           {whatsNext.actionHref && whatsNext.actionLabel ? (
-            <BackLink
-              fallbackHref={whatsNext.actionHref}
+            <Link
+              href={whatsNext.actionHref}
               className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500"
             >
               {whatsNext.actionLabel}
-            </BackLink>
+            </Link>
           ) : null}
         </div>
       </div>

@@ -100,7 +100,9 @@ export default async function CommunityEventsPage() {
 
       <p className="mt-8 text-center text-sm text-zinc-500">
         Need access?{" "}
-        <BackLink fallbackHref="/dashboard/membership" className="font-semibold text-violet-600">View your courses</BackLink>
+        <Link href="/dashboard/membership" className="font-semibold text-violet-600">
+          View your courses
+        </Link>
       </p>
     </div>
   );

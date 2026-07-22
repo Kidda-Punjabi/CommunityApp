@@ -179,13 +179,19 @@ export default async function ProfileBillingPage() {
           </p>
           <ul className="mt-3 space-y-2">
             <li>
-              <BackLink fallbackHref={productPath("foundational")} className="text-sm font-medium text-violet-600">Foundational Course →</BackLink>
+              <Link href={productPath("foundational")} className="text-sm font-medium text-violet-600">
+                Foundational Course →
+              </Link>
             </li>
             <li>
-              <BackLink fallbackHref={productPath("beginners")} className="text-sm font-medium text-violet-600">Beginners Course →</BackLink>
+              <Link href={productPath("beginners")} className="text-sm font-medium text-violet-600">
+                Beginners Course →
+              </Link>
             </li>
             <li>
-              <BackLink fallbackHref={productPath("community")} className="text-sm font-medium text-violet-600">Kidda Community →</BackLink>
+              <Link href={productPath("community")} className="text-sm font-medium text-violet-600">
+                Kidda Community →
+              </Link>
             </li>
           </ul>
         </div>
