@@ -390,8 +390,8 @@ BEGIN
   END IF;
 
   IF COALESCE(v_tier, '') = 'foundational' THEN
-    IF NEW.delivery_mode IS NOT NULL THEN
-      RAISE EXCEPTION 'Foundational enrollments must not set delivery_mode.';
+    IF NEW.delivery_mode IS NOT NULL AND NEW.delivery_mode <> 'one_to_one'::public.delivery_mode THEN
+      RAISE EXCEPTION 'Foundational enrollments only allow delivery_mode one_to_one or null.';
     END IF;
     IF NEW.cohort_id IS NOT NULL THEN
       RAISE EXCEPTION 'Foundational enrollments must not set cohort_id.';

@@ -134,14 +134,33 @@ export function StudentDiscountSection({
   const [pending, startTransition] = useTransition();
 
   const displayRequests = useMemo(() => {
-    if (!localPending) return requests;
-    if (requestFor(requests, localPending.courseFormat, localPending.discountType)) {
-      return requests;
+    const serverMatch =
+      localPending &&
+      requestFor(requests, localPending.courseFormat, localPending.discountType);
+
+    const merged =
+      localPending && !serverMatch
+        ? [
+            ...requests,
+            optimisticPendingRequest(localPending.courseFormat, localPending.discountType),
+          ]
+        : requests;
+
+    const byKey = new Map<string, StudentDiscountRequestView>();
+    for (const request of merged) {
+      const key = `${request.courseFormat}:${request.discountType}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, request);
+        continue;
+      }
+      const existingIsOptimistic = existing.id.startsWith("local-pending-");
+      const requestIsOptimistic = request.id.startsWith("local-pending-");
+      if (existingIsOptimistic && !requestIsOptimistic) {
+        byKey.set(key, request);
+      }
     }
-    return [
-      ...requests,
-      optimisticPendingRequest(localPending.courseFormat, localPending.discountType),
-    ];
+    return [...byKey.values()];
   }, [requests, localPending]);
 
   useEffect(() => {
@@ -309,8 +328,6 @@ export function StudentDiscountSection({
               {pending ? "Submitting…" : "Submit application"}
             </button>
           </form>
-        ) : existingForSelection ? (
-          <StatusCard request={existingForSelection} />
         ) : null}
       </div>
     </section>

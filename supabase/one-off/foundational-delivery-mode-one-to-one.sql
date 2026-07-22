@@ -1,6 +1,5 @@
--- hello@kidda.app foundational 1-1 enrollment (Adnan) — run in Supabase SQL Editor.
--- Step 1: allow delivery_mode = one_to_one on foundational (replaces strict NULL-only rule).
--- Step 2: set hello's Foundational enrollment.
+-- Allow explicit one_to_one delivery_mode on foundational enrollments (1-1 tutoring).
+-- Still forbid group/cohort on foundational.
 
 CREATE OR REPLACE FUNCTION public.enforce_course_enrollment_rules()
 RETURNS TRIGGER
@@ -64,6 +63,7 @@ BEGIN
   END IF;
 
   IF NOT public.is_tutor() AND NOT public.is_master_admin() AND TG_OP = 'INSERT' THEN
+    -- Allow service_role / migration; app uses staff RPCs
     NULL;
   END IF;
 
@@ -71,11 +71,5 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-UPDATE public.course_enrollments
-SET delivery_mode = 'one_to_one'
-WHERE id = 'db98f36d-66eb-45d4-bb2d-e895b21e60a6'
-  AND user_id = 'b4755c02-e4be-4241-a66f-3d50fe0d33da'
-  AND tutor_id = 'd99dbb59-243b-47ba-880f-b07fa50cc1ed';
 
 NOTIFY pgrst, 'reload schema';
