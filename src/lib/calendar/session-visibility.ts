@@ -33,17 +33,18 @@ export function isSessionVisibleToStudent(
     return false;
   }
 
-  const enrollment = enrollments.find((entry) => entry.tutorId === session.tutor_id);
-  if (!enrollment) return false;
+  const tutorEnrollments = enrollments.filter((entry) => entry.tutorId === session.tutor_id);
+  if (tutorEnrollments.length === 0) return false;
 
+  // Explicit 1-to-1 assignment — do not let a same-tutor group enrollment hide it.
   if (session.student_id) {
-    return session.student_id === studentId && enrollment.deliveryMode !== "group";
+    return session.student_id === studentId;
   }
 
   if (session.cohort_id) {
-    return (
-      enrollment.deliveryMode === "group" &&
-      enrollment.cohortId === session.cohort_id
+    return tutorEnrollments.some(
+      (entry) =>
+        entry.deliveryMode === "group" && entry.cohortId === session.cohort_id
     );
   }
 

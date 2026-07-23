@@ -7,6 +7,7 @@ import {
   reserveSlotForPurchase,
   type BookingActionResult,
 } from "@/app/dashboard/schedule/booking-actions";
+import { BookingSlotCalendar } from "@/components/schedule/booking-slot-calendar";
 import { ONE_TO_ONE_SESSION_CHECKOUT_KEY } from "@/lib/products/checkout";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type {
@@ -15,7 +16,7 @@ import type {
   TutorBookingCredit,
   TutorOneToOneBooking,
 } from "@/lib/tutoring/availability/types";
-import { cn, ui } from "@/lib/ui/styles";
+import { ui } from "@/lib/ui/styles";
 import { useActionState, useEffect, useState, useTransition } from "react";
 
 const initial: BookingActionResult = {};
@@ -47,11 +48,12 @@ export function BookOneToOneSection({
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
 
   const activeCredit = credits[0] ?? null;
-  const showSection = credits.length > 0 || Boolean(context);
+  const showSection = credits.length > 0 || Boolean(context) || bookings.length > 0;
   const canBrowseSlots = Boolean(context?.bookingEnabled && !context.tutorUnresolved);
   const canBookWithCredit = Boolean(canBrowseSlots && activeCredit);
   const canPurchaseWithSlot = Boolean(canBrowseSlots && !activeCredit && checkoutConfigured);
   const tutorLabel = context?.tutorName ?? "your tutor";
+  const showPicker = canBrowseSlots && (Boolean(activeCredit) || canPurchaseWithSlot || checkoutConfigured);
 
   useEffect(() => {
     if (!canBrowseSlots || !context?.tutorId) return;
@@ -103,8 +105,19 @@ export function BookOneToOneSection({
   if (!schemaReady) return null;
   if (!showSection) return null;
 
+  const bookAnotherHeading =
+    bookings.length > 0 && activeCredit
+      ? credits.length === 1
+        ? "You have 1 credit left — book another session"
+        : `You have ${credits.length} credits left — book another session`
+      : activeCredit
+        ? credits.length === 1
+          ? "Book your session"
+          : `Book a session (${credits.length} credits)`
+        : "Book a 1-to-1 session";
+
   return (
-    <section className={`${ui.cardBordered} mb-8 space-y-4 p-4`}>
+    <section className={`${ui.cardBordered} mb-8 space-y-6 p-4`}>
       <div>
         <h2 className={ui.sectionTitle}>
           {context?.tutorUnresolved
@@ -131,52 +144,61 @@ export function BookOneToOneSection({
           <p className="mt-1 text-sm text-zinc-500">
             Your tutor hasn&apos;t opened self-serve booking yet. Contact them to schedule a lesson.
           </p>
-        ) : activeCredit ? (
-          <p className="mt-1 text-sm text-zinc-500">
-            You have {credits.length} paid session credit{credits.length === 1 ? "" : "s"}.
-            Pick a time at least {context.settings?.bookingBufferHours ?? 24} hours ahead.
-          </p>
-        ) : (
-          <p className="mt-1 text-sm text-zinc-500">
-            Choose an available time first, then pay to confirm your lesson. Your slot is held for
-            20 minutes while you check out.
-          </p>
-        )}
+        ) : null}
       </div>
 
       {bookings.length > 0 ? (
-        <ul className="space-y-2">
-          {bookings.map((booking) => (
-            <li
-              key={booking.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm"
-            >
-              <div>
-                <p className="font-medium text-zinc-900">
-                  {formatSessionWhen(booking.startsAt, booking.endsAt)}
-                </p>
-                <p className="text-xs text-zinc-500">Confirmed with {tutorLabel}</p>
-              </div>
-              <button
-                type="button"
-                className={ui.btnGhost}
-                onClick={() => {
-                  void cancelPendingBooking(booking.id).then((result) => {
-                    setCancelMessage(result.success ?? result.error ?? null);
-                  });
-                }}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-zinc-900">
+            {bookings.length === 1 ? "Your confirmed session" : "Your confirmed sessions"}
+          </h3>
+          <ul className="space-y-2">
+            {bookings.map((booking) => (
+              <li
+                key={booking.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-sm"
               >
-                Cancel
-              </button>
-            </li>
-          ))}
-        </ul>
+                <div>
+                  <p className="font-medium text-zinc-900">
+                    {formatSessionWhen(booking.startsAt, booking.endsAt)}
+                  </p>
+                  <p className="text-xs text-zinc-600">Confirmed with {tutorLabel}</p>
+                </div>
+                <button
+                  type="button"
+                  className={ui.btnGhost}
+                  onClick={() => {
+                    void cancelPendingBooking(booking.id).then((result) => {
+                      setCancelMessage(result.success ?? result.error ?? null);
+                    });
+                  }}
+                >
+                  Cancel
+                </button>
+              </li>
+            ))}
+          </ul>
+          {cancelMessage ? <p className="text-sm text-zinc-600">{cancelMessage}</p> : null}
+        </div>
       ) : null}
 
-      {cancelMessage ? <p className="text-sm text-zinc-600">{cancelMessage}</p> : null}
+      {canBrowseSlots && showPicker ? (
+        <div className="space-y-3 border-t border-zinc-100 pt-5">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-900">{bookAnotherHeading}</h3>
+            {activeCredit ? (
+              <p className="mt-1 text-sm text-zinc-500">
+                Pick a day, then a time — at least {context?.settings?.bookingBufferHours ?? 24}{" "}
+                hours ahead.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-zinc-500">
+                Choose a day and time first, then pay to confirm. Your slot is held for 20 minutes
+                while you check out.
+              </p>
+            )}
+          </div>
 
-      {canBrowseSlots ? (
-        <>
           {loadingSlots ? (
             <p className="text-sm text-zinc-500">Loading available times…</p>
           ) : slotsError ? (
@@ -184,26 +206,15 @@ export function BookOneToOneSection({
           ) : slots.length === 0 ? (
             <p className="text-sm text-zinc-500">No available slots in the next few weeks.</p>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {slots.map((slot) => (
-                <button
-                  key={slot.startsAt}
-                  type="button"
-                  onClick={() => {
-                    setSelectedSlot(slot);
-                    setCheckoutError(null);
-                  }}
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-left text-sm transition-colors",
-                    selectedSlot?.startsAt === slot.startsAt
-                      ? "border-violet-400 bg-violet-50 text-violet-900"
-                      : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                  )}
-                >
-                  {slot.label}
-                </button>
-              ))}
-            </div>
+            <BookingSlotCalendar
+              slots={slots}
+              selectedSlot={selectedSlot}
+              onSelectSlot={(slot) => {
+                setSelectedSlot(slot);
+                setCheckoutError(null);
+              }}
+              onClearSlot={() => setSelectedSlot(null)}
+            />
           )}
 
           {selectedSlot && canBookWithCredit && context && activeCredit ? (
@@ -251,7 +262,7 @@ export function BookOneToOneSection({
               Checkout isn&apos;t configured for 1-to-1 sessions yet. Contact support to book.
             </p>
           ) : null}
-        </>
+        </div>
       ) : null}
     </section>
   );
