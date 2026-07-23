@@ -150,15 +150,25 @@ CREATE TABLE IF NOT EXISTS public.tutor_one_to_one_booking_credits (
   status                    TEXT NOT NULL DEFAULT 'available'
     CHECK (status IN ('available', 'used')),
   booking_id                UUID REFERENCES public.tutor_one_to_one_bookings (id) ON DELETE SET NULL,
+  course_id                 UUID REFERENCES public.courses (id) ON DELETE SET NULL,
+  tutor_id                  UUID REFERENCES public.profiles (id) ON DELETE SET NULL,
   purchased_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
   used_at                   TIMESTAMPTZ
 );
 
 COMMENT ON TABLE public.tutor_one_to_one_booking_credits IS
-  'One paid 1-to-1 session = one credit. Used when the member picks a calendar slot.';
+  'One paid 1-to-1 session = one credit for a specific course. Used when the member picks a calendar slot.';
+COMMENT ON COLUMN public.tutor_one_to_one_booking_credits.course_id IS
+  'Course this session credit was purchased for.';
+COMMENT ON COLUMN public.tutor_one_to_one_booking_credits.tutor_id IS
+  'Tutor snapshot from the student enrollment for course_id at purchase time.';
 
 CREATE INDEX IF NOT EXISTS idx_booking_credits_student_available
   ON public.tutor_one_to_one_booking_credits (student_id, purchased_at DESC)
+  WHERE status = 'available';
+
+CREATE INDEX IF NOT EXISTS idx_booking_credits_student_course_available
+  ON public.tutor_one_to_one_booking_credits (student_id, course_id, purchased_at ASC)
   WHERE status = 'available';
 
 ALTER TABLE public.tutor_one_to_one_booking_credits ENABLE ROW LEVEL SECURITY;

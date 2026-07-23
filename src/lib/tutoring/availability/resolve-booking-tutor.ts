@@ -62,16 +62,41 @@ async function tutorIsBookable(
   return { bookable, settings: availability.settings };
 }
 
+async function profileTutorName(
+  supabase: SupabaseClient,
+  tutorId: string
+): Promise<string> {
+  const { data: tutorProfile } = await supabase
+    .from("profiles")
+    .select("full_name, preferred_name")
+    .eq("id", tutorId)
+    .maybeSingle();
+  return tutorProfile ? (getDisplayName(tutorProfile) ?? "Your tutor") : "Your tutor";
+}
+
 /**
  * Picks the tutor for self-serve 1-1 booking.
- * Standalone session credits prefer the student's 1-1-style enrollment tutor when bookable.
- * If multiple system tutors offer slots, enrolled bookable tutors win; otherwise the sole
- * bookable tutor (production often has one).
+ * Prefer the course/tutor on the oldest available session credit; otherwise the
+ * student's 1-1-style enrollment tutor; finally the sole bookable tutor.
  */
 export async function resolveStudentBookingTutor(
   supabase: SupabaseClient,
-  studentId: string
+  studentId: string,
+  options?: { preferredCourseId?: string | null; preferredTutorId?: string | null }
 ): Promise<ResolvedBookingTutor | null> {
+  const preferredCourseId = options?.preferredCourseId?.trim() || null;
+  const preferredTutorId = options?.preferredTutorId?.trim() || null;
+
+  if (preferredCourseId || preferredTutorId) {
+    const fromCredit = await resolveFromCourseOrTutor(
+      supabase,
+      studentId,
+      preferredCourseId,
+      preferredTutorId
+    );
+    if (fromCredit) return fromCredit;
+  }
+
   const { data: enrollments, error } = await supabase
     .from("course_enrollments")
     .select("id, course_id, tutor_id, delivery_mode, student_package_id")
@@ -97,15 +122,9 @@ export async function resolveStudentBookingTutor(
     const tutorId = enrollment.tutor_id!;
     const { bookable } = await tutorIsBookable(supabase, tutorId);
     if (bookable) {
-      const { data: tutorProfile } = await supabase
-        .from("profiles")
-        .select("full_name, preferred_name")
-        .eq("id", tutorId)
-        .maybeSingle();
-
       return {
         tutorId,
-        tutorName: tutorProfile ? (getDisplayName(tutorProfile) ?? "Your tutor") : "Your tutor",
+        tutorName: await profileTutorName(supabase, tutorId),
         enrollmentId: enrollment.id,
         courseId: enrollment.course_id,
         bookingEnabled: true,
@@ -118,15 +137,10 @@ export async function resolveStudentBookingTutor(
     const { enrollment } = oneToOneCandidates[0]!;
     const tutorId = enrollment.tutor_id!;
     const { bookable } = await tutorIsBookable(supabase, tutorId);
-    const { data: tutorProfile } = await supabase
-      .from("profiles")
-      .select("full_name, preferred_name")
-      .eq("id", tutorId)
-      .maybeSingle();
 
     return {
       tutorId,
-      tutorName: tutorProfile ? (getDisplayName(tutorProfile) ?? "Your tutor") : "Your tutor",
+      tutorName: await profileTutorName(supabase, tutorId),
       enrollmentId: enrollment.id,
       courseId: enrollment.course_id,
       bookingEnabled: bookable,
@@ -134,7 +148,6 @@ export async function resolveStudentBookingTutor(
     };
   }
 
-  // No 1-1-style enrollment: if exactly one bookable tutor in the system, use them.
   const { data: enabledSettings } = await supabase
     .from("tutor_availability_settings")
     .select("tutor_id")
@@ -149,19 +162,65 @@ export async function resolveStudentBookingTutor(
 
   if (bookableTutorIds.length === 1) {
     const tutorId = bookableTutorIds[0]!;
-    const { data: tutorProfile } = await supabase
-      .from("profiles")
-      .select("full_name, preferred_name")
-      .eq("id", tutorId)
-      .maybeSingle();
-
     return {
       tutorId,
-      tutorName: tutorProfile ? (getDisplayName(tutorProfile) ?? "Your tutor") : "Your tutor",
+      tutorName: await profileTutorName(supabase, tutorId),
       enrollmentId: null,
       courseId: null,
       bookingEnabled: true,
       hasAvailabilityWindows: true,
+    };
+  }
+
+  return null;
+}
+
+async function resolveFromCourseOrTutor(
+  supabase: SupabaseClient,
+  studentId: string,
+  courseId: string | null,
+  tutorIdHint: string | null
+): Promise<ResolvedBookingTutor | null> {
+  if (courseId) {
+    const { data: enrollment } = await supabase
+      .from("course_enrollments")
+      .select("id, course_id, tutor_id, delivery_mode")
+      .eq("user_id", studentId)
+      .eq("course_id", courseId)
+      .maybeSingle();
+
+    const tutorId = (enrollment?.tutor_id as string | null) ?? tutorIdHint;
+    if (!tutorId) return null;
+
+    const { bookable } = await tutorIsBookable(supabase, tutorId);
+    return {
+      tutorId,
+      tutorName: await profileTutorName(supabase, tutorId),
+      enrollmentId: (enrollment?.id as string | undefined) ?? null,
+      courseId,
+      bookingEnabled: bookable,
+      hasAvailabilityWindows: bookable,
+    };
+  }
+
+  if (tutorIdHint) {
+    const { bookable } = await tutorIsBookable(supabase, tutorIdHint);
+    const { data: enrollment } = await supabase
+      .from("course_enrollments")
+      .select("id, course_id")
+      .eq("user_id", studentId)
+      .eq("tutor_id", tutorIdHint)
+      .neq("delivery_mode", "group")
+      .limit(1)
+      .maybeSingle();
+
+    return {
+      tutorId: tutorIdHint,
+      tutorName: await profileTutorName(supabase, tutorIdHint),
+      enrollmentId: (enrollment?.id as string | undefined) ?? null,
+      courseId: (enrollment?.course_id as string | undefined) ?? null,
+      bookingEnabled: bookable,
+      hasAvailabilityWindows: bookable,
     };
   }
 

@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { BuyButton } from "@/components/products/buy-button";
 import { UserAvatar } from "@/components/profile/user-avatar";
-import { ONE_TO_ONE_SESSION_CHECKOUT_KEY, isCheckoutConfigured } from "@/lib/products/checkout";
 import type { StudentPackage } from "@/lib/packages/load-student-packages";
 import { ui } from "@/lib/ui/styles";
 
@@ -37,23 +35,18 @@ export function shouldShowBuyExtraOneToOneLesson(pkg: StudentPackage): boolean {
 }
 
 export function BuyExtraOneToOneCard({ pkg }: { pkg: StudentPackage }) {
-  const configured = isCheckoutConfigured(ONE_TO_ONE_SESSION_CHECKOUT_KEY);
-
   if (!shouldShowBuyExtraOneToOneLesson(pkg)) return null;
 
   return (
     <div className={`${ui.cardBordered} space-y-3`}>
       <p className="text-sm font-semibold text-violet-900">Need an extra 1-to-1 lesson?</p>
       <p className="text-sm text-violet-800">
-        Buy an additional session with your tutor and then choose your time on the schedule page.
+        Choose a time on the schedule page, then pay to confirm a session for {pkg.name}.
       </p>
       <div className="max-w-xs">
-        <BuyButton
-          checkoutKey={ONE_TO_ONE_SESSION_CHECKOUT_KEY}
-          label="Buy extra 1-to-1 lesson"
-          configured={configured}
-          className={ui.btnPrimary}
-        />
+        <Link href="/dashboard/schedule" className={ui.btnPrimary}>
+          Book on Schedule →
+        </Link>
       </div>
     </div>
   );

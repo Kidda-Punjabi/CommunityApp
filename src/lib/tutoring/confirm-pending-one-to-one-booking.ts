@@ -99,13 +99,19 @@ export async function confirmPendingOneToOneBookingAfterPayment(
     .eq("tutor_id", booking.tutor_id)
     .maybeSingle();
 
+  const { data: creditRow } = await supabase
+    .from("tutor_one_to_one_booking_credits")
+    .select("course_id")
+    .eq("id", params.creditId)
+    .maybeSingle();
+
   const calendarResult = await createOneToOneCalendarSession(supabase, {
     tutorId: booking.tutor_id as string,
     studentId: params.userId,
     studentEmail: params.studentEmail,
     startsAt: booking.starts_at as string,
     endsAt: booking.ends_at as string,
-    courseId: null,
+    courseId: (creditRow?.course_id as string | null) ?? null,
     title: lessonTitle,
     notes: (booking.notes as string) ?? null,
     timeZone: (settings?.timezone as string) ?? "Europe/London",

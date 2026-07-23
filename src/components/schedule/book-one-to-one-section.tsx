@@ -87,6 +87,7 @@ export function BookOneToOneSection({
         body: JSON.stringify({
           checkoutKey: ONE_TO_ONE_SESSION_CHECKOUT_KEY,
           oneToOneBookingId: reserved.bookingId,
+          ...(context.courseId ? { courseId: context.courseId } : {}),
         }),
       });
 

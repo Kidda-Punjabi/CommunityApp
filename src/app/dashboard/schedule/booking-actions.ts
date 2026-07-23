@@ -225,7 +225,7 @@ export async function createOneToOneBooking(
     const admin = createServiceRoleClient();
     const { data: credit, error: creditError } = await admin
       .from("tutor_one_to_one_booking_credits")
-      .select("id, status")
+      .select("id, status, course_id, tutor_id")
       .eq("id", creditId)
       .eq("student_id", user.id)
       .eq("status", "available")
@@ -233,6 +233,18 @@ export async function createOneToOneBooking(
 
     if (creditError || !credit) {
       return { error: "Your session credit is no longer available. Purchase a new session." };
+    }
+
+    if (credit.course_id && context.courseId && credit.course_id !== context.courseId) {
+      return {
+        error: "This credit is for a different course. Refresh the page and try again.",
+      };
+    }
+
+    if (credit.tutor_id && credit.tutor_id !== tutorId) {
+      return {
+        error: "This credit is for a different tutor. Refresh the page and try again.",
+      };
     }
 
     const slotStart = new Date(startsAt).getTime();

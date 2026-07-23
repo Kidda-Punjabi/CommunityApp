@@ -58,6 +58,8 @@ export type TutorBookingCredit = {
   id: string;
   purchasedAt: string;
   status: "available" | "used";
+  courseId: string | null;
+  tutorId: string | null;
 };
 
 export const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;

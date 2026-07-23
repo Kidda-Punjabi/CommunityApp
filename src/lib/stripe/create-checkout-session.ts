@@ -19,6 +19,8 @@ type CreateCheckoutSessionOptions = {
   cohortId?: string;
   cohortSeatHoldId?: string;
   oneToOneBookingId?: string;
+  /** Course this 1-to-1 session credit is for (required for course-scoped credits). */
+  courseId?: string;
 };
 
 async function resolveStripeCustomerId(userId: string, email: string): Promise<string> {
@@ -60,6 +62,7 @@ export async function createCheckoutSession({
   cohortId,
   cohortSeatHoldId,
   oneToOneBookingId,
+  courseId,
 }: CreateCheckoutSessionOptions) {
   const config = getCheckoutConfig(checkoutKey);
   if (!config) {
@@ -81,6 +84,9 @@ export async function createCheckoutSession({
   const needsGroupCohort = await isGroupPackageCheckoutKey(supabase, checkoutKey);
   const needsOneToOneSlot = checkoutKey === ONE_TO_ONE_SESSION_CHECKOUT_KEY;
 
+  let oneToOneCourseId = courseId?.trim() || null;
+  let oneToOneTutorId: string | null = null;
+
   if (needsOneToOneSlot) {
     if (!user) {
       throw new Error("Sign in to choose a lesson time and purchase a 1-to-1 session.");
@@ -92,7 +98,7 @@ export async function createCheckoutSession({
     const admin = createServiceRoleClient();
     const { data: pending, error: pendingError } = await admin
       .from("tutor_one_to_one_bookings")
-      .select("id, student_id, status, created_at")
+      .select("id, student_id, tutor_id, status, created_at")
       .eq("id", oneToOneBookingId.trim())
       .maybeSingle();
 
@@ -108,6 +114,29 @@ export async function createCheckoutSession({
         .update({ status: "cancelled", updated_at: new Date().toISOString() })
         .eq("id", pending.id);
       throw new Error("Your lesson time reservation expired. Choose a time again.");
+    }
+
+    oneToOneTutorId = (pending.tutor_id as string | null) ?? null;
+
+    if (!oneToOneCourseId) {
+      const { inferCourseScopeFromBookingTutor } = await import(
+        "@/lib/tutoring/booking-credit-course"
+      );
+      const inferred = oneToOneTutorId
+        ? await inferCourseScopeFromBookingTutor(admin, user.id, oneToOneTutorId)
+        : null;
+      oneToOneCourseId = inferred?.courseId ?? null;
+    }
+
+    if (oneToOneCourseId && !oneToOneTutorId) {
+      const { tutorIdForStudentCourse } = await import("@/lib/tutoring/booking-credit-course");
+      oneToOneTutorId = await tutorIdForStudentCourse(admin, user.id, oneToOneCourseId);
+    }
+
+    if (!oneToOneCourseId) {
+      throw new Error(
+        "Could not determine which course this session is for. Open Schedule from your course package and try again."
+      );
     }
   }
 
@@ -208,7 +237,11 @@ export async function createCheckoutSession({
         ? { cohort_id: cohortId, cohort_seat_hold_id: cohortSeatHoldId }
         : {}),
       ...(needsOneToOneSlot && oneToOneBookingId
-        ? { one_to_one_booking_id: oneToOneBookingId.trim() }
+        ? {
+            one_to_one_booking_id: oneToOneBookingId.trim(),
+            ...(oneToOneCourseId ? { course_id: oneToOneCourseId } : {}),
+            ...(oneToOneTutorId ? { tutor_id: oneToOneTutorId } : {}),
+          }
         : {}),
     },
     ...(customerId ? { customer: customerId } : {}),

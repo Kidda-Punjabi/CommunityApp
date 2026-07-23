@@ -89,8 +89,19 @@ export async function loadStudentBookingContext(
   supabase: SupabaseClient,
   studentId: string
 ): Promise<{ context: StudentBookingContext | null; schemaReady: boolean }> {
-  const availableCredits = await countAvailableBookingCredits(supabase, studentId);
-  const resolved = await resolveStudentBookingTutor(supabase, studentId);
+  const creditsLoad = await loadAvailableBookingCredits(supabase, studentId);
+  if (!creditsLoad.schemaReady) {
+    return { context: null, schemaReady: false };
+  }
+
+  const availableCredits = creditsLoad.credits.length;
+  // FIFO: oldest available credit decides which course/tutor to book against.
+  const preferredCredit = creditsLoad.credits[0] ?? null;
+
+  const resolved = await resolveStudentBookingTutor(supabase, studentId, {
+    preferredCourseId: preferredCredit?.courseId ?? null,
+    preferredTutorId: preferredCredit?.tutorId ?? null,
+  });
 
   if (!resolved) {
     if (availableCredits < 1) {
@@ -103,7 +114,7 @@ export async function loadStudentBookingContext(
         tutorId: "",
         tutorName: "Your tutor",
         enrollmentId: null,
-        courseId: null,
+        courseId: preferredCredit?.courseId ?? null,
         bookingEnabled: false,
         settings: null,
         availableCredits,
@@ -160,7 +171,7 @@ export async function loadAvailableBookingCredits(
 ): Promise<{ credits: TutorBookingCredit[]; schemaReady: boolean }> {
   const { data, error } = await supabase
     .from("tutor_one_to_one_booking_credits")
-    .select("id, purchased_at, status")
+    .select("id, purchased_at, status, course_id, tutor_id")
     .eq("student_id", studentId)
     .eq("status", "available")
     .order("purchased_at", { ascending: true });
@@ -168,6 +179,35 @@ export async function loadAvailableBookingCredits(
   if (error) {
     if (isAvailabilitySchemaMissingError(error)) {
       return { credits: [], schemaReady: false };
+    }
+    // Older schema without course_id / tutor_id — soft-fall back.
+    if (
+      error.message?.includes("course_id") ||
+      error.message?.includes("tutor_id") ||
+      error.code === "42703"
+    ) {
+      const legacy = await supabase
+        .from("tutor_one_to_one_booking_credits")
+        .select("id, purchased_at, status")
+        .eq("student_id", studentId)
+        .eq("status", "available")
+        .order("purchased_at", { ascending: true });
+      if (legacy.error) {
+        if (isAvailabilitySchemaMissingError(legacy.error)) {
+          return { credits: [], schemaReady: false };
+        }
+        throw legacy.error;
+      }
+      return {
+        schemaReady: true,
+        credits: (legacy.data ?? []).map((row) => ({
+          id: row.id as string,
+          purchasedAt: row.purchased_at as string,
+          status: row.status as TutorBookingCredit["status"],
+          courseId: null,
+          tutorId: null,
+        })),
+      };
     }
     throw error;
   }
@@ -178,6 +218,8 @@ export async function loadAvailableBookingCredits(
       id: row.id as string,
       purchasedAt: row.purchased_at as string,
       status: row.status as TutorBookingCredit["status"],
+      courseId: (row.course_id as string | null) ?? null,
+      tutorId: (row.tutor_id as string | null) ?? null,
     })),
   };
 }
