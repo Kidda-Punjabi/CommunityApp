@@ -2,7 +2,6 @@
 
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
@@ -17,6 +16,7 @@ import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
 import {
   buildVoicePracticeRound,
   isPlayableVoiceSentence,
+  normalizeSpeechTranscript,
   passedVoiceAttempt,
   romanisedHint,
   speechSimilarityPercent,
@@ -24,33 +24,45 @@ import {
   VOICE_PRACTICE_PASS_THRESHOLD,
   type VoicePracticeQuestionResult,
 } from "@/lib/games/voice-practice";
+import {
+  VOICE_PRACTICE_MONTHLY_LIMIT,
+  type VoicePracticeAttempts,
+} from "@/lib/games/voice-practice-stt";
 import { formatPunjabiForDisplay } from "@/lib/conjugation/format";
-import {
-  isSafariBrowser,
-  isSpeechRecognitionSupported,
-  SAFARI_VOICE_WARNING,
-  SPEECH_UNSUPPORTED_MESSAGE,
-} from "@/lib/speech/speech-recognition";
-import {
-  startPunjabiRecognitionSession,
-  type PunjabiRecognitionSession,
-} from "@/lib/speech/punjabi-recognition-session";
 import { createClient } from "@/lib/supabase/client";
 
 const ADVANCE_MS = 1400;
+/** Sentences need more headroom than single-word Speaking Practice (8s). */
+const MAX_RECORDING_MS = 12000;
 
 type Phase = "ready" | "playing" | "finished";
 type QuestionFeedback = "pass" | "retry" | "failed" | null;
 
+type TranscribeResponse = {
+  allowed?: boolean;
+  limitReached?: boolean;
+  message?: string;
+  transcript?: string;
+  remaining?: number;
+  error?: string;
+};
+
 type VoicePracticeModeProps = {
   sentences: GrammarSentence[];
+  initialAttempts: VoicePracticeAttempts;
   tableReady: boolean;
   loadError: string | null;
   catchupReturn?: string | null;
 };
 
+function pickRecorderMimeType(): string | undefined {
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
 export function VoicePracticeMode({
   sentences,
+  initialAttempts,
   catchupReturn = null,
   tableReady,
   loadError,
@@ -67,17 +79,27 @@ export function VoicePracticeMode({
   const [bestSimilarity, setBestSimilarity] = useState(0);
   const [lastTranscript, setLastTranscript] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<QuestionFeedback>(null);
-  const [listening, setListening] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [limitMessage, setLimitMessage] = useState<string | null>(null);
+  const [monthlyAttempts, setMonthlyAttempts] = useState(initialAttempts);
   const [pointsEarned, setPointsEarned] = useState(0);
 
-  const sessionRef = useRef<PunjabiRecognitionSession | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const stopTimerRef = useRef<number | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
   const { playSound } = useAudioManager();
-  const speechSupported = useMemo(() => isSpeechRecognitionSupported(), []);
-  const safariBrowser = useMemo(() => isSafariBrowser(), []);
+
+  const mediaSupported =
+    typeof window !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof MediaRecorder !== "undefined";
 
   const playableSentences = useMemo(
     () => sentences.filter(isPlayableVoiceSentence),
@@ -100,7 +122,11 @@ export function VoicePracticeMode({
 
   const current = questions[questionIndex];
   const totalQuestions = questions.length;
-  const canStart = tableReady && playableSentences.length > 0 && speechSupported;
+  const canStart =
+    tableReady &&
+    playableSentences.length > 0 &&
+    mediaSupported &&
+    monthlyAttempts.remaining > 0;
 
   useEffect(() => {
     const supabase = createClient();
@@ -136,20 +162,32 @@ export function VoicePracticeMode({
     void persist();
   }, [phase, questionResults, questions.length, requestedCount, tenseFilter]);
 
+  const stopStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (stopTimerRef.current) {
+      window.clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+    }
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop();
+    } else {
+      stopStream();
+      setRecording(false);
+    }
+  }, [stopStream]);
+
   useEffect(() => {
     return () => {
+      stopRecording();
       if (advanceTimerRef.current) {
         window.clearTimeout(advanceTimerRef.current);
       }
-      sessionRef.current?.stop();
     };
-  }, []);
-
-  function stopRecognition() {
-    sessionRef.current?.stop();
-    sessionRef.current = null;
-    setListening(false);
-  }
+  }, [stopRecording]);
 
   function scheduleAdvance(result: VoicePracticeQuestionResult) {
     if (advanceTimerRef.current) {
@@ -207,6 +245,7 @@ export function VoicePracticeMode({
     setLastTranscript(null);
     setFeedback(null);
     setMicError(null);
+    setLimitMessage(null);
     setPhase("playing");
   }
 
@@ -216,10 +255,11 @@ export function VoicePracticeMode({
     const similarity = speechSimilarityPercent(transcript, current.punjabi_sentence);
     const nextAttempts = attempts + 1;
     const nextBest = Math.max(bestSimilarity, similarity);
+    const displayTranscript = normalizeSpeechTranscript(transcript) || transcript;
 
     setAttempts(nextAttempts);
     setBestSimilarity(nextBest);
-    setLastTranscript(transcript);
+    setLastTranscript(displayTranscript);
 
     if (passedVoiceAttempt(similarity)) {
       playSound("correct");
@@ -248,8 +288,66 @@ export function VoicePracticeMode({
     setFeedback("retry");
   }
 
-  function startListening() {
-    if (!current || listening || feedback === "pass" || feedback === "failed") return;
+  async function handleRecordingComplete(blob: Blob) {
+    if (!current) return;
+
+    setUploading(true);
+    setMicError(null);
+
+    try {
+      const body = new FormData();
+      body.append("audio", blob, "recording.webm");
+      body.append("sentence_id", current.id);
+      body.append("target_romanised", romanisedHint(current) ?? "");
+      body.append("target_punjabi", current.punjabi_sentence);
+
+      const response = await fetch("/api/voice-practice/transcribe", {
+        method: "POST",
+        body,
+      });
+
+      const payload = (await response.json()) as TranscribeResponse;
+
+      if (payload.limitReached || payload.allowed === false) {
+        setLimitMessage(
+          payload.message ??
+            `You've used all ${VOICE_PRACTICE_MONTHLY_LIMIT} Speak It transcriptions for this month. Come back next month!`
+        );
+        setMonthlyAttempts((prev) => ({ ...prev, remaining: 0, used: prev.limit }));
+        return;
+      }
+
+      if (!response.ok || payload.error) {
+        setMicError(payload.error ?? "Could not transcribe your recording. Please try again.");
+        return;
+      }
+
+      if (typeof payload.remaining === "number") {
+        setMonthlyAttempts((prev) => ({
+          ...prev,
+          remaining: payload.remaining!,
+          used: prev.limit - payload.remaining!,
+        }));
+      }
+
+      handleTranscript(payload.transcript ?? "");
+    } catch {
+      setMicError("Something went wrong sending your recording. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function startRecording() {
+    if (!current || recording || uploading || feedback === "pass" || feedback === "failed") {
+      return;
+    }
+    if (monthlyAttempts.remaining <= 0) {
+      setLimitMessage(
+        `You've used all ${VOICE_PRACTICE_MONTHLY_LIMIT} Speak It transcriptions for this month. Come back next month!`
+      );
+      return;
+    }
 
     setMicError(null);
     if (feedback === "retry") {
@@ -257,21 +355,49 @@ export function VoicePracticeMode({
       setLastTranscript(null);
     }
 
-    sessionRef.current?.stop();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
 
-    sessionRef.current = startPunjabiRecognitionSession({
-      onTranscript: handleTranscript,
-      onError: (message) => {
-        setMicError(message);
-        sessionRef.current = null;
-      },
-      onListeningChange: (active) => {
-        setListening(active);
-        if (!active) {
-          sessionRef.current = null;
-        }
-      },
-    });
+      const mimeType = pickRecorderMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      recorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = () => {
+        setRecording(false);
+        stopStream();
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        chunksRef.current = [];
+        recorderRef.current = null;
+        void handleRecordingComplete(blob);
+      };
+
+      recorder.onerror = () => {
+        setMicError("Recording failed — check microphone permissions and try again.");
+        stopRecording();
+      };
+
+      recorder.start();
+      setRecording(true);
+
+      stopTimerRef.current = window.setTimeout(() => {
+        stopRecording();
+      }, MAX_RECORDING_MS);
+    } catch {
+      setMicError("Microphone access is required for Speak It.");
+      stopStream();
+      setRecording(false);
+    }
   }
 
   if (phase === "ready") {
@@ -285,10 +411,22 @@ export function VoicePracticeMode({
         poolSizeForFilter={poolSizeForFilter}
         repeatPolicy="cap"
         canStart={canStart}
+        extraSettings={
+          <p className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+            <span className="font-semibold">{monthlyAttempts.remaining}</span> Speak It
+            transcription{monthlyAttempts.remaining === 1 ? "" : "s"} left this month
+            <span className="text-violet-600"> (resets {monthlyAttempts.monthKey})</span>
+          </p>
+        }
         unavailableMessage={
-          !speechSupported ? (
+          !mediaSupported ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {SPEECH_UNSUPPORTED_MESSAGE}
+              This browser can&apos;t record audio. Try Safari, Chrome, or Edge on a supported device.
+            </div>
+          ) : monthlyAttempts.remaining <= 0 ? (
+            <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+              You&apos;ve used all {VOICE_PRACTICE_MONTHLY_LIMIT} Speak It transcriptions for this
+              month. Come back next month — your counter resets on the 1st.
             </div>
           ) : !tableReady ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -330,7 +468,6 @@ export function VoicePracticeMode({
     ? formatPunjabiForDisplay(current.punjabi_sentence)
     : "";
   const hintRomanised = current ? romanisedHint(current) : null;
-  const revealAnswer = feedback === "failed";
 
   return (
     <div className="relative space-y-5">
@@ -339,17 +476,24 @@ export function VoicePracticeMode({
 
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Exit</BackLink>
-          <p className="text-sm font-semibold text-zinc-900">{passedCount} passed</p>
+          <BackLink
+            fallbackHref={GAMES_HUB_HREF}
+            className="text-sm font-medium text-violet-600 hover:text-violet-500"
+          >
+            ← Exit
+          </BackLink>
+          <p className="text-sm font-semibold text-zinc-900">
+            {passedCount} passed · {monthlyAttempts.remaining} left this month
+          </p>
         </div>
         {shortPoolNotice ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {shortPoolNotice}
           </p>
         ) : null}
-        {safariBrowser ? (
+        {limitMessage ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            {SAFARI_VOICE_WARNING}
+            {limitMessage}
           </p>
         ) : null}
       </div>
@@ -414,29 +558,34 @@ export function VoicePracticeMode({
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-zinc-600">
-              Tap record, then read the Punjabi sentence aloud clearly.
+              Tap record, say the Punjabi sentence clearly, then tap stop.
             </p>
             <p className="text-xs text-zinc-500">
-              Attempt {attempts + 1} of {VOICE_PRACTICE_MAX_ATTEMPTS}
+              Attempt {attempts + 1} of {VOICE_PRACTICE_MAX_ATTEMPTS} · up to{" "}
+              {MAX_RECORDING_MS / 1000}s per recording
             </p>
           </div>
         )}
 
         {micError ? <p className="mt-3 text-sm text-red-600">{micError}</p> : null}
 
-        {feedback !== "pass" && feedback !== "failed" ? (
+        {feedback !== "pass" && feedback !== "failed" && !limitMessage ? (
           <button
             type="button"
-            onClick={listening ? stopRecognition : startListening}
-            disabled={revealAnswer}
-            className={`mt-4 inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-colors ${
-              listening
-                ? "bg-red-500 hover:bg-red-400"
-                : "bg-violet-600 hover:bg-violet-500"
+            onClick={recording ? stopRecording : startRecording}
+            disabled={uploading || monthlyAttempts.remaining <= 0}
+            className={`mt-4 inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-colors disabled:opacity-60 ${
+              recording ? "bg-red-500 hover:bg-red-400" : "bg-violet-600 hover:bg-violet-500"
             }`}
           >
-            <span aria-hidden="true">{listening ? "⏹" : "🎙️"}</span>
-            {listening ? "Stop listening" : feedback === "retry" ? "Try again" : "Record"}
+            <span aria-hidden="true">{recording ? "⏹" : uploading ? "⏳" : "🎙️"}</span>
+            {uploading
+              ? "Checking…"
+              : recording
+                ? "Stop recording"
+                : feedback === "retry"
+                  ? "Try again"
+                  : "Record"}
           </button>
         ) : null}
       </div>
