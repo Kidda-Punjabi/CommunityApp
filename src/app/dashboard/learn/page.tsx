@@ -10,7 +10,9 @@ import {
   isLearnTrackUnlocked,
   lessonCountForTrack,
 } from "@/lib/learning/learn-access";
+import { resolveGroupCohortContentGate } from "@/lib/learning/group-cohort-content-gate";
 import { LEARN_TRACKS, shouldShowLearnCourseProgress } from "@/lib/learning/learn-catalog";
+import { findCoursesForTier } from "@/lib/membership/courses";
 import { loadStudentNextLiveLesson } from "@/lib/lessons/load-student-next-live-lesson";
 import {
   getCachedAuthSession,
@@ -44,53 +46,66 @@ export default async function LearnPage() {
     loadStudentNextLiveLesson(supabase, user.id),
   ]);
 
-  const tracks = LEARN_TRACKS.map((track) => {
-    if (track.alwaysUnlocked) {
-      const trackLessons = filterFreeLessons(allLessons);
-      const accessibleLessons = trackLessons.filter((lesson) =>
-        canAccessLessonInContext(access, lesson)
-      );
-      const progress = summarizeCourseProgress(accessibleLessons, completionMap);
+  const tracks = await Promise.all(
+    LEARN_TRACKS.map(async (track) => {
+      if (track.alwaysUnlocked) {
+        const trackLessons = filterFreeLessons(allLessons);
+        const accessibleLessons = trackLessons.filter((lesson) =>
+          canAccessLessonInContext(access, lesson)
+        );
+        const progress = summarizeCourseProgress(accessibleLessons, completionMap);
+
+        return {
+          track,
+          locked: false,
+          opensOnMessage: null as string | null,
+          lessonCount: trackLessons.length,
+          courseProgress: {
+            completed: progress.completedLessons,
+            total: progress.totalLessons,
+          },
+        };
+      }
+
+      const locked = !isLearnTrackUnlocked(track, access);
+      const trackLessons = track.tier
+        ? filterLessonsForTrack(allLessons, access.courses, track.tier)
+        : [];
+
+      let opensOnMessage: string | null = null;
+      if (!locked && track.tier) {
+        const courseIds = findCoursesForTier(access.courses, track.tier).map((c) => c.id);
+        const gate = await resolveGroupCohortContentGate(supabase, user.id, courseIds);
+        if (gate?.gated) opensOnMessage = gate.message;
+      }
+
+      const accessibleLessons =
+        locked || opensOnMessage
+          ? []
+          : trackLessons.filter((lesson) => canAccessLessonInContext(access, lesson));
 
       return {
         track,
-        locked: false,
-        lessonCount: trackLessons.length,
-        courseProgress: {
-          completed: progress.completedLessons,
-          total: progress.totalLessons,
-        },
+        locked,
+        opensOnMessage,
+        lessonCount: track.tier
+          ? lessonCountForTrack(allLessons, access.courses, track.tier)
+          : 0,
+        courseProgress:
+          locked || opensOnMessage
+            ? undefined
+            : !shouldShowLearnCourseProgress(track.id)
+              ? undefined
+              : (() => {
+                  const progress = summarizeCourseProgress(accessibleLessons, completionMap);
+                  return {
+                    completed: progress.completedLessons,
+                    total: progress.totalLessons,
+                  };
+                })(),
       };
-    }
-
-    const locked = !isLearnTrackUnlocked(track, access);
-    const trackLessons = track.tier
-      ? filterLessonsForTrack(allLessons, access.courses, track.tier)
-      : [];
-
-    const accessibleLessons = locked
-      ? []
-      : trackLessons.filter((lesson) => canAccessLessonInContext(access, lesson));
-
-    return {
-      track,
-      locked,
-      lessonCount: track.tier
-        ? lessonCountForTrack(allLessons, access.courses, track.tier)
-        : 0,
-      courseProgress: locked
-        ? undefined
-        : !shouldShowLearnCourseProgress(track.id)
-          ? undefined
-          : (() => {
-            const progress = summarizeCourseProgress(accessibleLessons, completionMap);
-            return {
-              completed: progress.completedLessons,
-              total: progress.totalLessons,
-            };
-          })(),
-    };
-  });
+    })
+  );
 
   return (
     <div className={ui.page}>
@@ -127,11 +142,12 @@ export default async function LearnPage() {
       </h2>
 
       <div className={ui.stack}>
-        {tracks.map(({ track, locked, lessonCount, courseProgress }) => (
+        {tracks.map(({ track, locked, opensOnMessage, lessonCount, courseProgress }) => (
           <LearnCourseCard
             key={track.id}
             track={track}
             locked={locked}
+            opensOnMessage={opensOnMessage}
             lessonCount={lessonCount}
             courseProgress={
               courseProgress

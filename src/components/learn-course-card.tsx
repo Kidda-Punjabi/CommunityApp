@@ -7,6 +7,8 @@ import { ui } from "@/lib/ui/styles";
 type LearnCourseCardProps = {
   track: LearnTrack;
   locked: boolean;
+  /** Owned group cohort with a future start — show opens-on instead of lessons. */
+  opensOnMessage?: string | null;
   lessonCount?: number;
   courseProgress?: {
     completed: number;
@@ -17,20 +19,25 @@ type LearnCourseCardProps = {
 export function LearnCourseCard({
   track,
   locked,
+  opensOnMessage,
   lessonCount,
   courseProgress,
 }: LearnCourseCardProps) {
   const showLock = !track.alwaysUnlocked && locked;
-  const showProgress = !showLock && courseProgress && courseProgress.total > 0;
+  const showOpensOn = !showLock && Boolean(opensOnMessage);
+  const showProgress =
+    !showLock && !showOpensOn && courseProgress && courseProgress.total > 0;
   const href = learnTrackPath(track.id);
   const salesHref = track.unlockUrl ?? `/courses/${track.id}`;
 
   const subtitle =
-    showProgress || showLock
-      ? track.description
-      : lessonCount !== undefined && lessonCount > 0
-        ? `${lessonCount} lesson${lessonCount === 1 ? "" : "s"}`
-        : track.description;
+    showOpensOn && opensOnMessage
+      ? opensOnMessage
+      : showProgress || showLock
+        ? track.description
+        : lessonCount !== undefined && lessonCount > 0
+          ? `${lessonCount} lesson${lessonCount === 1 ? "" : "s"}`
+          : track.description;
 
   if (showLock) {
     return (
@@ -45,6 +52,20 @@ export function LearnCourseCard({
             Find out more
           </NavLink>
         </div>
+      </div>
+    );
+  }
+
+  if (showOpensOn) {
+    return (
+      <div className={`${ui.listRow} flex-col items-stretch gap-0 p-0`}>
+        <NavLink href={href} className="group block p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
+            Course
+          </p>
+          <p className="mt-0.5 font-heading font-semibold text-zinc-900">{track.title}</p>
+          <p className="mt-1 text-sm font-medium text-violet-800">{subtitle}</p>
+        </NavLink>
       </div>
     );
   }

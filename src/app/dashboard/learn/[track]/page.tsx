@@ -1,4 +1,5 @@
 import { LearnLessonList } from "@/components/learn-lesson-list";
+import { GroupCohortOpensPanel } from "@/components/learn/group-cohort-opens-panel";
 import {
   BuyExtraOneToOneCard,
   PackageHubPanel,
@@ -12,12 +13,12 @@ import {
   filterFreeLessons,
 } from "@/lib/learning/load-learn-content";
 import {
-  canAccessLessonInContext,
   filterLessonsForTrack,
   isLearnTrackUnlocked,
-  isLessonContentUnlockedForUser,
 } from "@/lib/learning/learn-access";
+import { resolveGroupCohortContentGate } from "@/lib/learning/group-cohort-content-gate";
 import { getLearnTrack, shouldShowLearnCourseProgress } from "@/lib/learning/learn-catalog";
+import { findCoursesForTier } from "@/lib/membership/courses";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import {
   fetchLessonCompletionMap,
@@ -77,15 +78,6 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
         lessons.map((lesson) => lesson.id)
       ),
     ]);
-    const accessibleLessons = lessons.filter((lesson) => {
-      const canBrowse = canAccessLessonInContext(access, lesson);
-      const contentUnlocked = isLessonContentUnlockedForUser(
-        access,
-        lesson,
-        contentUnlockedMap.get(lesson.id)
-      );
-      return canBrowse && contentUnlocked;
-    });
 
     return (
       <LearnLessonList
@@ -113,31 +105,10 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
     redirect(`/courses/${track.id}#pricing`);
   }
 
-  const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
-  const showHomework = track.id === "foundational" || track.id === "beginners";
-  const lessonIds = lessons.map((lesson) => lesson.id);
-  const [completionMap, contentUnlockedMap, recordingMap, homeworkMap, catchupLessonIds] =
-    await Promise.all([
-    fetchLessonCompletionMap(supabase, user!.id, lessons),
-    fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
-    fetchLessonRecordingsForUser(supabase, user!.id, lessonIds),
-    showHomework
-      ? fetchHomeworkSubmissionsForUser(supabase, user!.id, lessonIds)
-      : Promise.resolve(new Map()),
-    fetchCatchupEnabledLessonIds(supabase, lessonIds),
-  ]);
-  const accessibleLessons = lessons.filter((lesson) => {
-    const canBrowse = canAccessLessonInContext(access, lesson);
-    const contentUnlocked = isLessonContentUnlockedForUser(
-      access,
-      lesson,
-      contentUnlockedMap.get(lesson.id)
-    );
-    return canBrowse && contentUnlocked;
-  });
-  const courseProgress = summarizeCourseProgress(lessons, completionMap);
-  const studentPackage = findStudentPackageForTrack(studentPackages, track.id);
+  const courseIds = findCoursesForTier(access.courses, track.tier).map((c) => c.id);
+  const contentGate = await resolveGroupCohortContentGate(supabase, user!.id, courseIds);
 
+  const studentPackage = findStudentPackageForTrack(studentPackages, track.id);
   let staffSection = null;
 
   if (studentPackage) {
@@ -156,6 +127,31 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
     const leads = await loadCommunityLeads(supabase);
     staffSection = <CommunityLeadSection leads={leads} />;
   }
+
+  if (contentGate?.gated) {
+    return (
+      <GroupCohortOpensPanel
+        title={track.title}
+        message={contentGate.message}
+        staffSection={staffSection}
+      />
+    );
+  }
+
+  const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
+  const showHomework = track.id === "foundational" || track.id === "beginners";
+  const lessonIds = lessons.map((lesson) => lesson.id);
+  const [completionMap, contentUnlockedMap, recordingMap, homeworkMap, catchupLessonIds] =
+    await Promise.all([
+      fetchLessonCompletionMap(supabase, user!.id, lessons),
+      fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
+      fetchLessonRecordingsForUser(supabase, user!.id, lessonIds),
+      showHomework
+        ? fetchHomeworkSubmissionsForUser(supabase, user!.id, lessonIds)
+        : Promise.resolve(new Map()),
+      fetchCatchupEnabledLessonIds(supabase, lessonIds),
+    ]);
+  const courseProgress = summarizeCourseProgress(lessons, completionMap);
 
   return (
     <LearnLessonList
