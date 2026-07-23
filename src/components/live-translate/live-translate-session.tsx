@@ -16,17 +16,19 @@ import {
   type PointerEvent,
 } from "react";
 
+type BubbleStage = "hearing" | "translating" | "speaking" | "done";
+
 type ChatMessage = {
   id: string;
   spokenLanguage: LiveTranslateSpokenLanguage;
   originalText: string;
   translatedText: string;
   audioBase64: string | null;
+  stage: BubbleStage;
 };
 
-type ProcessTurnResponse = {
-  skipped?: boolean;
-  reason?: string;
+type StreamEvent = {
+  stage?: string;
   original_text?: string;
   translated_text?: string;
   audio_base64?: string | null;
@@ -35,11 +37,54 @@ type ProcessTurnResponse = {
   resets_on?: string;
   message?: string;
   error?: string;
+  reason?: string;
+};
+
+type CapReachedPayload = {
+  error?: string;
+  message?: string;
+  seconds_remaining_this_month?: number;
+  seconds_used_this_month?: number;
+  resets_on?: string;
 };
 
 type LiveTranslateSessionProps = {
   initialUsage: LiveTranslateUsageSnapshot;
 };
+
+async function readNdjsonStream(
+  response: Response,
+  onEvent: (event: StreamEvent) => void | Promise<void>
+): Promise<void> {
+  if (!response.body) {
+    throw new Error("Live Translate stream was empty.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      if (line) {
+        await onEvent(JSON.parse(line) as StreamEvent);
+      }
+      newlineIndex = buffer.indexOf("\n");
+    }
+  }
+
+  const trailing = buffer.trim();
+  if (trailing) {
+    await onEvent(JSON.parse(trailing) as StreamEvent);
+  }
+}
 
 export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps) {
   const [phase, setPhase] = useState<"ready" | "active">("ready");
@@ -65,6 +110,12 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
     }
   }, []);
 
+  const patchMessage = useCallback((id: string, patch: Partial<ChatMessage>) => {
+    setMessages((current) =>
+      current.map((message) => (message.id === id ? { ...message, ...patch } : message))
+    );
+  }, []);
+
   const handleClip = useCallback(
     async ({
       blob,
@@ -80,6 +131,20 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
       setProcessingTurn(true);
       setError(null);
 
+      turnIdRef.current += 1;
+      const messageId = `turn-${turnIdRef.current}`;
+      setMessages((current) => [
+        ...current,
+        {
+          id: messageId,
+          spokenLanguage: language,
+          originalText: "",
+          translatedText: "",
+          audioBase64: null,
+          stage: "hearing",
+        },
+      ]);
+
       const formData = new FormData();
       formData.append("audio", blob, "utterance.webm");
       formData.append("language_code", language);
@@ -90,9 +155,10 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
           method: "POST",
           body: formData,
         });
-        const payload = (await response.json()) as ProcessTurnResponse;
 
         if (response.status === 429) {
+          const payload = (await response.json()) as CapReachedPayload;
+          setMessages((current) => current.filter((message) => message.id !== messageId));
           setUsage((current) => ({
             ...current,
             secondsRemaining: 0,
@@ -109,51 +175,108 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
           return;
         }
 
+        const contentType = response.headers.get("content-type") ?? "";
         if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as StreamEvent;
           throw new Error(payload.error ?? payload.message ?? "Live Translate failed.");
         }
 
-        if (payload.skipped) {
+        if (!contentType.includes("ndjson")) {
+          // Legacy single-JSON response fallback (should not happen after deploy).
+          const payload = (await response.json()) as StreamEvent;
+          if (payload.error) throw new Error(payload.error);
+          patchMessage(messageId, {
+            originalText: payload.original_text?.trim() ?? "",
+            translatedText: payload.translated_text?.trim() ?? "",
+            audioBase64: payload.audio_base64 ?? null,
+            stage: "done",
+          });
+          if (payload.audio_base64) {
+            await playTranslatedAudio(payload.audio_base64);
+          }
           return;
         }
 
-        const originalText = payload.original_text?.trim() ?? "";
-        const translatedText = payload.translated_text?.trim() ?? "";
-        if (!originalText || !translatedText) return;
+        let sawDone = false;
+        await readNdjsonStream(response, async (event) => {
+          switch (event.stage) {
+            case "hearing":
+              patchMessage(messageId, { stage: "hearing" });
+              break;
+            case "transcript":
+              patchMessage(messageId, {
+                stage: "translating",
+                originalText: event.original_text?.trim() ?? "",
+              });
+              break;
+            case "translating":
+              patchMessage(messageId, { stage: "translating" });
+              break;
+            case "translated":
+              patchMessage(messageId, {
+                // EN→PA still needs TTS; PA→EN is text-complete here.
+                stage: language === "en" ? "speaking" : "done",
+                translatedText: event.translated_text?.trim() ?? "",
+              });
+              break;
+            case "speaking":
+              patchMessage(messageId, { stage: "speaking" });
+              break;
+            case "skipped":
+              setMessages((current) => current.filter((message) => message.id !== messageId));
+              break;
+            case "error":
+              setMessages((current) => current.filter((message) => message.id !== messageId));
+              throw new Error(event.error ?? "Live Translate failed.");
+            case "done": {
+              sawDone = true;
+              const audioBase64 = event.audio_base64 ?? null;
+              patchMessage(messageId, {
+                stage: "done",
+                originalText: event.original_text?.trim() ?? "",
+                translatedText: event.translated_text?.trim() ?? "",
+                audioBase64,
+              });
+              if (typeof event.seconds_remaining_this_month === "number") {
+                setUsage((current) => ({
+                  ...current,
+                  secondsRemaining: event.seconds_remaining_this_month ?? 0,
+                  secondsUsed:
+                    event.seconds_used_this_month ??
+                    current.capSeconds - (event.seconds_remaining_this_month ?? 0),
+                }));
+              }
+              if (audioBase64) {
+                await playTranslatedAudio(audioBase64);
+              }
+              break;
+            }
+            default:
+              break;
+          }
+        });
 
-        turnIdRef.current += 1;
-        const audioBase64 = payload.audio_base64 ?? null;
-        setMessages((current) => [
-          ...current,
-          {
-            id: `turn-${turnIdRef.current}`,
-            spokenLanguage: language,
-            originalText,
-            translatedText,
-            audioBase64,
-          },
-        ]);
-
-        if (typeof payload.seconds_remaining_this_month === "number") {
-          setUsage((current) => ({
-            ...current,
-            secondsRemaining: payload.seconds_remaining_this_month ?? 0,
-            secondsUsed:
-              payload.seconds_used_this_month ??
-              current.capSeconds - (payload.seconds_remaining_this_month ?? 0),
-          }));
-        }
-
-        if (audioBase64) {
-          await playTranslatedAudio(audioBase64);
+        if (!sawDone) {
+          // Stream ended without done/skipped — drop incomplete bubble.
+          setMessages((current) => {
+            const message = current.find((row) => row.id === messageId);
+            if (!message || message.stage === "done") return current;
+            if (message.originalText && message.translatedText) {
+              return current.map((row) =>
+                row.id === messageId ? { ...row, stage: "done" as const } : row
+              );
+            }
+            return current.filter((row) => row.id !== messageId);
+          });
         }
       } catch (caught) {
+        setMessages((current) => current.filter((message) => message.id !== messageId));
         setError(caught instanceof Error ? caught.message : "Live Translate failed.");
       } finally {
         setProcessingTurn(false);
       }
     },
-    [phase, playTranslatedAudio, usage.resetsOn]
+    [phase, patchMessage, playTranslatedAudio, usage.resetsOn]
   );
 
   const {
@@ -263,7 +386,11 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
         <div>
           <p className="text-sm font-semibold text-zinc-900">Live Translate</p>
           <p className="text-xs text-zinc-500">
-            {!micReady ? "Starting mic…" : holdingLanguage ? "Recording…" : "Hold a language to speak"}
+            {!micReady
+              ? "Starting mic…"
+              : holdingLanguage
+                ? "Recording…"
+                : "Hold a language to speak"}
             {busy ? " · Processing" : ""}
           </p>
         </div>
@@ -341,6 +468,21 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
   );
 }
 
+function stageLabel(stage: BubbleStage, hasTranslation: boolean, hasAudio: boolean): string | null {
+  switch (stage) {
+    case "hearing":
+      return "Hearing you…";
+    case "translating":
+      return "Translating…";
+    case "speaking":
+      return hasTranslation ? "Speaking…" : "Translating…";
+    case "done":
+      return hasAudio ? null : null;
+    default:
+      return null;
+  }
+}
+
 function ChatBubble({
   message,
   onReplay,
@@ -350,6 +492,11 @@ function ChatBubble({
 }) {
   const spokenLabel = message.spokenLanguage === "en" ? "English" : "Punjabi";
   const originalIsGurmukhi = containsGurmukhi(message.originalText);
+  const status = stageLabel(
+    message.stage,
+    Boolean(message.translatedText),
+    Boolean(message.audioBase64)
+  );
 
   return (
     <article className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
@@ -367,16 +514,30 @@ function ChatBubble({
           </button>
         ) : null}
       </div>
-      <p
-        className={`mt-2 leading-snug text-zinc-900 ${
-          originalIsGurmukhi ? "text-lg font-semibold" : "text-base font-medium"
-        }`}
-      >
-        {message.originalText}
-      </p>
-      <p className="mt-2 border-t border-zinc-100 pt-2 text-sm leading-snug text-zinc-600">
-        {message.translatedText}
-      </p>
+
+      {message.originalText ? (
+        <p
+          className={`mt-2 leading-snug text-zinc-900 ${
+            originalIsGurmukhi ? "text-lg font-semibold" : "text-base font-medium"
+          }`}
+        >
+          {message.originalText}
+        </p>
+      ) : (
+        <p className="mt-2 text-sm italic text-zinc-500">{status ?? "Hearing you…"}</p>
+      )}
+
+      {message.translatedText ? (
+        <p className="mt-2 border-t border-zinc-100 pt-2 text-sm leading-snug text-zinc-600">
+          {message.translatedText}
+        </p>
+      ) : message.originalText && status ? (
+        <p className="mt-2 border-t border-zinc-100 pt-2 text-sm italic text-zinc-500">{status}</p>
+      ) : null}
+
+      {message.stage === "speaking" && message.translatedText ? (
+        <p className="mt-2 text-xs font-medium text-violet-600">Speaking…</p>
+      ) : null}
     </article>
   );
 }

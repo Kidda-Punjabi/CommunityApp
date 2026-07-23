@@ -22,8 +22,12 @@ import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
+export const maxDuration = 60;
+
 const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 const MAX_DURATION_SECONDS = 30;
+
+type StreamEvent = Record<string, unknown>;
 
 function parseSpokenLanguage(
   value: FormDataEntryValue | null
@@ -41,6 +45,35 @@ function parseDurationSeconds(value: FormDataEntryValue | null): number {
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return Buffer.from(buffer).toString("base64");
+}
+
+function ndjsonStream(writeEvents: (emit: (event: StreamEvent) => void) => Promise<void>) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const emit = (event: StreamEvent) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
+      try {
+        await writeEvents(emit);
+      } catch (error) {
+        emit({
+          stage: "error",
+          error: error instanceof Error ? error.message : "Live Translate failed.",
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -133,18 +166,21 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
+  return ndjsonStream(async (emit) => {
+    emit({
+      stage: "hearing",
+      direction,
+      language_code: spokenLanguage,
+    });
+
     const stt = await transcribeSpeech(audio, {
       languageCode: sttLanguageCode(spokenLanguage),
     });
 
     if (isNonSpeechTranscript(stt.text)) {
-      return NextResponse.json({
-        skipped: true,
+      emit({
+        stage: "skipped",
         reason: "non_speech",
-        original_text: "",
-        translated_text: "",
-        audio_base64: null,
         direction,
         language_code: spokenLanguage,
         seconds_remaining_this_month: usage.secondsRemaining,
@@ -152,12 +188,26 @@ export async function POST(request: Request) {
         month_key: usage.monthKey,
         resets_on: usage.resetsOn,
       });
+      return;
     }
 
+    emit({
+      stage: "transcript",
+      original_text: stt.text,
+      direction,
+      language_code: spokenLanguage,
+    });
+
+    emit({ stage: "translating" });
     const translatedText = await translateLiveUtterance(stt.text, direction);
+    emit({
+      stage: "translated",
+      translated_text: translatedText,
+    });
 
     let audioBase64: string | null = null;
     if (direction === "en-to-pa") {
+      emit({ stage: "speaking" });
       const pronunciationDictionaryLocators = await getPronunciationDictionaryLocator(
         adminClient
       );
@@ -177,7 +227,8 @@ export async function POST(request: Request) {
       durationSeconds
     );
 
-    return NextResponse.json({
+    emit({
+      stage: "done",
       original_text: stt.text,
       translated_text: translatedText,
       audio_base64: audioBase64,
@@ -188,10 +239,7 @@ export async function POST(request: Request) {
       month_key: updatedUsage.monthKey,
       resets_on: updatedUsage.resetsOn,
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Live Translate failed.";
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
+  });
 }
 
 export async function GET() {
