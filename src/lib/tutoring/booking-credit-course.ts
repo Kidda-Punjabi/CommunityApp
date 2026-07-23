@@ -1,5 +1,3 @@
-import "server-only";
-
 import { getCheckoutConfig } from "@/lib/products/checkout";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
