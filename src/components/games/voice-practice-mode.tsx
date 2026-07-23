@@ -15,11 +15,10 @@ import type { GrammarSentence } from "@/lib/games/types";
 import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
 import {
   buildVoicePracticeRound,
+  formatHeardTranscript,
   isPlayableVoiceSentence,
-  normalizeSpeechTranscript,
   passedVoiceAttempt,
   romanisedHint,
-  speechSimilarityPercent,
   VOICE_PRACTICE_MAX_ATTEMPTS,
   VOICE_PRACTICE_PASS_THRESHOLD,
   type VoicePracticeQuestionResult,
@@ -28,6 +27,7 @@ import {
   VOICE_PRACTICE_MONTHLY_LIMIT,
   type VoicePracticeAttempts,
 } from "@/lib/games/voice-practice-stt";
+import { matchSpeakingTranscript } from "@/lib/games/speaking-practice";
 import { formatPunjabiForDisplay } from "@/lib/conjugation/format";
 import { createClient } from "@/lib/supabase/client";
 
@@ -252,10 +252,22 @@ export function VoicePracticeMode({
   function handleTranscript(transcript: string) {
     if (!current || feedback === "pass" || feedback === "failed") return;
 
-    const similarity = speechSimilarityPercent(transcript, current.punjabi_sentence);
+    // Score against both romanised + Gurmukhi — Scribe returns either script.
+    // Use the same "heard" string we show the user so visible matches score high.
+    const displayTranscript = formatHeardTranscript(transcript) || transcript.trim();
+    const romanised = romanisedHint(current) ?? "";
+    const similarity = Math.max(
+      matchSpeakingTranscript(displayTranscript, {
+        romanised,
+        punjabi: current.punjabi_sentence,
+      }),
+      matchSpeakingTranscript(transcript, {
+        romanised,
+        punjabi: current.punjabi_sentence,
+      })
+    );
     const nextAttempts = attempts + 1;
     const nextBest = Math.max(bestSimilarity, similarity);
-    const displayTranscript = normalizeSpeechTranscript(transcript) || transcript;
 
     setAttempts(nextAttempts);
     setBestSimilarity(nextBest);

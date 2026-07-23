@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { transcribeSpeech } from "@/lib/elevenlabs/speech-to-text";
+import {
+  transcribeSpeech,
+  userFacingSpeechToTextError,
+} from "@/lib/elevenlabs/speech-to-text";
 import { VOICE_PRACTICE_MONTHLY_LIMIT } from "@/lib/games/voice-practice-stt";
 import { createClient } from "@/lib/supabase/server";
 
@@ -93,7 +96,9 @@ export async function POST(request: Request) {
       month_key: limit.month_key,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Transcription failed.";
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json(
+      { error: userFacingSpeechToTextError(error) },
+      { status: 502 }
+    );
   }
 }

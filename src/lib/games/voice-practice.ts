@@ -157,6 +157,19 @@ export function normalizeSpeechTranscript(text: string): string {
   return normalizeSpeechText(text);
 }
 
+const GURMUKHI = /[\u0A00-\u0A7F]/;
+
+/**
+ * What we show as "heard" — prefer readable Latin when Scribe returned romanisation,
+ * otherwise keep Gurmukhi as spoken-script output.
+ */
+export function formatHeardTranscript(transcript: string): string {
+  const trimmed = transcript.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  if (GURMUKHI.test(trimmed)) return trimmed;
+  return normalizeSpeechTranscript(trimmed) || trimmed;
+}
+
 function levenshteinDistance(a: string, b: string): number {
   if (a === b) return 0;
   if (a.length === 0) return b.length;
