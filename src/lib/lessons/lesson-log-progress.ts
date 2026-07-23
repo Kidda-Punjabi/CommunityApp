@@ -36,11 +36,17 @@ export function numberLessonLogEntries<T extends { id: string; lessonDate: strin
  * Next occurrence of the cohort weekly slot after the most recent logged lesson.
  * Uses weekly_session_start (ISO datetime with weekday+time) when available;
  * otherwise falls back to start_day_of_week at 12:00 UTC.
+ *
+ * When nothing is logged yet, floors at the cohort's real first session
+ * (weekly_session_start / start_date) — never "next weekday from today" for a
+ * cohort that hasn't started.
  */
 export function computeNextLessonAfterLog(options: {
   weeklySessionStart: string | null;
   startDayOfWeek: string | null;
   lastLessonDate: string | null;
+  /** Calendar start (YYYY-MM-DD or ISO). Used as a floor when no lessons are logged. */
+  startDate?: string | null;
   from?: Date;
 }): Date | null {
   const from = options.from ?? new Date();
@@ -48,16 +54,49 @@ export function computeNextLessonAfterLog(options: {
     ? new Date(`${options.lastLessonDate}T23:59:59.999Z`)
     : null;
 
+  const firstSession = resolveCohortFirstSession(
+    options.weeklySessionStart,
+    options.startDate ?? null
+  );
+
+  // No lessons logged yet and the first session is still ahead — that is next.
+  if (!lastLesson && firstSession && firstSession > from) {
+    return firstSession;
+  }
+
   const after = lastLesson && lastLesson > from ? lastLesson : from;
+  // Never project a weekly slot before the cohort's first session.
+  const afterFloor =
+    firstSession && firstSession > after
+      ? new Date(firstSession.getTime() - 1)
+      : after;
 
   if (options.weeklySessionStart?.includes("T")) {
-    return nextWeeklyOccurrenceFromTemplate(options.weeklySessionStart, after);
+    return nextWeeklyOccurrenceFromTemplate(options.weeklySessionStart, afterFloor);
   }
 
   const weekday = parseWeekdayName(options.startDayOfWeek);
-  if (weekday == null) return null;
+  if (weekday == null) {
+    return firstSession && firstSession > from ? firstSession : null;
+  }
 
-  return nextWeeklyOccurrenceOnWeekday(weekday, after, 12, 0);
+  return nextWeeklyOccurrenceOnWeekday(weekday, afterFloor, 12, 0);
+}
+
+/** Prefer weekly_session_start (real first slot); fall back to start_date calendar day. */
+function resolveCohortFirstSession(
+  weeklySessionStart: string | null,
+  startDate: string | null
+): Date | null {
+  if (weeklySessionStart?.includes("T")) {
+    const first = new Date(weeklySessionStart);
+    if (!Number.isNaN(first.getTime())) return first;
+  }
+
+  if (!startDate) return null;
+  const day = startDate.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  return new Date(`${day}T12:00:00.000Z`);
 }
 
 function parseWeekdayName(value: string | null): number | null {

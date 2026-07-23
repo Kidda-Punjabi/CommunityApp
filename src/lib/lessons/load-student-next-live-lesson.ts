@@ -18,7 +18,9 @@ export async function loadStudentNextLiveLesson(
 ): Promise<StudentNextLiveLesson | null> {
   const { data: memberships, error } = await supabase
     .from("cohort_members")
-    .select("cohort_id, cohorts(id, name, course_id, weekly_session_start, start_day_of_week, status)")
+    .select(
+      "cohort_id, cohorts(id, name, course_id, weekly_session_start, start_day_of_week, start_date, status)"
+    )
     .eq("user_id", userId)
     .is("left_at", null);
 
@@ -34,6 +36,7 @@ export async function loadStudentNextLiveLesson(
             course_id: string;
             weekly_session_start: string | null;
             start_day_of_week: string | null;
+            start_date: string | null;
             status: string | null;
           }
         | null
@@ -53,6 +56,7 @@ export async function loadStudentNextLiveLesson(
         courseId: cohort.course_id,
         weeklySessionStart: cohort.weekly_session_start,
         startDayOfWeek: cohort.start_day_of_week,
+        startDate: cohort.start_date,
       };
     })
     .filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -66,6 +70,7 @@ export async function loadStudentNextLiveLesson(
       courseId: c.courseId,
       weeklySessionStart: c.weeklySessionStart,
       startDayOfWeek: c.startDayOfWeek,
+      startDate: c.startDate,
     }))
   );
 

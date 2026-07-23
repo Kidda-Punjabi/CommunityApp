@@ -91,6 +91,7 @@ export async function buildCohortLessonProgress(options: {
   courseId: string;
   weeklySessionStart: string | null;
   startDayOfWeek: string | null;
+  startDate?: string | null;
   entries: LessonLogEntrySummary[];
   totalLessons: number;
 }): Promise<CohortLessonProgress> {
@@ -103,6 +104,7 @@ export async function buildCohortLessonProgress(options: {
       : computeNextLessonAfterLog({
           weeklySessionStart: options.weeklySessionStart,
           startDayOfWeek: options.startDayOfWeek,
+          startDate: options.startDate ?? null,
           lastLessonDate,
         });
 
@@ -123,6 +125,7 @@ export async function loadCohortLessonProgressMap(
     courseId: string;
     weeklySessionStart: string | null;
     startDayOfWeek: string | null;
+    startDate?: string | null;
   }>
 ): Promise<Map<string, CohortLessonProgress>> {
   const result = new Map<string, CohortLessonProgress>();
@@ -141,6 +144,7 @@ export async function loadCohortLessonProgressMap(
       courseId: cohort.courseId,
       weeklySessionStart: cohort.weeklySessionStart,
       startDayOfWeek: cohort.startDayOfWeek,
+      startDate: cohort.startDate ?? null,
       entries: entriesByCohort.get(cohort.id) ?? [],
       totalLessons: totals.get(cohort.courseId) ?? 0,
     });

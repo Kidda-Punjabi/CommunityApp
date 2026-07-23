@@ -678,6 +678,7 @@ export async function loadAdminPackagesList(
       courseId: cohort.course_id,
       weeklySessionStart: cohort.weekly_session_start ?? null,
       startDayOfWeek: cohort.start_day_of_week ?? null,
+      startDate: cohort.start_date ?? null,
     }))
   );
 
