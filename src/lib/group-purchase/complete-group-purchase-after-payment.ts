@@ -105,18 +105,27 @@ export async function completeGroupPurchaseAfterPayment(
     });
   }
 
-  // Enrollment already done (e.g. reconcile after RPC fix) — still retry Notion
+  // Enrollment already on THIS cohort (e.g. reconcile after RPC fix) — still retry Notion
   // Confirmed write-back when a prior attempt left open attention (e.g. no_lead race).
+  // Do NOT skip when the package is confirmed on a *different* cohort (re-test / switch).
   if (studentPackage.enrollment_id && studentPackage.status === "confirmed") {
-    const needsWriteBackRetry = await hasOpenCohortWriteBackAttention(
-      supabase,
-      params.userId,
-      cohortId
-    );
-    if (needsWriteBackRetry) {
-      await writeBackNotionConfirmed({ suppressDuplicateAttention: true });
+    const { data: existingEnrollment } = await supabase
+      .from("course_enrollments")
+      .select("cohort_id")
+      .eq("id", studentPackage.enrollment_id)
+      .maybeSingle();
+
+    if (existingEnrollment?.cohort_id === cohortId) {
+      const needsWriteBackRetry = await hasOpenCohortWriteBackAttention(
+        supabase,
+        params.userId,
+        cohortId
+      );
+      if (needsWriteBackRetry) {
+        await writeBackNotionConfirmed({ suppressDuplicateAttention: true });
+      }
+      return { completed: true };
     }
-    return { completed: true };
   }
 
   const { data: hold, error: holdError } = await supabase

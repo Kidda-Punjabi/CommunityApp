@@ -1,5 +1,9 @@
 -- Atomic core steps for group checkout completion (member → enrollment → package → hold → checklist).
 -- Side effects (Google Calendar, Notion, notifications) stay in app code after RPC succeeds.
+--
+-- Idempotent only when the student is already placed on the *same* cohort as this checkout.
+-- A confirmed package still enrolled on a different cohort (e.g. prior test purchase) must
+-- re-run placement so the new cohort_id / hold / membership take effect.
 
 CREATE OR REPLACE FUNCTION public.complete_group_purchase_core(
   p_user_id uuid,
@@ -23,6 +27,7 @@ DECLARE
   v_cohort public.cohorts%ROWTYPE;
   v_enrollment_id uuid;
   v_checklist_id uuid;
+  v_existing_cohort_id uuid;
 BEGIN
   SELECT sp.*
   INTO v_sp
@@ -48,14 +53,21 @@ BEGIN
   END IF;
 
   IF v_sp.status = 'confirmed' AND v_sp.enrollment_id IS NOT NULL THEN
-    RETURN jsonb_build_object(
-      'ok',
-      true,
-      'already_completed',
-      true,
-      'enrollment_id',
-      v_sp.enrollment_id
-    );
+    SELECT ce.cohort_id
+    INTO v_existing_cohort_id
+    FROM public.course_enrollments ce
+    WHERE ce.id = v_sp.enrollment_id;
+
+    IF v_existing_cohort_id IS NOT DISTINCT FROM p_cohort_id THEN
+      RETURN jsonb_build_object(
+        'ok',
+        true,
+        'already_completed',
+        true,
+        'enrollment_id',
+        v_sp.enrollment_id
+      );
+    END IF;
   END IF;
 
   SELECT *
@@ -78,6 +90,16 @@ BEGIN
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'error', 'Cohort not found.');
   END IF;
+
+  -- Leave any other active memberships on this course before joining the new cohort.
+  UPDATE public.cohort_members cm
+  SET left_at = COALESCE(cm.left_at, p_purchased_at)
+  FROM public.cohorts c
+  WHERE cm.user_id = p_user_id
+    AND cm.cohort_id <> p_cohort_id
+    AND cm.left_at IS NULL
+    AND c.id = cm.cohort_id
+    AND c.course_id = v_cohort.course_id;
 
   INSERT INTO public.cohort_members (cohort_id, user_id, joined_at, left_at)
   VALUES (p_cohort_id, p_user_id, p_purchased_at, NULL)
@@ -178,6 +200,8 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.complete_group_purchase_core IS
-  'Single-transaction group purchase placement: cohort member, enrollment, confirmed package, hold consumption, onboarding flags.';
+  'Single-transaction group purchase placement: cohort member, enrollment, confirmed package, hold consumption, onboarding flags. Idempotent only for the same cohort.';
 
 GRANT EXECUTE ON FUNCTION public.complete_group_purchase_core TO service_role;
+
+NOTIFY pgrst, 'reload schema';
