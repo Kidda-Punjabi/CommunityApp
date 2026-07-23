@@ -93,31 +93,13 @@ export async function resolveStudentBookingTutor(
     }
   }
 
+  // Prefer a bookable 1-1-style enrollment tutor. If none of those tutors offer slots
+  // (e.g. leftover test enrollment), fall through to the sole system bookable tutor.
   for (const { enrollment } of oneToOneCandidates) {
     const tutorId = enrollment.tutor_id!;
     const { bookable } = await tutorIsBookable(supabase, tutorId);
-    if (bookable) {
-      const { data: tutorProfile } = await supabase
-        .from("profiles")
-        .select("full_name, preferred_name")
-        .eq("id", tutorId)
-        .maybeSingle();
+    if (!bookable) continue;
 
-      return {
-        tutorId,
-        tutorName: tutorProfile ? (getDisplayName(tutorProfile) ?? "Your tutor") : "Your tutor",
-        enrollmentId: enrollment.id,
-        courseId: enrollment.course_id,
-        bookingEnabled: true,
-        hasAvailabilityWindows: true,
-      };
-    }
-  }
-
-  if (oneToOneCandidates.length > 0) {
-    const { enrollment } = oneToOneCandidates[0]!;
-    const tutorId = enrollment.tutor_id!;
-    const { bookable } = await tutorIsBookable(supabase, tutorId);
     const { data: tutorProfile } = await supabase
       .from("profiles")
       .select("full_name, preferred_name")
@@ -129,12 +111,12 @@ export async function resolveStudentBookingTutor(
       tutorName: tutorProfile ? (getDisplayName(tutorProfile) ?? "Your tutor") : "Your tutor",
       enrollmentId: enrollment.id,
       courseId: enrollment.course_id,
-      bookingEnabled: bookable,
-      hasAvailabilityWindows: bookable,
+      bookingEnabled: true,
+      hasAvailabilityWindows: true,
     };
   }
 
-  // No 1-1-style enrollment: if exactly one bookable tutor in the system, use them.
+  // No usable 1-1-style enrollment tutor: if exactly one bookable tutor in the system, use them.
   const { data: enabledSettings } = await supabase
     .from("tutor_availability_settings")
     .select("tutor_id")
