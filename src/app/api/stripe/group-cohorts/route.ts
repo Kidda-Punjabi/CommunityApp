@@ -11,6 +11,9 @@ import { createClient } from "@/lib/supabase/server";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
 
+/** Checkout refresh must not be killed mid-Notion sync (stale notion_synced_at). */
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const checkoutKey = searchParams.get("checkoutKey")?.trim() ?? "";
@@ -51,7 +54,11 @@ export async function GET(request: Request) {
   const service = tryCreateServiceRoleClient();
   if (service.client) {
     try {
-      const { errors } = await syncGroupCohortsForCourseFromNotion(service.client, pkg.course_id);
+      // Skip per-lead roster fetches — those made this path ~2min and left the
+      // picker stuck on stale notion_synced_at after serverless timeouts / 429s.
+      const { errors } = await syncGroupCohortsForCourseFromNotion(service.client, pkg.course_id, {
+        syncRoster: false,
+      });
       if (errors.length > 0) {
         syncWarning = errors.slice(0, 3).join(" ");
       }

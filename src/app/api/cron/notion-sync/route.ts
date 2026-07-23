@@ -42,9 +42,13 @@ export async function GET(request: Request) {
   const fullLeadsCacheSync = url.searchParams.get("fullLeadsCacheSync") === "1";
   const fullLessonLogSync = url.searchParams.get("fullLessonLogSync") === "1";
 
-  const [packages, groupCohorts, leadsCache, salesCalls, lessonLog] = await Promise.all([
-    pullPackageInstancesFromNotion(client),
-    syncAllGroupCohortsFromNotion(client),
+  // Run package/cohort pulls sequentially first — parallel Notion crawls with the
+  // Lessons Log job were competing for the same rate limit and leaving cohort
+  // notion_synced_at stale for days (checkout freshness gate then hides them).
+  const packages = await pullPackageInstancesFromNotion(client);
+  const groupCohorts = await syncAllGroupCohortsFromNotion(client);
+
+  const [leadsCache, salesCalls, lessonLog] = await Promise.all([
     upsertNotionLeadsCache(client, { fullSync: fullLeadsCacheSync }),
     pullSalesCallsFromNotion(client, { fullSync: fullSalesCallSync }),
     pullLessonLogFromNotion(client, { fullSync: fullLessonLogSync }).catch((error) => ({

@@ -773,16 +773,30 @@ async function findCohortForNotionImport(
   return byName?.id ?? null;
 }
 
+export type CreateOrUpdateCohortFromNotionOptions = {
+  /**
+   * Full roster sync fetches every Interested/Waiting/Confirmed lead page from Notion.
+   * Checkout only needs status + confirmed counts — skip lead fetches there.
+   */
+  syncRoster?: boolean;
+  tutorMapByNotionUserId?: Map<string, { tutorId: string; notionUserName: string | null }>;
+  notionColumnsAvailable?: boolean;
+};
+
 export async function createOrUpdateCohortFromNotionPage(
   supabase: SupabaseClient,
   page: ParsedNotionPackagePage,
-  link: ResolvedNotionSyncTarget
+  link: ResolvedNotionSyncTarget,
+  options?: CreateOrUpdateCohortFromNotionOptions
 ): Promise<{ ok: boolean; cohortId?: string; error?: string }> {
-  const status = page.status ?? "pre_scheduling";
-  const { byNotionUserId } = await loadNotionTutorMap(supabase);
+  const syncRoster = options?.syncRoster !== false;
+  const byNotionUserId =
+    options?.tutorMapByNotionUserId ?? (await loadNotionTutorMap(supabase)).byNotionUserId;
   const cohortName = link.cohortName ?? cohortDisplayNameFromNotionPage(page);
   const startDay = readNotionStartDayOfWeek(page);
-  const notionColumns = await cohortNotionColumnsAvailable(supabase);
+  const notionColumns =
+    options?.notionColumnsAvailable ?? (await cohortNotionColumnsAvailable(supabase));
+  const status = page.status ?? "pre_scheduling";
 
   const existingId = await findCohortForNotionImport(supabase, page, link.courseId, cohortName);
   let cohortId = existingId;
@@ -845,18 +859,20 @@ export async function createOrUpdateCohortFromNotionPage(
     cohortId = cohort.id;
   }
 
-  const rosterResult = await syncCohortRosterFromNotion(
-    supabase,
-    cohortId!,
-    page.rawProperties,
-    page.pageId
-  );
-  if (rosterResult.error) {
-    return {
-      ok: false,
-      error: `Cohort saved but roster sync failed: ${rosterResult.error}`,
-      cohortId: cohortId ?? undefined,
-    };
+  if (syncRoster) {
+    const rosterResult = await syncCohortRosterFromNotion(
+      supabase,
+      cohortId!,
+      page.rawProperties,
+      page.pageId
+    );
+    if (rosterResult.error) {
+      return {
+        ok: false,
+        error: `Cohort saved but roster sync failed: ${rosterResult.error}`,
+        cohortId: cohortId ?? undefined,
+      };
+    }
   }
 
   await saveCohortNotionLink(supabase, page.pageId, cohortId!, {

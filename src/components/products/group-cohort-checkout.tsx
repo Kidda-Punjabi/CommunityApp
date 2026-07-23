@@ -64,12 +64,16 @@ export function GroupCohortCheckout({
         const data = (await res.json()) as {
           cohorts?: CohortOption[];
           checkingAvailability?: Array<{ id: string; name: string }>;
+          syncWarning?: string | null;
           error?: string;
         };
         if (!res.ok) throw new Error(data.error ?? "Could not load cohorts.");
         if (!cancelled) {
           setCohorts(data.cohorts ?? []);
           setCheckingAvailability(data.checkingAvailability ?? []);
+          if (data.syncWarning && (data.cohorts ?? []).length === 0) {
+            setLoadError(data.syncWarning);
+          }
           if ((data.cohorts ?? []).length === 1) {
             setSelectedCohortId(data.cohorts![0].id);
           }

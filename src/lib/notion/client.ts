@@ -54,12 +54,31 @@ export async function notionFetch(path: string, init?: RequestInit): Promise<Res
 }
 
 export async function notionJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await notionFetch(path, init);
-  const body = await response.text();
-  if (!response.ok) {
-    throw new NotionApiError(response.status, body);
+  const maxAttempts = 4;
+  let lastError: NotionApiError | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await notionFetch(path, init);
+    const body = await response.text();
+    if (response.ok) {
+      return JSON.parse(body) as T;
+    }
+
+    lastError = new NotionApiError(response.status, body);
+    const retryable = response.status === 429 || response.status >= 500;
+    if (!retryable || attempt === maxAttempts) {
+      throw lastError;
+    }
+
+    const retryAfterHeader = response.headers.get("retry-after");
+    const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : NaN;
+    const backoffMs = Number.isFinite(retryAfterMs)
+      ? Math.max(retryAfterMs, 250)
+      : 400 * 2 ** (attempt - 1);
+    await new Promise((resolve) => setTimeout(resolve, backoffMs));
   }
-  return JSON.parse(body) as T;
+
+  throw lastError ?? new NotionApiError(500, "Notion request failed.");
 }
 
 export function plainTextFromRichText(
