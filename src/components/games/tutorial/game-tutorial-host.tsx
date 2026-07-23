@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useState } from "react";
 import { GameTutorialHelpButton } from "@/components/games/tutorial/game-tutorial-help-button";
 import { GameTutorialOverlay } from "@/components/games/tutorial/game-tutorial-overlay";
 import { useGameTutorial } from "@/components/games/tutorial/use-game-tutorial";
@@ -13,7 +13,7 @@ type GameTutorialHostProps = {
 };
 
 /**
- * Drop-in first-play tutorial + help button for a game start screen.
+ * Drop-in first-play tutorial + help button for a game start screen / lobby.
  * Auto-opens once per tutorialId until the player opts out via "Don't show again".
  */
 export function GameTutorialHost({
@@ -22,7 +22,7 @@ export function GameTutorialHost({
   helpClassName = "",
 }: GameTutorialHostProps) {
   const { content, isOpen, open, close } = useGameTutorial(tutorialId);
-  const openedFromHelpRef = useRef(false);
+  const [preferDontShowAgain, setPreferDontShowAgain] = useState(true);
 
   if (!content) return null;
 
@@ -31,17 +31,17 @@ export function GameTutorialHost({
       <GameTutorialHelpButton
         className={helpClassName}
         onClick={() => {
-          openedFromHelpRef.current = true;
+          setPreferDontShowAgain(false);
           open();
         }}
       />
       <GameTutorialOverlay
         content={content}
         open={isOpen}
-        preferDontShowAgain={!openedFromHelpRef.current}
+        preferDontShowAgain={preferDontShowAgain}
         onClose={(options) => {
           close(options);
-          openedFromHelpRef.current = false;
+          setPreferDontShowAgain(true);
         }}
       />
     </div>
