@@ -346,7 +346,7 @@ export async function createOneToOneBooking(
       studentEmail,
       startsAt,
       endsAt,
-      courseId: context.courseId,
+      courseId: (credit.course_id as string | null) ?? context.courseId,
       title: lessonTitle,
       notes,
       timeZone: context.settings.timezone,
