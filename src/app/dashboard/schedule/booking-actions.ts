@@ -25,7 +25,8 @@ export async function syncBookingPayment(sessionId: string): Promise<BookingActi
     if (!result.granted) {
       return { error: "Payment not completed yet. Refresh in a moment if you just paid." };
     }
-    revalidatePath("/dashboard/schedule");
+    // Do not revalidatePath here — this runs during /dashboard/schedule render
+    // after Stripe redirects with ?session_id=. The page already loads fresh data.
     if (result.bookingConfirmed) {
       return {
         success: result.meetLink
