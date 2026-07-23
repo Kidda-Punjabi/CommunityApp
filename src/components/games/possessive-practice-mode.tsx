@@ -227,6 +227,7 @@ export function PossessivePracticeMode({
           ) : undefined
         }
         onStart={startRound}
+        tutorialId="possessive_practice"
       />
     );
   }
@@ -313,7 +314,9 @@ export function PossessivePracticeMode({
               className={className}
             >
               <span className="font-semibold text-zinc-900">{option.gurmukhi}</span>
-              <span className="text-sm text-violet-600">{option.romanised}</span>
+              <span className="text-sm text-violet-600">
+                {latinRomanised(option.romanised) ?? option.romanised}
+              </span>
               <span className="text-sm text-zinc-500">{option.english}</span>
             </button>
           );

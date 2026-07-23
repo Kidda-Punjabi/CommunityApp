@@ -12,6 +12,7 @@ import {
   SLOW_SPEECH_RATE,
   useSpeechPlaybackRate,
 } from "@/lib/audio/speech-playback";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 
 type ComprehensionScriptViewerProps = {
   title: string;
@@ -260,7 +261,7 @@ export function ComprehensionScriptViewer({
                 ) : null}
                 {preferences.showRomanised ? (
                   <p className="text-sm leading-relaxed text-violet-600">
-                    {sentence.romanised_text}
+                    {latinRomanised(sentence.romanised_text) ?? sentence.romanised_text}
                   </p>
                 ) : null}
                 {sentence.english_translation &&

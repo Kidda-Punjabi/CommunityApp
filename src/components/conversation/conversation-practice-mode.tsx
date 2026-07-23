@@ -9,6 +9,7 @@ import {
 import { ConversationDisplaySettings } from "@/components/conversation/conversation-display-settings";
 import { getConversationCharacterEmoji } from "@/components/conversation/conversation-bubble";
 import { GameSessionReview } from "@/components/games/game-session-review";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
 import {
@@ -56,6 +57,7 @@ import {
 } from "@/lib/conversation/transcript";
 import { createClient } from "@/lib/supabase/client";
 import { useSpeechPlaybackRate } from "@/lib/audio/speech-playback";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 
 const FEEDBACK_MS = 900;
 
@@ -468,8 +470,10 @@ export function ConversationPracticeMode({
                     className="rounded-xl border border-zinc-200 bg-white px-3 py-3 text-left text-sm font-medium text-zinc-900 hover:border-violet-300"
                   >
                     {option.gurmukhi}
-                    {option.romanised ? (
-                      <span className="mt-0.5 block text-xs text-violet-600">{option.romanised}</span>
+                    {latinRomanised(option.romanised) ? (
+                      <span className="mt-0.5 block text-xs text-violet-600">
+                        {latinRomanised(option.romanised)}
+                      </span>
                     ) : null}
                   </button>
                 ))}
@@ -488,8 +492,8 @@ export function ConversationPracticeMode({
                 className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left hover:border-violet-300"
               >
                 <p className="font-medium text-zinc-900">{option.gurmukhi}</p>
-                {option.romanised ? (
-                  <p className="text-sm text-violet-600">{option.romanised}</p>
+                {latinRomanised(option.romanised) ? (
+                  <p className="text-sm text-violet-600">{latinRomanised(option.romanised)}</p>
                 ) : null}
               </button>
             ))}
@@ -515,9 +519,9 @@ export function ConversationPracticeMode({
                         className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
                       >
                         <span>{tile.gurmukhi}</span>
-                        {tile.romanised ? (
+                        {latinRomanised(tile.romanised) ? (
                           <span className="mt-0.5 block text-xs font-normal text-violet-200">
-                            {tile.romanised}
+                            {latinRomanised(tile.romanised)}
                           </span>
                         ) : null}
                       </span>
@@ -531,9 +535,9 @@ export function ConversationPracticeMode({
                         className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-80"
                       >
                         <span>{tile.word}</span>
-                        {tile.romanised ? (
+                        {latinRomanised(tile.romanised) ? (
                           <span className="mt-0.5 block text-xs font-normal text-violet-200">
-                            {tile.romanised}
+                            {latinRomanised(tile.romanised)}
                           </span>
                         ) : null}
                       </button>
@@ -552,9 +556,9 @@ export function ConversationPracticeMode({
                       className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300"
                     >
                       <span>{tile.word}</span>
-                      {tile.romanised ? (
+                      {latinRomanised(tile.romanised) ? (
                         <span className="mt-0.5 block text-xs font-normal text-violet-600">
-                          {tile.romanised}
+                          {latinRomanised(tile.romanised)}
                         </span>
                       ) : null}
                     </button>
@@ -587,8 +591,10 @@ export function ConversationPracticeMode({
                 {currentExchange.target_response_gurmukhi}
               </p>
             )}
-            {!lastCorrect && currentExchange.target_response_romanised ? (
-              <p className="text-violet-600">{currentExchange.target_response_romanised}</p>
+            {!lastCorrect && latinRomanised(currentExchange.target_response_romanised) ? (
+              <p className="text-violet-600">
+                {latinRomanised(currentExchange.target_response_romanised)}
+              </p>
             ) : null}
           </div>
         )}
@@ -776,18 +782,21 @@ function SetupHeader({
 }) {
   return (
     <div>
-      <div className="flex items-center gap-3">
-        {setupPhase !== "characters" ? (
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            ← Back
-          </button>
-        ) : (
-          <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
-        )}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {setupPhase !== "characters" ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="text-sm font-medium text-violet-600 hover:text-violet-500"
+            >
+              ← Back
+            </button>
+          ) : (
+            <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
+          )}
+        </div>
+        <GameTutorialHost tutorialId="conversation_practice" />
       </div>
       <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
         {CONVERSATION_PRACTICE_DISPLAY_NAME}

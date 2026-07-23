@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { BackLink } from "@/components/navigation/back-link";
 import { useMemo, useState } from "react";
 import { GrammarTenseFilterPicker } from "@/components/games/grammar-tense-filter-picker";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import {
   isMixedFilter,
@@ -12,6 +12,7 @@ import {
   type GameSessionSettingsChoice,
   type QuestionCount,
 } from "@/lib/games/session-settings";
+import type { TutorialId } from "@/lib/games/tutorials/types";
 import { ui } from "@/lib/ui/styles";
 
 export type SessionFilterOption = {
@@ -37,6 +38,8 @@ type GameSessionSettingsProps = {
   extraSettings?: React.ReactNode;
   onStart: (choice: GameSessionSettingsChoice) => void;
   gamesHubHref?: string;
+  /** When set, shows first-play tutorial + help button on this start screen. */
+  tutorialId?: TutorialId;
 };
 
 export function GameSessionSettings({
@@ -54,6 +57,7 @@ export function GameSessionSettings({
   extraSettings,
   onStart,
   gamesHubHref = GAMES_HUB_HREF,
+  tutorialId,
 }: GameSessionSettingsProps) {
   const [questionCount, setQuestionCount] = useState<QuestionCount>(10);
   const [isMixed, setIsMixed] = useState(true);
@@ -85,7 +89,10 @@ export function GameSessionSettings({
   return (
     <div className="space-y-6">
       <div>
-        <BackLink fallbackHref={gamesHubHref}>← Back</BackLink>
+        <div className="flex items-start justify-between gap-3">
+          <BackLink fallbackHref={gamesHubHref}>← Back</BackLink>
+          {tutorialId ? <GameTutorialHost tutorialId={tutorialId} /> : null}
+        </div>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
           {gameEyebrow ?? gameTitle}
         </p>

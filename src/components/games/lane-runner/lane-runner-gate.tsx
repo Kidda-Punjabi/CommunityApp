@@ -12,6 +12,7 @@ import {
   laneY,
 } from "@/lib/games/lane-runner/config";
 import type { LaneIndex, LaneRunnerGate } from "@/lib/games/lane-runner/types";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 
 type LaneRunnerGateViewProps = {
   gate: LaneRunnerGate;
@@ -62,9 +63,11 @@ function GateTile({
     >
       <div className="flex min-h-[5rem] flex-col items-center justify-center rounded-xl border border-zinc-200 bg-white px-2 py-3 text-center shadow-sm">
         <p className="text-base font-semibold leading-snug text-zinc-900 sm:text-lg">{gurmukhi}</p>
-        <p className="mt-1.5 text-xs font-medium leading-snug text-violet-600 sm:text-sm">
-          {romanised}
-        </p>
+        {latinRomanised(romanised) ? (
+          <p className="mt-1.5 text-xs font-medium leading-snug text-violet-600 sm:text-sm">
+            {latinRomanised(romanised)}
+          </p>
+        ) : null}
       </div>
     </div>
   );

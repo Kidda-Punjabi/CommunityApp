@@ -13,6 +13,7 @@ export type PictureMatchCard = {
   romanised: string | null;
   icon_name: string;
   difficulty: number;
+  audioUrl?: string | null;
 };
 
 export type PictureMatchFlashcardRow = {

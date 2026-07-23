@@ -28,6 +28,7 @@ import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
 import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
 import { ui } from "@/lib/ui/styles";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
 import { SessionProgressBar } from "@/components/session-progress-bar";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
@@ -259,6 +260,7 @@ export function SentenceBuilderMode({
           ) : undefined
         }
         onStart={startRound}
+        tutorialId="sentence_builder"
       />
     );
   }
@@ -336,11 +338,11 @@ export function SentenceBuilderMode({
               className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-80"
             >
               <span>{tile.word}</span>
-              {tile.romanised && (
+              {latinRomanised(tile.romanised) ? (
                 <span className="mt-0.5 block text-xs font-normal text-violet-200">
-                  {tile.romanised}
+                  {latinRomanised(tile.romanised)}
                 </span>
-              )}
+              ) : null}
             </button>
           ))}
         </div>
@@ -351,9 +353,9 @@ export function SentenceBuilderMode({
           <p className="text-sm font-medium text-zinc-900">
             {current.correctTiles.join(" ")}
           </p>
-          {current.romanised && (
-            <p className="text-sm text-violet-600">{current.romanised}</p>
-          )}
+          {latinRomanised(current.romanised) ? (
+            <p className="text-sm text-violet-600">{latinRomanised(current.romanised)}</p>
+          ) : null}
         </div>
       )}
 
@@ -377,11 +379,11 @@ export function SentenceBuilderMode({
             className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300 disabled:opacity-70"
           >
             <span>{tile.word}</span>
-            {tile.romanised && (
+            {latinRomanised(tile.romanised) ? (
               <span className="mt-0.5 block text-xs font-normal text-violet-600">
-                {tile.romanised}
+                {latinRomanised(tile.romanised)}
               </span>
-            )}
+            ) : null}
           </button>
         ))}
       </div>

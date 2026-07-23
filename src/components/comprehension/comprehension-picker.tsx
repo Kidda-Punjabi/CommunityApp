@@ -1,6 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/navigation/back-link";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import {
   learnerScriptsByTier,
   learnerTierCounts,
@@ -30,12 +31,15 @@ export function ComprehensionTierPicker({ scripts, onSelectTier }: Comprehension
   return (
     <div className="space-y-6">
       <div>
-        <BackLink
-          fallbackHref={GAMES_HUB_HREF}
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to games
-        </BackLink>
+        <div className="flex items-start justify-between gap-3">
+          <BackLink
+            fallbackHref={GAMES_HUB_HREF}
+            className="text-sm font-medium text-violet-600 hover:text-violet-500"
+          >
+            ← Back to games
+          </BackLink>
+          <GameTutorialHost tutorialId="comprehension_practice" />
+        </div>
         <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
           {COMPREHENSION_PRACTICE_DISPLAY_NAME}
         </p>

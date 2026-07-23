@@ -9,6 +9,7 @@ import { GameSessionSettings } from "@/components/games/game-session-settings";
 import { SessionProgressBar } from "@/components/session-progress-bar";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { formatPunjabiForDisplay } from "@/lib/conjugation/format";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { saveGameScore } from "@/lib/games/game-scores";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
@@ -383,6 +384,7 @@ export function SpeakingPracticeMode({
           ) : undefined
         }
         onStart={startRound}
+        tutorialId="speaking_practice"
       />
     );
   }
@@ -443,7 +445,9 @@ export function SpeakingPracticeMode({
         </p>
         <p className="mt-3 text-base font-medium text-zinc-700">{current?.english}</p>
         <p className="mt-4 text-2xl font-semibold leading-relaxed text-zinc-900">{punjabiDisplay}</p>
-        <p className="mt-2 text-sm text-violet-600">{current?.romanised}</p>
+        <p className="mt-2 text-sm text-violet-600">
+          {latinRomanised(current?.romanised) ?? current?.romanised}
+        </p>
       </div>
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-sm">
@@ -464,7 +468,9 @@ export function SpeakingPracticeMode({
         ) : feedback === "failed" ? (
           <div className="space-y-2">
             <p className="text-lg font-semibold text-zinc-900">Target pronunciation</p>
-            <p className="text-xl font-medium text-violet-700">{current?.romanised}</p>
+            <p className="text-xl font-medium text-violet-700">
+              {latinRomanised(current?.romanised) ?? current?.romanised}
+            </p>
             {lastTranscript ? (
               <p className="text-sm text-zinc-500">
                 Best match: {bestSimilarity}% · heard &ldquo;{lastTranscript}&rdquo;

@@ -28,6 +28,7 @@ import type {
   SpotTheMistakeQuestionResult,
 } from "@/lib/spot-the-mistake/types";
 import { createClient } from "@/lib/supabase/client";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 
 const ADVANCE_MS = 1400;
 
@@ -248,6 +249,7 @@ export function SpotTheMistakeMode({
           ) : undefined
         }
         onStart={startRound}
+        tutorialId="spot_the_mistake"
       />
     );
   }
@@ -269,8 +271,9 @@ export function SpotTheMistakeMode({
   const activeTokens =
     questionStep === "revealed" ? current.correctedTokens : current.tokens;
 
-  const activeRomanised =
-    questionStep === "revealed" ? current.correctedRomanised : current.brokenRomanised;
+  const activeRomanised = latinRomanised(
+    questionStep === "revealed" ? current.correctedRomanised : current.brokenRomanised
+  );
 
   return (
     <div className="relative space-y-4">
@@ -322,8 +325,10 @@ export function SpotTheMistakeMode({
                 className={className}
               >
                 <span className="block text-base font-semibold text-zinc-900">{token.gurmukhi}</span>
-                {token.romanised ? (
-                  <span className="block text-xs text-violet-600">{token.romanised}</span>
+                {latinRomanised(token.romanised) ? (
+                  <span className="block text-xs text-violet-600">
+                    {latinRomanised(token.romanised)}
+                  </span>
                 ) : null}
               </button>
             );
@@ -389,7 +394,9 @@ export function SpotTheMistakeMode({
                   className={className}
                 >
                   <span className="font-semibold text-zinc-900">{option.gurmukhi}</span>
-                  <span className="block text-sm text-violet-600">{option.romanised}</span>
+                  <span className="block text-sm text-violet-600">
+                    {latinRomanised(option.romanised) ?? option.romanised}
+                  </span>
                 </button>
               );
             })}

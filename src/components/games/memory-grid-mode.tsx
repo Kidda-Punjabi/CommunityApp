@@ -2,6 +2,7 @@
 
 import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { BackLink } from "@/components/navigation/back-link";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
@@ -202,7 +203,10 @@ export function MemoryGridMode({
     return (
       <div className="space-y-6">
         <div>
-          <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to decks</BackLink>
+          <div className="flex items-start justify-between gap-3">
+            <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to decks</BackLink>
+            <GameTutorialHost tutorialId="memory_grid" />
+          </div>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Memory Grid · {deck.deckName}
           </p>

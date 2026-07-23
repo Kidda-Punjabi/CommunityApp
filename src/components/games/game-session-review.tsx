@@ -13,6 +13,7 @@ import {
   type RoundResult,
 } from "@/lib/games/session-review";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 
 type GameSessionReviewProps = {
   title: string;
@@ -37,6 +38,7 @@ function PromptLines({
   promptRomanised?: string;
   className?: string;
 }) {
+  const latin = latinRomanised(promptRomanised);
   return (
     <div className={className}>
       <EnglishWithGenderMarkers
@@ -44,8 +46,8 @@ function PromptLines({
         text={prompt}
         className="font-medium text-zinc-900"
       />
-      {promptRomanised ? (
-        <p className="mt-0.5 text-sm text-violet-600">{promptRomanised}</p>
+      {latin ? (
+        <p className="mt-0.5 text-sm text-violet-600">{latin}</p>
       ) : null}
     </div>
   );
@@ -62,6 +64,7 @@ function AnswerLines({
   romanised?: string;
   tone?: "neutral" | "wrong" | "correct";
 }) {
+  const latin = latinRomanised(romanised);
   const labelClass =
     tone === "wrong"
       ? "text-red-700"
@@ -81,7 +84,7 @@ function AnswerLines({
         {label}
       </p>
       <p className={`mt-0.5 text-sm font-medium ${textClass}`}>{gurmukhi}</p>
-      {romanised ? (
+      {latin ? (
         <p
           className={`text-sm ${
             tone === "wrong"
@@ -91,7 +94,7 @@ function AnswerLines({
                 : "text-violet-600"
           }`}
         >
-          {romanised}
+          {latin}
         </p>
       ) : null}
     </div>

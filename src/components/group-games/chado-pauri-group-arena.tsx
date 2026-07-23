@@ -11,6 +11,7 @@ import { AskRoomAudienceChart } from "@/components/group-games/ask-room-audience
 import { ChadoPauriGroupOptionLabel } from "@/components/group-games/chado-pauri-group-option-label";
 import { ChadoPauriGroupPlayerChips } from "@/components/group-games/chado-pauri-group-player-chips";
 import { ChadoPauriLadder } from "@/components/games/chado-pauri-ladder";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { GroupGameLeaderboard } from "@/components/group-games/group-game-leaderboard";
 import { useLadderRealtime } from "@/hooks/use-ladder-realtime";
 import {
@@ -268,16 +269,19 @@ export function ChadoPauriGroupArena({
           room after today&apos;s update.
         </p>
       ) : null}
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600">
-          Chado Pauri — Group
-        </p>
-        <h1 className="text-base font-bold leading-snug text-zinc-900">
-          {hotSeatPlayerId
-            ? `${playerName(hotSeatPlayerId)} is in the hot seat`
-            : "Waiting for the next player…"}
-          {isHotSeat ? " (you)" : ""}
-        </h1>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600">
+            Chado Pauri — Group
+          </p>
+          <h1 className="text-base font-bold leading-snug text-zinc-900">
+            {hotSeatPlayerId
+              ? `${playerName(hotSeatPlayerId)} is in the hot seat`
+              : "Waiting for the next player…"}
+            {isHotSeat ? " (you)" : ""}
+          </h1>
+        </div>
+        <GameTutorialHost tutorialId="chado_pauri_group" />
       </div>
 
       <ChadoPauriGroupPlayerChips

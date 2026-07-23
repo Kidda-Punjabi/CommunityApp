@@ -30,6 +30,7 @@ import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-
 import { SessionProgressBar } from "@/components/session-progress-bar";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
 import type { ChallengePlayContext } from "@/lib/challenges/types";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 import { ui } from "@/lib/ui/styles";
 
 const BASE_POINTS = 10;
@@ -65,7 +66,7 @@ function NounPromptDisplay({
   romanised: string | null;
   english: string;
 }) {
-  const latin = romanised?.trim();
+  const latin = latinRomanised(romanised);
 
   return (
     <div className="space-y-1.5 text-center">
@@ -89,7 +90,7 @@ function PunjabiOptionLabel({
   label?: string;
   centered?: boolean;
 }) {
-  const latin = romanised.trim();
+  const latin = latinRomanised(romanised);
 
   return (
     <span className={centered ? "flex w-full flex-col items-center text-center" : "block"}>
@@ -390,6 +391,7 @@ export function GenderSortMode({
         }
         onStart={startGame}
         gamesHubHref={gamesHubHref}
+        tutorialId="gender_sort"
       />
     );
   }

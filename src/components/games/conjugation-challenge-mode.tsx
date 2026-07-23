@@ -31,6 +31,7 @@ import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-
 import { SessionProgressBar } from "@/components/session-progress-bar";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
 import type { ChallengePlayContext } from "@/lib/challenges/types";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 const FEEDBACK_MS = 1000;
 
 type Phase = "setup" | "playing" | "finished";
@@ -59,11 +60,12 @@ function PunjabiWithRomanised({
   punjabiClassName?: string;
   romanisedClassName?: string;
 }) {
+  const latin = latinRomanised(romanised);
   return (
     <span className="flex w-full flex-col items-center text-center gap-0.5">
       <span className={`${textClassName} ${punjabiClassName}`}>{punjabi}</span>
-      {romanised ? (
-        <span className={`${textClassName} ${romanisedClassName}`}>{romanised}</span>
+      {latin ? (
+        <span className={`${textClassName} ${romanisedClassName}`}>{latin}</span>
       ) : null}
     </span>
   );
@@ -322,6 +324,7 @@ export function ConjugationChallengeMode({
           ) : undefined
         }
         onStart={startRound}
+        tutorialId="conjugation_challenge"
       />
     );
   }

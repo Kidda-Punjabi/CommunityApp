@@ -455,6 +455,7 @@ export function VoicePracticeMode({
           ) : undefined
         }
         onStart={startRound}
+        tutorialId="voice_practice"
       />
     );
   }

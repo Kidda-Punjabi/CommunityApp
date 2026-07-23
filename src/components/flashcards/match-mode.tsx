@@ -2,6 +2,7 @@
 
 import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { BackLink } from "@/components/navigation/back-link";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { useEffect, useRef, useState } from "react";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { useAudioManager } from "@/lib/audio/audio-manager";
@@ -244,7 +245,10 @@ export function FlashcardMatchMode({
     return (
       <div className="space-y-6">
         <div>
-          <BackLink fallbackHref={deckHubHref}>← Back</BackLink>
+          <div className="flex items-start justify-between gap-3">
+            <BackLink fallbackHref={deckHubHref}>← Back</BackLink>
+            <GameTutorialHost tutorialId="match" />
+          </div>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Match · {deck.deckName}
           </p>

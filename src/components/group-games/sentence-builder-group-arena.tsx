@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import { submitTilePlacementAction } from "@/app/dashboard/group-games/sentence-actions";
 import { GroupGameLeaderboard } from "@/components/group-games/group-game-leaderboard";
 import { GroupGameScoreboard } from "@/components/group-games/group-game-scoreboard";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { useSentenceBuilderRealtime } from "@/hooks/use-sentence-builder-realtime";
 import {
   availablePoolTiles,
@@ -13,6 +14,7 @@ import type { SentenceBuilderGroupState, SentenceRoundRow } from "@/lib/sentence
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
 import { createClient } from "@/lib/supabase/client";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 import { ui } from "@/lib/ui/styles";
 
 type SentenceBuilderGroupArenaProps = {
@@ -227,7 +229,10 @@ export function SentenceBuilderGroupArena({
           </p>
           <h1 className="text-lg font-bold text-zinc-900">{roundLabel}</h1>
         </div>
-        <p className="text-xs font-medium text-zinc-500">+1 per correct tile</p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs font-medium text-zinc-500">+1 per correct tile</p>
+          <GameTutorialHost tutorialId="sentence_builder_group" />
+        </div>
       </div>
 
       <GroupGameScoreboard entries={scoreboard} currentUserId={currentUserId} />
@@ -253,15 +258,20 @@ export function SentenceBuilderGroupArena({
         </div>
 
         <div className="flex min-h-[3.5rem] flex-wrap gap-2 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-3">
-          {filledSlots.map((slot) => (
-            <span
-              key={slot.tile_identifier}
-              className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
-              title={slot.romanised || undefined}
-            >
-              {slot.gurmukhi}
-            </span>
-          ))}
+          {filledSlots.map((slot) => {
+            const latin = latinRomanised(slot.romanised);
+            return (
+              <span
+                key={slot.tile_identifier}
+                className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
+              >
+                <span>{slot.gurmukhi}</span>
+                {latin ? (
+                  <span className="mt-0.5 block text-xs font-normal text-violet-200">{latin}</span>
+                ) : null}
+              </span>
+            );
+          })}
           {Array.from({ length: emptySlotCount }).map((_, index) => (
             <span
               key={`empty-${index}`}
@@ -290,20 +300,29 @@ export function SentenceBuilderGroupArena({
         <div className="flex flex-wrap gap-2">
           {poolTiles.map((tile) => {
             const disabled = !isMyTurn || pending;
+            const latin = latinRomanised(tile.romanised);
             return (
               <button
                 key={tile.tile_identifier}
                 type="button"
                 disabled={disabled}
                 onClick={() => handleTilePick(tile.tile_identifier)}
-                title={tile.romanised || undefined}
                 className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
                   disabled
                     ? "cursor-default border-zinc-200 bg-zinc-50 text-zinc-400"
                     : "border-violet-200 bg-white text-violet-800 hover:border-violet-400 hover:bg-violet-50 active:scale-95"
                 }`}
               >
-                {tile.gurmukhi}
+                <span>{tile.gurmukhi}</span>
+                {latin ? (
+                  <span
+                    className={`mt-0.5 block text-xs font-normal ${
+                      disabled ? "text-zinc-400" : "text-violet-600"
+                    }`}
+                  >
+                    {latin}
+                  </span>
+                ) : null}
               </button>
             );
           })}

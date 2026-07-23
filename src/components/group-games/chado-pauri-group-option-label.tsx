@@ -1,3 +1,5 @@
+import { latinRomanised } from "@/lib/conjugation/romanised";
+
 type ChadoPauriGroupOptionLabelProps = {
   gurmukhi: string;
   romanised: string | null;
@@ -11,6 +13,7 @@ export function ChadoPauriGroupOptionLabel({
   label,
   className = "",
 }: ChadoPauriGroupOptionLabelProps) {
+  const latin = latinRomanised(romanised);
   return (
     <span className={`block ${className}`}>
       {label ? (
@@ -19,8 +22,8 @@ export function ChadoPauriGroupOptionLabel({
         </span>
       ) : null}
       <span className="font-semibold text-zinc-900">{gurmukhi}</span>
-      {romanised ? (
-        <span className="mt-0.5 block text-sm font-normal text-violet-600">{romanised}</span>
+      {latin ? (
+        <span className="mt-0.5 block text-sm font-normal text-violet-600">{latin}</span>
       ) : null}
     </span>
   );

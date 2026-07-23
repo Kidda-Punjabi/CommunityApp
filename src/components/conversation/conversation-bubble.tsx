@@ -1,5 +1,6 @@
 import type { ConversationCharacter } from "@/lib/conversation/types";
 import type { ConversationDisplayPreferences } from "@/lib/conversation/display-preferences";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 
 const ICON_EMOJI: Record<string, string> = {
   store: "🏪",
@@ -36,7 +37,7 @@ function hasVisibleText(
   english?: string | null
 ): boolean {
   if (preferences.showGurmukhi && gurmukhi.trim()) return true;
-  if (preferences.showRomanised && romanised?.trim()) return true;
+  if (preferences.showRomanised && latinRomanised(romanised)) return true;
   if (preferences.showEnglish && english?.trim()) return true;
   return false;
 }
@@ -53,6 +54,7 @@ export function ConversationMessageBubble({
   onPlay,
 }: ConversationMessageBubbleProps) {
   const canPlay = Boolean(onPlay && audioUrl?.trim());
+  const latin = latinRomanised(romanised);
   const showText = hasVisibleText(displayPreferences, gurmukhi, romanised, english);
 
   if (role === "student") {
@@ -87,8 +89,8 @@ export function ConversationMessageBubble({
                       {gurmukhi}
                     </p>
                   ) : null}
-                  {displayPreferences.showRomanised && romanised ? (
-                    <p className="mt-1 text-sm text-violet-100">{romanised}</p>
+                  {displayPreferences.showRomanised && latin ? (
+                    <p className="mt-1 text-sm text-violet-100">{latin}</p>
                   ) : null}
                   {displayPreferences.showEnglish && english ? (
                     <p className="mt-1 text-sm text-violet-200/90">{english}</p>
@@ -161,8 +163,8 @@ export function ConversationMessageBubble({
                     {gurmukhi}
                   </p>
                 ) : null}
-                {displayPreferences.showRomanised && romanised ? (
-                  <p className="mt-1 text-sm text-violet-600">{romanised}</p>
+                {displayPreferences.showRomanised && latin ? (
+                  <p className="mt-1 text-sm text-violet-600">{latin}</p>
                 ) : null}
                 {displayPreferences.showEnglish && english ? (
                   <p className="mt-1 text-sm text-zinc-500">{english}</p>

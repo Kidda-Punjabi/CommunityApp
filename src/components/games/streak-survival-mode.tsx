@@ -1,6 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/navigation/back-link";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +16,7 @@ import {
   getConjugationForm,
 } from "@/lib/games/types";
 import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 import { saveGameScore } from "@/lib/games/game-scores";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
@@ -60,7 +62,8 @@ function buildDeckQuestion(cards: FlashcardDeckCard[]): DeckQuestion {
 
 function buildGenderQuestion(nouns: GenderedNoun[]): GenderQuestion {
   const noun = nouns[Math.floor(Math.random() * nouns.length)];
-  const romanised = noun.romanised ? ` (${noun.romanised})` : "";
+  const latin = latinRomanised(noun.romanised);
+  const romanised = latin ? ` (${latin})` : "";
   return {
     kind: "gender",
     prompt: `${noun.punjabi_word}${romanised} — ${noun.english_meaning}`,
@@ -233,7 +236,10 @@ export function StreakSurvivalMode({
     return (
       <div className="space-y-6">
         <div>
-          <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back</BackLink>
+          <div className="flex items-start justify-between gap-3">
+            <BackLink fallbackHref={backHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back</BackLink>
+            <GameTutorialHost tutorialId="streak_survival" />
+          </div>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Streak Survival · {title}
           </p>

@@ -2,6 +2,7 @@
 
 import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { BackLink } from "@/components/navigation/back-link";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { buildBackTextRomanisedMap } from "@/lib/chado-pauri-group/option-romanised";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChadoPauriLadder } from "@/components/games/chado-pauri-ladder";
@@ -242,7 +243,10 @@ export function ChadoPauriMode({
     return (
       <div className="space-y-6">
         <div>
-          <BackLink fallbackHref={GAMES_HUB_HREF}>← Back</BackLink>
+          <div className="flex items-start justify-between gap-3">
+            <BackLink fallbackHref={GAMES_HUB_HREF}>← Back</BackLink>
+            <GameTutorialHost tutorialId="chado_pauri" />
+          </div>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Solo ladder
           </p>

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { BackLink } from "@/components/navigation/back-link";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { LANE_RUNNER_DISPLAY_NAME, LANE_RUNNER_LIVES } from "@/lib/games/lane-runner/config";
 
@@ -79,7 +79,10 @@ export function LaneRunnerReadyScreen({
   return (
     <div className="space-y-6">
       <div>
-        <BackLink fallbackHref={GAMES_HUB_HREF}>← Back</BackLink>
+        <div className="flex items-start justify-between gap-3">
+          <BackLink fallbackHref={GAMES_HUB_HREF}>← Back</BackLink>
+          <GameTutorialHost tutorialId="lane_runner" />
+        </div>
         <h1 className="mt-4 text-2xl font-bold text-zinc-900">{LANE_RUNNER_DISPLAY_NAME}</h1>
         <p className="mt-2 text-sm text-zinc-500">
           Endless run — dodge into the right lane, grab coins, and spell KIDDA. You have three

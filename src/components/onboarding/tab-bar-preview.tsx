@@ -1,11 +1,9 @@
-import { GAMES_HUB_HREF } from "@/lib/games/catalog";
-
 const TABS = [
-  { label: "Home", description: "Your dashboard and what to do next" },
-  { label: "Learn", description: "Structured weekly courses, in order" },
-  { label: "Games", description: "Practice what you've learned" },
-  { label: "Community", description: "Leaderboard, events, and friends" },
-  { label: "Profile", description: "Your progress, streak, and level" },
+  { label: "Home", description: "Your dashboard — streak, next steps, and today's focus" },
+  { label: "Learn", description: "Weekly courses and lessons at your own pace" },
+  { label: "Games", description: "Vocabulary and grammar practice — tap ? in any game for how to play" },
+  { label: "Community", description: "Leaderboard, events, forum, and friends" },
+  { label: "Profile", description: "Progress, streak, level, and settings" },
 ] as const;
 
 export function TabBarPreview() {
@@ -19,14 +17,16 @@ export function TabBarPreview() {
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
                   index === 0
                     ? "bg-violet-100 text-violet-600"
-                    : "bg-zinc-100 text-zinc-600"
+                    : index === 2
+                      ? "bg-violet-50 text-violet-500 ring-1 ring-violet-200"
+                      : "bg-zinc-100 text-zinc-600"
                 }`}
               >
                 {tab.label.slice(0, 1)}
               </span>
               <span
                 className={`text-[10px] font-semibold ${
-                  index === 0 ? "text-violet-600" : "text-zinc-500"
+                  index === 0 || index === 2 ? "text-violet-600" : "text-zinc-500"
                 }`}
               >
                 {tab.label}
@@ -35,7 +35,7 @@ export function TabBarPreview() {
           ))}
         </div>
         <p className="mt-2 text-center text-[10px] text-zinc-400">
-          Your navigation bar — tap any tab to explore
+          Bottom navigation — five tabs for the whole app
         </p>
       </div>
 

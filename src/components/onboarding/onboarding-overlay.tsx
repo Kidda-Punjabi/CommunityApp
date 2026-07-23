@@ -23,26 +23,27 @@ type ScreenContent = {
 const INFO_SCREENS: ScreenContent[] = [
   {
     title: "Welcome to Kidda",
-    body: "Let's show you around in under a minute.",
+    body: "A quick tour of the app — under a minute, then you're in.",
     visual: "welcome",
   },
   {
     title: "Your five main tabs",
+    body: "Everything lives in the bar at the bottom. Here's what each tab is for.",
     visual: "tabs",
   },
   {
     title: "Lessons and course access",
     body: [
-      "Lessons are organised by week within each course.",
-      "Free starter lessons are available straight away. Full courses unlock when you purchase them — you can jump to any week inside a course you own; progress isn't gated week-by-week.",
+      "Learn holds your courses, organised by week.",
+      "Free starter lessons are available straight away. Full courses unlock when you purchase them — jump to any week you own; progress isn't locked week-by-week.",
     ],
     visual: "lessons",
   },
   {
     title: "Games for practice",
     body: [
-      `Under the Games tab you'll find Vocabulary Games and Grammar Games — ${GAME_CATALOG.length} ways to practice, including Match, Speed Translate, Conjugation Challenge, and Sentence Builder.`,
-      "Games earn XP toward your next level-up test alongside lessons and quizzes.",
+      `The Games tab has Vocabulary and Grammar games — ${GAME_CATALOG.length} modes including Match, Picture Match, Conjugation Challenge, and Sentence Builder.`,
+      "The first time you open a game, a short how-to appears. Tap the ? help button anytime to see it again. Games earn XP toward your next level-up test.",
     ],
     visual: "games",
   },
@@ -50,7 +51,7 @@ const INFO_SCREENS: ScreenContent[] = [
     title: "Keep your streak going",
     body: [
       "A streak counts consecutive days you learn in the app.",
-      "Miss one day? You get a one-day grace redemption — complete an activity the next day to keep your streak alive.",
+      "Miss one day? You get a one-day grace — complete an activity the next day to keep the streak alive.",
     ],
     visual: "streaks",
   },
@@ -95,15 +96,20 @@ function VisualPanel({ kind }: { kind: ScreenContent["visual"] }) {
 
   if (kind === "games") {
     return (
-      <div className="grid grid-cols-2 gap-2">
-        {GAME_CATALOG.slice(0, 4).map((game) => (
-          <div
-            key={game.type}
-            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800"
-          >
-            {game.emoji} {game.title}
-          </div>
-        ))}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          {GAME_CATALOG.slice(0, 6).map((game) => (
+            <div
+              key={game.type}
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800"
+            >
+              {game.emoji} {game.title}
+            </div>
+          ))}
+        </div>
+        <p className="rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-center text-xs text-violet-800">
+          Look for <span className="font-semibold">?</span> How to play on every game start screen
+        </p>
       </div>
     );
   }

@@ -2,8 +2,9 @@
 
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { FlashcardAudioPlayButton } from "@/components/audio/flashcard-audio-play-button";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +14,12 @@ import { saveGameScore } from "@/lib/games/game-scores";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { SessionProgressBar } from "@/components/session-progress-bar";
+import { latinRomanised } from "@/lib/conjugation/romanised";
+import {
+  readPictureMatchWordAudioEnabled,
+  writePictureMatchWordAudioEnabled,
+} from "@/lib/games/picture-match-audio-preference";
+import { loadDictionaryAudioByFlashcardId } from "@/lib/resources/load-dictionary-audio";
 import { ui } from "@/lib/ui/styles";
 import { emojiForIcon } from "./emojiMap";
 import {
@@ -21,7 +28,6 @@ import {
 } from "./pictureMatchCards";
 
 const POINTS_PER_CORRECT = 10;
-const FEEDBACK_MS = 1200;
 
 type RoundOption = {
   cardId: string;
@@ -102,7 +108,7 @@ function PunjabiOptionLabel({
   romanised: string | null;
   tone?: "neutral" | "correct" | "wrong" | "muted";
 }) {
-  const latin = romanised?.trim();
+  const latin = latinRomanised(romanised);
   const punjabiClass =
     tone === "correct"
       ? "text-green-900"
@@ -141,6 +147,7 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
   const [correctCount, setCorrectCount] = useState(0);
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
   const [celebrate, setCelebrate] = useState(false);
+  const [wordAudioEnabled, setWordAudioEnabled] = useState(true);
   const [result, setResult] = useState<{
     isNewBest: boolean;
     currentBest: number;
@@ -150,7 +157,6 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
   const userIdRef = useRef<string | null>(null);
   const savedRef = useRef(false);
   const { playSound } = useAudioManager();
-  const advanceTimerRef = useRef<number | null>(null);
 
   const difficultyConfig = useMemo(
     () => DIFFICULTY_OPTIONS.find((option) => option.id === difficulty)!,
@@ -167,6 +173,8 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
   const maxScore = totalRounds * POINTS_PER_CORRECT;
   const locked = feedback !== null;
   const canStart = filteredPool.length >= 4;
+  const currentAudioUrl = currentCard?.audioUrl?.trim() || null;
+  const showWordAudio = wordAudioEnabled && Boolean(currentAudioUrl);
 
   const options = useMemo(() => {
     if (!currentCard) return [];
@@ -174,18 +182,14 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
   }, [currentCard, filteredPool]);
 
   useEffect(() => {
+    setWordAudioEnabled(readPictureMatchWordAudioEnabled());
+  }, []);
+
+  useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       userIdRef.current = user?.id ?? null;
     });
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (advanceTimerRef.current != null) {
-        window.clearTimeout(advanceTimerRef.current);
-      }
-    };
   }, []);
 
   useEffect(() => {
@@ -207,8 +211,26 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
       }
 
       const cards = buildPictureMatchPool(data ?? []);
+      let withAudio = cards;
 
-      setAllCards(cards);
+      try {
+        const audioMap = await loadDictionaryAudioByFlashcardId(
+          supabase,
+          cards.map((card) => card.id)
+        );
+        if (!cancelled) {
+          withAudio = cards.map((card) => ({
+            ...card,
+            audioUrl: audioMap.get(card.id)?.wordAudioUrl ?? null,
+          }));
+        }
+      } catch (audioError) {
+        console.error("Failed to load picture match audio:", audioError);
+      }
+
+      if (cancelled) return;
+
+      setAllCards(withAudio);
       setLoadState("ready");
     };
 
@@ -242,13 +264,16 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
     void persist();
   }, [phase, score, correctCount, totalRounds, difficulty]);
 
+  const toggleWordAudio = useCallback(() => {
+    setWordAudioEnabled((prev) => {
+      const next = !prev;
+      writePictureMatchWordAudioEnabled(next);
+      return next;
+    });
+  }, []);
+
   const startGame = useCallback(() => {
     if (!canStart) return;
-
-    if (advanceTimerRef.current != null) {
-      window.clearTimeout(advanceTimerRef.current);
-      advanceTimerRef.current = null;
-    }
 
     savedRef.current = false;
     const rounds = buildRoundQueue(filteredPool, difficultyConfig.rounds);
@@ -290,17 +315,11 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
         setScore((value) => value + POINTS_PER_CORRECT);
         setCorrectCount((value) => value + 1);
         setCelebrate(true);
-      }
-
-      if (!wasCorrect) {
+      } else {
         playSound("incorrect");
       }
-
-      advanceTimerRef.current = window.setTimeout(() => {
-        advanceRound();
-      }, FEEDBACK_MS);
     },
-    [phase, currentCard, locked, advanceRound, playSound]
+    [phase, currentCard, locked, playSound]
   );
 
   if (loadState === "loading") {
@@ -336,7 +355,10 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
     return (
       <div className="space-y-6">
         <div>
-          <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
+          <div className="flex items-start justify-between gap-3">
+            <BackLink fallbackHref={GAMES_HUB_HREF} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to games</BackLink>
+            <GameTutorialHost tutorialId="picture_match" />
+          </div>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Vocabulary game
           </p>
@@ -377,6 +399,22 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
           </p>
         </div>
 
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+          <input
+            type="checkbox"
+            checked={wordAudioEnabled}
+            onChange={toggleWordAudio}
+            className="mt-1 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-500"
+          />
+          <span>
+            <span className="block text-sm font-semibold text-zinc-900">Word audio prompts</span>
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Show a speaker on each picture so you can hear the Punjabi word (when a clip is
+              available). Turn off if you prefer to play without the extra prompt.
+            </span>
+          </span>
+        </label>
+
         {initialBestScore > 0 ? (
           <div className={ui.cardBordered}>
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Your best</p>
@@ -405,28 +443,48 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
       <FloatingSoundToggle />
       <SessionProgressBar current={roundIndex + 1} total={totalRounds} />
 
-      <div className="flex items-center justify-between pt-2">
+      <div className="flex items-center justify-between gap-3 pt-2">
         <p className="text-sm font-semibold text-zinc-500">
           Round {roundIndex + 1} / {totalRounds}
         </p>
-        <p
-          className={`text-sm font-bold text-violet-600 transition-transform ${
-            celebrate ? "scale-110" : ""
-          }`}
-        >
-          {score} pts
-        </p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={toggleWordAudio}
+            className="text-xs font-semibold text-violet-600 hover:text-violet-500"
+            aria-pressed={wordAudioEnabled}
+          >
+            {wordAudioEnabled ? "Word audio on" : "Word audio off"}
+          </button>
+          <p
+            className={`text-sm font-bold text-violet-600 transition-transform ${
+              celebrate ? "scale-110" : ""
+            }`}
+          >
+            {score} pts
+          </p>
+        </div>
       </div>
 
       {currentCard ? (
         <div className="flex flex-col items-center text-center">
-          <div
-            className={`flex h-36 w-36 items-center justify-center rounded-3xl bg-violet-50 text-7xl shadow-inner transition-transform duration-300 ${
-              celebrate ? "scale-105 animate-pulse" : ""
-            }`}
-            aria-hidden="true"
-          >
-            {emojiForIcon(currentCard.icon_name)}
+          <div className="relative">
+            <div
+              className={`flex h-36 w-36 items-center justify-center rounded-3xl bg-violet-50 text-7xl shadow-inner transition-transform duration-300 ${
+                celebrate ? "scale-105 animate-pulse" : ""
+              }`}
+              aria-hidden="true"
+            >
+              {emojiForIcon(currentCard.icon_name)}
+            </div>
+            {showWordAudio && currentAudioUrl ? (
+              <div className="absolute -bottom-2 -right-2">
+                <FlashcardAudioPlayButton
+                  audioUrl={currentAudioUrl}
+                  label={`Play audio for ${currentCard.english}`}
+                />
+              </div>
+            ) : null}
           </div>
           <p className="mt-4 text-lg font-medium text-zinc-600">{currentCard.english}</p>
         </div>
@@ -472,6 +530,12 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
           );
         })}
       </div>
+
+      {feedback ? (
+        <button type="button" onClick={advanceRound} className={ui.btnPrimaryBlock}>
+          {roundIndex + 1 >= totalRounds ? "See results" : "Next"}
+        </button>
+      ) : null}
     </div>
   );
 }
