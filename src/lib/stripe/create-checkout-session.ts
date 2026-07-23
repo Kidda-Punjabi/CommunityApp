@@ -18,6 +18,7 @@ type CreateCheckoutSessionOptions = {
   embedded?: boolean;
   cohortId?: string;
   cohortSeatHoldId?: string;
+  oneToOneBookingId?: string;
 };
 
 async function resolveStripeCustomerId(userId: string, email: string): Promise<string> {
@@ -58,6 +59,7 @@ export async function createCheckoutSession({
   embedded = false,
   cohortId,
   cohortSeatHoldId,
+  oneToOneBookingId,
 }: CreateCheckoutSessionOptions) {
   const config = getCheckoutConfig(checkoutKey);
   if (!config) {
@@ -77,6 +79,37 @@ export async function createCheckoutSession({
   } = await supabase.auth.getUser();
 
   const needsGroupCohort = await isGroupPackageCheckoutKey(supabase, checkoutKey);
+  const needsOneToOneSlot = checkoutKey === ONE_TO_ONE_SESSION_CHECKOUT_KEY;
+
+  if (needsOneToOneSlot) {
+    if (!user) {
+      throw new Error("Sign in to choose a lesson time and purchase a 1-to-1 session.");
+    }
+    if (!oneToOneBookingId?.trim()) {
+      throw new Error("Choose a lesson time before checkout.");
+    }
+
+    const admin = createServiceRoleClient();
+    const { data: pending, error: pendingError } = await admin
+      .from("tutor_one_to_one_bookings")
+      .select("id, student_id, status, created_at")
+      .eq("id", oneToOneBookingId.trim())
+      .maybeSingle();
+
+    if (pendingError) throw new Error(pendingError.message);
+    if (!pending || pending.student_id !== user.id || pending.status !== "pending_payment") {
+      throw new Error("Your lesson time reservation expired or is invalid. Choose a time again.");
+    }
+
+    const holdAgeMs = Date.now() - new Date(pending.created_at as string).getTime();
+    if (holdAgeMs > 20 * 60 * 1000) {
+      await admin
+        .from("tutor_one_to_one_bookings")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("id", pending.id);
+      throw new Error("Your lesson time reservation expired. Choose a time again.");
+    }
+  }
 
   if (needsGroupCohort) {
     if (!user) {
@@ -131,6 +164,17 @@ export async function createCheckoutSession({
   }
 
   if (!priceId && paymentLink) {
+    if (needsOneToOneSlot && oneToOneBookingId && user) {
+      // Payment links can't carry booking metadata — the pending hold on the user is enough.
+      await createServiceRoleClient()
+        .from("tutor_one_to_one_bookings")
+        .update({
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", oneToOneBookingId.trim())
+        .eq("student_id", user.id)
+        .eq("status", "pending_payment");
+    }
     return {
       type: "payment_link" as const,
       url: appendPaymentLinkParams(paymentLink, {
@@ -163,6 +207,9 @@ export async function createCheckoutSession({
       ...(needsGroupCohort && cohortId && cohortSeatHoldId
         ? { cohort_id: cohortId, cohort_seat_hold_id: cohortSeatHoldId }
         : {}),
+      ...(needsOneToOneSlot && oneToOneBookingId
+        ? { one_to_one_booking_id: oneToOneBookingId.trim() }
+        : {}),
     },
     ...(customerId ? { customer: customerId } : {}),
   };
@@ -185,6 +232,18 @@ export async function createCheckoutSession({
       .update({ stripe_checkout_session_id: session.id })
       .eq("id", cohortSeatHoldId)
       .eq("user_id", user!.id);
+  }
+
+  if (needsOneToOneSlot && oneToOneBookingId && user) {
+    await createServiceRoleClient()
+      .from("tutor_one_to_one_bookings")
+      .update({
+        stripe_checkout_session_id: session.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", oneToOneBookingId.trim())
+      .eq("student_id", user.id)
+      .eq("status", "pending_payment");
   }
 
   if (embedded) {

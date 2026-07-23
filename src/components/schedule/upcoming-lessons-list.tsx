@@ -32,7 +32,7 @@ export function UpcomingLessonsList({ sessions, hasBookingCredit = false }: Upco
         <p className="font-semibold text-zinc-900">No upcoming live lessons</p>
         {hasBookingCredit ? (
           <p className="mt-2 text-sm text-zinc-500">
-            You have a paid 1-to-1 session credit — use the booking section above to choose a time.
+            You have a paid 1-to-1 session credit — choose a time in the booking section above.
             After you confirm a slot, your lesson and Google Meet join link will appear here.
           </p>
         ) : (

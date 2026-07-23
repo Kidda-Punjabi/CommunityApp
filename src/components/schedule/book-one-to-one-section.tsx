@@ -4,9 +4,9 @@ import {
   cancelPendingBooking,
   createOneToOneBooking,
   fetchBookableSlots,
+  reserveSlotForPurchase,
   type BookingActionResult,
 } from "@/app/dashboard/schedule/booking-actions";
-import { BuyButton } from "@/components/products/buy-button";
 import { ONE_TO_ONE_SESSION_CHECKOUT_KEY } from "@/lib/products/checkout";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type {
@@ -41,22 +41,64 @@ export function BookOneToOneSection({
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
   const [loadingSlots, startLoadSlots] = useTransition();
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [state, formAction, pending] = useActionState(createOneToOneBooking, initial);
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
 
   const activeCredit = credits[0] ?? null;
   const showSection = credits.length > 0 || Boolean(context);
-  const canBook = Boolean(context?.bookingEnabled && activeCredit && !context.tutorUnresolved);
+  const canBrowseSlots = Boolean(context?.bookingEnabled && !context.tutorUnresolved);
+  const canBookWithCredit = Boolean(canBrowseSlots && activeCredit);
+  const canPurchaseWithSlot = Boolean(canBrowseSlots && !activeCredit && checkoutConfigured);
   const tutorLabel = context?.tutorName ?? "your tutor";
 
   useEffect(() => {
-    if (!canBook || !context?.tutorId) return;
+    if (!canBrowseSlots || !context?.tutorId) return;
     startLoadSlots(async () => {
       const result = await fetchBookableSlots(context.tutorId);
       setSlots(result.slots);
       setSlotsError(result.error ?? null);
     });
-  }, [canBook, context?.tutorId]);
+  }, [canBrowseSlots, context?.tutorId]);
+
+  async function continueToPurchase() {
+    if (!selectedSlot || !context?.tutorId) return;
+
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+
+    try {
+      const reserved = await reserveSlotForPurchase({
+        tutorId: context.tutorId,
+        startsAt: selectedSlot.startsAt,
+        endsAt: selectedSlot.endsAt,
+      });
+
+      if (!reserved.bookingId) {
+        throw new Error(reserved.error ?? "Could not reserve that time.");
+      }
+
+      const response = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkoutKey: ONE_TO_ONE_SESSION_CHECKOUT_KEY,
+          oneToOneBookingId: reserved.bookingId,
+        }),
+      });
+
+      const data = (await response.json()) as { url?: string; error?: string };
+      if (!response.ok || !data.url) {
+        throw new Error(data.error ?? "Could not start checkout.");
+      }
+
+      window.location.href = data.url;
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : "Checkout failed.");
+      setCheckoutLoading(false);
+    }
+  }
 
   if (!schemaReady) return null;
   if (!showSection) return null;
@@ -96,7 +138,8 @@ export function BookOneToOneSection({
           </p>
         ) : (
           <p className="mt-1 text-sm text-zinc-500">
-            Purchase a 1-to-1 session first, then choose a time that works for you and your tutor.
+            Choose an available time first, then pay to confirm your lesson. Your slot is held for
+            20 minutes while you check out.
           </p>
         )}
       </div>
@@ -132,21 +175,7 @@ export function BookOneToOneSection({
 
       {cancelMessage ? <p className="text-sm text-zinc-600">{cancelMessage}</p> : null}
 
-      {context && !context.tutorUnresolved && context.bookingEnabled && !activeCredit ? (
-        <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
-          <p className="mb-3 text-sm text-violet-900">
-            Pay securely with Stripe to unlock the calendar and book your lesson.
-          </p>
-          <BuyButton
-            checkoutKey={ONE_TO_ONE_SESSION_CHECKOUT_KEY}
-            label="Purchase 1-to-1 session"
-            configured={checkoutConfigured}
-            className={ui.btnPrimary}
-          />
-        </div>
-      ) : null}
-
-      {canBook ? (
+      {canBrowseSlots ? (
         <>
           {loadingSlots ? (
             <p className="text-sm text-zinc-500">Loading available times…</p>
@@ -160,7 +189,10 @@ export function BookOneToOneSection({
                 <button
                   key={slot.startsAt}
                   type="button"
-                  onClick={() => setSelectedSlot(slot)}
+                  onClick={() => {
+                    setSelectedSlot(slot);
+                    setCheckoutError(null);
+                  }}
                   className={cn(
                     "rounded-xl border px-3 py-2 text-left text-sm transition-colors",
                     selectedSlot?.startsAt === slot.startsAt
@@ -174,7 +206,7 @@ export function BookOneToOneSection({
             </div>
           )}
 
-          {selectedSlot && activeCredit && context ? (
+          {selectedSlot && canBookWithCredit && context && activeCredit ? (
             <form action={formAction} className="space-y-3 border-t border-zinc-100 pt-4">
               <input type="hidden" name="tutor_id" value={context.tutorId} />
               <input type="hidden" name="starts_at" value={selectedSlot.startsAt} />
@@ -193,6 +225,31 @@ export function BookOneToOneSection({
                 {pending ? "Booking…" : "Confirm lesson time"}
               </button>
             </form>
+          ) : null}
+
+          {selectedSlot && canPurchaseWithSlot ? (
+            <div className="space-y-3 border-t border-zinc-100 pt-4">
+              <p className="text-sm font-medium text-zinc-900">Selected: {selectedSlot.label}</p>
+              <p className="text-sm text-zinc-600">
+                Next you&apos;ll pay securely with Stripe. Your lesson is confirmed as soon as
+                payment succeeds.
+              </p>
+              {checkoutError ? <p className="text-sm text-rose-600">{checkoutError}</p> : null}
+              <button
+                type="button"
+                disabled={checkoutLoading}
+                onClick={() => void continueToPurchase()}
+                className={ui.btnPrimary}
+              >
+                {checkoutLoading ? "Reserving…" : "Continue to payment"}
+              </button>
+            </div>
+          ) : null}
+
+          {!activeCredit && !checkoutConfigured && context?.bookingEnabled ? (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Checkout isn&apos;t configured for 1-to-1 sessions yet. Contact support to book.
+            </p>
           ) : null}
         </>
       ) : null}

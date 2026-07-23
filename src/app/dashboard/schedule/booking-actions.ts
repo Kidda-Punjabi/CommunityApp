@@ -26,7 +26,17 @@ export async function syncBookingPayment(sessionId: string): Promise<BookingActi
       return { error: "Payment not completed yet. Refresh in a moment if you just paid." };
     }
     revalidatePath("/dashboard/schedule");
-    return { success: "Payment received — pick a time for your lesson below." };
+    if (result.bookingConfirmed) {
+      return {
+        success: result.meetLink
+          ? "Payment received — your lesson is booked! Check Upcoming lessons for your join link."
+          : "Payment received — your lesson is booked! Check Upcoming lessons for the calendar invite.",
+      };
+    }
+    return {
+      success:
+        "Payment received — your session credit is ready. Pick a time below if a slot wasn't reserved.",
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not verify payment." };
   }
@@ -54,9 +64,12 @@ export async function fetchBookableSlots(tutorId: string): Promise<{
     if (!context.bookingEnabled || !context.settings) {
       return { slots: [], error: "Your tutor has not opened booking yet." };
     }
-    if (context.availableCredits < 1) {
-      return { slots: [], error: "Purchase a 1-to-1 session before booking a time." };
-    }
+
+    const admin = createServiceRoleClient();
+    const { expireStalePendingOneToOneBookings } = await import(
+      "@/lib/tutoring/confirm-pending-one-to-one-booking"
+    );
+    await expireStalePendingOneToOneBookings(admin, tutorId);
 
     const availability = await loadTutorAvailability(supabase, tutorId);
     const rangeStart = new Date().toISOString();
@@ -67,6 +80,103 @@ export async function fetchBookableSlots(tutorId: string): Promise<{
     return { slots: slots.slice(0, 60) };
   } catch (e) {
     return { slots: [], error: e instanceof Error ? e.message : "Could not load available times." };
+  }
+}
+
+/**
+ * Hold a slot as pending_payment, then continue to Stripe for a 1-to-1 session purchase.
+ */
+export async function reserveSlotForPurchase(input: {
+  tutorId: string;
+  startsAt: string;
+  endsAt: string;
+}): Promise<BookingActionResult & { bookingId?: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: "Sign in to choose a lesson time." };
+
+    const tutorId = input.tutorId.trim();
+    const startsAt = input.startsAt.trim();
+    const endsAt = input.endsAt.trim();
+    if (!tutorId || !startsAt || !endsAt) {
+      return { error: "Choose a time slot." };
+    }
+
+    const { context } = await loadStudentBookingContext(supabase, user.id);
+    if (
+      !context ||
+      context.tutorUnresolved ||
+      context.tutorId !== tutorId ||
+      !context.settings ||
+      !context.bookingEnabled
+    ) {
+      return { error: "You are not eligible to book with this tutor." };
+    }
+
+    const slotStart = new Date(startsAt).getTime();
+    const earliest = Date.now() + context.settings.bookingBufferHours * 60 * 60 * 1000;
+    if (slotStart < earliest) {
+      return {
+        error: `Bookings must be at least ${context.settings.bookingBufferHours} hours in advance.`,
+      };
+    }
+
+    const admin = createServiceRoleClient();
+    const { expireStalePendingOneToOneBookings } = await import(
+      "@/lib/tutoring/confirm-pending-one-to-one-booking"
+    );
+    await expireStalePendingOneToOneBookings(admin, tutorId);
+
+    // Drop this student's other unpaid holds so they don't stack.
+    await admin
+      .from("tutor_one_to_one_bookings")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("student_id", user.id)
+      .eq("status", "pending_payment");
+
+    const busyBlocks = await loadTutorBusyBlocks(admin, tutorId, startsAt, endsAt);
+    if (busyBlocks.length > 0) {
+      return { error: "That time is no longer available. Please choose another slot." };
+    }
+
+    const availability = await loadTutorAvailability(supabase, tutorId);
+    const validSlots = generateBookableSlots(context.settings, availability.windows, busyBlocks, {
+      fromMs: slotStart - 24 * 60 * 60 * 1000,
+      daysAhead: 2,
+    });
+    const isValid = validSlots.some((slot) => slot.startsAt === startsAt && slot.endsAt === endsAt);
+    if (!isValid) {
+      return { error: "That slot is outside your tutor's available hours." };
+    }
+
+    const { data, error } = await admin
+      .from("tutor_one_to_one_bookings")
+      .insert({
+        tutor_id: tutorId,
+        student_id: user.id,
+        starts_at: startsAt,
+        ends_at: endsAt,
+        status: "pending_payment",
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") {
+        return { error: "That time was just taken. Please choose another slot." };
+      }
+      return { error: error.message };
+    }
+
+    return {
+      bookingId: data.id as string,
+      success: "Time reserved — continue to payment to confirm your lesson.",
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not reserve that time." };
   }
 }
 

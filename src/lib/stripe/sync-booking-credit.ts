@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ONE_TO_ONE_SESSION_CHECKOUT_KEY } from "@/lib/products/checkout";
+import { confirmPendingOneToOneBookingAfterPayment } from "@/lib/tutoring/confirm-pending-one-to-one-booking";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { findUserIdByEmail } from "@/lib/stripe/sync-purchases";
 import { getStripe } from "@/lib/stripe/server";
@@ -25,16 +26,6 @@ function isOneToOneSessionCheckout(session: Stripe.Checkout.Session): boolean {
     return true;
   }
 
-  const configuredPriceId = process.env.STRIPE_CHECKOUT_PRICE_ONE_TO_ONE_SESSION?.trim();
-  if (configuredPriceId && session.metadata?.checkout_key === ONE_TO_ONE_SESSION_CHECKOUT_KEY) {
-    return true;
-  }
-
-  if (session.payment_link && session.client_reference_id) {
-    const paymentLinkUrl = process.env.STRIPE_PAYMENT_LINK_ONE_TO_ONE_SESSION?.trim();
-    if (paymentLinkUrl) return true;
-  }
-
   const plinkId = process.env.STRIPE_PAYMENT_LINK_ONE_TO_ONE_SESSION_PLINK_ID?.trim();
   if (plinkId && session.payment_link === plinkId) {
     return true;
@@ -45,7 +36,12 @@ function isOneToOneSessionCheckout(session: Stripe.Checkout.Session): boolean {
 
 export async function syncBookingCreditFromCheckoutSession(
   sessionId: string
-): Promise<{ granted: boolean; creditId?: string }> {
+): Promise<{
+  granted: boolean;
+  creditId?: string;
+  bookingConfirmed?: boolean;
+  meetLink?: string | null;
+}> {
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.retrieve(sessionId);
 
@@ -65,36 +61,114 @@ export async function syncBookingCreditFromCheckoutSession(
   const admin = createServiceRoleClient();
   const { data: existing } = await admin
     .from("tutor_one_to_one_booking_credits")
-    .select("id")
+    .select("id, booking_id, status")
     .eq("stripe_checkout_session_id", session.id)
     .maybeSingle();
 
-  if (existing?.id) {
-    return { granted: true, creditId: existing.id as string };
+  let creditId = existing?.id as string | undefined;
+
+  if (!creditId) {
+    const { data, error } = await admin
+      .from("tutor_one_to_one_booking_credits")
+      .insert({
+        student_id: userId,
+        stripe_checkout_session_id: session.id,
+        status: "available",
+        purchased_at: new Date(session.created * 1000).toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") {
+        const { data: raced } = await admin
+          .from("tutor_one_to_one_booking_credits")
+          .select("id, booking_id, status")
+          .eq("stripe_checkout_session_id", session.id)
+          .maybeSingle();
+        creditId = raced?.id as string | undefined;
+      } else if (error.message?.includes("tutor_one_to_one_booking_credits")) {
+        throw new Error("Booking credits table is not set up. Run the latest SQL migration.");
+      } else {
+        throw error;
+      }
+    } else {
+      creditId = data.id as string;
+    }
   }
 
-  const { data, error } = await admin
-    .from("tutor_one_to_one_booking_credits")
-    .insert({
-      student_id: userId,
+  if (!creditId) {
+    return { granted: true };
+  }
+
+  const bookingIdFromMeta = session.metadata?.one_to_one_booking_id?.trim() || null;
+  let bookingId = bookingIdFromMeta;
+
+  if (!bookingId) {
+    const cutoff = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    const { data: pendingHold } = await admin
+      .from("tutor_one_to_one_bookings")
+      .select("id")
+      .eq("student_id", userId)
+      .eq("status", "pending_payment")
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    bookingId = (pendingHold?.id as string | undefined) ?? null;
+  }
+
+  if (!bookingId) {
+    return { granted: true, creditId };
+  }
+
+  // Already confirmed on a prior success-page load.
+  if (existing?.status === "used" && existing.booking_id === bookingId) {
+    return { granted: true, creditId, bookingConfirmed: true };
+  }
+
+  const email =
+    session.customer_details?.email ??
+    session.customer_email ??
+    null;
+  if (!email?.trim()) {
+    console.error("one-to-one checkout missing email for calendar booking", session.id);
+    return { granted: true, creditId };
+  }
+
+  await admin
+    .from("tutor_one_to_one_bookings")
+    .update({
       stripe_checkout_session_id: session.id,
-      status: "available",
-      purchased_at: new Date(session.created * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
     })
-    .select("id")
-    .single();
+    .eq("id", bookingId)
+    .eq("student_id", userId)
+    .eq("status", "pending_payment");
 
-  if (error) {
-    if (error.code === "23505") {
-      return { granted: true };
-    }
-    if (error.message?.includes("tutor_one_to_one_booking_credits")) {
-      throw new Error("Booking credits table is not set up. Run the latest SQL migration.");
-    }
-    throw error;
+  const confirmed = await confirmPendingOneToOneBookingAfterPayment(admin, {
+    userId,
+    creditId,
+    bookingId,
+    studentEmail: email.trim(),
+  });
+
+  if (!confirmed.ok) {
+    console.error(
+      "one-to-one pending booking confirm failed:",
+      confirmed.error,
+      "session=",
+      session.id
+    );
+    return { granted: true, creditId, bookingConfirmed: false };
   }
 
-  return { granted: true, creditId: data.id as string };
+  return {
+    granted: true,
+    creditId,
+    bookingConfirmed: true,
+    meetLink: confirmed.meetLink,
+  };
 }
 
 export async function syncBookingCreditFromStripeEvent(event: Stripe.Event): Promise<void> {

@@ -282,7 +282,7 @@ export async function loadTutorBusyBlocks(
       .from("tutor_one_to_one_bookings")
       .select("starts_at, ends_at")
       .eq("tutor_id", tutorId)
-      .in("status", ["confirmed"])
+      .in("status", ["confirmed", "pending_payment"])
       .lt("starts_at", rangeEnd)
       .gt("ends_at", rangeStart),
   ]);

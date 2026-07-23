@@ -14,6 +14,7 @@ export async function POST(request: Request) {
   let embedded = false;
   let cohortId: string | undefined;
   let cohortSeatHoldId: string | undefined;
+  let oneToOneBookingId: string | undefined;
 
   try {
     const body = (await request.json()) as {
@@ -21,11 +22,13 @@ export async function POST(request: Request) {
       embedded?: boolean;
       cohortId?: string;
       cohortSeatHoldId?: string;
+      oneToOneBookingId?: string;
     };
     checkoutKey = body.checkoutKey ?? "";
     embedded = Boolean(body.embedded);
     cohortId = body.cohortId?.trim();
     cohortSeatHoldId = body.cohortSeatHoldId?.trim();
+    oneToOneBookingId = body.oneToOneBookingId?.trim();
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
@@ -36,6 +39,7 @@ export async function POST(request: Request) {
       embedded,
       cohortId,
       cohortSeatHoldId,
+      oneToOneBookingId,
     });
 
     if (result.type === "payment_link") {
