@@ -151,6 +151,35 @@ const TUTORIALS: Record<TutorialId, GameTutorialContent> = {
       "Pass the threshold to move on — you have a few attempts per word.",
     ],
   },
+  buzz_in: {
+    id: "buzz_in",
+    title: "How to play Buzz-in",
+    steps: [
+      "Everyone sees the same English prompt at once — first to know the answer taps BUZZ!",
+      "Only the player who buzzes in gets to pick the Punjabi answer. Wrong or too slow → the round moves on.",
+      "Correct answers earn points. Spectators (host not playing) watch without buzzing.",
+      "Keep going through the question list — the scoreboard updates live.",
+    ],
+  },
+  jeopardy: {
+    id: "jeopardy",
+    title: "How to play Jeopardy",
+    steps: [
+      "One player picks a category tile (Alphabet, Vocab, or Sentences) and a point value.",
+      "When the question opens, anyone playing can tap BUZZ! — first buzz locks in who answers.",
+      "Only the buzzer chooses from the options. Correct = those points; wrong or timeout = no score for that tile.",
+      "After each tile, the next picker chooses. Cleared tiles stay crossed off until the board is done.",
+    ],
+  },
+  point_race: {
+    id: "point_race",
+    title: "How to play Point Race",
+    steps: [
+      "Every player races on their own questions at their own pace — no shared buzz.",
+      "Pick the correct Punjabi translation for each English prompt to earn a point.",
+      "First player to hit the room's target score wins. Spectators can watch the live standings.",
+    ],
+  },
   chado_pauri_group: {
     id: "chado_pauri_group",
     title: `How to play ${CHADO_PAURI_DISPLAY_NAME} (group)`,

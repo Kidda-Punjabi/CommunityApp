@@ -6,6 +6,7 @@ import {
   resolveBuzzInTimeout,
   submitBuzzInAnswer,
 } from "@/app/dashboard/group-games/buzz-in-actions";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { BuzzRacePanel } from "@/components/group-games/buzz-race-panel";
 import { GroupGameLeaderboard } from "@/components/group-games/group-game-leaderboard";
 import { GroupGameScoreboard } from "@/components/group-games/group-game-scoreboard";
@@ -209,23 +210,8 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
     state.scoreboard.find((entry) => entry.userId === round?.buzzed_by)?.displayName ??
     "Someone";
 
-  if (phase === "finished" || room.status === "completed") {
-    return (
-      <GroupGameLeaderboard
-        title="Buzz-in"
-        entries={state.scoreboard}
-        currentUserId={currentUserId}
-      />
-    );
-  }
-
-  if (!round || phase === "waiting" || !question) {
-    return (
-      <div className={`${ui.card} py-12 text-center`}>
-        <p className="text-sm text-zinc-500">Loading next question…</p>
-      </div>
-    );
-  }
+  const finished = phase === "finished" || room.status === "completed";
+  const loading = !finished && (!round || phase === "waiting" || !question);
 
   return (
     <div className="space-y-5">
@@ -233,30 +219,57 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">Buzz-in</p>
           <h1 className="text-lg font-bold text-zinc-900">
-            Question {round.round_number} of {state.totalRounds}
+            {finished
+              ? "Game over"
+              : round
+                ? `Question ${round.round_number} of ${state.totalRounds}`
+                : "Get ready"}
           </h1>
         </div>
-        <p className="text-xs font-medium text-zinc-500">
-          +{BUZZ_IN_POINTS_PER_CORRECT} per correct
-        </p>
+        <div className="flex items-center gap-3">
+          {!finished ? (
+            <p className="text-xs font-medium text-zinc-500">
+              +{BUZZ_IN_POINTS_PER_CORRECT} per correct
+            </p>
+          ) : null}
+          <GameTutorialHost tutorialId="buzz_in" />
+        </div>
       </div>
 
-      <GroupGameScoreboard entries={state.scoreboard} currentUserId={currentUserId} />
+      {finished ? (
+        <GroupGameLeaderboard
+          title="Buzz-in"
+          entries={state.scoreboard}
+          currentUserId={currentUserId}
+        />
+      ) : null}
 
-      <BuzzRacePanel
-        question={question}
-        phase={phase}
-        isPlaying={isPlaying}
-        isBuzzer={isBuzzer}
-        buzzerDisplayName={buzzerDisplayName}
-        buzzedBy={round.buzzed_by}
-        answerCorrect={round.answer_correct}
-        pending={pending}
-        onBuzz={handleBuzz}
-        onAnswer={handleAnswer}
-      />
+      {loading ? (
+        <div className={`${ui.card} py-12 text-center`}>
+          <p className="text-sm text-zinc-500">Loading next question…</p>
+        </div>
+      ) : null}
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {!finished && !loading && round && question ? (
+        <>
+          <GroupGameScoreboard entries={state.scoreboard} currentUserId={currentUserId} />
+
+          <BuzzRacePanel
+            question={question}
+            phase={phase}
+            isPlaying={isPlaying}
+            isBuzzer={isBuzzer}
+            buzzerDisplayName={buzzerDisplayName}
+            buzzedBy={round.buzzed_by}
+            answerCorrect={round.answer_correct}
+            pending={pending}
+            onBuzz={handleBuzz}
+            onAnswer={handleAnswer}
+          />
+
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+        </>
+      ) : null}
     </div>
   );
 }

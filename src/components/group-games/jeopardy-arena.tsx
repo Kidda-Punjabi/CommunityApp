@@ -7,6 +7,7 @@ import {
   selectJeopardyTile,
   submitJeopardyAnswer,
 } from "@/app/dashboard/group-games/jeopardy-actions";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { BuzzRacePanel } from "@/components/group-games/buzz-race-panel";
 import { GroupGameLeaderboard } from "@/components/group-games/group-game-leaderboard";
 import { GroupGameScoreboard } from "@/components/group-games/group-game-scoreboard";
@@ -222,115 +223,122 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
     state.scoreboard.find((e) => e.userId === activeTile?.buzzed_by)?.displayName ??
     "Someone";
 
-  if (room.status === "completed") {
-    return (
-      <GroupGameLeaderboard
-        title="Jeopardy"
-        entries={state.scoreboard}
-        currentUserId={currentUserId}
-      />
-    );
-  }
+  const finished = room.status === "completed";
 
   return (
     <div className="space-y-5">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">Jeopardy</p>
-        <h1 className="text-lg font-bold text-zinc-900">
-          {isPicker
-            ? "Your turn — pick a tile"
-            : `Waiting for ${pickerName} to choose a tile`}
-        </h1>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">Jeopardy</p>
+          <h1 className="text-lg font-bold text-zinc-900">
+            {finished
+              ? "Game over"
+              : isPicker
+                ? "Your turn — pick a tile"
+                : `Waiting for ${pickerName} to choose a tile`}
+          </h1>
+        </div>
+        <GameTutorialHost tutorialId="jeopardy" />
       </div>
 
-      <GroupGameScoreboard entries={state.scoreboard} currentUserId={currentUserId} />
-
-      {state.skippedTiles.length > 0 ? (
-        <p className="text-xs text-amber-700">
-          {state.skippedTiles.length} tile(s) skipped — missing flashcards for some slots.
-        </p>
-      ) : null}
-
-      <section className={`${ui.card} overflow-x-auto`}>
-        <div className="min-w-[20rem]">
-          <div className="grid grid-cols-4 gap-2">
-            <div />
-            {JEOPARDY_CATEGORIES.map((cat) => (
-              <div
-                key={cat}
-                className="py-2 text-center text-xs font-bold uppercase tracking-wider text-violet-700"
-              >
-                {JEOPARDY_CATEGORY_LABELS[cat]}
-              </div>
-            ))}
-
-            {JEOPARDY_POINT_VALUES.map((points) => (
-              <div key={`row-${points}`} className="contents">
-                <div className="flex items-center justify-end pr-2 text-xs font-semibold text-zinc-500">
-                  {points}
-                </div>
-                {JEOPARDY_CATEGORIES.map((cat) => {
-                  const tile = tiles.find(
-                    (t) => t.category === cat && t.point_value === points
-                  );
-                  if (!tile) {
-                    return (
-                      <div
-                        key={`${cat}-${points}`}
-                        className="flex h-14 items-center justify-center rounded-xl bg-zinc-100 text-xs text-zinc-400"
-                      >
-                        —
-                      </div>
-                    );
-                  }
-
-                  const spent = tile.status === "resolved";
-                  const active = tile.status === "active";
-                  const selectable =
-                    isPicker && tile.status === "unopened" && !activeTile;
-
-                  return (
-                    <button
-                      key={tile.id}
-                      type="button"
-                      disabled={!selectable || pending}
-                      onClick={() => handleSelectTile(tile.id)}
-                      className={`flex h-14 items-center justify-center rounded-xl text-sm font-bold transition-colors ${
-                        spent
-                          ? "bg-zinc-200 text-zinc-400 line-through decoration-zinc-400"
-                          : active
-                            ? "bg-violet-600 text-white ring-2 ring-violet-300"
-                            : selectable
-                              ? "bg-violet-100 text-violet-800 hover:bg-violet-200"
-                              : "cursor-default bg-violet-50 text-violet-400"
-                      }`}
-                    >
-                      {points}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {activeTile && question && (viewMode === "question" || viewMode === "result") ? (
-        <BuzzRacePanel
-          question={question}
-          phase={buzzPhase}
-          isPlaying={isPlaying}
-          isBuzzer={isBuzzer}
-          buzzerDisplayName={buzzerDisplayName}
-          buzzedBy={activeTile.buzzed_by}
-          answerCorrect={activeTile.answer_correct}
-          pending={pending}
-          onBuzz={handleBuzz}
-          onAnswer={handleAnswer}
+      {finished ? (
+        <GroupGameLeaderboard
+          title="Jeopardy"
+          entries={state.scoreboard}
+          currentUserId={currentUserId}
         />
-      ) : null}
+      ) : (
+        <>
+          <GroupGameScoreboard entries={state.scoreboard} currentUserId={currentUserId} />
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+          {state.skippedTiles.length > 0 ? (
+            <p className="text-xs text-amber-700">
+              {state.skippedTiles.length} tile(s) skipped — missing flashcards for some slots.
+            </p>
+          ) : null}
+
+          <section className={`${ui.card} overflow-x-auto`}>
+            <div className="min-w-[20rem]">
+              <div className="grid grid-cols-4 gap-2">
+                <div />
+                {JEOPARDY_CATEGORIES.map((cat) => (
+                  <div
+                    key={cat}
+                    className="py-2 text-center text-xs font-bold uppercase tracking-wider text-violet-700"
+                  >
+                    {JEOPARDY_CATEGORY_LABELS[cat]}
+                  </div>
+                ))}
+
+                {JEOPARDY_POINT_VALUES.map((points) => (
+                  <div key={`row-${points}`} className="contents">
+                    <div className="flex items-center justify-end pr-2 text-xs font-semibold text-zinc-500">
+                      {points}
+                    </div>
+                    {JEOPARDY_CATEGORIES.map((cat) => {
+                      const tile = tiles.find(
+                        (t) => t.category === cat && t.point_value === points
+                      );
+                      if (!tile) {
+                        return (
+                          <div
+                            key={`${cat}-${points}`}
+                            className="flex h-14 items-center justify-center rounded-xl bg-zinc-100 text-xs text-zinc-400"
+                          >
+                            —
+                          </div>
+                        );
+                      }
+
+                      const spent = tile.status === "resolved";
+                      const active = tile.status === "active";
+                      const selectable =
+                        isPicker && tile.status === "unopened" && !activeTile;
+
+                      return (
+                        <button
+                          key={tile.id}
+                          type="button"
+                          disabled={!selectable || pending}
+                          onClick={() => handleSelectTile(tile.id)}
+                          className={`flex h-14 items-center justify-center rounded-xl text-sm font-bold transition-colors ${
+                            spent
+                              ? "bg-zinc-200 text-zinc-400 line-through decoration-zinc-400"
+                              : active
+                                ? "bg-violet-600 text-white ring-2 ring-violet-300"
+                                : selectable
+                                  ? "bg-violet-100 text-violet-800 hover:bg-violet-200"
+                                  : "cursor-default bg-violet-50 text-violet-400"
+                          }`}
+                        >
+                          {points}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {activeTile && question && (viewMode === "question" || viewMode === "result") ? (
+            <BuzzRacePanel
+              question={question}
+              phase={buzzPhase}
+              isPlaying={isPlaying}
+              isBuzzer={isBuzzer}
+              buzzerDisplayName={buzzerDisplayName}
+              buzzedBy={activeTile.buzzed_by}
+              answerCorrect={activeTile.answer_correct}
+              pending={pending}
+              onBuzz={handleBuzz}
+              onAnswer={handleAnswer}
+            />
+          ) : null}
+
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+        </>
+      )}
     </div>
   );
 }

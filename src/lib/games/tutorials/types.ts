@@ -1,7 +1,13 @@
 import type { GameType } from "@/lib/games/types";
 
 /** Solo catalog games plus group-arena tutorial keys. */
-export type TutorialId = GameType | "chado_pauri_group" | "sentence_builder_group";
+export type TutorialId =
+  | GameType
+  | "buzz_in"
+  | "jeopardy"
+  | "point_race"
+  | "chado_pauri_group"
+  | "sentence_builder_group";
 
 export type GameTutorialContent = {
   id: TutorialId;
@@ -31,6 +37,9 @@ const TUTORIAL_ID_SET: Record<TutorialId, true> = {
   comprehension_practice: true,
   lane_runner: true,
   speaking_practice: true,
+  buzz_in: true,
+  jeopardy: true,
+  point_race: true,
   chado_pauri_group: true,
   sentence_builder_group: true,
 };

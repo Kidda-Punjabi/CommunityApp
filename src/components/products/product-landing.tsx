@@ -371,9 +371,9 @@ export function ProductLanding({
         <footer className="mt-16 border-t border-zinc-200 pt-8 text-center text-xs text-zinc-400">
           <p>Copyright 2026 | Gurupma Singh</p>
           <p className="mt-1">
-            <a href="https://kidda.app/privacy" className="hover:text-violet-600">
+            <Link href="/privacy" className="hover:text-violet-600">
               Privacy Policy
-            </a>
+            </Link>
           </p>
         </footer>
       </main>

@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState, useTransition } from "react";
 import { submitRaceAnswerAction } from "@/app/dashboard/group-games/race-actions";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { GroupGameLeaderboard } from "@/components/group-games/group-game-leaderboard";
 import { GroupGameScoreboard } from "@/components/group-games/group-game-scoreboard";
 import { usePointRaceRealtime } from "@/hooks/use-point-race-realtime";
@@ -142,100 +143,108 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
     score: entry.score,
   }));
 
-  if (room.status === "completed") {
-    return (
-      <div className="space-y-6">
-        <div className={`${ui.card} py-6 text-center`}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-            Point Race — Game over
-          </p>
-          <h1 className="mt-2 text-2xl font-bold text-zinc-900">
-            {winnerId === currentUserId ? "You won!" : `${winnerName} won!`}
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500">First to {winScore} points</p>
-        </div>
-        <GroupGameLeaderboard
-          title="Point Race"
-          entries={scoreboardEntries}
-          currentUserId={currentUserId}
-        />
-      </div>
-    );
-  }
+  const finished = room.status === "completed";
 
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-            Point Race
+            Point Race{finished ? " — Game over" : ""}
           </p>
-          <h1 className="text-lg font-bold text-zinc-900">Race to {winScore} points</h1>
+          <h1 className="text-lg font-bold text-zinc-900">
+            {finished
+              ? winnerId === currentUserId
+                ? "You won!"
+                : `${winnerName} won!`
+              : `Race to ${winScore} points`}
+          </h1>
         </div>
-        <p className="text-xs font-medium text-zinc-500">+1 per correct · your own pace</p>
+        <div className="flex items-center gap-3">
+          {!finished ? (
+            <p className="text-xs font-medium text-zinc-500">+1 per correct · your own pace</p>
+          ) : (
+            <p className="text-xs font-medium text-zinc-500">First to {winScore}</p>
+          )}
+          <GameTutorialHost tutorialId="point_race" />
+        </div>
       </div>
 
-      <GroupGameScoreboard entries={scoreboardEntries} currentUserId={currentUserId} />
+      {finished ? (
+        <GroupGameLeaderboard
+          title="Point Race"
+          entries={scoreboardEntries}
+          currentUserId={currentUserId}
+        />
+      ) : (
+        <>
+          <GroupGameScoreboard entries={scoreboardEntries} currentUserId={currentUserId} />
 
-      {isPlaying && myQuestion ? (
-        <section
-          className={`${ui.card} space-y-5 ${
-            feedback === "correct"
-              ? "ring-2 ring-emerald-400"
-              : feedback === "wrong"
-                ? "ring-2 ring-rose-400"
-                : ""
-          }`}
-        >
-          <div className="text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-              Translate
-            </p>
-            <p className="mt-3 text-3xl font-bold leading-snug text-zinc-900">{myQuestion.prompt}</p>
-          </div>
-
-          {feedback ? (
-            <p
-              className={`text-center text-sm font-semibold ${
-                feedback === "correct" ? "text-emerald-600" : "text-rose-600"
+          {isPlaying && myQuestion ? (
+            <section
+              className={`${ui.card} space-y-5 ${
+                feedback === "correct"
+                  ? "ring-2 ring-emerald-400"
+                  : feedback === "wrong"
+                    ? "ring-2 ring-rose-400"
+                    : ""
               }`}
             >
-              {feedback === "correct" ? "Correct!" : `Not quite — it was “${lastCorrectAnswer}”`}
-            </p>
+              <div className="text-center">
+                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                  Translate
+                </p>
+                <p className="mt-3 text-3xl font-bold leading-snug text-zinc-900">
+                  {myQuestion.prompt}
+                </p>
+              </div>
+
+              {feedback ? (
+                <p
+                  className={`text-center text-sm font-semibold ${
+                    feedback === "correct" ? "text-emerald-600" : "text-rose-600"
+                  }`}
+                >
+                  {feedback === "correct"
+                    ? "Correct!"
+                    : `Not quite — it was “${lastCorrectAnswer}”`}
+                </p>
+              ) : null}
+
+              <div className="grid gap-3">
+                {myQuestion.options.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    disabled={pending || feedback !== null}
+                    onClick={() => handleAnswer(option)}
+                    className={`${ui.cardBordered} w-full px-4 py-4 text-center text-lg font-semibold text-zinc-900 transition-colors enabled:hover:border-violet-300 enabled:hover:bg-violet-50 disabled:opacity-60`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </section>
           ) : null}
 
-          <div className="grid gap-3">
-            {myQuestion.options.map((option) => (
-              <button
-                key={option}
-                type="button"
-                disabled={pending || feedback !== null}
-                onClick={() => handleAnswer(option)}
-                className={`${ui.cardBordered} w-full px-4 py-4 text-center text-lg font-semibold text-zinc-900 transition-colors enabled:hover:border-violet-300 enabled:hover:bg-violet-50 disabled:opacity-60`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
+          {isPlaying && !myQuestion ? (
+            <div className={`${ui.card} py-10 text-center text-sm text-zinc-500`}>
+              Loading your question…
+            </div>
+          ) : null}
 
-      {isPlaying && !myQuestion ? (
-        <div className={`${ui.card} py-10 text-center text-sm text-zinc-500`}>
-          Loading your question…
-        </div>
-      ) : null}
+          {!isPlaying ? (
+            <div className={`${ui.card} py-8 text-center`}>
+              <p className="text-sm font-medium text-zinc-700">You&apos;re spectating</p>
+              <p className="mt-1 text-sm text-zinc-500">
+                Watch the leaderboard — players are racing independently.
+              </p>
+            </div>
+          ) : null}
 
-      {!isPlaying ? (
-        <div className={`${ui.card} py-8 text-center`}>
-          <p className="text-sm font-medium text-zinc-700">You&apos;re spectating</p>
-          <p className="mt-1 text-sm text-zinc-500">
-            Watch the leaderboard — players are racing independently.
-          </p>
-        </div>
-      ) : null}
-
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+        </>
+      )}
     </div>
   );
 }

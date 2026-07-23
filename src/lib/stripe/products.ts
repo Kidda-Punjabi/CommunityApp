@@ -71,6 +71,12 @@ export type CourseCatalogItem = {
   tier: PaidCourseTier;
   label: string;
   description: string;
+  /**
+   * From NEXT_PUBLIC_COURSE_URL_* or in-app `/courses/...` fallback.
+   * Not currently consumed by the membership page (which uses productPath);
+   * keep in sync if a future UI surfaces this field. GHL funnel URLs on
+   * kidda.app (/fd, /bc, /community) must be retargeted when GHL leaves that domain.
+   */
   learnMoreUrl: string | null;
 };
 

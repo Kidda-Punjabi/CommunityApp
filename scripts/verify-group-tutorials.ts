@@ -5,21 +5,25 @@
 import assert from "node:assert/strict";
 import { getTutorialContent } from "../src/lib/games/tutorials/content";
 import { tutorialIdForGroupGameType } from "../src/lib/games/tutorials/group";
+import { GROUP_GAME_TYPES } from "../src/lib/game-rooms/constants";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const chadoId = tutorialIdForGroupGameType("chado_pauri_group");
-const sentenceId = tutorialIdForGroupGameType("sentence_builder_group");
-const buzzId = tutorialIdForGroupGameType("buzz_in");
+const expected: Record<string, string> = {
+  buzz_in: "buzz_in",
+  jeopardy: "jeopardy",
+  point_race: "point_race",
+  chado_pauri_group: "chado_pauri_group",
+  sentence_builder_group: "sentence_builder_group",
+};
 
-assert.equal(chadoId, "chado_pauri_group");
-assert.equal(sentenceId, "sentence_builder_group");
-assert.equal(buzzId, null);
-
-const chado = getTutorialContent("chado_pauri_group");
-const sentence = getTutorialContent("sentence_builder_group");
-assert.ok(chado.steps.length >= 2);
-assert.ok(sentence.steps.length >= 2);
+for (const gameType of GROUP_GAME_TYPES) {
+  const id = tutorialIdForGroupGameType(gameType);
+  assert.equal(id, expected[gameType], `${gameType} should map to a tutorial`);
+  const content = getTutorialContent(id!);
+  assert.ok(content.steps.length >= 2, `${id} needs at least 2 steps`);
+  assert.match(content.steps.join(" "), /buzz|Buzz|tile|Race|ladder|sentence/i);
+}
 
 const lobbySrc = readFileSync(
   resolve("src/components/group-games/game-room-lobby.tsx"),
@@ -28,28 +32,48 @@ const lobbySrc = readFileSync(
 assert.match(lobbySrc, /GameTutorialHost/);
 assert.match(lobbySrc, /tutorialIdForGroupGameType/);
 
-const chadoArenaSrc = readFileSync(
-  resolve("src/components/group-games/chado-pauri-group-arena.tsx"),
-  "utf8"
-);
-assert.match(chadoArenaSrc, /tutorialId="chado_pauri_group"/);
+const arenaChecks: Array<{ file: string; tutorialId: string; earlyReturnGuard?: string }> = [
+  {
+    file: "src/components/group-games/chado-pauri-group-arena.tsx",
+    tutorialId: "chado_pauri_group",
+  },
+  {
+    file: "src/components/group-games/sentence-builder-group-arena.tsx",
+    tutorialId: "sentence_builder_group",
+    earlyReturnGuard: "Loading sentence",
+  },
+  {
+    file: "src/components/group-games/buzz-in-arena.tsx",
+    tutorialId: "buzz_in",
+    earlyReturnGuard: "Loading next question",
+  },
+  {
+    file: "src/components/group-games/jeopardy-arena.tsx",
+    tutorialId: "jeopardy",
+  },
+  {
+    file: "src/components/group-games/point-race-arena.tsx",
+    tutorialId: "point_race",
+  },
+];
 
-const sentenceArenaSrc = readFileSync(
-  resolve("src/components/group-games/sentence-builder-group-arena.tsx"),
-  "utf8"
-);
-assert.match(sentenceArenaSrc, /tutorialId="sentence_builder_group"/);
-// Host must not only live behind activeRound early-returns
-assert.match(sentenceArenaSrc, /Loading sentence/);
-const hostIndex = sentenceArenaSrc.indexOf('tutorialId="sentence_builder_group"');
-const loadingIndex = sentenceArenaSrc.indexOf("Loading sentence");
-assert.ok(hostIndex > 0, "sentence builder must include GameTutorialHost");
-assert.ok(
-  loadingIndex > 0 && hostIndex < loadingIndex,
-  "sentence builder tutorial host should stay mounted above loading/content branches"
-);
+for (const check of arenaChecks) {
+  const src = readFileSync(resolve(check.file), "utf8");
+  const hostNeedle = `tutorialId="${check.tutorialId}"`;
+  assert.match(src, /GameTutorialHost/);
+  assert.ok(src.includes(hostNeedle), `${check.file} must mount ${hostNeedle}`);
+  if (check.earlyReturnGuard) {
+    const hostIndex = src.indexOf(hostNeedle);
+    const loadingIndex = src.indexOf(check.earlyReturnGuard);
+    assert.ok(hostIndex > 0, `${check.file} must include tutorial host`);
+    assert.ok(
+      loadingIndex > 0 && hostIndex < loadingIndex,
+      `${check.file} tutorial host should stay mounted above loading branches`
+    );
+  }
+}
 
-console.log("Group tutorial wiring OK:");
-console.log(`- lobby maps chado_pauri_group → ${chadoId}`);
-console.log(`- lobby maps sentence_builder_group → ${sentenceId}`);
-console.log(`- content titles: ${chado.title} / ${sentence.title}`);
+console.log("Group tutorial wiring OK for all group game types:");
+for (const gameType of GROUP_GAME_TYPES) {
+  console.log(`- ${gameType} → ${tutorialIdForGroupGameType(gameType)}`);
+}
