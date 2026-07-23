@@ -106,7 +106,9 @@ export async function resolveGroupCohortContentGate(
   let best: GroupCohortContentGate | null = null;
 
   for (const cohort of cohorts ?? []) {
-    const startDate = utcCalendarDay(cohort.start_date as string | null);
+    const rawStart = cohort.start_date as string | null;
+    if (!rawStart) continue;
+    const startDate = utcCalendarDay(rawStart);
     if (!startDate) continue;
     if (startDate <= today) continue;
 
