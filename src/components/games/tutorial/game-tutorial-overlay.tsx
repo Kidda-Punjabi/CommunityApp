@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
 import type { GameTutorialContent } from "@/lib/games/tutorials/types";
 import { ui } from "@/lib/ui/styles";
 
@@ -20,6 +21,11 @@ export function GameTutorialOverlay({
 }: GameTutorialOverlayProps) {
   const titleId = useId();
   const [dontShowAgain, setDontShowAgain] = useState(preferDontShowAgain);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -36,11 +42,11 @@ export function GameTutorialOverlay({
     };
   }, [open]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-zinc-900/60 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[110] flex items-end justify-center bg-zinc-900/60 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -100,6 +106,7 @@ export function GameTutorialOverlay({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

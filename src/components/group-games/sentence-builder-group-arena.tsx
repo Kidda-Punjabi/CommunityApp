@@ -190,35 +190,11 @@ export function SentenceBuilderGroupArena({
     );
   }
 
-  if (!activeRound && latestCompletedRound) {
-    return (
-      <div className="space-y-5">
-        <GroupGameScoreboard entries={scoreboard} currentUserId={currentUserId} />
-        <div className={`${ui.card} space-y-4 py-8 text-center`}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
-            Sentence complete
-          </p>
-          <p className="text-lg font-semibold text-zinc-900">
-            Round {latestCompletedRound.round_number} of {totalRounds}
-          </p>
-          {revealedTranslation ? (
-            <p className="text-base text-zinc-600">{revealedTranslation}</p>
-          ) : null}
-          <p className="text-sm text-zinc-500">Next sentence loading…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!activeRound) {
-    return (
-      <div className={`${ui.card} py-12 text-center`}>
-        <p className="text-sm text-zinc-500">Loading sentence…</p>
-      </div>
-    );
-  }
-
-  const roundLabel = `Round ${activeRound.round_number} of ${totalRounds}`;
+  const roundLabel = activeRound
+    ? `Round ${activeRound.round_number} of ${totalRounds}`
+    : latestCompletedRound
+      ? `Round ${latestCompletedRound.round_number} of ${totalRounds}`
+      : "Collaborative Sentence Builder";
 
   return (
     <div className="space-y-5">
@@ -230,106 +206,140 @@ export function SentenceBuilderGroupArena({
           <h1 className="text-lg font-bold text-zinc-900">{roundLabel}</h1>
         </div>
         <div className="flex items-center gap-3">
-          <p className="text-xs font-medium text-zinc-500">+1 per correct tile</p>
+          {activeRound ? (
+            <p className="text-xs font-medium text-zinc-500">+1 per correct tile</p>
+          ) : null}
           <GameTutorialHost tutorialId="sentence_builder_group" />
         </div>
       </div>
 
-      <GroupGameScoreboard entries={scoreboard} currentUserId={currentUserId} />
+      {!activeRound && latestCompletedRound ? (
+        <>
+          <GroupGameScoreboard entries={scoreboard} currentUserId={currentUserId} />
+          <div className={`${ui.card} space-y-4 py-8 text-center`}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
+              Sentence complete
+            </p>
+            <p className="text-lg font-semibold text-zinc-900">
+              Round {latestCompletedRound.round_number} of {totalRounds}
+            </p>
+            {revealedTranslation ? (
+              <p className="text-base text-zinc-600">{revealedTranslation}</p>
+            ) : null}
+            <p className="text-sm text-zinc-500">Next sentence loading…</p>
+          </div>
+        </>
+      ) : null}
 
-      <div
-        className={`${ui.card} space-y-3 ${
-          feedback === "correct"
-            ? "ring-2 ring-emerald-400"
-            : feedback === "wrong"
-              ? "ring-2 ring-rose-400"
-              : ""
-        }`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-medium text-zinc-700">
-            {isMyTurn ? "Your turn — pick the next word" : `Waiting for ${turnPlayerName}'s turn`}
-          </p>
-          {!isPlaying ? (
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
-              Spectating
-            </span>
-          ) : null}
+      {!activeRound && !latestCompletedRound ? (
+        <div className={`${ui.card} py-12 text-center`}>
+          <p className="text-sm text-zinc-500">Loading sentence…</p>
         </div>
+      ) : null}
 
-        <div className="flex min-h-[3.5rem] flex-wrap gap-2 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-3">
-          {filledSlots.map((slot) => {
-            const latin = latinRomanised(slot.romanised);
-            return (
-              <span
-                key={slot.tile_identifier}
-                className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
-              >
-                <span>{slot.gurmukhi}</span>
-                {latin ? (
-                  <span className="mt-0.5 block text-xs font-normal text-violet-200">{latin}</span>
-                ) : null}
-              </span>
-            );
-          })}
-          {Array.from({ length: emptySlotCount }).map((_, index) => (
-            <span
-              key={`empty-${index}`}
-              className="inline-flex min-w-[4rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-300"
-            >
-              —
-            </span>
-          ))}
-        </div>
+      {activeRound ? (
+        <>
+          <GroupGameScoreboard entries={scoreboard} currentUserId={currentUserId} />
 
-        <p className="text-xs text-zinc-400">
-          {correctTileSequence(
-            activeRound.tile_pool.map((t) => ({
-              gurmukhi: t.gurmukhi,
-              romanised: t.romanised,
-              correct_position: t.correct_position,
-              is_distractor: t.is_distractor,
-            }))
-          ).length}{" "}
-          words to build · English hint revealed when the sentence is complete
-        </p>
-      </div>
+          <div
+            className={`${ui.card} space-y-3 ${
+              feedback === "correct"
+                ? "ring-2 ring-emerald-400"
+                : feedback === "wrong"
+                  ? "ring-2 ring-rose-400"
+                  : ""
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-zinc-700">
+                {isMyTurn
+                  ? "Your turn — pick the next word"
+                  : `Waiting for ${turnPlayerName}'s turn`}
+              </p>
+              {!isPlaying ? (
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                  Spectating
+                </span>
+              ) : null}
+            </div>
 
-      <div className={`${ui.card} space-y-3`}>
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Word pool</p>
-        <div className="flex flex-wrap gap-2">
-          {poolTiles.map((tile) => {
-            const disabled = !isMyTurn || pending;
-            const latin = latinRomanised(tile.romanised);
-            return (
-              <button
-                key={tile.tile_identifier}
-                type="button"
-                disabled={disabled}
-                onClick={() => handleTilePick(tile.tile_identifier)}
-                className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                  disabled
-                    ? "cursor-default border-zinc-200 bg-zinc-50 text-zinc-400"
-                    : "border-violet-200 bg-white text-violet-800 hover:border-violet-400 hover:bg-violet-50 active:scale-95"
-                }`}
-              >
-                <span>{tile.gurmukhi}</span>
-                {latin ? (
+            <div className="flex min-h-[3.5rem] flex-wrap gap-2 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-3">
+              {filledSlots.map((slot) => {
+                const latin = latinRomanised(slot.romanised);
+                return (
                   <span
-                    className={`mt-0.5 block text-xs font-normal ${
-                      disabled ? "text-zinc-400" : "text-violet-600"
+                    key={slot.tile_identifier}
+                    className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
+                  >
+                    <span>{slot.gurmukhi}</span>
+                    {latin ? (
+                      <span className="mt-0.5 block text-xs font-normal text-violet-200">
+                        {latin}
+                      </span>
+                    ) : null}
+                  </span>
+                );
+              })}
+              {Array.from({ length: emptySlotCount }).map((_, index) => (
+                <span
+                  key={`empty-${index}`}
+                  className="inline-flex min-w-[4rem] items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-300"
+                >
+                  —
+                </span>
+              ))}
+            </div>
+
+            <p className="text-xs text-zinc-400">
+              {correctTileSequence(
+                activeRound.tile_pool.map((t) => ({
+                  gurmukhi: t.gurmukhi,
+                  romanised: t.romanised,
+                  correct_position: t.correct_position,
+                  is_distractor: t.is_distractor,
+                }))
+              ).length}{" "}
+              words to build · English hint revealed when the sentence is complete
+            </p>
+          </div>
+
+          <div className={`${ui.card} space-y-3`}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Word pool</p>
+            <div className="flex flex-wrap gap-2">
+              {poolTiles.map((tile) => {
+                const disabled = !isMyTurn || pending;
+                const latin = latinRomanised(tile.romanised);
+                return (
+                  <button
+                    key={tile.tile_identifier}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => handleTilePick(tile.tile_identifier)}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                      disabled
+                        ? "cursor-default border-zinc-200 bg-zinc-50 text-zinc-400"
+                        : "border-violet-200 bg-white text-violet-800 hover:border-violet-400 hover:bg-violet-50 active:scale-95"
                     }`}
                   >
-                    {latin}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+                    <span>{tile.gurmukhi}</span>
+                    {latin ? (
+                      <span
+                        className={`mt-0.5 block text-xs font-normal ${
+                          disabled ? "text-zinc-400" : "text-violet-600"
+                        }`}
+                      >
+                        {latin}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+        </>
+      ) : null}
     </div>
   );
 }

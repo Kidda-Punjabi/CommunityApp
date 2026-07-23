@@ -9,10 +9,12 @@ import {
   setHostPlaying,
   startGameRoom,
 } from "@/app/dashboard/group-games/actions";
+import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { useGameRoomRealtime } from "@/hooks/use-game-room-realtime";
 import { GROUP_GAME_LABELS } from "@/lib/game-rooms/constants";
 import { loadActiveParticipants, loadGameRoom } from "@/lib/game-rooms/load-room";
 import type { GameRoomParticipantView, GameRoomRow, GameRoomView } from "@/lib/game-rooms/types";
+import { tutorialIdForGroupGameType } from "@/lib/games/tutorials/group";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createClient } from "@/lib/supabase/client";
 import { ui } from "@/lib/ui/styles";
@@ -69,6 +71,7 @@ export function GameRoomLobby({ initialView }: GameRoomLobbyProps) {
   const hostIsPlaying = selfParticipant?.isPlaying ?? false;
   const playingCount = participants.filter((p) => p.isPlaying).length;
   const canStart = playingCount >= 1;
+  const tutorialId = tutorialIdForGroupGameType(room.game_type);
 
   const refreshParticipants = useCallback(async () => {
     const next = await fetchParticipantViews(room.id, currentUserId);
@@ -174,7 +177,10 @@ export function GameRoomLobby({ initialView }: GameRoomLobbyProps) {
   return (
     <div className="space-y-6">
       <div>
-        <BackLink fallbackHref="/dashboard/group-games" className="text-sm font-medium text-violet-600 hover:text-violet-700">← Back to group games</BackLink>
+        <div className="flex items-start justify-between gap-3">
+          <BackLink fallbackHref="/dashboard/group-games" className="text-sm font-medium text-violet-600 hover:text-violet-700">← Back to group games</BackLink>
+          {tutorialId ? <GameTutorialHost tutorialId={tutorialId} /> : null}
+        </div>
         <h1 className="mt-3 text-2xl font-bold text-zinc-900">
           {GROUP_GAME_LABELS[room.game_type]}
         </h1>
