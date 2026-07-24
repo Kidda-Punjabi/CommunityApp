@@ -115,6 +115,11 @@ export function AdminHomeContent() {
             }
           />
           <AdminNavListRow
+            href="/admin/content/kids-stories"
+            title="Kids bedtime stories"
+            description="Author Premium kids stories (empty until content is approved)"
+          />
+          <AdminNavListRow
             href="/admin/content/help"
             title="Help articles"
             description="FAQs and SOPs for cohorts, members, curriculum, and payments"

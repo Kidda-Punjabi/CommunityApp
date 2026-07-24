@@ -19,6 +19,7 @@ export function AccountCard({ isFreeOnly }: AccountCardProps) {
     <>
       <HubCard>
         <div className="divide-y divide-zinc-100">
+          <AccountListRow href="/dashboard/membership/premium" label="Kidda Premium" />
           <AccountListRow href="/dashboard/profile/billing" label="Billing and purchases" />
           <AccountListRow
             href="/courses"

@@ -173,6 +173,8 @@ export type AdminMemberListItem = {
   displayName: string;
   avatarUrl: string | null;
   accessTiers: string[];
+  membershipTier: string;
+  subscriptionStatus: string | null;
 };
 
 export type AdminMemberDetail = {
@@ -180,6 +182,9 @@ export type AdminMemberDetail = {
   email: string | null;
   displayName: string;
   avatarUrl: string | null;
+  membershipTier: string;
+  subscriptionStatus: string | null;
+  stripeSubscriptionId: string | null;
   courseAccess: {
     foundational: boolean;
     beginners: boolean;

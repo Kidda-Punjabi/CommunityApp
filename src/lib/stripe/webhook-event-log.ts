@@ -36,6 +36,17 @@ function summarizeEvent(event: Stripe.Event): Record<string, unknown> {
     summary.email = session.customer_details?.email ?? session.customer_email ?? null;
   }
 
+  if (event.type.startsWith("customer.subscription.")) {
+    const subscription = event.data.object as Stripe.Subscription;
+    summary.subscription_id = subscription.id;
+    summary.status = subscription.status;
+    summary.checkout_key = subscription.metadata?.checkout_key ?? null;
+    summary.app_user_id =
+      subscription.metadata?.app_user_id ??
+      subscription.metadata?.supabase_user_id ??
+      null;
+  }
+
   return summary;
 }
 

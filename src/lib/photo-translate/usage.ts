@@ -1,4 +1,4 @@
-import { PHOTO_TRANSLATE_MONTHLY_CAP_SCANS } from "@/lib/photo-translate/config";
+import { photoTranslateCapForPremium } from "@/lib/photo-translate/config";
 import { currentMonthKeyUtc, nextMonthResetLabel } from "@/lib/photo-translate/month-key";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -16,23 +16,26 @@ type UsageRow = {
 
 export function usageSnapshotFromCount(
   scanCount: number,
-  monthKey = currentMonthKeyUtc()
+  monthKey = currentMonthKeyUtc(),
+  capScans = photoTranslateCapForPremium(false)
 ): PhotoTranslateUsageSnapshot {
   const safeUsed = Math.max(0, Math.floor(scanCount));
   return {
     monthKey,
     scansUsed: safeUsed,
-    scansRemaining: Math.max(PHOTO_TRANSLATE_MONTHLY_CAP_SCANS - safeUsed, 0),
-    capScans: PHOTO_TRANSLATE_MONTHLY_CAP_SCANS,
+    scansRemaining: Math.max(capScans - safeUsed, 0),
+    capScans,
     resetsOn: nextMonthResetLabel(monthKey),
   };
 }
 
 export async function loadPhotoTranslateUsage(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  isPremium = false
 ): Promise<PhotoTranslateUsageSnapshot> {
   const monthKey = currentMonthKeyUtc();
+  const capScans = photoTranslateCapForPremium(isPremium);
   const { data, error } = await supabase
     .from("photo_translate_usage")
     .select("scan_count")
@@ -42,19 +45,25 @@ export async function loadPhotoTranslateUsage(
 
   if (error) {
     if (error.message.includes("photo_translate_usage")) {
-      return usageSnapshotFromCount(0, monthKey);
+      return usageSnapshotFromCount(0, monthKey, capScans);
     }
     throw new Error(error.message);
   }
 
-  return usageSnapshotFromCount((data as UsageRow | null)?.scan_count ?? 0, monthKey);
+  return usageSnapshotFromCount(
+    (data as UsageRow | null)?.scan_count ?? 0,
+    monthKey,
+    capScans
+  );
 }
 
 export async function incrementPhotoTranslateUsage(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  isPremium = false
 ): Promise<PhotoTranslateUsageSnapshot> {
   const monthKey = currentMonthKeyUtc();
+  const capScans = photoTranslateCapForPremium(isPremium);
 
   const { data: existing, error: readError } = await supabase
     .from("photo_translate_usage")
@@ -83,9 +92,9 @@ export async function incrementPhotoTranslateUsage(
     throw new Error(writeError.message);
   }
 
-  return usageSnapshotFromCount(nextCount, monthKey);
+  return usageSnapshotFromCount(nextCount, monthKey, capScans);
 }
 
-export function capReachedMessage(resetsOn: string): string {
-  return `You've used all 25 Photo Translate scans for this month. Your allowance resets on ${resetsOn}.`;
+export function capReachedMessage(resetsOn: string, capScans: number): string {
+  return `You've used all ${capScans} Photo Translate scans for this month. Your allowance resets on ${resetsOn}.`;
 }

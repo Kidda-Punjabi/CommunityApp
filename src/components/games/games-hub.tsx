@@ -4,14 +4,21 @@ import { GamesPlayAgainCard } from "@/components/games/games-play-again-card";
 import { HubLinkTile } from "@/components/games/hub-link-tile";
 import type { GameCatalogEntry } from "@/lib/games/catalog";
 import { BATTLE_GAME_HUB_ENTRIES, GROUP_GAME_HUB_ENTRIES } from "@/lib/games/hub-config";
+import { isGameUnlockedForTier } from "@/lib/games/premium-gating";
 
 type GamesHubProps = {
   vocabularyGames: GameCatalogEntry[];
   grammarGames: GameCatalogEntry[];
   personalBests: Record<string, number>;
+  isPremium?: boolean;
 };
 
-export function GamesHub({ vocabularyGames, grammarGames, personalBests }: GamesHubProps) {
+export function GamesHub({
+  vocabularyGames,
+  grammarGames,
+  personalBests,
+  isPremium = false,
+}: GamesHubProps) {
   return (
     <div className="space-y-6">
       <section>
@@ -22,12 +29,14 @@ export function GamesHub({ vocabularyGames, grammarGames, personalBests }: Games
         title="Vocabulary games"
         games={vocabularyGames}
         personalBests={personalBests}
+        isPremium={isPremium}
       />
 
       <GamesCategoryGrid
         title="Grammar games"
         games={grammarGames}
         personalBests={personalBests}
+        isPremium={isPremium}
       />
 
       <GamesHorizontalRow title="Group games">
@@ -55,4 +64,11 @@ export function GamesHub({ vocabularyGames, grammarGames, personalBests }: Games
       </GamesHorizontalRow>
     </div>
   );
+}
+
+export function gameLockedForHub(
+  type: GameCatalogEntry["type"],
+  isPremium: boolean
+): boolean {
+  return !isGameUnlockedForTier(type, isPremium);
 }

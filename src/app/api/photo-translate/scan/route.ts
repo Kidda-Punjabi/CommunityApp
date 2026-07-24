@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { canAccessPhotoTranslate } from "@/lib/photo-translate/access";
-import { PHOTO_TRANSLATE_MONTHLY_CAP_SCANS } from "@/lib/photo-translate/config";
 import { currentMonthKeyUtc } from "@/lib/photo-translate/month-key";
 import { scanPhotoForPunjabiText } from "@/lib/photo-translate/scan-image";
 import {
@@ -8,7 +7,7 @@ import {
   incrementPhotoTranslateUsage,
   loadPhotoTranslateUsage,
 } from "@/lib/photo-translate/usage";
-import { getCourseAccessContext } from "@/lib/membership/unlocked";
+import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,10 +23,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
 
-  const access = await getCourseAccessContext(supabase, user);
-  if (!canAccessPhotoTranslate(access)) {
+  if (!canAccessPhotoTranslate()) {
     return NextResponse.json(
-      { error: "Photo Translate is available on paid Kidda plans." },
+      { error: "Photo Translate is available to signed-in members." },
       { status: 403 }
     );
   }
@@ -53,24 +51,26 @@ export async function POST(request: Request) {
   }
 
   const monthKey = currentMonthKeyUtc();
+  const isPremium = await hasPremiumAccess(adminClient, user.id);
 
   let usage;
   try {
-    usage = await loadPhotoTranslateUsage(adminClient, user.id);
+    usage = await loadPhotoTranslateUsage(adminClient, user.id, isPremium);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load usage.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  if (usage.scansUsed >= PHOTO_TRANSLATE_MONTHLY_CAP_SCANS) {
+  if (usage.scansUsed >= usage.capScans) {
     return NextResponse.json(
       {
         error: "cap_reached",
-        message: capReachedMessage(usage.resetsOn),
+        message: capReachedMessage(usage.resetsOn, usage.capScans),
         scans_remaining_this_month: 0,
         scans_used_this_month: usage.scansUsed,
         month_key: monthKey,
         resets_on: usage.resetsOn,
+        cap_scans: usage.capScans,
       },
       { status: 429 }
     );
@@ -80,7 +80,11 @@ export async function POST(request: Request) {
     const imageBytes = await image.arrayBuffer();
     const mediaType = image.type || "image/jpeg";
     const result = await scanPhotoForPunjabiText(imageBytes, mediaType);
-    const updatedUsage = await incrementPhotoTranslateUsage(adminClient, user.id);
+    const updatedUsage = await incrementPhotoTranslateUsage(
+      adminClient,
+      user.id,
+      isPremium
+    );
 
     return NextResponse.json({
       text_detected: result.text_detected,
@@ -90,6 +94,7 @@ export async function POST(request: Request) {
       scans_used_this_month: updatedUsage.scansUsed,
       month_key: updatedUsage.monthKey,
       resets_on: updatedUsage.resetsOn,
+      cap_scans: updatedUsage.capScans,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Photo scan failed.";
@@ -107,10 +112,9 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
 
-  const access = await getCourseAccessContext(supabase, user);
-  if (!canAccessPhotoTranslate(access)) {
+  if (!canAccessPhotoTranslate()) {
     return NextResponse.json(
-      { error: "Photo Translate is available on paid Kidda plans." },
+      { error: "Photo Translate is available to signed-in members." },
       { status: 403 }
     );
   }
@@ -121,7 +125,8 @@ export async function GET() {
   }
 
   try {
-    const usage = await loadPhotoTranslateUsage(adminClient, user.id);
+    const isPremium = await hasPremiumAccess(adminClient, user.id);
+    const usage = await loadPhotoTranslateUsage(adminClient, user.id, isPremium);
     return NextResponse.json({
       scans_remaining_this_month: usage.scansRemaining,
       scans_used_this_month: usage.scansUsed,

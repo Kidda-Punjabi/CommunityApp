@@ -63,6 +63,18 @@ function MemberListContent({
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-zinc-900">{member.displayName}</p>
         {member.email && <p className="truncate text-xs text-zinc-500">{member.email}</p>}
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {member.membershipTier === "premium" ? (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+              Premium
+              {member.subscriptionStatus ? ` · ${member.subscriptionStatus}` : ""}
+            </span>
+          ) : (
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+              {member.membershipTier}
+            </span>
+          )}
+        </div>
         <div className="mt-1.5">
           <AccessBadges tiers={member.accessTiers} />
         </div>

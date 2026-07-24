@@ -9,11 +9,54 @@ import { loadAccessTiersByUserId } from "@/lib/admin/member-access-tiers";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { revalidatePath } from "next/cache";
 import type { AdminMemberDetail, AdminMemberListItem } from "./types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const ADMIN_PATH = "/admin/content";
 
 function revalidateAdmin() {
   revalidatePath(ADMIN_PATH);
+}
+
+async function loadPremiumFieldsByUserId(
+  supabase: SupabaseClient,
+  userIds: string[]
+): Promise<
+  Map<string, { membershipTier: string; subscriptionStatus: string | null }>
+> {
+  const map = new Map<
+    string,
+    { membershipTier: string; subscriptionStatus: string | null }
+  >();
+  if (userIds.length === 0) return map;
+
+  const [{ data: profiles }, { data: memberships }] = await Promise.all([
+    supabase.from("profiles").select("id, membership_tier").in("id", userIds),
+    supabase
+      .from("memberships")
+      .select("user_id, status, updated_at")
+      .in("user_id", userIds)
+      .order("updated_at", { ascending: false }),
+  ]);
+
+  for (const profile of profiles ?? []) {
+    map.set(profile.id, {
+      membershipTier: (profile.membership_tier as string) ?? "free",
+      subscriptionStatus: null,
+    });
+  }
+
+  for (const row of memberships ?? []) {
+    const existing = map.get(row.user_id) ?? {
+      membershipTier: "free",
+      subscriptionStatus: null,
+    };
+    if (!existing.subscriptionStatus) {
+      existing.subscriptionStatus = row.status as string;
+      map.set(row.user_id, existing);
+    }
+  }
+
+  return map;
 }
 
 function courseForTier(
@@ -57,6 +100,8 @@ export async function listAdminMembers(
           displayName: getDisplayName(profile) ?? "Member",
           avatarUrl: profile.avatar_url,
           accessTiers: [],
+          membershipTier: "free",
+          subscriptionStatus: null,
         });
       }
 
@@ -73,16 +118,24 @@ export async function listAdminMembers(
           displayName: getDisplayName(profile ?? null) ?? user.email ?? "Member",
           avatarUrl: profile?.avatar_url ?? null,
           accessTiers: [],
+          membershipTier: "free",
+          subscriptionStatus: null,
         });
       }
 
       const userIds = [...byId.keys()];
       if (userIds.length === 0) return { members: [] };
 
-      const tiersByUser = await loadAccessTiersByUserId(supabase, userIds);
+      const [tiersByUser, premiumByUser] = await Promise.all([
+        loadAccessTiersByUserId(supabase, userIds),
+        loadPremiumFieldsByUserId(supabase, userIds),
+      ]);
 
       for (const member of byId.values()) {
         member.accessTiers = [...(tiersByUser.get(member.userId) ?? [])];
+        const premium = premiumByUser.get(member.userId);
+        member.membershipTier = premium?.membershipTier ?? "free";
+        member.subscriptionStatus = premium?.subscriptionStatus ?? null;
       }
 
       return { members: [...byId.values()].slice(0, 50) };
@@ -99,24 +152,28 @@ export async function listAdminMembers(
     const userIds = users.map((user) => user.id);
     if (userIds.length === 0) return { members: [] };
 
-    const [{ data: profiles }, tiersByUser] = await Promise.all([
+    const [{ data: profiles }, tiersByUser, premiumByUser] = await Promise.all([
       supabase
         .from("profiles")
         .select("id, full_name, preferred_name, avatar_url")
         .in("id", userIds),
       loadAccessTiersByUserId(supabase, userIds),
+      loadPremiumFieldsByUserId(supabase, userIds),
     ]);
 
     const profileById = new Map((profiles ?? []).map((row) => [row.id, row] as const));
 
     const members: AdminMemberListItem[] = users.map((user) => {
       const profile = profileById.get(user.id);
+      const premium = premiumByUser.get(user.id);
       return {
         userId: user.id,
         email: user.email ?? null,
         displayName: getDisplayName(profile ?? null) ?? user.email ?? "Member",
         avatarUrl: profile?.avatar_url ?? null,
         accessTiers: [...(tiersByUser.get(user.id) ?? [])],
+        membershipTier: premium?.membershipTier ?? "free",
+        subscriptionStatus: premium?.subscriptionStatus ?? null,
       };
     });
 
@@ -144,11 +201,12 @@ export async function loadAdminMemberDetail(
       { data: enrollmentRows },
       { data: courses },
       { data: cohortMemberRows },
+      { data: membership },
     ] = await Promise.all([
       supabase.auth.admin.getUserById(userId),
       supabase
         .from("profiles")
-        .select("id, full_name, preferred_name, avatar_url")
+        .select("id, full_name, preferred_name, avatar_url, membership_tier")
         .eq("id", userId)
         .maybeSingle(),
       supabase.from("course_access").select("course_id").eq("user_id", userId),
@@ -162,6 +220,13 @@ export async function loadAdminMemberDetail(
         .select("cohort_id, cohorts(id, name)")
         .eq("user_id", userId)
         .is("left_at", null),
+      supabase
+        .from("memberships")
+        .select("status, stripe_subscription_id, updated_at")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     if (authError) return { detail: null, error: authError.message };
@@ -222,6 +287,9 @@ export async function loadAdminMemberDetail(
         displayName:
           getDisplayName(profile ?? null) ?? authUser.user.email ?? "Member",
         avatarUrl: profile?.avatar_url ?? null,
+        membershipTier: (profile?.membership_tier as string) ?? "free",
+        subscriptionStatus: (membership?.status as string) ?? null,
+        stripeSubscriptionId: membership?.stripe_subscription_id ?? null,
         courseAccess: {
           foundational: hasTierAccess("foundational"),
           beginners: hasTierAccess("beginners"),

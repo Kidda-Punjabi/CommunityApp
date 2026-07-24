@@ -151,6 +151,15 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
           />
           <div>
             {detail.email && <p className="text-sm text-zinc-600">{detail.email}</p>}
+            <p className="mt-1 text-xs text-zinc-500">
+              Membership:{" "}
+              <span className="font-semibold capitalize text-zinc-800">
+                {detail.membershipTier}
+              </span>
+              {detail.subscriptionStatus
+                ? ` · subscription ${detail.subscriptionStatus}`
+                : ""}
+            </p>
             {detail.activeCohorts.length > 0 && (
               <p className="mt-1 text-xs text-zinc-500">
                 Cohorts: {detail.activeCohorts.map((cohort) => cohort.cohortName).join(", ")}

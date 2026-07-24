@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { KidLucideIcon } from "@/components/kids/kid-lucide-icon";
+import { loadKidBedtimeStoriesForParent } from "@/lib/kids/bedtime-stories";
+import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 import { loadKidSession } from "@/lib/kids/session";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -29,6 +31,12 @@ export default async function KidsHomePage() {
   const session = await loadKidSession(user.id);
   const kid = session.activeKidProfile;
   if (!kid) redirect("/dashboard/profile/kids");
+
+  const { stories, parentIsPremium, tableReady } = await loadKidBedtimeStoriesForParent(
+    supabase,
+    user.id,
+    kid.age_tier
+  );
 
   return (
     <div>
@@ -71,6 +79,43 @@ export default async function KidsHomePage() {
             </span>
           </Link>
         )}
+
+        {tableReady ? (
+          <section className="rounded-3xl bg-white p-5 shadow-md">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-bold text-zinc-900">Bedtime stories</h2>
+              {!parentIsPremium ? (
+                <Link
+                  href={PREMIUM_UNLOCK_PATH}
+                  className="text-xs font-semibold text-violet-600"
+                >
+                  Premium →
+                </Link>
+              ) : null}
+            </div>
+            {stories.length === 0 ? (
+              <p className="mt-2 text-sm text-zinc-500">
+                Stories are coming soon — check back after a grown-up adds some.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {stories.map((story) => (
+                  <li
+                    key={story.id}
+                    className={`rounded-2xl px-3 py-3 text-sm ${
+                      story.unlocked ? "bg-sky-50 text-sky-900" : "bg-zinc-50 text-zinc-500"
+                    }`}
+                  >
+                    <span className="font-semibold">{story.title}</span>
+                    {!story.unlocked ? (
+                      <span className="mt-0.5 block text-xs">Unlock with Premium</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ) : null}
       </div>
     </div>
   );

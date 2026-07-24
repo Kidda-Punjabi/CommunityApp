@@ -30,7 +30,7 @@ export function TopicsPathSection({ items }: TopicsPathSectionProps) {
         </h2>
         <p className="mt-1 text-sm text-zinc-500">
           First {TOPICS_FREE_WEEK_COUNT} weeks free. Weeks {TOPICS_FREE_WEEK_COUNT + 1}
-          –24 unlock with a Topics subscription.
+          –24 unlock with Premium.
         </p>
       </div>
 
@@ -92,7 +92,7 @@ export function TopicsPathSection({ items }: TopicsPathSectionProps) {
                       href={TOPICS_SUBSCRIPTION_UNLOCK_URL}
                       className={`mt-1.5 inline-flex ${ui.btnSecondary} text-xs`}
                     >
-                      Unlock with Topics subscription
+                      Unlock with Premium
                     </Link>
                   </div>
                 )}

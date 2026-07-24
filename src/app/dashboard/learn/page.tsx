@@ -29,9 +29,8 @@ import {
   hasTopicsAccess,
   isTopicWeekUnlocked,
 } from "@/lib/topics/access";
+import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { redirect } from "next/navigation";
-
-const COMMUNITY_COURSE_ID = "22f0e217-92a7-46f0-b38e-651409d7d118";
 
 export default async function LearnPage() {
   const session = await getCachedAuthSession();
@@ -54,7 +53,7 @@ export default async function LearnPage() {
         fetchLessonCompletionMap(supabase, user.id, lessons)
       ),
       loadStudentNextLiveLesson(supabase, user.id),
-      hasTopicsAccess(user.id),
+      hasTopicsAccess(user.id, supabase),
     ]);
 
   const topicsItems = allLessons

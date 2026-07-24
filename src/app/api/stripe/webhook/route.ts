@@ -1,5 +1,6 @@
 import { syncBookingCreditFromStripeEvent } from "@/lib/stripe/sync-booking-credit";
 import { syncMembershipFromStripeEvent } from "@/lib/stripe/sync-membership";
+import { syncPremiumFromStripeEvent } from "@/lib/stripe/sync-premium-membership";
 import {
   logStripeWebhookReceived,
   logStripeWebhookResult,
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
 
   try {
     const bookingResult = await syncBookingCreditFromStripeEvent(event);
+    await syncPremiumFromStripeEvent(event);
     await syncMembershipFromStripeEvent(event);
     await logStripeWebhookResult(
       event.id,

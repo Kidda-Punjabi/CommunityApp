@@ -1,9 +1,8 @@
-import type { CourseAccessContext } from "@/lib/membership/unlocked";
-
 /**
- * Photo Translate is for paid members only — same gate as Live Translate
- * (`course_access` via `isFreeOnly`, not legacy `profiles.membership_tier`).
+ * Photo Translate is available to all signed-in members.
+ * Caps differ by Premium (see photoTranslateCapForPremium).
+ * Course purchases (Foundational/Beginners) do not change this gate.
  */
-export function canAccessPhotoTranslate(access: CourseAccessContext): boolean {
-  return !access.isFreeOnly;
+export function canAccessPhotoTranslate(_access?: unknown): boolean {
+  return true;
 }
