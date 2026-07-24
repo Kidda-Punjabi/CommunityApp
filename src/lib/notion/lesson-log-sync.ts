@@ -9,6 +9,7 @@ import {
   plainTextFromTitle,
   relationIds,
 } from "@/lib/notion/client";
+import { omitLessonLogManualFieldsFromPullPatch } from "@/lib/notion/lesson-log-field-source";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type NotionQueryResponse = {
@@ -254,8 +255,14 @@ export async function upsertLessonLogEntryFromNotion(
     }
   }
 
+  const { data: existing } = await supabase
+    .from("cohort_lesson_log_entries")
+    .select("id, source, status_source, reviewed_source, notes_source")
+    .eq("notion_page_id", page.pageId)
+    .maybeSingle();
+
   const now = new Date().toISOString();
-  const { error } = await supabase.from("cohort_lesson_log_entries").upsert(
+  const patch = omitLessonLogManualFieldsFromPullPatch(
     {
       notion_page_id: page.pageId,
       cohort_id: cohortId,
@@ -266,19 +273,31 @@ export async function upsertLessonLogEntryFromNotion(
       slides_url: page.slidesUrl,
       flashcards_url: page.flashcardsUrl,
       notes: page.notes,
+      notes_source: "notion",
       notion_tutor_user_id: page.notionTutorUserId,
       notion_last_edited_at: page.lastEditedTime,
       status: page.status,
+      status_source: "notion",
       reviewed: page.reviewed,
+      reviewed_source: "notion",
       notion_sync_status: syncStatus,
       notion_sync_error: syncError,
       notion_synced_at: now,
-      source: "notion",
+      source: existing?.source === "app" ? "app" : "notion",
     },
-    { onConflict: "notion_page_id" }
+    existing
   );
 
-  if (error) throw new Error(error.message);
+  if (existing?.id) {
+    const { error } = await supabase
+      .from("cohort_lesson_log_entries")
+      .update(patch)
+      .eq("id", existing.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from("cohort_lesson_log_entries").insert(patch);
+    if (error) throw new Error(error.message);
+  }
   return "upserted";
 }
 
@@ -328,15 +347,71 @@ export async function pullLessonLogFromNotion(
 }
 
 export type CreateLessonLogInput = {
-  cohortId: string;
+  cohortId?: string | null;
+  packageInstanceId?: string | null;
   lessonDate: string;
   notes?: string | null;
   recordingUrl?: string | null;
   slidesUrl?: string | null;
   flashcardsUrl?: string | null;
-  loggedBy: string;
+  status?: "Scheduled" | "Completed" | "Cancelled" | null;
+  loggedBy?: string | null;
   notionTutorUserId?: string | null;
 };
+
+async function resolvePackageNotionPageId(
+  supabase: SupabaseClient,
+  input: { cohortId?: string | null; packageInstanceId?: string | null }
+): Promise<
+  | {
+      ok: true;
+      cohortId: string | null;
+      packageInstanceId: string | null;
+      name: string;
+      packageNotionPageId: string;
+    }
+  | { ok: false; error: string }
+> {
+  if (input.cohortId) {
+    const { data: cohort, error } = await supabase
+      .from("cohorts")
+      .select("id, name, notion_page_id")
+      .eq("id", input.cohortId)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!cohort?.notion_page_id) {
+      return { ok: false, error: "This cohort is not linked to Notion yet." };
+    }
+    return {
+      ok: true,
+      cohortId: cohort.id,
+      packageInstanceId: null,
+      name: cohort.name,
+      packageNotionPageId: cohort.notion_page_id,
+    };
+  }
+
+  if (input.packageInstanceId) {
+    const { data: instance, error } = await supabase
+      .from("package_instances")
+      .select("id, name, notion_page_id")
+      .eq("id", input.packageInstanceId)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!instance?.notion_page_id) {
+      return { ok: false, error: "This package instance is not linked to Notion yet." };
+    }
+    return {
+      ok: true,
+      cohortId: null,
+      packageInstanceId: instance.id,
+      name: instance.name?.trim() || "1-1 package",
+      packageNotionPageId: instance.notion_page_id,
+    };
+  }
+
+  return { ok: false, error: "Choose a cohort or package instance." };
+}
 
 export async function createLessonLogInNotionAndSupabase(
   supabase: SupabaseClient,
@@ -347,20 +422,11 @@ export async function createLessonLogInNotionAndSupabase(
     return { ok: false, error: "Lesson date is required." };
   }
 
-  const { data: cohort, error: cohortError } = await supabase
-    .from("cohorts")
-    .select("id, name, notion_page_id")
-    .eq("id", input.cohortId)
-    .maybeSingle();
+  const target = await resolvePackageNotionPageId(supabase, input);
+  if (!target.ok) return target;
 
-  if (cohortError) {
-    return { ok: false, error: cohortError.message };
-  }
-  if (!cohort?.notion_page_id) {
-    return { ok: false, error: "This cohort is not linked to Notion yet." };
-  }
-
-  const title = `${cohort.name}  - ${lessonDate} `;
+  const status = input.status ?? "Completed";
+  const title = `${target.name}  - ${lessonDate} `;
   const properties: Record<string, unknown> = {
     Lesson: {
       title: [{ type: "text", text: { content: title.slice(0, 2000) } }],
@@ -369,8 +435,10 @@ export async function createLessonLogInNotionAndSupabase(
       date: { start: lessonDate },
     },
     "New Package DB": {
-      relation: [{ id: cohort.notion_page_id }],
+      relation: [{ id: target.packageNotionPageId }],
     },
+    Status: { select: { name: status } },
+    Reviewed: { checkbox: false },
   };
 
   if (input.notes?.trim()) {
@@ -392,8 +460,6 @@ export async function createLessonLogInNotionAndSupabase(
       people: [{ id: input.notionTutorUserId.trim() }],
     };
   }
-  properties.Status = { select: { name: "Completed" } };
-  properties.Reviewed = { checkbox: false };
 
   let notionPageId: string;
   try {
@@ -412,27 +478,31 @@ export async function createLessonLogInNotionAndSupabase(
     };
   }
 
+  const now = new Date().toISOString();
   const { data: inserted, error: insertError } = await supabase
     .from("cohort_lesson_log_entries")
     .insert({
       notion_page_id: notionPageId,
-      cohort_id: cohort.id,
-      package_instance_id: null,
+      cohort_id: target.cohortId,
+      package_instance_id: target.packageInstanceId,
       lesson_title: title.trim(),
       lesson_date: lessonDate,
       recording_url: input.recordingUrl?.trim() || null,
       slides_url: input.slidesUrl?.trim() || null,
       flashcards_url: input.flashcardsUrl?.trim() || null,
       notes: input.notes?.trim() || null,
+      notes_source: "notion",
       notion_tutor_user_id: input.notionTutorUserId?.trim() || null,
-      logged_by: input.loggedBy,
+      logged_by: input.loggedBy?.trim() || null,
       source: "app",
-      status: "Completed",
+      status,
+      status_source: "notion",
       reviewed: false,
+      reviewed_source: "notion",
       notion_sync_status: "synced",
       notion_sync_error: null,
-      notion_synced_at: new Date().toISOString(),
-      notion_last_edited_at: new Date().toISOString(),
+      notion_synced_at: now,
+      notion_last_edited_at: now,
     })
     .select("id")
     .single();
@@ -447,4 +517,106 @@ export async function createLessonLogInNotionAndSupabase(
   }
 
   return { ok: true, entryId: inserted.id, notionPageId };
+}
+
+export type UpdateLessonLogManualFieldsInput = {
+  status?: "Scheduled" | "Completed" | "Cancelled" | null;
+  reviewed?: boolean;
+  notes?: string | null;
+};
+
+/**
+ * Admin edits that lock fields (mirrors setting tutor_id_source = 'manual').
+ * Does not push back to Notion — Supabase-only override until reset.
+ */
+export async function updateLessonLogManualFields(
+  supabase: SupabaseClient,
+  entryId: string,
+  fields: UpdateLessonLogManualFieldsInput
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const patch: Record<string, unknown> = {};
+
+  if (fields.status !== undefined) {
+    patch.status = fields.status;
+    patch.status_source = "manual";
+  }
+  if (fields.reviewed !== undefined) {
+    patch.reviewed = fields.reviewed;
+    patch.reviewed_source = "manual";
+  }
+  if (fields.notes !== undefined) {
+    patch.notes = fields.notes?.trim() || null;
+    patch.notes_source = "manual";
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { ok: false, error: "No fields to update." };
+  }
+
+  const { error } = await supabase
+    .from("cohort_lesson_log_entries")
+    .update(patch)
+    .eq("id", entryId);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Reset locked fields from the linked Notion page (mirrors resetPackageTutorToNotion).
+ */
+export async function resetLessonLogFieldsToNotion(
+  supabase: SupabaseClient,
+  entryId: string,
+  fields: Array<"status" | "reviewed" | "notes">
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (fields.length === 0) return { ok: false, error: "Choose a field to reset." };
+
+  const { data: entry, error: loadError } = await supabase
+    .from("cohort_lesson_log_entries")
+    .select("id, notion_page_id")
+    .eq("id", entryId)
+    .maybeSingle();
+
+  if (loadError) return { ok: false, error: loadError.message };
+  if (!entry?.notion_page_id) {
+    return { ok: false, error: "This entry is not linked to a Notion page." };
+  }
+
+  let page: ParsedLessonLogPage;
+  try {
+    const raw = await notionJson<{
+      id: string;
+      last_edited_time: string;
+      properties: Record<string, unknown>;
+    }>(`/pages/${entry.notion_page_id}`);
+    page = parseNotionLessonLogPage(raw);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed to load Notion page.",
+    };
+  }
+
+  const patch: Record<string, unknown> = {};
+  if (fields.includes("status")) {
+    patch.status = page.status;
+    patch.status_source = "notion";
+  }
+  if (fields.includes("reviewed")) {
+    patch.reviewed = page.reviewed;
+    patch.reviewed_source = "notion";
+  }
+  if (fields.includes("notes")) {
+    patch.notes = page.notes;
+    patch.notes_source = "notion";
+  }
+
+  const { error } = await supabase
+    .from("cohort_lesson_log_entries")
+    .update(patch)
+    .eq("id", entryId);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }

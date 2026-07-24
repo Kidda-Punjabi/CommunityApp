@@ -17,6 +17,9 @@ export type AdminLessonLogEntry = {
   lessonDate: string;
   status: LessonLogStatus | null;
   reviewed: boolean;
+  statusSource: "notion" | "manual";
+  reviewedSource: "notion" | "manual";
+  notesSource: "notion" | "manual";
   recordingUrl: string | null;
   slidesUrl: string | null;
   flashcardsUrl: string | null;
@@ -57,8 +60,10 @@ export type AdminLessonLogSnapshot = {
     unlinked: number;
   };
   filters: {
-    /** Cohorts and package instances (filter by group run id). */
+    /** Cohorts and package instances that already have log entries. */
     packages: Array<{ id: string; name: string; kind: "cohort" | "package_instance" }>;
+    /** All Notion-linked cohorts/instances for create-from-app. */
+    createTargets: Array<{ id: string; name: string; kind: "cohort" | "package_instance" }>;
     tutors: Array<{ id: string; name: string }>;
     statuses: LessonLogStatus[];
   };
@@ -78,11 +83,18 @@ type EntryRow = {
   notion_tutor_user_id: string | null;
   status: string | null;
   reviewed: boolean | null;
+  status_source: string | null;
+  reviewed_source: string | null;
+  notes_source: string | null;
   notion_sync_status: string | null;
   notion_sync_error: string | null;
   notion_synced_at: string | null;
   source: string;
 };
+
+function asFieldSource(value: string | null): "notion" | "manual" {
+  return value === "manual" ? "manual" : "notion";
+}
 
 function asStatus(value: string | null): LessonLogStatus | null {
   if (value === "Scheduled" || value === "Completed" || value === "Cancelled") {
@@ -109,15 +121,43 @@ export async function loadAdminLessonLogSnapshot(
       missingRecording: 0,
       unlinked: 0,
     },
-    filters: { packages: [], tutors: [], statuses: ["Scheduled", "Completed", "Cancelled"] },
+    filters: {
+      packages: [],
+      createTargets: [],
+      tutors: [],
+      statuses: ["Scheduled", "Completed", "Cancelled"],
+    },
   };
 
-  const { data: entries, error } = await supabase
-    .from("cohort_lesson_log_entries")
-    .select(
-      "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, notion_sync_status, notion_sync_error, notion_synced_at, source"
-    )
-    .order("lesson_date", { ascending: false });
+  const selectWithSources =
+    "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, status_source, reviewed_source, notes_source, notion_sync_status, notion_sync_error, notion_synced_at, source";
+  const selectWithoutSources =
+    "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, notion_sync_status, notion_sync_error, notion_synced_at, source";
+
+  let entries: EntryRow[] | null = null;
+  let error: { message: string } | null = null;
+
+  {
+    const first = await supabase
+      .from("cohort_lesson_log_entries")
+      .select(selectWithSources)
+      .order("lesson_date", { ascending: false });
+    if (
+      first.error?.message.includes("status_source") ||
+      first.error?.message.includes("reviewed_source") ||
+      first.error?.message.includes("notes_source")
+    ) {
+      const second = await supabase
+        .from("cohort_lesson_log_entries")
+        .select(selectWithoutSources)
+        .order("lesson_date", { ascending: false });
+      entries = (second.data ?? null) as EntryRow[] | null;
+      error = second.error;
+    } else {
+      entries = (first.data ?? null) as EntryRow[] | null;
+      error = first.error;
+    }
+  }
 
   if (error) {
     if (
@@ -126,14 +166,46 @@ export async function loadAdminLessonLogSnapshot(
       error.message.includes("notion_sync_status")
     ) {
       throw new Error(
-        `${error.message} Run supabase/cohort-lesson-log-admin.sql if columns are missing.`
+        `${error.message} Run supabase/cohort-lesson-log-admin.sql and supabase/cohort-lesson-log-manual-source.sql if columns are missing.`
       );
     }
     throw new Error(error.message);
   }
 
   const rows = (entries ?? []) as EntryRow[];
-  if (rows.length === 0) return empty;
+
+  const [{ data: linkedCohorts }, { data: linkedInstances }] = await Promise.all([
+    supabase
+      .from("cohorts")
+      .select("id, name")
+      .not("notion_page_id", "is", null)
+      .order("name"),
+    supabase
+      .from("package_instances")
+      .select("id, name")
+      .not("notion_page_id", "is", null)
+      .order("name"),
+  ]);
+
+  const createTargets = [
+    ...(linkedCohorts ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      kind: "cohort" as const,
+    })),
+    ...(linkedInstances ?? []).map((i) => ({
+      id: i.id,
+      name: i.name?.trim() || "Untitled package instance",
+      kind: "package_instance" as const,
+    })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+
+  if (rows.length === 0) {
+    return {
+      ...empty,
+      filters: { ...empty.filters, createTargets },
+    };
+  }
 
   const cohortIds = [...new Set(rows.map((r) => r.cohort_id).filter(Boolean))] as string[];
   const instanceIds = [
@@ -211,6 +283,9 @@ export async function loadAdminLessonLogSnapshot(
       lessonDate: row.lesson_date,
       status: asStatus(row.status),
       reviewed: Boolean(row.reviewed),
+      statusSource: asFieldSource(row.status_source),
+      reviewedSource: asFieldSource(row.reviewed_source),
+      notesSource: asFieldSource(row.notes_source),
       recordingUrl: row.recording_url,
       slidesUrl: row.slides_url,
       flashcardsUrl: row.flashcards_url,
@@ -327,6 +402,7 @@ export async function loadAdminLessonLogSnapshot(
     },
     filters: {
       packages: filterPackages,
+      createTargets,
       tutors: filterTutors,
       statuses: ["Scheduled", "Completed", "Cancelled"],
     },

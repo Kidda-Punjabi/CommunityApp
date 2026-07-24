@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
+  createAdminLessonLogEntry,
   fetchAdminLessonLog,
   refreshLessonLogFromNotion,
+  resetAdminLessonLogFieldsToNotion,
+  updateAdminLessonLogFields,
 } from "@/app/admin/lesson-log/actions";
 import {
   fetchNotionTutorMapData,
@@ -17,6 +20,10 @@ import type {
   LessonLogStatus,
 } from "@/lib/admin/load-admin-lesson-log";
 import { ui } from "@/lib/ui/styles";
+
+function todayDateInput(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -72,6 +79,20 @@ export function AdminLessonLogSection() {
   const [notionUsers, setNotionUsers] = useState<
     Array<{ id: string; name: string; type: string }>
   >([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createDraft, setCreateDraft] = useState({
+    runId: "",
+    lessonDate: todayDateInput(),
+    notes: "",
+    recordingUrl: "",
+    status: "Completed" as LessonLogStatus,
+  });
+  const [editDraft, setEditDraft] = useState<{
+    entryId: string;
+    status: LessonLogStatus | "";
+    reviewed: boolean;
+    notes: string;
+  } | null>(null);
 
   function reload() {
     startTransition(async () => {
@@ -176,6 +197,14 @@ export function AdminLessonLogSection() {
           <button
             type="button"
             disabled={pending}
+            onClick={() => setShowCreate((v) => !v)}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 disabled:opacity-60"
+          >
+            {showCreate ? "Hide create" : "Log lesson"}
+          </button>
+          <button
+            type="button"
+            disabled={pending}
             onClick={() => {
               startTransition(async () => {
                 setMessage(null);
@@ -215,6 +244,110 @@ export function AdminLessonLogSection() {
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{message}</p>
       ) : null}
       {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p> : null}
+
+      {showCreate ? (
+        <div className="space-y-3 rounded-2xl border border-violet-200 bg-violet-50/40 p-4">
+          <p className="text-sm font-medium text-zinc-900">
+            Log a lesson from the app ({`source = 'app'`})
+          </p>
+          <p className="text-xs text-zinc-600">
+            Creates a Notion Lessons Log page with the correct New Package DB relation, then stores
+            the Notion page id on the Supabase row.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={createDraft.runId}
+              onChange={(e) => setCreateDraft((d) => ({ ...d, runId: e.target.value }))}
+              className="min-w-[14rem] flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+            >
+              <option value="">Choose cohort / package…</option>
+              {(snapshot?.filters.createTargets ?? []).map((pkg) => (
+                <option key={`${pkg.kind}:${pkg.id}`} value={pkg.id}>
+                  {pkg.name}
+                  {pkg.kind === "package_instance" ? " (1-1)" : ""}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={createDraft.lessonDate}
+              onChange={(e) => setCreateDraft((d) => ({ ...d, lessonDate: e.target.value }))}
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+            />
+            <select
+              value={createDraft.status}
+              onChange={(e) =>
+                setCreateDraft((d) => ({
+                  ...d,
+                  status: e.target.value as LessonLogStatus,
+                }))
+              }
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+            >
+              <option value="Completed">Completed</option>
+              <option value="Scheduled">Scheduled</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+          <input
+            value={createDraft.recordingUrl}
+            onChange={(e) => setCreateDraft((d) => ({ ...d, recordingUrl: e.target.value }))}
+            placeholder="Recording URL (optional)"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+          />
+          <textarea
+            value={createDraft.notes}
+            onChange={(e) => setCreateDraft((d) => ({ ...d, notes: e.target.value }))}
+            placeholder="Notes (optional)"
+            rows={2}
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            disabled={pending || !createDraft.runId || !createDraft.lessonDate}
+            className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            onClick={() => {
+              const pkg = snapshot?.filters.createTargets.find((p) => p.id === createDraft.runId);
+              if (!pkg) {
+                setError("Choose a cohort or package.");
+                return;
+              }
+              startTransition(async () => {
+                setMessage(null);
+                setError(null);
+                const result = await createAdminLessonLogEntry({
+                  kind: pkg.kind,
+                  runId: pkg.id,
+                  lessonDate: createDraft.lessonDate,
+                  notes: createDraft.notes,
+                  recordingUrl: createDraft.recordingUrl,
+                  status: createDraft.status,
+                });
+                if (result.error) {
+                  setError(result.error);
+                  return;
+                }
+                setMessage(
+                  `${result.success ?? "Created."}${
+                    result.notionPageId ? ` Notion page ${result.notionPageId}` : ""
+                  }`
+                );
+                setShowCreate(false);
+                setCreateDraft({
+                  runId: "",
+                  lessonDate: todayDateInput(),
+                  notes: "",
+                  recordingUrl: "",
+                  status: "Completed",
+                });
+                reload();
+              });
+            }}
+          >
+            Create in app + Notion
+          </button>
+        </div>
+      ) : null}
 
       {snapshot ? (
         <div className="grid gap-3 sm:grid-cols-4">
@@ -388,7 +521,10 @@ export function AdminLessonLogSection() {
                               <p className="mt-0.5 text-xs text-zinc-500">
                                 {formatDate(entry.lessonDate)}
                                 {entry.status ? ` · ${entry.status}` : ""}
+                                {entry.statusSource === "manual" ? " (manual)" : ""}
                                 {entry.reviewed ? " · Reviewed" : ""}
+                                {entry.reviewedSource === "manual" ? " (manual)" : ""}
+                                {entry.source === "app" ? " · from app" : ""}
                                 {entry.resolvedTutorName
                                   ? ` · ${entry.resolvedTutorName}`
                                   : entry.notionTutorUserId
@@ -404,6 +540,144 @@ export function AdminLessonLogSection() {
                                 <p className="mt-1 text-[11px] text-red-600">
                                   {entry.notionSyncError}
                                 </p>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="mt-2 text-xs font-medium text-violet-700 hover:text-violet-500"
+                                onClick={() =>
+                                  setEditDraft(
+                                    editDraft?.entryId === entry.id
+                                      ? null
+                                      : {
+                                          entryId: entry.id,
+                                          status: entry.status ?? "",
+                                          reviewed: entry.reviewed,
+                                          notes: entry.notes ?? "",
+                                        }
+                                  )
+                                }
+                              >
+                                {editDraft?.entryId === entry.id
+                                  ? "Cancel edit"
+                                  : "Edit status / reviewed / notes"}
+                              </button>
+                              {editDraft?.entryId === entry.id ? (
+                                <div className="mt-2 space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                                  <p className="text-[11px] text-zinc-600">
+                                    Saves as manual override (like Packages tutor_id_source) — pull
+                                    will not overwrite until reset. Does not push back to Notion.
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    <select
+                                      value={editDraft.status}
+                                      onChange={(e) =>
+                                        setEditDraft({
+                                          ...editDraft,
+                                          status: e.target.value as LessonLogStatus | "",
+                                        })
+                                      }
+                                      className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs"
+                                    >
+                                      <option value="">No status</option>
+                                      <option value="Scheduled">Scheduled</option>
+                                      <option value="Completed">Completed</option>
+                                      <option value="Cancelled">Cancelled</option>
+                                    </select>
+                                    <label className="flex items-center gap-1.5 text-xs text-zinc-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={editDraft.reviewed}
+                                        onChange={(e) =>
+                                          setEditDraft({
+                                            ...editDraft,
+                                            reviewed: e.target.checked,
+                                          })
+                                        }
+                                      />
+                                      Reviewed
+                                    </label>
+                                  </div>
+                                  <textarea
+                                    value={editDraft.notes}
+                                    onChange={(e) =>
+                                      setEditDraft({ ...editDraft, notes: e.target.value })
+                                    }
+                                    rows={2}
+                                    className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs"
+                                    placeholder="Notes"
+                                  />
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={pending}
+                                      className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+                                      onClick={() => {
+                                        startTransition(async () => {
+                                          setError(null);
+                                          setMessage(null);
+                                          const result = await updateAdminLessonLogFields(
+                                            entry.id,
+                                            {
+                                              status: editDraft.status || null,
+                                              reviewed: editDraft.reviewed,
+                                              notes: editDraft.notes,
+                                            }
+                                          );
+                                          if (result.error) {
+                                            setError(result.error);
+                                            return;
+                                          }
+                                          setMessage(result.success ?? "Saved.");
+                                          setEditDraft(null);
+                                          reload();
+                                        });
+                                      }}
+                                    >
+                                      Save manual override
+                                    </button>
+                                    {(entry.statusSource === "manual" ||
+                                      entry.reviewedSource === "manual" ||
+                                      entry.notesSource === "manual") && (
+                                      <button
+                                        type="button"
+                                        disabled={pending}
+                                        className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 disabled:opacity-60"
+                                        onClick={() => {
+                                          startTransition(async () => {
+                                            setError(null);
+                                            setMessage(null);
+                                            const fields: Array<
+                                              "status" | "reviewed" | "notes"
+                                            > = [];
+                                            if (entry.statusSource === "manual") {
+                                              fields.push("status");
+                                            }
+                                            if (entry.reviewedSource === "manual") {
+                                              fields.push("reviewed");
+                                            }
+                                            if (entry.notesSource === "manual") {
+                                              fields.push("notes");
+                                            }
+                                            const result =
+                                              await resetAdminLessonLogFieldsToNotion(
+                                                entry.id,
+                                                fields
+                                              );
+                                            if (result.error) {
+                                              setError(result.error);
+                                              return;
+                                            }
+                                            setMessage(result.success ?? "Reset.");
+                                            setEditDraft(null);
+                                            reload();
+                                          });
+                                        }}
+                                      >
+                                        Reset to Notion
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
                               ) : null}
                             </div>
                             <div className="flex flex-wrap gap-2 text-xs">

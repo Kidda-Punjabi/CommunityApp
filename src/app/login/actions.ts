@@ -35,6 +35,26 @@ export async function login(
     return { error: resolved.message, errorKind: resolved.kind };
   }
 
+  // Heal purchase grants for already-linked leads. Password login never hits
+  // /auth/callback (that path is code-exchange only: email confirm / magic link).
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.id) {
+      const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
+      const { maybeGrantAccessForLinkedProfile } = await import(
+        "@/lib/notion/lead-purchase-access-grant"
+      );
+      await maybeGrantAccessForLinkedProfile(createServiceRoleClient(), user.id);
+    }
+  } catch (grantError) {
+    console.error(
+      "[login] lead purchase grant heal failed:",
+      grantError instanceof Error ? grantError.message : grantError
+    );
+  }
+
   await persistLastUser(supabase);
 
   const next = safeNextPath(formData.get("next") as string | null);

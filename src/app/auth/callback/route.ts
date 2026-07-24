@@ -60,8 +60,11 @@ export async function GET(request: Request) {
             "@/lib/notion/lead-purchase-access-grant"
           );
           await maybeGrantAccessAfterLeadLink(service, user.id, linkResult);
-        } catch {
-          // Best-effort — do not block auth redirect.
+        } catch (healError) {
+          console.error(
+            "[auth/callback] lead link/grant heal failed:",
+            healError instanceof Error ? healError.message : healError
+          );
         }
       }
 

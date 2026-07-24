@@ -236,7 +236,7 @@ async function grantResolvedTarget(
  * After a profile is linked to a Notion lead, grant course access from the lead's
  * Packages relation. Never throws to callers — failures are logged / queued.
  *
- * - 0 Packages → no-op (normal unpaid signup)
+ * - 0 Packages → logged skip (normal unpaid signup); no queue noise
  * - Exactly one cleanly resolved package → auto-grant
  * - Multiple / unresolvable → queue for admin
  */
@@ -267,6 +267,20 @@ export async function grantAccessFromLinkedLeadPackages(
       message
     );
     result.errors.push(message);
+    const queued = await enqueueLeadPurchaseGrant(supabase, {
+      profileId,
+      notionLeadPageId: leadPageId,
+      leadEmail: null,
+      leadName: null,
+      reason: "notion_fetch_failed",
+      rawPackageData: { error: message },
+    });
+    if (queued.queued) result.queued = 1;
+    if (queued.error) result.errors.push(queued.error);
+    console.error(
+      `[lead purchase grant] outcome profile=${profileId} lead=${leadPageId}`,
+      result
+    );
     return result;
   }
 
@@ -279,6 +293,9 @@ export async function grantAccessFromLinkedLeadPackages(
   if (packagePageIds.length === 0) {
     result.skipped = 1;
     result.details.push("No Packages relation — nothing to grant.");
+    console.info(
+      `[lead purchase grant] no-packages profile=${profileId} lead=${leadPageId} email=${leadEmail ?? "?"}`
+    );
     return result;
   }
 
@@ -306,7 +323,8 @@ export async function grantAccessFromLinkedLeadPackages(
     unresolved,
   };
 
-  const isCleanSingle = resolved.length === 1 && unresolved.length === 0 && packagePageIds.length === 1;
+  const isCleanSingle =
+    resolved.length === 1 && unresolved.length === 0 && packagePageIds.length === 1;
 
   if (!isCleanSingle) {
     const reason =
@@ -331,6 +349,11 @@ export async function grantAccessFromLinkedLeadPackages(
     } else {
       result.details.push(`Could not queue (${reason}).`);
     }
+    console.warn(
+      `[lead purchase grant] ${reason} profile=${profileId} lead=${leadPageId}`,
+      rawPackageData,
+      result
+    );
     return result;
   }
 
@@ -347,11 +370,18 @@ export async function grantAccessFromLinkedLeadPackages(
       rawPackageData: { ...rawPackageData, grantError: grant.error },
     });
     if (queued.queued) result.queued = 1;
+    console.error(
+      `[lead purchase grant] grant_failed profile=${profileId} lead=${leadPageId} target=${target.label}:`,
+      grant.error
+    );
     return result;
   }
 
   result.granted = 1;
   result.details.push(`Granted ${target.kind} ${target.label} (${target.runId}).`);
+  console.info(
+    `[lead purchase grant] granted profile=${profileId} lead=${leadPageId} ${target.kind}=${target.runId} label=${target.label}`
+  );
   return result;
 }
 
@@ -361,9 +391,19 @@ export async function maybeGrantAccessAfterLeadLink(
   profileId: string,
   linkResult: Pick<LinkLeadsForProfileResult, "leadPageId" | "ambiguous" | "conflicts">
 ): Promise<LeadPurchaseGrantResult | null> {
-  if (!linkResult.leadPageId) return null;
+  if (!linkResult.leadPageId) {
+    console.info(
+      `[lead purchase grant] skip — no lead linked profile=${profileId} ambiguous=${linkResult.ambiguous} conflicts=${linkResult.conflicts}`
+    );
+    return null;
+  }
   // Ambiguous lead match did not produce a trustworthy single lead page.
-  if (linkResult.ambiguous > 0) return null;
+  if (linkResult.ambiguous > 0) {
+    console.warn(
+      `[lead purchase grant] skip — ambiguous lead match profile=${profileId} lead=${linkResult.leadPageId}`
+    );
+    return null;
+  }
 
   try {
     return await grantAccessFromLinkedLeadPackages(
@@ -374,9 +414,24 @@ export async function maybeGrantAccessAfterLeadLink(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Purchase grant failed.";
     console.error(
-      `[lead purchase grant] unexpected failure profile=${profileId}:`,
+      `[lead purchase grant] unexpected failure profile=${profileId} lead=${linkResult.leadPageId}:`,
       message
     );
+    try {
+      await enqueueLeadPurchaseGrant(supabase, {
+        profileId,
+        notionLeadPageId: linkResult.leadPageId,
+        leadEmail: null,
+        leadName: null,
+        reason: "unexpected_failure",
+        rawPackageData: { error: message },
+      });
+    } catch (queueError) {
+      console.error(
+        `[lead purchase grant] failed to queue unexpected_failure profile=${profileId}:`,
+        queueError instanceof Error ? queueError.message : queueError
+      );
+    }
     return {
       attempted: true,
       granted: 0,
@@ -385,6 +440,77 @@ export async function maybeGrantAccessAfterLeadLink(
       errors: [message],
       details: [],
     };
+  }
+}
+
+/**
+ * Heal path for already-linked profiles (e.g. password login). Signup/auth-callback
+ * own the primary trigger; this covers cases where grant never ran after linking.
+ * Skips the Notion round-trip when the profile already has a confirmed package or
+ * active cohort membership (idempotent fast path).
+ */
+export async function maybeGrantAccessForLinkedProfile(
+  supabase: SupabaseClient,
+  profileId: string
+): Promise<LeadPurchaseGrantResult | null> {
+  try {
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("notion_lead_page_id")
+      .eq("id", profileId)
+      .maybeSingle();
+    if (error) {
+      console.error(
+        `[lead purchase grant] linked-profile heal load failed profile=${profileId}:`,
+        error.message
+      );
+      return null;
+    }
+    const leadPageId = profile?.notion_lead_page_id?.trim();
+    if (!leadPageId) {
+      console.info(
+        `[lead purchase grant] linked-profile heal skip — no notion_lead_page_id profile=${profileId}`
+      );
+      return null;
+    }
+
+    const [{ count: memberCount }, { count: packageCount }] = await Promise.all([
+      supabase
+        .from("cohort_members")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", profileId)
+        .is("left_at", null),
+      supabase
+        .from("student_packages")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", profileId)
+        .eq("status", "confirmed"),
+    ]);
+
+    if ((memberCount ?? 0) > 0 || (packageCount ?? 0) > 0) {
+      console.info(
+        `[lead purchase grant] linked-profile heal skip — already has access profile=${profileId} members=${memberCount ?? 0} packages=${packageCount ?? 0}`
+      );
+      return {
+        attempted: false,
+        granted: 0,
+        queued: 0,
+        skipped: 1,
+        errors: [],
+        details: ["Already has cohort membership or confirmed package."],
+      };
+    }
+
+    console.info(
+      `[lead purchase grant] linked-profile heal running profile=${profileId} lead=${leadPageId}`
+    );
+    return await grantAccessFromLinkedLeadPackages(supabase, profileId, leadPageId);
+  } catch (error) {
+    console.error(
+      `[lead purchase grant] linked-profile heal unexpected profile=${profileId}:`,
+      error instanceof Error ? error.message : error
+    );
+    return null;
   }
 }
 

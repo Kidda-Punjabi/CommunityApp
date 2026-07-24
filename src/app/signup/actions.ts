@@ -63,8 +63,11 @@ export async function signup(
         "@/lib/notion/lead-purchase-access-grant"
       );
       await maybeGrantAccessAfterLeadLink(service, data.user.id, linkResult);
-    } catch {
-      // Notion lead linking is best-effort and should not block signup.
+    } catch (linkError) {
+      console.error(
+        "[signup] lead link/grant failed:",
+        linkError instanceof Error ? linkError.message : linkError
+      );
     }
   }
 
