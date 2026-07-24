@@ -58,8 +58,8 @@ week_data (lesson_number, title, presentation_url) AS (
     (20, 'Giving Directions', 'https://canva.link/ql16x7ycyxrwt2'),
     (21, 'At a Wedding / Cultural Events', 'https://canva.link/esq3guna400ulp8'),
     (22, 'Punjabi Music & Pop Culture', 'https://canva.link/cx6gnownwdvq4ii'),
-    (23, 'Community Showcase Prep', 'https://canva.link/qvqctdq8nr77570'),
-    (24, 'Community Showcase & Celebration', 'https://canva.link/aw8octp6cthgh3l')
+    (23, 'Talking with Grandparents & Elders', 'https://canva.link/qvqctdq8nr77570'),
+    (24, 'At the Gurdwara & Community Spaces', 'https://canva.link/aw8octp6cthgh3l')
 )
 UPDATE public.lessons AS l
 SET
@@ -106,8 +106,8 @@ week_data (lesson_number, title, presentation_url) AS (
     (20, 'Giving Directions', 'https://canva.link/ql16x7ycyxrwt2'),
     (21, 'At a Wedding / Cultural Events', 'https://canva.link/esq3guna400ulp8'),
     (22, 'Punjabi Music & Pop Culture', 'https://canva.link/cx6gnownwdvq4ii'),
-    (23, 'Community Showcase Prep', 'https://canva.link/qvqctdq8nr77570'),
-    (24, 'Community Showcase & Celebration', 'https://canva.link/aw8octp6cthgh3l')
+    (23, 'Talking with Grandparents & Elders', 'https://canva.link/qvqctdq8nr77570'),
+    (24, 'At the Gurdwara & Community Spaces', 'https://canva.link/aw8octp6cthgh3l')
 )
 INSERT INTO public.lessons (course_id, lesson_number, title, presentation_url, is_free)
 SELECT cc.id, w.lesson_number, w.title, w.presentation_url, false

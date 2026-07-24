@@ -1,4 +1,5 @@
 import { LearnCourseCard } from "@/components/learn-course-card";
+import { TopicsPathSection } from "@/components/learn/topics-path-section";
 import { ResourceListSection } from "@/components/resources/resource-list-section";
 import {
   fetchLearnContent,
@@ -24,7 +25,13 @@ import {
   summarizeCourseProgress,
 } from "@/lib/progress/lesson-completion";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
+import {
+  hasTopicsAccess,
+  isTopicWeekUnlocked,
+} from "@/lib/topics/access";
 import { redirect } from "next/navigation";
+
+const COMMUNITY_COURSE_ID = "22f0e217-92a7-46f0-b38e-651409d7d118";
 
 export default async function LearnPage() {
   const session = await getCachedAuthSession();
@@ -39,12 +46,27 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap, nextLiveLesson] = await Promise.all([
-    getCachedCourseAccess(supabase, user),
-    lessonsPromise,
-    lessonsPromise.then((lessons) => fetchLessonCompletionMap(supabase, user.id, lessons)),
-    loadStudentNextLiveLesson(supabase, user.id),
-  ]);
+  const [access, allLessons, completionMap, nextLiveLesson, topicsSubscribed] =
+    await Promise.all([
+      getCachedCourseAccess(supabase, user),
+      lessonsPromise,
+      lessonsPromise.then((lessons) =>
+        fetchLessonCompletionMap(supabase, user.id, lessons)
+      ),
+      loadStudentNextLiveLesson(supabase, user.id),
+      hasTopicsAccess(user.id),
+    ]);
+
+  const topicsItems = allLessons
+    .filter((lesson) => lesson.course_id === COMMUNITY_COURSE_ID)
+    .sort((a, b) => a.lesson_number - b.lesson_number)
+    .map((lesson) => ({
+      id: lesson.id,
+      weekNumber: lesson.lesson_number,
+      title: lesson.title,
+      presentationUrl: lesson.presentation_url,
+      unlocked: isTopicWeekUnlocked(lesson.lesson_number, topicsSubscribed),
+    }));
 
   const tracks = await Promise.all(
     LEARN_TRACKS.map(async (track) => {
@@ -136,6 +158,21 @@ export default async function LearnPage() {
           </p>
         ) : null}
       </div>
+
+      <section className="mb-10 rounded-2xl border border-zinc-200 bg-zinc-50/80 px-4 py-5 sm:px-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          Your Path
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-700">
+          Start with Topics — free to try, practical, no pressure.
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-700">
+          Ready to go deeper? Foundational teaches pronunciation. Beginners teaches
+          grammar. Pick based on what you want first.
+        </p>
+      </section>
+
+      {topicsItems.length > 0 ? <TopicsPathSection items={topicsItems} /> : null}
 
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
         All courses
