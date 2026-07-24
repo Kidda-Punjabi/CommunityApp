@@ -9,6 +9,12 @@ export type GameRoomStatus = "lobby" | "in_progress" | "completed" | "cancelled"
 
 export type GameRoomSettings = {
   question_count?: number;
+  /** Host-selected flashcard/grammar topic tags (lowercase). */
+  topic_tags?: string[];
+  /** Inclusive difficulty floor (1–5) for filtered group games. */
+  difficulty_min?: number;
+  /** Inclusive difficulty ceiling (1–5) for filtered group games. */
+  difficulty_max?: number;
   [key: string]: unknown;
 };
 

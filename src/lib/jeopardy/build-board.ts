@@ -1,10 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  contentFiltersFromSettings,
+  itemMatchesTopicTags,
+} from "@/lib/group-games/content-filters";
+import {
   buildMcqPayload,
   normalizeFlashcardRow,
   type FlashcardForMcq,
 } from "@/lib/group-games/build-mcq-question";
 import type { McqQuestionPayload } from "@/lib/group-games/buzz-race-types";
+import type { GameRoomSettings } from "@/lib/game-rooms/types";
 
 export const JEOPARDY_CATEGORIES = ["alphabet", "vocab", "sentences"] as const;
 export type JeopardyCategory = (typeof JEOPARDY_CATEGORIES)[number];
@@ -31,7 +36,10 @@ export type JeopardyTileInsert = {
   question_payload: McqQuestionPayload;
 };
 
-type FlashcardWithDifficulty = FlashcardForMcq & { difficulty: number | null };
+type FlashcardWithDifficulty = FlashcardForMcq & {
+  difficulty: number | null;
+  topic_tags: string[];
+};
 
 function pickCardForSlot(
   cards: FlashcardWithDifficulty[],
@@ -66,17 +74,40 @@ export type JeopardyBoardBuildResult = {
 };
 
 export async function buildJeopardyBoard(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  settings?: GameRoomSettings | null
 ): Promise<JeopardyBoardBuildResult> {
+  const filters = contentFiltersFromSettings(settings);
   const { data, error } = await supabase
     .from("flashcards")
-    .select("id, front_text, back_text, category, difficulty");
+    .select("id, front_text, back_text, category, difficulty, topic_tags");
 
   if (error) throw error;
 
-  const cards = (data ?? [])
-    .map((row) => normalizeFlashcardRow(row))
+  const allCards = (data ?? [])
+    .map((row) => {
+      const normalized = normalizeFlashcardRow(row);
+      if (!normalized) return null;
+      return {
+        ...normalized,
+        topic_tags: Array.isArray(row.topic_tags) ? row.topic_tags.map(String) : [],
+      };
+    })
     .filter((card): card is FlashcardWithDifficulty => card !== null);
+
+  const topicScoped =
+    filters.topicTags.length === 0
+      ? allCards
+      : allCards.filter((card) => itemMatchesTopicTags(card.topic_tags, filters.topicTags));
+
+  // Prefer topic-filtered pool; if empty, fall back so the board can still build.
+  const cards = topicScoped.length > 0 ? topicScoped : allCards;
+  if (filters.topicTags.length > 0 && topicScoped.length === 0) {
+    console.warn(
+      "[jeopardy] Topic filter matched no flashcards; falling back to full pool.",
+      { topicTags: filters.topicTags }
+    );
+  }
 
   const usedIds = new Set<string>();
   const tiles: JeopardyTileInsert[] = [];
@@ -92,7 +123,10 @@ export async function buildJeopardyBoard(
           category,
           point_value: pointValue,
           difficulty,
-          reason: `No flashcard for ${category} at difficulty ${difficulty} (or adjacent)`,
+          reason:
+            filters.topicTags.length > 0
+              ? `No flashcard for ${category} at difficulty ${difficulty} (or adjacent) within topics [${filters.topicTags.join(", ")}]`
+              : `No flashcard for ${category} at difficulty ${difficulty} (or adjacent)`,
         });
         continue;
       }

@@ -31,7 +31,7 @@ export async function ensureJeopardyInitialized(
   const existing = await loadJeopardyTiles(supabase, room.id);
   if (existing.length > 0) return;
 
-  const { tiles, skipped } = await buildJeopardyBoard(supabase);
+  const { tiles, skipped } = await buildJeopardyBoard(supabase, room.settings);
   const initialPickerId = await pickInitialJeopardyPicker(supabase, room.id, room.host_id);
 
   const { error } = await supabase.rpc("jeopardy_initialize_board", {

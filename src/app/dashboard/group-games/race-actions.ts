@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { buildRandomMcqQuestion, getFlashcardPool } from "@/lib/point-race/build-questions";
 import type { McqQuestionPayload } from "@/lib/group-games/buzz-race-types";
+import type { GameRoomSettings } from "@/lib/game-rooms/types";
 
 export type RaceActionResult = {
   error?: string;
@@ -16,9 +17,41 @@ export type RaceActionResult = {
   gameEnded?: boolean;
 };
 
+async function loadActivePointRaceSettings(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<GameRoomSettings | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: raceState } = await supabase
+    .from("game_room_race_state")
+    .select("room_id")
+    .eq("player_id", user.id)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!raceState?.room_id) return null;
+
+  const { data: room } = await supabase
+    .from("game_rooms")
+    .select("settings, status, game_type")
+    .eq("id", raceState.room_id)
+    .maybeSingle();
+
+  if (!room || room.game_type !== "point_race" || room.status !== "in_progress") {
+    return null;
+  }
+
+  return (room.settings as GameRoomSettings) ?? null;
+}
+
 export async function submitRaceAnswerAction(answer: string): Promise<RaceActionResult> {
   const supabase = await createClient();
-  const cards = await getFlashcardPool(supabase);
+  const settings = await loadActivePointRaceSettings(supabase);
+  const cards = await getFlashcardPool(supabase, settings);
   const nextQuestion = buildRandomMcqQuestion(cards);
 
   const { data, error } = await supabase.rpc("submit_race_answer", {

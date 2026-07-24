@@ -1,10 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { pickRandomItems } from "@/lib/flashcards/utils";
 import {
+  filterByContentFilters,
+  topicFiltersFromSettings,
+} from "@/lib/group-games/content-filters";
+import {
   buildGroupSentenceTilePool,
   parseGrammarWordTiles,
   type GrammarWordTile,
 } from "@/lib/sentence-builder-group/tiles";
+import type { GameRoomSettings } from "@/lib/game-rooms/types";
 
 export type GrammarSentenceRow = {
   id: string;
@@ -12,6 +17,7 @@ export type GrammarSentenceRow = {
   english_translation: string;
   word_tiles: unknown;
   difficulty: number | null;
+  topic_tags: string[] | null;
 };
 
 export async function loadGrammarSentencesForGroup(
@@ -19,7 +25,7 @@ export async function loadGrammarSentencesForGroup(
 ): Promise<GrammarSentenceRow[]> {
   const { data, error } = await supabase
     .from("grammar_sentences")
-    .select("id, punjabi_sentence, english_translation, word_tiles, difficulty");
+    .select("id, punjabi_sentence, english_translation, word_tiles, difficulty, topic_tags");
 
   if (error) throw error;
 
@@ -40,14 +46,31 @@ export type PickedSentenceSession = {
 
 export async function pickSessionSentences(
   supabase: SupabaseClient,
-  roundCount: number
+  roundCount: number,
+  settings?: GameRoomSettings | null
 ): Promise<PickedSentenceSession> {
   const all = await loadGrammarSentencesForGroup(supabase);
   if (all.length === 0) {
     throw new Error("No grammar sentences with word tiles available.");
   }
 
-  const picked = pickRandomItems(all, Math.min(roundCount, all.length));
+  const filters = topicFiltersFromSettings(settings);
+  const { matched, usedFallback } = filterByContentFilters(
+    all,
+    filters,
+    (row) => row.topic_tags,
+    (row) => row.difficulty
+  );
+
+  const pool = matched.length > 0 ? matched : all;
+  if (matched.length === 0 && filters.topicTags.length > 0) {
+    console.warn(
+      "[sentence_builder_group] Narrow content filter matched nothing; falling back to full pool.",
+      { filters, usedFallback }
+    );
+  }
+
+  const picked = pickRandomItems(pool, Math.min(roundCount, pool.length));
   return {
     sentences: picked,
     sessionSentenceIds: picked.map((s) => s.id),

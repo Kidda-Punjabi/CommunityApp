@@ -72,7 +72,7 @@ export async function ensurePointRaceInitialized(
     throw new Error("No playing participants to start point race.");
   }
 
-  const states = await buildInitialRaceQuestions(supabase, playerIds);
+  const states = await buildInitialRaceQuestions(supabase, playerIds, room.settings);
   const { error } = await supabase.rpc("race_initialize_game", {
     p_room_id: room.id,
     p_states: states,

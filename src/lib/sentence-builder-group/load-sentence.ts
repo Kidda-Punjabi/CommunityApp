@@ -54,7 +54,11 @@ export async function ensureSentenceBuilderInitialized(
   const questionCount =
     typeof room.settings?.question_count === "number" ? room.settings.question_count : 10;
 
-  const { sentences, sessionSentenceIds } = await pickSessionSentences(supabase, questionCount);
+  const { sentences, sessionSentenceIds } = await pickSessionSentences(
+    supabase,
+    questionCount,
+    room.settings
+  );
   const first = buildRoundPayload(sentences[0]!, 1);
 
   const { error } = await supabase.rpc("sentence_initialize_game", {

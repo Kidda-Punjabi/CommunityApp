@@ -46,7 +46,7 @@ export async function ensureBuzzInInitialized(
   const questionCount =
     typeof room.settings?.question_count === "number" ? room.settings.question_count : 10;
 
-  const rounds = await buildBuzzInRounds(supabase, questionCount);
+  const rounds = await buildBuzzInRounds(supabase, questionCount, room.settings);
   const { error } = await supabase.rpc("buzz_in_initialize_rounds", {
     p_room_id: room.id,
     p_rounds: rounds,

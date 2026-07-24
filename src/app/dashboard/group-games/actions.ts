@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { GROUP_GAME_TYPES } from "@/lib/game-rooms/constants";
 import type { GroupGameType } from "@/lib/game-rooms/types";
+import {
+  buildRoomContentSettings,
+  parseTopicTagsFromForm,
+} from "@/lib/group-games/content-filters";
 import { ensureBuzzInInitialized } from "@/lib/buzz-in/load-buzz-in";
 import { ensureJeopardyInitialized } from "@/lib/jeopardy/load-jeopardy";
 import { ensureLadderInitialized } from "@/lib/chado-pauri-group/load-ladder";
@@ -25,6 +29,7 @@ export async function createGameRoom(
   const gameType = String(formData.get("game_type") ?? "").trim();
   const questionCountRaw = String(formData.get("question_count") ?? "10").trim();
   const questionCount = Number.parseInt(questionCountRaw, 10);
+  const topicTags = parseTopicTagsFromForm(formData.get("topic_tags"));
 
   if (!isGroupGameType(gameType)) {
     return { error: "Pick a group game type." };
@@ -34,10 +39,16 @@ export async function createGameRoom(
     return { error: "Question count must be between 1 and 50." };
   }
 
+  const settings = buildRoomContentSettings({
+    questionCount,
+    gameType,
+    topicTags,
+  });
+
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("create_game_room", {
     p_game_type: gameType,
-    p_settings: { question_count: questionCount },
+    p_settings: settings,
   });
 
   if (error) return { error: error.message };
