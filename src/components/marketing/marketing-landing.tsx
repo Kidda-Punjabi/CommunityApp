@@ -45,7 +45,7 @@ export function MarketingLanding({ continueAs }: MarketingLandingProps) {
                   <Link href="/signup" className={`${ui.btnPrimary} w-full sm:w-auto`}>
                     Create account
                   </Link>
-                  <Link href="/courses" className={`${ui.btnSecondary} w-full sm:w-auto`}>
+                  <Link href="/how-it-works" className={`${ui.btnSecondary} w-full sm:w-auto`}>
                     See how it works
                   </Link>
                 </>

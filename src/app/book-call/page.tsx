@@ -16,8 +16,8 @@ export default async function BookCallPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const backHref = user ? "/dashboard/profile" : "/courses";
-  const backLabel = user ? "← Back to profile" : "← Back to courses";
+  const backHref = user ? "/dashboard/profile" : "/how-it-works";
+  const backLabel = user ? "← Back to profile" : "← Back to how it works";
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-violet-50 via-white to-zinc-50">
