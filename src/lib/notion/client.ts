@@ -4,7 +4,7 @@
 export const NOTION_API_VERSION = "2022-06-28";
 
 export const NOTION_PACKAGE_DATA_SOURCE_ID =
-  process.env.NOTION_PACKAGE_DATA_SOURCE_ID ?? "2a2b5ac4-29c6-80e1-9bfa-000b455fcc0e";
+  process.env.NOTION_PACKAGE_DATA_SOURCE_ID ?? "2a2b5ac4-29c6-805d-922b-d93a13be766d";
 
 export const NOTION_LEADS_DATA_SOURCE_ID =
   process.env.NOTION_LEADS_DATA_SOURCE_ID ?? "293b5ac4-29c6-807e-bb23-db35b02b3fdf";
