@@ -37,6 +37,11 @@ export function useTabNav() {
   return context;
 }
 
+/** Safe outside the dashboard shell (e.g. public marketing /courses pages). */
+export function useOptionalTabNav() {
+  return useContext(TabNavContext);
+}
+
 export function TabNavProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
