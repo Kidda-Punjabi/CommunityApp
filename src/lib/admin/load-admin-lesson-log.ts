@@ -96,6 +96,24 @@ function asFieldSource(value: string | null): "notion" | "manual" {
   return value === "manual" ? "manual" : "notion";
 }
 
+/** Missing recording is only actionable for recently completed lessons. */
+const MISSING_RECORDING_LOOKBACK_DAYS = 21;
+
+function isActionableMissingRecording(row: {
+  status: string | null;
+  lesson_date: string;
+  recording_url: string | null;
+}): boolean {
+  if (row.status !== "Completed") return false;
+  if (row.recording_url?.trim()) return false;
+  const lessonDate = row.lesson_date?.trim();
+  if (!lessonDate) return false;
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - MISSING_RECORDING_LOOKBACK_DAYS);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  return lessonDate >= cutoffStr;
+}
+
 function asStatus(value: string | null): LessonLogStatus | null {
   if (value === "Scheduled" || value === "Completed" || value === "Cancelled") {
     return value;
@@ -262,17 +280,20 @@ export async function loadAdminLessonLogSnapshot(
       : null;
     const attentionReasons: LessonLogAttentionReason[] = [];
 
-    if (row.notion_tutor_user_id && !resolvedTutorId) {
-      attentionReasons.push("unresolved_tutor");
-      unresolvedTutor += 1;
-    }
-    if (!row.recording_url?.trim()) {
-      attentionReasons.push("missing_recording");
-      missingRecording += 1;
-    }
-    if (!row.cohort_id && !row.package_instance_id) {
-      attentionReasons.push("unlinked_package");
-      unlinked += 1;
+    // Dismissed / reviewed entries stay out of Needs attention (admin Dismiss sets reviewed).
+    if (!row.reviewed) {
+      if (row.notion_tutor_user_id && !resolvedTutorId) {
+        attentionReasons.push("unresolved_tutor");
+        unresolvedTutor += 1;
+      }
+      if (isActionableMissingRecording(row)) {
+        attentionReasons.push("missing_recording");
+        missingRecording += 1;
+      }
+      if (!row.cohort_id && !row.package_instance_id) {
+        attentionReasons.push("unlinked_package");
+        unlinked += 1;
+      }
     }
     if (attentionReasons.length > 0) attention += 1;
 

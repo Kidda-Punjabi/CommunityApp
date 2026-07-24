@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   createAdminLessonLogEntry,
+  dismissAdminLessonLogAttention,
   fetchAdminLessonLog,
   refreshLessonLogFromNotion,
   resetAdminLessonLogFieldsToNotion,
@@ -535,6 +536,30 @@ export function AdminLessonLogSection() {
                                 <p className="mt-1 text-[11px] font-semibold text-amber-700">
                                   Needs attention · {attention}
                                 </p>
+                              ) : null}
+                              {attention ? (
+                                <button
+                                  type="button"
+                                  disabled={pending}
+                                  className="mt-1 text-xs font-medium text-zinc-600 underline-offset-2 hover:text-zinc-900 hover:underline disabled:opacity-60"
+                                  onClick={() => {
+                                    startTransition(async () => {
+                                      setError(null);
+                                      setMessage(null);
+                                      const result = await dismissAdminLessonLogAttention(
+                                        entry.id
+                                      );
+                                      if (result.error) {
+                                        setError(result.error);
+                                        return;
+                                      }
+                                      setMessage(result.success ?? "Dismissed.");
+                                      reload();
+                                    });
+                                  }}
+                                >
+                                  Dismiss
+                                </button>
                               ) : null}
                               {entry.notionSyncError ? (
                                 <p className="mt-1 text-[11px] text-red-600">

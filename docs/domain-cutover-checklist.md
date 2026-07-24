@@ -1,76 +1,49 @@
-# kidda.app domain cutover — verification checklist
+# webapp.kidda.app — additive custom domain (GHL keeps kidda.app)
 
-Prep work in this repo only. DNS, Vercel domain settings, Supabase Auth URLs,
-Stripe webhook endpoint, and Google OAuth client config are handled outside
-the repo (Gurupma). Use this list after `kidda.app` is pointed at this Next.js
-app and `NEXT_PUBLIC_APP_URL=https://kidda.app` is set in Vercel production.
+Prep after `webapp.kidda.app` is attached in Vercel and
+`NEXT_PUBLIC_APP_URL=https://webapp.kidda.app` is set in Production (and Preview if needed).
 
-## Before traffic cutover
+Root `kidda.app` stays on GoHighLevel — do not point app traffic there.
+`community-app-v2-eosin.vercel.app` must keep working in parallel (no forced redirect away yet).
 
-- [ ] Vercel: custom domain `kidda.app` (+ `www` if used) attached to this project; TLS valid
-- [ ] Vercel env: `NEXT_PUBLIC_APP_URL=https://kidda.app` (Production; Preview if testing on a custom preview host)
-- [ ] Supabase Auth: Site URL + Redirect URLs include `https://kidda.app` and `https://kidda.app/auth/callback`
-- [ ] Stripe: webhook endpoint URL updated to `https://kidda.app/api/stripe/webhook` (or dual-write briefly)
-- [ ] Google Calendar OAuth: authorized redirect URI includes `https://kidda.app/api/google/calendar/callback`; JavaScript origin `https://kidda.app`
-- [ ] Confirm GHL funnels are no longer served from `kidda.app` (moved e.g. to `kidda.co.uk`) so app routes are not hijacked
 - [ ] If still using `NEXT_PUBLIC_COURSE_URL_*`, point them at the new GHL host (or leave empty to use in-app `/courses/*`)
+## Before sharing with students
 
-## Staging / smoke on kidda.app
+- [ ] Vercel: custom domain `webapp.kidda.app` attached; TLS valid
+- [ ] Vercel env: `NEXT_PUBLIC_APP_URL=https://webapp.kidda.app` (Production)
+- [ ] Supabase Auth Site URL: `https://webapp.kidda.app`
+- [ ] Supabase Auth Redirect URLs include (keep vercel.app entries too):
+  - `https://webapp.kidda.app/**`
+  - `https://webapp.kidda.app/auth/callback`
+  - `https://community-app-v2-eosin.vercel.app/**`
+  - `https://community-app-v2-eosin.vercel.app/auth/callback`
+- [ ] Google Calendar OAuth authorized redirect URI (add, do not remove old):
+  - `https://webapp.kidda.app/api/google/calendar/callback`
+  - keep `https://community-app-v2-eosin.vercel.app/api/google/calendar/callback` if tutors still connect via vercel.app
+- [ ] Google OAuth JavaScript origin: `https://webapp.kidda.app`
+- [ ] Stripe checkout success/cancel already use `getPublicAppUrl()` — no code change once env is set
+- [ ] Stripe webhook can stay on vercel.app until you dual-add webapp (optional; webhooks hit whichever URL Stripe is configured with)
 
-### Marketing & legal
-
-- [ ] `https://kidda.app/` loads this app’s marketing home (not GHL)
-- [ ] `https://kidda.app/courses`, `/courses/foundational`, `/beginners`, `/community` load product pages
-- [ ] `https://kidda.app/privacy` loads the Privacy Policy page
-- [ ] Product page footer “Privacy Policy” link goes to `/privacy` (same origin)
+## Smoke on webapp.kidda.app
 
 ### Auth
-
-- [ ] Signup with a new email; confirmation link lands on `https://kidda.app/auth/callback` and completes
+- [ ] Signup → confirmation email → lands on `https://webapp.kidda.app/auth/callback` and completes
 - [ ] Login / logout
-- [ ] Forgot password email link uses `kidda.app` and completes reset
-- [ ] Account invite email (if used) redirect uses `kidda.app`
+- [ ] Forgot password link uses `webapp.kidda.app`
 
-### Checkout & Stripe
+### Checkout
+- [ ] Start checkout; success/cancel return to `webapp.kidda.app` URLs
+- [ ] Billing portal return is `https://webapp.kidda.app/dashboard/profile/billing`
 
-- [ ] Start checkout from a course page; success/cancel return to `kidda.app` URLs
-- [ ] Embedded checkout return (if used) returns to `kidda.app`
-- [ ] Billing portal return URL is `https://kidda.app/dashboard/profile/billing`
-- [ ] Stripe Dashboard → Webhooks: recent events deliver `2xx` to the `kidda.app` endpoint
-- [ ] After a test purchase, course access unlocks in the dashboard
+### Calendar
+- [ ] Tutor Connect Google Calendar returns to `https://webapp.kidda.app/api/google/calendar/callback`
 
-### Calendar OAuth (tutors)
+### Referrals
+- [ ] Share / invite links use `https://webapp.kidda.app/...` when generated from server env
 
-- [ ] Tutor “Connect Google Calendar” starts OAuth and returns to `https://kidda.app/api/google/calendar/callback`
-- [ ] Reconnect / disconnect still works after cutover
+### Parallel host
+- [ ] `https://community-app-v2-eosin.vercel.app` still loads and can log in (additive only)
 
-### Referrals & share links
-
-- [ ] Referral share URL is `https://kidda.app/signup?ref=...` (or current host via `getShareAppUrl`)
-- [ ] Opening that link pre-fills / attributes referral correctly
-- [ ] Battle invite link (client `window.location.origin`) shares as `https://kidda.app/dashboard/battle?code=...`
-
-### Book a call
-
-- [ ] `/book-call` still embeds the LeadConnector widget (third-party; independent of kidda.app host)
-
-### Regression spot-checks
-
-- [ ] Dashboard home, Learn, membership/courses list
-- [ ] Mobile + desktop login
-- [ ] No mixed redirects back to `*.vercel.app` for auth or Stripe returns when using the custom domain
-
-## After cutover
-
-- [ ] Monitor Stripe webhook failures for 24–48h
-- [ ] Monitor Supabase auth email delivery / bounce for wrong redirect hosts
-- [ ] Remove or keep Vercel default URL as fallback only; ensure emails and Stripe no longer prefer the old host
-- [ ] Update any external docs/bookmarks that still cite the Vercel URL as “the app”
-
-## Out of scope for this checklist (handled externally)
-
-- Cloudflare / DNS records for `kidda.app`
-- Moving GHL sites to `kidda.co.uk` (or elsewhere)
-- Stripe Dashboard webhook secret rotation (unless endpoint changes require it)
-- Google Cloud Console OAuth client edits
-- Supabase dashboard Auth URL edits
+## Out of scope here
+- GHL / `kidda.app` DNS
+- Removing the Vercel default hostname

@@ -161,3 +161,26 @@ export async function resetAdminLessonLogFieldsToNotion(
     return { error: e instanceof Error ? e.message : "Failed to reset lesson log fields." };
   }
 }
+
+/** Mark attention as handled without linking (sets reviewed = manual). */
+export async function dismissAdminLessonLogAttention(
+  entryId: string
+): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { updateLessonLogManualFields } = await import("@/lib/notion/lesson-log-sync");
+    const result = await updateLessonLogManualFields(supabase, entryId, {
+      reviewed: true,
+    });
+    if (!result.ok) return { error: result.error };
+    revalidateLessonLog();
+    return {
+      success: "Dismissed from Needs attention (marked reviewed).",
+    };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Failed to dismiss lesson log attention.",
+    };
+  }
+}

@@ -4,7 +4,8 @@ function stripTrailingSlash(url: string): string {
 
 /**
  * Canonical app origin from env (referrals, Stripe, auth, calendar OAuth when headers unavailable).
- * Production should be NEXT_PUBLIC_APP_URL=https://kidda.app once that domain points at this app.
+ * Production: NEXT_PUBLIC_APP_URL=https://webapp.kidda.app
+ * (community-app-v2-eosin.vercel.app remains a parallel host; do not remove yet.)
  */
 export function getPublicAppUrl(): string {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
