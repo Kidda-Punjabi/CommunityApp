@@ -34,13 +34,17 @@ function leadEmailFromPage(page: NotionLeadPage): string | null {
     string,
     { email?: string; rich_text?: Array<{ plain_text?: string }> }
   >;
-  const emailProp = props.Email;
-  if (!emailProp) return null;
-  if ("email" in emailProp && emailProp.email?.trim()) {
-    return emailProp.email.trim();
+  // Prefer Email (email type); fall back to Email (Copy) rich_text — same as roster sync.
+  for (const key of ["Email", "Email (Copy)"]) {
+    const emailProp = props[key];
+    if (!emailProp) continue;
+    if ("email" in emailProp && emailProp.email?.trim()) {
+      return emailProp.email.trim();
+    }
+    const fromRichText = plainTextFromRichText(emailProp);
+    if (fromRichText) return fromRichText;
   }
-  const fromRichText = plainTextFromRichText(emailProp);
-  return fromRichText || null;
+  return null;
 }
 
 function leadPhoneFromPage(page: NotionLeadPage): string | null {
@@ -150,20 +154,16 @@ async function writeAppUserIdToLead(pageId: string, profileId: string): Promise<
   });
 }
 
-async function queryLeadPageIdsByEmail(email: string): Promise<string[]> {
-  const normalized = email.trim().toLowerCase();
-  if (!normalized) return [];
-
+async function queryLeadPagesWithFilter(
+  filter: Record<string, unknown>
+): Promise<string[]> {
   const ids = new Set<string>();
   let cursor: string | undefined;
 
   do {
     const body: Record<string, unknown> = {
       page_size: 100,
-      filter: {
-        property: "Email",
-        email: { equals: normalized },
-      },
+      filter,
     };
     if (cursor) body.start_cursor = cursor;
 
@@ -183,6 +183,32 @@ async function queryLeadPageIdsByEmail(email: string): Promise<string[]> {
   } while (cursor);
 
   return [...ids];
+}
+
+async function queryLeadPageIdsByEmail(email: string): Promise<string[]> {
+  const trimmed = email.trim();
+  const normalized = trimmed.toLowerCase();
+  if (!normalized) return [];
+
+  // Email is Notion email-type; Email (Copy) is rich_text (historical imports).
+  // Query both casings on Email in case stored value isn't lowercased.
+  const variants = [...new Set([normalized, trimmed])];
+  const orFilters: Record<string, unknown>[] = [];
+  for (const value of variants) {
+    orFilters.push({ property: "Email", email: { equals: value } });
+    orFilters.push({ property: "Email (Copy)", rich_text: { equals: value } });
+  }
+
+  return queryLeadPagesWithFilter({ or: orFilters });
+}
+
+async function queryLeadPageIdsByAppUserId(profileId: string): Promise<string[]> {
+  const id = profileId.trim();
+  if (!id) return [];
+  return queryLeadPagesWithFilter({
+    property: "App User ID",
+    rich_text: { equals: id },
+  });
 }
 
 async function createAppSignupLeadPage(
@@ -223,7 +249,28 @@ async function linkProfileToNotionLead(
   profileId: string,
   leadPageId: string
 ): Promise<void> {
+  // Always write both directions in one step. Notion first (source of truth for
+  // App User ID), then profiles.notion_lead_page_id — do not leave Notion updated
+  // while the profile row stays null (the historical 10-vs-6 skew).
   await writeAppUserIdToLead(leadPageId, profileId);
+
+  const { data: current, error: readError } = await supabase
+    .from("profiles")
+    .select("notion_lead_page_id")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+
+  if (current?.notion_lead_page_id && current.notion_lead_page_id !== leadPageId) {
+    throw new Error(
+      `Profile ${profileId} already linked to ${current.notion_lead_page_id}, refusing ${leadPageId}`
+    );
+  }
+
+  if (current?.notion_lead_page_id === leadPageId) {
+    return;
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({ notion_lead_page_id: leadPageId })
@@ -231,6 +278,25 @@ async function linkProfileToNotionLead(
     .is("notion_lead_page_id", null);
 
   if (error) throw new Error(error.message);
+
+  // Confirm the write landed (null-only update can match 0 rows under race).
+  const { data: after } = await supabase
+    .from("profiles")
+    .select("notion_lead_page_id")
+    .eq("id", profileId)
+    .maybeSingle();
+
+  if (!after?.notion_lead_page_id) {
+    const { error: forceError } = await supabase
+      .from("profiles")
+      .update({ notion_lead_page_id: leadPageId })
+      .eq("id", profileId);
+    if (forceError) throw new Error(forceError.message);
+  } else if (after.notion_lead_page_id !== leadPageId) {
+    throw new Error(
+      `Profile ${profileId} linked to ${after.notion_lead_page_id} during race with ${leadPageId}`
+    );
+  }
 }
 
 async function recordAmbiguousLeadMatch(
@@ -282,14 +348,27 @@ export type LinkLeadsForProfileResult = {
   leadPageId: string | null;
 };
 
+export type LinkLeadsForProfileOptions = {
+  fullName?: string | null;
+  /**
+   * When true (default, signup path): create a Notion lead if email match finds none.
+   * When false (historical backfill): never create — log no-match / ambiguous instead.
+   */
+  createIfMissing?: boolean;
+};
+
 /**
- * Match profile email to Notion Leads: 0 → create, 1 → link, >1 → admin attention (non-throwing).
+ * Match profile ↔ Notion Leads (bidirectional):
+ * 1) If profile already has notion_lead_page_id → ensure Notion App User ID is set.
+ * 2) Else if Notion already has App User ID = this profile → set profiles.notion_lead_page_id.
+ * 3) Else email-match Email + Email (Copy): 0 → create (signup) or skip (backfill),
+ *    1 → link both sides, >1 → attention + conflicts (non-throwing).
  */
 export async function linkLeadsForProfile(
   supabase: SupabaseClient,
   profileId: string,
   email: string,
-  options?: { fullName?: string | null }
+  options?: LinkLeadsForProfileOptions
 ): Promise<LinkLeadsForProfileResult> {
   const result: LinkLeadsForProfileResult = {
     linked: 0,
@@ -299,6 +378,7 @@ export async function linkLeadsForProfile(
     ambiguous: 0,
     leadPageId: null,
   };
+  const createIfMissing = options?.createIfMissing !== false;
 
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail) {
@@ -318,9 +398,52 @@ export async function linkLeadsForProfile(
   }
 
   if (profile.notion_lead_page_id) {
+    // Heal Notion side if App User ID was never written (or drifted).
+    try {
+      await writeAppUserIdToLead(profile.notion_lead_page_id, profileId);
+    } catch (error) {
+      console.error(
+        `[notion lead link] ensure App User ID failed profile=${profileId} lead=${profile.notion_lead_page_id}:`,
+        error instanceof Error ? error.message : error
+      );
+    }
     result.skipped = 1;
     result.leadPageId = profile.notion_lead_page_id;
     return result;
+  }
+
+  // Reverse: Notion already has App User ID but profile.notion_lead_page_id is null.
+  try {
+    const byAppUser = await queryLeadPageIdsByAppUserId(profileId);
+    if (byAppUser.length > 1) {
+      await recordAmbiguousLeadMatch(supabase, {
+        profileId,
+        email: normalizedEmail,
+        leadPageIds: byAppUser,
+      });
+      await logLeadLinkConflict(supabase, {
+        profileId,
+        existingNotionPageId: byAppUser[0]!,
+        attemptedNotionPageId: byAppUser[1]!,
+        leadEmail: normalizedEmail,
+        details:
+          "Multiple Notion leads already have this profile's App User ID; refusing to guess which to link on profiles.",
+      });
+      result.ambiguous = 1;
+      result.conflicts = 1;
+      return result;
+    }
+    if (byAppUser.length === 1) {
+      await linkProfileToNotionLead(supabase, profileId, byAppUser[0]!);
+      result.linked = 1;
+      result.leadPageId = byAppUser[0]!;
+      return result;
+    }
+  } catch (error) {
+    console.error(
+      `[notion lead link] reverse App User ID lookup failed profile=${profileId}:`,
+      error instanceof Error ? error.message : error
+    );
   }
 
   const displayName =
@@ -347,7 +470,15 @@ export async function linkLeadsForProfile(
       email: normalizedEmail,
       leadPageIds,
     });
+    await logLeadLinkConflict(supabase, {
+      profileId,
+      existingNotionPageId: leadPageIds[0]!,
+      attemptedNotionPageId: leadPageIds[1]!,
+      leadEmail: normalizedEmail,
+      details: `Ambiguous email match: ${leadPageIds.length} Notion leads share this email; not auto-linked.`,
+    });
     result.ambiguous = 1;
+    result.conflicts = 1;
     return result;
   }
 
@@ -377,6 +508,20 @@ export async function linkLeadsForProfile(
       );
       result.skipped = 1;
     }
+    return result;
+  }
+
+  // No email match.
+  if (!createIfMissing) {
+    await logLeadLinkConflict(supabase, {
+      profileId,
+      existingNotionPageId: "__no_match__",
+      attemptedNotionPageId: "__no_match__",
+      leadEmail: normalizedEmail,
+      details: "No Notion lead matched this profile email during backfill; not creating a lead.",
+    });
+    result.conflicts = 1;
+    result.skipped = 1;
     return result;
   }
 
@@ -496,6 +641,17 @@ export async function linkUnlinkedProfilesFromApp(
       totals.ambiguous += outcome.ambiguous;
       totals.skipped += outcome.skipped;
       totals.conflicts += outcome.conflicts;
+
+      try {
+        const { maybeGrantAccessAfterLeadLink } = await import(
+          "@/lib/notion/lead-purchase-access-grant"
+        );
+        await maybeGrantAccessAfterLeadLink(supabase, profile.id, outcome);
+      } catch (grantError) {
+        totals.errors.push(
+          `${profile.id} grant: ${grantError instanceof Error ? grantError.message : "grant failed"}`
+        );
+      }
     } catch (error) {
       totals.errors.push(
         `${profile.id}: ${error instanceof Error ? error.message : "Lead link failed."}`
@@ -545,6 +701,7 @@ async function logLeadLinkConflict(
     existingNotionPageId: string;
     attemptedNotionPageId: string;
     leadEmail: string;
+    details?: string;
   }
 ): Promise<void> {
   await supabase.from("notion_lead_link_conflicts").insert({
@@ -553,8 +710,111 @@ async function logLeadLinkConflict(
     attempted_notion_page_id: input.attemptedNotionPageId,
     lead_email: input.leadEmail,
     details:
+      input.details ??
       "A second Notion lead row matched this profile email but the profile is already linked to a different lead page.",
   });
+}
+
+/**
+ * One-time / cron-safe match-only reconcile: never creates Notion leads.
+ * Links both profiles.notion_lead_page_id and Notion App User ID on clean matches.
+ */
+export async function backfillProfileNotionLeadLinks(
+  supabase: SupabaseClient
+): Promise<{
+  processed: number;
+  linked: number;
+  ambiguous: number;
+  skipped: number;
+  conflicts: number;
+  noMatch: number;
+  healedExisting: number;
+  errors: string[];
+}> {
+  const totals = {
+    processed: 0,
+    linked: 0,
+    ambiguous: 0,
+    skipped: 0,
+    conflicts: 0,
+    noMatch: 0,
+    healedExisting: 0,
+    errors: [] as string[],
+  };
+
+  const { data: profiles, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, full_name, preferred_name, notion_lead_page_id")
+    .order("created_at", { ascending: true });
+
+  if (profileError) {
+    throw new Error(profileError.message);
+  }
+
+  if (!profiles?.length) {
+    return totals;
+  }
+
+  const emailByProfileId = new Map<string, string>();
+  let page = 1;
+  while (true) {
+    const { data: authData, error: authError } = await supabase.auth.admin.listUsers({
+      page,
+      perPage: 200,
+    });
+    if (authError) {
+      totals.errors.push(authError.message);
+      break;
+    }
+
+    for (const user of authData.users) {
+      if (user.email) {
+        emailByProfileId.set(user.id, user.email);
+      }
+    }
+
+    if (authData.users.length < 200) break;
+    page += 1;
+  }
+
+  for (const profile of profiles) {
+    const email = emailByProfileId.get(profile.id)?.trim();
+    if (!email) {
+      totals.skipped += 1;
+      continue;
+    }
+
+    totals.processed += 1;
+    const hadLink = Boolean(profile.notion_lead_page_id);
+    try {
+      const outcome = await linkLeadsForProfile(supabase, profile.id, email, {
+        fullName: getDisplayName(profile),
+        createIfMissing: false,
+      });
+      totals.linked += outcome.linked;
+      totals.ambiguous += outcome.ambiguous;
+      totals.skipped += outcome.skipped;
+      totals.conflicts += outcome.conflicts;
+      if (hadLink && outcome.skipped) {
+        totals.healedExisting += 1;
+      }
+      if (
+        !hadLink &&
+        outcome.conflicts &&
+        !outcome.linked &&
+        !outcome.ambiguous &&
+        outcome.skipped
+      ) {
+        totals.noMatch += 1;
+      }
+    } catch (error) {
+      totals.errors.push(
+        `${profile.id}: ${error instanceof Error ? error.message : "Lead link failed."}`
+      );
+    }
+  }
+
+  return totals;
 }
 
 export async function linkLeadsFromNotion(

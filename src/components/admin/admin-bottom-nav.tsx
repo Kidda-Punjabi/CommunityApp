@@ -48,6 +48,14 @@ function PackagesIcon({ active }: { active: boolean }) {
   );
 }
 
+function LessonsIcon({ active }: { active: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+    </svg>
+  );
+}
+
 function OnboardingIcon({ active }: { active: boolean }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
@@ -91,6 +99,11 @@ const navItems: NavItem[] = [
     match: (pathname) => pathname.startsWith("/admin/packages"),
   },
   {
+    href: "/admin/lesson-log",
+    label: "Lessons",
+    match: (pathname) => pathname.startsWith("/admin/lesson-log"),
+  },
+  {
     href: "/admin/onboarding",
     label: "Onboard",
     match: (pathname) => pathname.startsWith("/admin/onboarding"),
@@ -122,6 +135,8 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
       return <PeopleIcon active={active} />;
     case "Packages":
       return <PackagesIcon active={active} />;
+    case "Lessons":
+      return <LessonsIcon active={active} />;
     case "Onboard":
       return <OnboardingIcon active={active} />;
     case "Sales":

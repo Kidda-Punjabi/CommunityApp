@@ -32,14 +32,38 @@ export type ParsedLessonLogPage = {
   flashcardsUrl: string | null;
   notes: string | null;
   notionTutorUserId: string | null;
+  status: "Scheduled" | "Completed" | "Cancelled" | null;
+  reviewed: boolean;
 };
 
 const LESSON_LOG_PULL_CURSOR_VIEW_TYPE = "notion_lesson_log_pull_cursor";
 const LESSON_LOG_PULL_CURSOR_NAME = "cohort_lesson_log_entries";
 
+const LESSON_LOG_STATUSES = new Set(["Scheduled", "Completed", "Cancelled"]);
+
 function urlProp(value: { url?: string | null } | undefined): string | null {
   const url = value?.url?.trim();
   return url || null;
+}
+
+function selectName(
+  value: { select?: { name?: string } | null } | undefined
+): string | null {
+  const name = value?.select?.name?.trim();
+  return name || null;
+}
+
+function checkboxProp(value: { checkbox?: boolean } | undefined): boolean {
+  return Boolean(value?.checkbox);
+}
+
+function parseLessonLogStatus(
+  raw: string | null
+): "Scheduled" | "Completed" | "Cancelled" | null {
+  if (!raw) return null;
+  return LESSON_LOG_STATUSES.has(raw)
+    ? (raw as "Scheduled" | "Completed" | "Cancelled")
+    : null;
 }
 
 function calendarDateOnly(isoOrDate: string | null): string | null {
@@ -80,6 +104,10 @@ export function parseNotionLessonLogPage(page: {
       plainTextFromRichText(props.notes as { rich_text?: Array<{ plain_text?: string }> }) ||
       null,
     notionTutorUserId: tutorIds[0] ?? null,
+    status: parseLessonLogStatus(
+      selectName(props.Status as { select?: { name?: string } | null })
+    ),
+    reviewed: checkboxProp(props.Reviewed as { checkbox?: boolean }),
   };
 }
 
@@ -204,20 +232,34 @@ export async function upsertLessonLogEntryFromNotion(
   supabase: SupabaseClient,
   page: ParsedLessonLogPage
 ): Promise<"upserted" | "skipped"> {
-  if (!page.lessonDate || !page.packageNotionPageId) {
+  if (!page.lessonDate) {
     return "skipped";
   }
 
-  const target = await resolvePackageTarget(supabase, page.packageNotionPageId);
-  if (!target.cohortId && !target.packageInstanceId) {
-    return "skipped";
+  let cohortId: string | null = null;
+  let packageInstanceId: string | null = null;
+  let syncStatus: "synced" | "error" = "synced";
+  let syncError: string | null = null;
+
+  if (!page.packageNotionPageId) {
+    syncStatus = "error";
+    syncError = "Notion lesson has no New Package DB relation.";
+  } else {
+    const target = await resolvePackageTarget(supabase, page.packageNotionPageId);
+    cohortId = target.cohortId;
+    packageInstanceId = target.packageInstanceId;
+    if (!cohortId && !packageInstanceId) {
+      syncStatus = "error";
+      syncError = `Package Notion page ${page.packageNotionPageId} is not linked to a cohort or package instance.`;
+    }
   }
 
+  const now = new Date().toISOString();
   const { error } = await supabase.from("cohort_lesson_log_entries").upsert(
     {
       notion_page_id: page.pageId,
-      cohort_id: target.cohortId,
-      package_instance_id: target.packageInstanceId,
+      cohort_id: cohortId,
+      package_instance_id: packageInstanceId,
       lesson_title: page.title,
       lesson_date: page.lessonDate,
       recording_url: page.recordingUrl,
@@ -226,6 +268,11 @@ export async function upsertLessonLogEntryFromNotion(
       notes: page.notes,
       notion_tutor_user_id: page.notionTutorUserId,
       notion_last_edited_at: page.lastEditedTime,
+      status: page.status,
+      reviewed: page.reviewed,
+      notion_sync_status: syncStatus,
+      notion_sync_error: syncError,
+      notion_synced_at: now,
       source: "notion",
     },
     { onConflict: "notion_page_id" }
@@ -345,6 +392,8 @@ export async function createLessonLogInNotionAndSupabase(
       people: [{ id: input.notionTutorUserId.trim() }],
     };
   }
+  properties.Status = { select: { name: "Completed" } };
+  properties.Reviewed = { checkbox: false };
 
   let notionPageId: string;
   try {
@@ -378,6 +427,11 @@ export async function createLessonLogInNotionAndSupabase(
       notion_tutor_user_id: input.notionTutorUserId?.trim() || null,
       logged_by: input.loggedBy,
       source: "app",
+      status: "Completed",
+      reviewed: false,
+      notion_sync_status: "synced",
+      notion_sync_error: null,
+      notion_synced_at: new Date().toISOString(),
       notion_last_edited_at: new Date().toISOString(),
     })
     .select("id")

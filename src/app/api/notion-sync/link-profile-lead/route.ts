@@ -51,5 +51,18 @@ export async function POST(request: Request) {
   const result = await linkLeadsForProfile(client, profileId, authUser.user.email, {
     fullName,
   });
+
+  try {
+    const { maybeGrantAccessAfterLeadLink } = await import(
+      "@/lib/notion/lead-purchase-access-grant"
+    );
+    await maybeGrantAccessAfterLeadLink(client, profileId, result);
+  } catch (error) {
+    console.error(
+      "[link-profile-lead] purchase grant follow-up failed:",
+      error instanceof Error ? error.message : error
+    );
+  }
+
   return NextResponse.json({ ok: true, ...result });
 }

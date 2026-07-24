@@ -286,3 +286,34 @@ export async function createGoogleCalendarEventWithMeet(
     attendeeEmails,
   };
 }
+
+export type DeleteGoogleCalendarEventResult = "deleted" | "already_gone";
+
+/**
+ * Deletes a single calendar event instance (never a recurring series master
+ * unless that id is passed). sendUpdates=all notifies attendees.
+ * 404/410 are treated as success (event already removed).
+ */
+export async function deleteGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string
+): Promise<DeleteGoogleCalendarEventResult> {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
+
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (res.status === 204 || res.status === 200) {
+    return "deleted";
+  }
+  // Already deleted / not found — treat as successful cancel outcome.
+  if (res.status === 404 || res.status === 410) {
+    return "already_gone";
+  }
+
+  const text = await res.text();
+  throw new Error(`Google Calendar delete event failed (${res.status}): ${text.slice(0, 500)}`);
+}

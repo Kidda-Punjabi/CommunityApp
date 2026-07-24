@@ -299,6 +299,84 @@ export async function fetchLeadLinkAdminData() {
   }
 }
 
+export async function fetchLeadPurchaseGrantQueue(): Promise<{
+  rows: Awaited<ReturnType<typeof import("@/lib/notion/lead-purchase-access-grant").loadLeadPurchaseGrantQueue>>;
+  cohorts: Array<{ id: string; name: string }>;
+  packageInstances: Array<{ id: string; name: string }>;
+  error?: string;
+}> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { loadLeadPurchaseGrantQueue } = await import(
+      "@/lib/notion/lead-purchase-access-grant"
+    );
+    const [rows, { data: cohorts }, { data: packageInstances }] = await Promise.all([
+      loadLeadPurchaseGrantQueue(supabase),
+      supabase.from("cohorts").select("id, name").order("name", { ascending: true }).limit(200),
+      supabase
+        .from("package_instances")
+        .select("id, name")
+        .order("name", { ascending: true })
+        .limit(200),
+    ]);
+    return {
+      rows,
+      cohorts: (cohorts ?? []).map((c) => ({ id: c.id, name: c.name })),
+      packageInstances: (packageInstances ?? []).map((p) => ({
+        id: p.id,
+        name: p.name ?? "Untitled instance",
+      })),
+    };
+  } catch (e) {
+    return {
+      rows: [],
+      cohorts: [],
+      packageInstances: [],
+      error: e instanceof Error ? e.message : "Failed to load purchase grant queue.",
+    };
+  }
+}
+
+export async function resolveLeadPurchaseGrantQueueItemAction(
+  queueId: string,
+  action: "dismiss" | "grant",
+  options?: {
+    kind?: "cohort" | "package_instance";
+    runId?: string;
+    note?: string;
+  }
+): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+    const { createClient } = await import("@/lib/supabase/server");
+    const authClient = await createClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const { resolveLeadPurchaseGrantQueueItem } = await import(
+      "@/lib/notion/lead-purchase-access-grant"
+    );
+    const result = await resolveLeadPurchaseGrantQueueItem(supabase, {
+      queueId,
+      resolvedBy: user.id,
+      action,
+      kind: options?.kind,
+      runId: options?.runId,
+      note: options?.note,
+    });
+    if (result.error) return { error: result.error };
+    revalidateNotionSync();
+    return { success: result.success ?? "Resolved." };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Failed to resolve purchase grant queue item.",
+    };
+  }
+}
+
 export async function fetchNotionLinkFormOptions(): Promise<{
   packages: Array<{ id: string; name: string; courseId: string; courseName: string }>;
   error?: string;

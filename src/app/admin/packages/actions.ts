@@ -344,7 +344,13 @@ export async function linkCohortCalendarMatch(input: {
     });
     if (!result.ok) return { error: result.error ?? "Failed to link calendar event." };
     revalidatePackages(input.cohortId);
-    return { success: "Calendar event linked." };
+    const n = result.linkedCount ?? 1;
+    return {
+      success:
+        n > 1
+          ? `Calendar series linked (${n} sessions).`
+          : "Calendar event linked.",
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to link calendar event." };
   }

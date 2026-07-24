@@ -46,21 +46,33 @@ export async function signup(
   }
 
   // Profile row is created by the handle_new_user DB trigger using user metadata.
-  // Upsert here when a session is returned (email confirmation disabled).
+  // Link Notion lead whenever we have a user id (session optional): confirmation-required
+  // signups still get both profiles.notion_lead_page_id and Notion App User ID; auth
+  // callback re-runs as a heal if this race loses to the trigger.
+  if (data.user) {
+    try {
+      const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
+      const { linkLeadsForProfile } = await import("@/lib/notion/lead-sync");
+      const service = createServiceRoleClient();
+      await service.from("profiles").upsert({
+        id: data.user.id,
+        full_name: fullName,
+      });
+      const linkResult = await linkLeadsForProfile(service, data.user.id, email, { fullName });
+      const { maybeGrantAccessAfterLeadLink } = await import(
+        "@/lib/notion/lead-purchase-access-grant"
+      );
+      await maybeGrantAccessAfterLeadLink(service, data.user.id, linkResult);
+    } catch {
+      // Notion lead linking is best-effort and should not block signup.
+    }
+  }
+
   if (data.user && data.session) {
     await supabase.from("profiles").upsert({
       id: data.user.id,
       full_name: fullName,
     });
-
-    try {
-      const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
-      const { linkLeadsForProfile } = await import("@/lib/notion/lead-sync");
-      const service = createServiceRoleClient();
-      await linkLeadsForProfile(service, data.user.id, email, { fullName });
-    } catch {
-      // Notion lead linking is best-effort and should not block signup.
-    }
 
     if (referralCode) {
       await supabase.rpc("register_referral", { p_referral_code: referralCode });

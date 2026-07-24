@@ -1,5 +1,9 @@
 import { syncBookingCreditFromStripeEvent } from "@/lib/stripe/sync-booking-credit";
 import { syncMembershipFromStripeEvent } from "@/lib/stripe/sync-membership";
+import {
+  logStripeWebhookReceived,
+  logStripeWebhookResult,
+} from "@/lib/stripe/webhook-event-log";
 import { getStripe } from "@/lib/stripe/server";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
@@ -29,13 +33,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
+  await logStripeWebhookReceived(event);
+
   try {
-    await syncBookingCreditFromStripeEvent(event);
+    const bookingResult = await syncBookingCreditFromStripeEvent(event);
     await syncMembershipFromStripeEvent(event);
+    await logStripeWebhookResult(
+      event.id,
+      bookingResult === "processed" ? "processed" : "ignored"
+    );
     return NextResponse.json({ received: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Webhook handler failed.";
-    console.error("Stripe webhook error:", message);
+    console.error("Stripe webhook error:", message, "event=", event.id, "type=", event.type);
+    await logStripeWebhookResult(event.id, "failed", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

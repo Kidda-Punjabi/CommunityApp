@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -398,28 +399,41 @@ export async function cancelPendingBooking(bookingId: string): Promise<BookingAc
     if (!user) return { error: "Unauthorized" };
 
     const admin = createServiceRoleClient();
-    const { data: booking } = await admin
-      .from("tutor_one_to_one_bookings")
-      .select("id, status, starts_at")
-      .eq("id", bookingId)
-      .eq("student_id", user.id)
-      .maybeSingle();
+    const { cancelConfirmedOneToOneBooking } = await import(
+      "@/lib/tutoring/cancel-one-to-one-booking"
+    );
+    const result = await cancelConfirmedOneToOneBooking(admin, {
+      bookingId,
+      studentId: user.id,
+    });
 
-    if (!booking) return { error: "Booking not found." };
-    if (booking.status !== "confirmed") {
-      return { error: "This booking cannot be cancelled here." };
+    if (!result.ok) return { error: result.error };
+
+    // Best-effort calendar follow-up after DB cancel commits — never blocks the student.
+    if (result.cancelledSessionId) {
+      const sessionId = result.cancelledSessionId;
+      after(async () => {
+        try {
+          const { cancelOneToOneSessionGoogleCalendarEvent } = await import(
+            "@/lib/tutoring/cancel-one-to-one-calendar-event"
+          );
+          await cancelOneToOneSessionGoogleCalendarEvent(admin, sessionId);
+        } catch (error) {
+          console.error(
+            "[one-to-one] calendar cancel follow-up crashed:",
+            error instanceof Error ? error.message : error,
+            "session=",
+            sessionId
+          );
+        }
+      });
     }
 
-    const { error } = await admin
-      .from("tutor_one_to_one_bookings")
-      .update({ status: "cancelled", updated_at: new Date().toISOString() })
-      .eq("id", bookingId)
-      .eq("student_id", user.id);
-
-    if (error) return { error: error.message };
-
     revalidatePath("/dashboard/schedule");
-    return { success: "Booking cancelled. Contact support if you need a credit refund." };
+    return {
+      success:
+        "Booking cancelled. Your 1-to-1 credit has been returned — pick a new time below when you're ready.",
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to cancel booking." };
   }

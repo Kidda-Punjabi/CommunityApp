@@ -38,9 +38,33 @@ export async function GET(request: Request) {
       }
     );
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      // Heal profile ↔ Notion lead link after email confirmation (signup may have
+      // linked already; createIfMissing stays true so brand-new app users still get a lead).
+      const user = sessionData.session?.user ?? sessionData.user;
+      const userEmail = user?.email?.trim();
+      if (user?.id && userEmail) {
+        try {
+          const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
+          const { linkLeadsForProfile } = await import("@/lib/notion/lead-sync");
+          const service = createServiceRoleClient();
+          const linkResult = await linkLeadsForProfile(service, user.id, userEmail, {
+            fullName:
+              typeof user.user_metadata?.full_name === "string"
+                ? user.user_metadata.full_name
+                : null,
+          });
+          const { maybeGrantAccessAfterLeadLink } = await import(
+            "@/lib/notion/lead-purchase-access-grant"
+          );
+          await maybeGrantAccessAfterLeadLink(service, user.id, linkResult);
+        } catch {
+          // Best-effort — do not block auth redirect.
+        }
+      }
+
       const response = NextResponse.redirect(`${origin}${next}`);
       response.cookies.delete(AUTH_RECOVERY_COOKIE);
 

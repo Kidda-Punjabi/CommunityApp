@@ -263,6 +263,12 @@ export function AdminPackagesBoardHeader({
           >
             Notion
           </Link>
+          <Link
+            href="/admin/lesson-log"
+            className="hidden rounded-lg px-2.5 py-1.5 text-sm font-medium text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 sm:inline"
+          >
+            Lesson Log
+          </Link>
 
           <button type="button" onClick={onNewPackage} className={ui.btnPrimary}>
             New package

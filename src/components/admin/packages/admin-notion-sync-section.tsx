@@ -6,15 +6,17 @@ import {
   deleteNotionTutorMapping,
   dismissNotionInboxRow,
   fetchLeadLinkAdminData,
+  fetchLeadPurchaseGrantQueue,
   fetchNotionLinkFormOptions,
   fetchNotionTutorMapData,
   linkNotionInboxRow,
   refreshNotionPackageInbox,
+  resolveLeadPurchaseGrantQueueItemAction,
   saveNotionTutorMapping,
   searchNotionWorkspaceUsers,
 } from "@/app/admin/packages/notion-actions";
 
-type Tab = "inbox" | "tutors" | "leads";
+type Tab = "inbox" | "tutors" | "leads" | "grants";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -40,6 +42,12 @@ export function AdminNotionSyncSection() {
   const [leadData, setLeadData] = useState<
     Awaited<ReturnType<typeof fetchLeadLinkAdminData>>
   >({ unlinkedProfiles: [], conflicts: [] });
+  const [grantData, setGrantData] = useState<
+    Awaited<ReturnType<typeof fetchLeadPurchaseGrantQueue>>
+  >({ rows: [], cohorts: [], packageInstances: [] });
+  const [grantSelections, setGrantSelections] = useState<
+    Record<string, { kind: "cohort" | "package_instance"; runId: string }>
+  >({});
   const [formOptions, setFormOptions] = useState<
     Awaited<ReturnType<typeof fetchNotionLinkFormOptions>>
   >({ packages: [] });
@@ -58,14 +66,16 @@ export function AdminNotionSyncSection() {
   function reload() {
     startTransition(async () => {
       setError(null);
-      const [inbox, tutors, leads, options] = await Promise.all([
+      const [inbox, tutors, leads, grants, options] = await Promise.all([
         refreshNotionPackageInbox(),
         fetchNotionTutorMapData(),
         fetchLeadLinkAdminData(),
+        fetchLeadPurchaseGrantQueue(),
         fetchNotionLinkFormOptions(),
       ]);
       if (inbox.error) setError(inbox.error);
       if (tutors.error) setError(tutors.error);
+      if (grants.error) setError(grants.error);
       setInboxRows(inbox.rows);
       if (inbox.autoLinked > 0) {
         setMessage(
@@ -74,6 +84,7 @@ export function AdminNotionSyncSection() {
       }
       setTutorData(tutors);
       setLeadData(leads);
+      setGrantData(grants);
       setFormOptions(options);
     });
   }
@@ -162,6 +173,7 @@ export function AdminNotionSyncSection() {
             ["inbox", "Package inbox"],
             ["tutors", "Tutor map"],
             ["leads", "Lead links"],
+            ["grants", "Purchase grants"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -173,6 +185,9 @@ export function AdminNotionSyncSection() {
             }`}
           >
             {label}
+            {id === "grants" && grantData.rows.length > 0
+              ? ` (${grantData.rows.length})`
+              : ""}
           </button>
         ))}
       </div>
@@ -457,6 +472,163 @@ export function AdminNotionSyncSection() {
               </ul>
             )}
           </div>
+        </section>
+      )}
+
+      {tab === "grants" && (
+        <section className="space-y-4">
+          <p className="text-sm text-zinc-600">
+            After signup lead-link, Packages that could not be auto-granted (multiple packages or no
+            matching cohort/instance) land here. Grant the right run in one click, or dismiss.
+          </p>
+          {grantData.rows.length === 0 ? (
+            <p className="text-sm text-zinc-500">No pending purchase grants.</p>
+          ) : (
+            grantData.rows.map((row) => {
+              const selection = grantSelections[row.id] ?? {
+                kind: "cohort" as const,
+                runId: grantData.cohorts[0]?.id ?? "",
+              };
+              const resolved = Array.isArray(
+                (row.rawPackageData as { resolved?: unknown }).resolved
+              )
+                ? (
+                    row.rawPackageData as {
+                      resolved: Array<{ kind: string; runId: string; label: string }>;
+                    }
+                  ).resolved
+                : [];
+
+              return (
+                <div key={row.id} className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                  <h2 className="font-medium text-zinc-900">
+                    {row.leadName ?? "Unknown lead"} · {row.leadEmail ?? "No email"}
+                  </h2>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Reason: {row.reason} · Lead page {row.notionLeadPageId}
+                  </p>
+                  {resolved.length > 0 && (
+                    <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+                      {resolved.map((item) => (
+                        <li key={`${item.kind}-${item.runId}`}>
+                          Suggested: {item.kind} — {item.label}
+                          <button
+                            type="button"
+                            className="ml-2 text-violet-700 underline"
+                            onClick={() =>
+                              setGrantSelections((prev) => ({
+                                ...prev,
+                                [row.id]: {
+                                  kind: item.kind as "cohort" | "package_instance",
+                                  runId: item.runId,
+                                },
+                              }))
+                            }
+                          >
+                            Use
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-end gap-2">
+                    <label className="text-sm text-zinc-700">
+                      Kind
+                      <select
+                        className="mt-1 block rounded-lg border border-zinc-200 bg-white px-2 py-1.5"
+                        value={selection.kind}
+                        onChange={(e) =>
+                          setGrantSelections((prev) => ({
+                            ...prev,
+                            [row.id]: {
+                              kind: e.target.value as "cohort" | "package_instance",
+                              runId: "",
+                            },
+                          }))
+                        }
+                      >
+                        <option value="cohort">Cohort</option>
+                        <option value="package_instance">1-1 instance</option>
+                      </select>
+                    </label>
+                    <label className="text-sm text-zinc-700">
+                      Run
+                      <select
+                        className="mt-1 block min-w-[14rem] rounded-lg border border-zinc-200 bg-white px-2 py-1.5"
+                        value={selection.runId}
+                        onChange={(e) =>
+                          setGrantSelections((prev) => ({
+                            ...prev,
+                            [row.id]: { ...selection, runId: e.target.value },
+                          }))
+                        }
+                      >
+                        <option value="">Select…</option>
+                        {(selection.kind === "cohort"
+                          ? grantData.cohorts
+                          : grantData.packageInstances
+                        ).map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={pending || !selection.runId}
+                      className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+                      onClick={() => {
+                        startTransition(async () => {
+                          setError(null);
+                          setMessage(null);
+                          const result = await resolveLeadPurchaseGrantQueueItemAction(
+                            row.id,
+                            "grant",
+                            {
+                              kind: selection.kind,
+                              runId: selection.runId,
+                            }
+                          );
+                          if (result.error) {
+                            setError(result.error);
+                            return;
+                          }
+                          setMessage(result.success ?? "Granted.");
+                          reload();
+                        });
+                      }}
+                    >
+                      Grant access
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-60"
+                      onClick={() => {
+                        startTransition(async () => {
+                          setError(null);
+                          setMessage(null);
+                          const result = await resolveLeadPurchaseGrantQueueItemAction(
+                            row.id,
+                            "dismiss"
+                          );
+                          if (result.error) {
+                            setError(result.error);
+                            return;
+                          }
+                          setMessage(result.success ?? "Dismissed.");
+                          reload();
+                        });
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </section>
       )}
     </div>

@@ -48,6 +48,7 @@ export function BookOneToOneSection({
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
 
   const activeCredit = credits[0] ?? null;
+  const availableCreditCount = credits.length;
   const showSection = credits.length > 0 || Boolean(context) || bookings.length > 0;
   const canBrowseSlots = Boolean(context?.bookingEnabled && !context.tutorUnresolved);
   const canBookWithCredit = Boolean(canBrowseSlots && activeCredit);
@@ -125,6 +126,12 @@ export function BookOneToOneSection({
             ? "Book a 1-to-1 lesson"
             : `Book a 1-to-1 with ${tutorLabel}`}
         </h2>
+        {availableCreditCount > 0 ? (
+          <p className="mt-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-900">
+            You have {availableCreditCount} unused 1-to-1 credit
+            {availableCreditCount === 1 ? "" : "s"}
+          </p>
+        ) : null}
         {paymentMessage ? (
           <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
             {paymentMessage}
@@ -171,6 +178,9 @@ export function BookOneToOneSection({
                   onClick={() => {
                     void cancelPendingBooking(booking.id).then((result) => {
                       setCancelMessage(result.success ?? result.error ?? null);
+                      if (result.success) {
+                        window.location.reload();
+                      }
                     });
                   }}
                 >

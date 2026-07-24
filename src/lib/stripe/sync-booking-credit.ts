@@ -1,11 +1,11 @@
 import "server-only";
 
-import { ONE_TO_ONE_SESSION_CHECKOUT_KEY } from "@/lib/products/checkout";
 import { confirmPendingOneToOneBookingAfterPayment } from "@/lib/tutoring/confirm-pending-one-to-one-booking";
 import {
   inferCourseScopeFromBookingTutor,
   resolveBookingCreditCourseScope,
 } from "@/lib/tutoring/booking-credit-course";
+import { isOneToOneSessionCheckout } from "@/lib/stripe/one-to-one-session-checkout";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { findUserIdByEmail } from "@/lib/stripe/sync-purchases";
 import { getStripe } from "@/lib/stripe/server";
@@ -23,19 +23,6 @@ async function resolveUserIdFromSession(session: Stripe.Checkout.Session): Promi
     session.customer_details?.email ?? session.customer_email ?? null;
   if (!email) return null;
   return findUserIdByEmail(email);
-}
-
-function isOneToOneSessionCheckout(session: Stripe.Checkout.Session): boolean {
-  if (session.metadata?.checkout_key === ONE_TO_ONE_SESSION_CHECKOUT_KEY) {
-    return true;
-  }
-
-  const plinkId = process.env.STRIPE_PAYMENT_LINK_ONE_TO_ONE_SESSION_PLINK_ID?.trim();
-  if (plinkId && session.payment_link === plinkId) {
-    return true;
-  }
-
-  return false;
 }
 
 async function resolveScopeForCreditGrant(
@@ -84,6 +71,7 @@ export async function syncBookingCreditFromCheckoutSession(
   sessionId: string
 ): Promise<{
   granted: boolean;
+  ignored?: boolean;
   creditId?: string;
   bookingConfirmed?: boolean;
   meetLink?: string | null;
@@ -95,13 +83,23 @@ export async function syncBookingCreditFromCheckoutSession(
     return { granted: false };
   }
 
-  if (!isOneToOneSessionCheckout(session)) {
-    return { granted: false };
+  if (!(await isOneToOneSessionCheckout(session))) {
+    console.info(
+      "[one-to-one] checkout session ignored (not a 1-to-1 session product):",
+      session.id,
+      "payment_link=",
+      session.payment_link,
+      "checkout_key=",
+      session.metadata?.checkout_key
+    );
+    return { granted: false, ignored: true };
   }
 
   const userId = await resolveUserIdFromSession(session);
   if (!userId) {
-    throw new Error("Could not match this payment to your Kidda account. Use the same email at checkout.");
+    throw new Error(
+      "Could not match this payment to your Kidda account. Use the same email at checkout."
+    );
   }
 
   const admin = createServiceRoleClient();
@@ -117,17 +115,31 @@ export async function syncBookingCreditFromCheckoutSession(
   let bookingId = bookingIdFromMeta;
 
   if (!bookingId) {
-    const cutoff = new Date(Date.now() - 20 * 60 * 1000).toISOString();
-    const { data: pendingHold } = await admin
+    // Prefer hold already linked to this checkout session.
+    const { data: linkedHold } = await admin
       .from("tutor_one_to_one_bookings")
-      .select("id")
+      .select("id, status")
       .eq("student_id", userId)
-      .eq("status", "pending_payment")
-      .gte("created_at", cutoff)
+      .eq("stripe_checkout_session_id", session.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    bookingId = (pendingHold?.id as string | undefined) ?? null;
+
+    if (linkedHold?.id) {
+      bookingId = linkedHold.id as string;
+    } else {
+      const cutoff = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+      const { data: pendingHold } = await admin
+        .from("tutor_one_to_one_bookings")
+        .select("id")
+        .eq("student_id", userId)
+        .eq("status", "pending_payment")
+        .gte("created_at", cutoff)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      bookingId = (pendingHold?.id as string | undefined) ?? null;
+    }
   }
 
   const scope = await resolveScopeForCreditGrant(admin, {
@@ -167,7 +179,6 @@ export async function syncBookingCreditFromCheckoutSession(
         error.message?.includes("tutor_id") ||
         error.code === "42703"
       ) {
-        // Migration not applied yet — grant without course scope.
         const { data: legacy, error: legacyError } = await admin
           .from("tutor_one_to_one_booking_credits")
           .insert({
@@ -186,8 +197,14 @@ export async function syncBookingCreditFromCheckoutSession(
     } else {
       creditId = data.id as string;
     }
+
+    console.info("[one-to-one] granted booking credit", {
+      creditId,
+      sessionId: session.id,
+      userId,
+      bookingId,
+    });
   } else if ((!existing?.course_id || !existing?.tutor_id) && (scope.courseId || scope.tutorId)) {
-    // Fill scope on an already-granted credit (e.g. race / re-sync).
     await admin
       .from("tutor_one_to_one_booking_credits")
       .update({
@@ -202,10 +219,13 @@ export async function syncBookingCreditFromCheckoutSession(
   }
 
   if (!bookingId) {
+    console.warn(
+      "[one-to-one] credit granted without pending booking hold — student can book with credit",
+      { creditId, sessionId: session.id, userId }
+    );
     return { granted: true, creditId };
   }
 
-  // Already confirmed on a prior success-page load.
   if (existing?.status === "used" && existing.booking_id === bookingId) {
     return { granted: true, creditId, bookingConfirmed: true };
   }
@@ -229,6 +249,21 @@ export async function syncBookingCreditFromCheckoutSession(
     .eq("student_id", userId)
     .eq("status", "pending_payment");
 
+  const { data: holdRow } = await admin
+    .from("tutor_one_to_one_bookings")
+    .select("id, status")
+    .eq("id", bookingId)
+    .eq("student_id", userId)
+    .maybeSingle();
+
+  if (!holdRow || holdRow.status !== "pending_payment") {
+    console.warn(
+      "[one-to-one] booking hold no longer pending — credit left available for self-serve booking",
+      { creditId, sessionId: session.id, userId, bookingId, status: holdRow?.status }
+    );
+    return { granted: true, creditId, bookingConfirmed: false };
+  }
+
   const confirmed = await confirmPendingOneToOneBookingAfterPayment(admin, {
     userId,
     creditId,
@@ -241,7 +276,11 @@ export async function syncBookingCreditFromCheckoutSession(
       "one-to-one pending booking confirm failed:",
       confirmed.error,
       "session=",
-      session.id
+      session.id,
+      "booking=",
+      bookingId,
+      "credit=",
+      creditId
     );
     return { granted: true, creditId, bookingConfirmed: false };
   }
@@ -254,8 +293,13 @@ export async function syncBookingCreditFromCheckoutSession(
   };
 }
 
-export async function syncBookingCreditFromStripeEvent(event: Stripe.Event): Promise<void> {
-  if (event.type !== "checkout.session.completed") return;
+export async function syncBookingCreditFromStripeEvent(
+  event: Stripe.Event
+): Promise<"processed" | "ignored"> {
+  if (event.type !== "checkout.session.completed") return "ignored";
   const session = event.data.object as Stripe.Checkout.Session;
-  await syncBookingCreditFromCheckoutSession(session.id);
+  const result = await syncBookingCreditFromCheckoutSession(session.id);
+  if (result.ignored) return "ignored";
+  if (!result.granted) return "ignored";
+  return "processed";
 }
