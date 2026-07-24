@@ -67,6 +67,23 @@ async function loadNotionLeadCandidates(
     }
   }
 
+  const leadPageIds = [...byLeadPageId.keys()];
+  if (leadPageIds.length > 0) {
+    const { data: leadsCacheRows } = await supabase
+      .from("notion_leads_cache")
+      .select("notion_page_id, name, email")
+      .in("notion_page_id", leadPageIds);
+    for (const row of leadsCacheRows ?? []) {
+      const existing = byLeadPageId.get(row.notion_page_id);
+      if (!existing) continue;
+      byLeadPageId.set(row.notion_page_id, {
+        ...existing,
+        leadName: row.name?.trim() || existing.leadName,
+        leadEmail: row.email ?? existing.leadEmail,
+      });
+    }
+  }
+
   const results: PackageRosterCandidateOption[] = [];
 
   for (const entry of byLeadPageId.values()) {

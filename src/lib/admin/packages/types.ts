@@ -31,6 +31,8 @@ export type CohortCalendarLinkedEvent = {
   startsAt: string;
   endsAt: string;
   recurringEventId: string;
+  /** Count of tutor_scheduled_sessions rows linked to this cohort for the series. */
+  linkedSessionCount: number;
 };
 
 export type AdminPackageListRow = {

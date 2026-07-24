@@ -188,7 +188,8 @@ function rosterFromNotionMirror(
     student_package_id: string | null;
   }>,
   profileById: Map<string, ProfileRow>,
-  emailById: Map<string, string | null>
+  emailById: Map<string, string | null>,
+  leadsCacheByPageId?: Map<string, { name: string | null; email: string | null }>
 ): {
   interested: PackagesRosterMember[];
   waitingForPayment: PackagesRosterMember[];
@@ -200,16 +201,22 @@ function rosterFromNotionMirror(
 
   for (const row of rows) {
     const profile = row.profile_id ? profileById.get(row.profile_id) : undefined;
+    const cachedLead = leadsCacheByPageId?.get(row.notion_lead_page_id);
+    const leadEmail =
+      cachedLead?.email ??
+      row.lead_email ??
+      (row.profile_id ? emailById.get(row.profile_id) ?? null : null);
+    const leadLabel = profile
+      ? labelForProfile(profile, leadEmail)
+      : cachedLead?.name?.trim() || row.lead_name;
     const member: PackagesRosterMember = {
       userId: row.profile_id,
       notionLeadPageId: row.notion_lead_page_id,
       isNotionLead: true,
       studentPackageId: row.student_package_id ?? `notion-roster:${row.id}`,
       membershipStatus: row.roster_status,
-      label: profile
-        ? labelForProfile(profile, row.lead_email ?? emailById.get(row.profile_id!) ?? null)
-        : row.lead_name,
-      email: row.lead_email ?? (row.profile_id ? emailById.get(row.profile_id) ?? null : null),
+      label: leadLabel,
+      email: leadEmail,
       avatarUrl: profile?.avatar_url ?? null,
     };
 
@@ -317,17 +324,29 @@ export async function loadAdminPackagesList(
       startsAt: string;
       endsAt: string;
       recurringEventId: string;
+      linkedSessionCount: number;
     }
   >();
   for (const row of recurringSessions ?? []) {
     if (!row.cohort_id || !row.google_recurring_event_id) continue;
-    if (linkedEventByCohortId.has(row.cohort_id)) continue;
-    linkedEventByCohortId.set(row.cohort_id, {
-      title: row.title,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      recurringEventId: row.google_recurring_event_id,
-    });
+    const existing = linkedEventByCohortId.get(row.cohort_id);
+    if (!existing) {
+      linkedEventByCohortId.set(row.cohort_id, {
+        title: row.title,
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+        recurringEventId: row.google_recurring_event_id,
+        linkedSessionCount: 1,
+      });
+      continue;
+    }
+    existing.linkedSessionCount += 1;
+    if (row.starts_at < existing.startsAt) {
+      existing.title = row.title;
+      existing.startsAt = row.starts_at;
+      existing.endsAt = row.ends_at;
+      existing.recurringEventId = row.google_recurring_event_id;
+    }
   }
   const connectionByTutorId = new Map(
     (calendarConnections ?? []).map((row) => [
@@ -671,6 +690,30 @@ export async function loadAdminPackagesList(
   ];
   const emailById = await loadEmails(supabase, allUserIds);
 
+  const notionLeadPageIds = [
+    ...new Set([
+      ...[...notionRosterByInstanceId.values()].flatMap((rows) =>
+        rows.map((row) => row.notion_lead_page_id)
+      ),
+      ...[...notionRosterByCohortId.values()].flatMap((rows) =>
+        rows.map((row) => row.notion_lead_page_id)
+      ),
+    ]),
+  ];
+  const leadsCacheByPageId = new Map<string, { name: string | null; email: string | null }>();
+  if (notionLeadPageIds.length > 0) {
+    const { data: leadsCacheRows } = await supabase
+      .from("notion_leads_cache")
+      .select("notion_page_id, name, email")
+      .in("notion_page_id", notionLeadPageIds);
+    for (const row of leadsCacheRows ?? []) {
+      leadsCacheByPageId.set(row.notion_page_id, {
+        name: row.name,
+        email: row.email,
+      });
+    }
+  }
+
   const lessonProgressByCohort = await loadCohortLessonProgressMap(
     supabase,
     (cohortRows ?? []).map((cohort) => ({
@@ -695,7 +738,8 @@ export async function loadAdminPackagesList(
           rosterFromNotionMirror(
             notionRosterByCohortId.get(cohort.id) ?? [],
             profileById,
-            emailById
+            emailById,
+            leadsCacheByPageId
           )
         )
       : rosterFromPackages(packagesByCohortId.get(cohort.id) ?? [], profileById, emailById);
@@ -766,7 +810,8 @@ export async function loadAdminPackagesList(
           rosterFromNotionMirror(
             notionRosterByInstanceId.get(instance.id) ?? [],
             profileById,
-            emailById
+            emailById,
+            leadsCacheByPageId
           )
         )
       : packagesRoster;

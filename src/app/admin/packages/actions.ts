@@ -356,6 +356,68 @@ export async function linkCohortCalendarMatch(input: {
   }
 }
 
+export async function unlinkCohortCalendarMatch(
+  cohortId: string
+): Promise<ActionResult & { unlinkedCount?: number }> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { unlinkCohortRecurringCalendarEvent } = await import(
+      "@/lib/admin/packages/cohort-calendar-link"
+    );
+    const result = await unlinkCohortRecurringCalendarEvent(supabase, { cohortId });
+    if (!result.ok) return { error: result.error ?? "Failed to unlink calendar event." };
+    revalidatePackages(cohortId);
+    const n = result.unlinkedCount ?? 0;
+    return {
+      success:
+        n > 1
+          ? `Calendar series unlinked (${n} sessions). Google Calendar was not changed.`
+          : "Calendar event unlinked. Google Calendar was not changed.",
+      unlinkedCount: n,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to unlink calendar event." };
+  }
+}
+
+export async function relinkCohortCalendarMatch(input: {
+  cohortId: string;
+  googleEventId: string;
+  recurringEventId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+}): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { relinkCohortRecurringCalendarEvent } = await import(
+      "@/lib/admin/packages/cohort-calendar-link"
+    );
+    const result = await relinkCohortRecurringCalendarEvent(supabase, {
+      cohortId: input.cohortId,
+      googleEventId: input.googleEventId,
+      recurringEventId: input.recurringEventId,
+      title: input.title,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+    });
+    if (!result.ok) return { error: result.error ?? "Failed to re-link calendar event." };
+    revalidatePackages(input.cohortId);
+    const linked = result.linkedCount ?? 1;
+    const unlinked = result.unlinkedCount ?? 0;
+    return {
+      success:
+        linked > 1
+          ? `Re-linked calendar series (${unlinked} unlinked → ${linked} linked). Google Calendar was not changed.`
+          : `Calendar event re-linked (${unlinked} session${unlinked === 1 ? "" : "s"} cleared first). Google Calendar was not changed.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to re-link calendar event." };
+  }
+}
+
 async function unlinkNotionInboxForDeletedPackageRun(
   supabase: SupabaseClient,
   kind: "cohort" | "package_instance",

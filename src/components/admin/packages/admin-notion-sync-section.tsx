@@ -10,6 +10,7 @@ import {
   fetchNotionLinkFormOptions,
   fetchNotionTutorMapData,
   linkNotionInboxRow,
+  refreshNotionLeadsCache,
   refreshNotionPackageInbox,
   resolveLeadPurchaseGrantQueueItemAction,
   saveNotionTutorMapping,
@@ -431,6 +432,53 @@ export function AdminNotionSyncSection() {
 
       {tab === "leads" && (
         <section className="space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-zinc-200 p-4">
+            <div>
+              <h2 className="font-medium text-zinc-900">Leads cache</h2>
+              <p className="mt-1 max-w-xl text-sm text-zinc-600">
+                Contact fields used by Packages people lists, sales calls, and lead search.
+                Cron refreshes every 10 minutes (leads first); use full sync after bulk Notion edits.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  startTransition(async () => {
+                    setMessage(null);
+                    setError(null);
+                    const result = await refreshNotionLeadsCache(false);
+                    if (result.error) setError(result.error);
+                    else setMessage(result.success ?? "Synced.");
+                    reload();
+                  });
+                }}
+                className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {pending ? "Working…" : "Sync from Notion"}
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                title="Re-pull every Leads page (use after bulk contact fixes)"
+                onClick={() => {
+                  startTransition(async () => {
+                    setMessage(null);
+                    setError(null);
+                    const result = await refreshNotionLeadsCache(true);
+                    if (result.error) setError(result.error);
+                    else setMessage(result.success ?? "Full sync done.");
+                    reload();
+                  });
+                }}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 disabled:opacity-60"
+              >
+                Full sync
+              </button>
+            </div>
+          </div>
+
           <div>
             <h2 className="font-medium text-zinc-900">Unlinked app users</h2>
             <p className="mt-1 text-sm text-zinc-600">

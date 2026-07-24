@@ -61,6 +61,69 @@ function appUserIdFromPage(page: NotionLeadPage): string | null {
   return value || null;
 }
 
+const LEADS_CACHE_PULL_CURSOR_VIEW_TYPE = "notion_leads_cache_pull_cursor";
+const LEADS_CACHE_PULL_CURSOR_NAME = "notion_leads_cache";
+
+type LeadsCachePullCursorConfig = {
+  lastEditedTime?: string;
+  lastFullSyncAt?: string;
+};
+
+async function loadLeadsCachePullCursor(
+  supabase: SupabaseClient
+): Promise<LeadsCachePullCursorConfig | null> {
+  const { data } = await supabase
+    .from("admin_saved_views")
+    .select("config")
+    .eq("view_type", LEADS_CACHE_PULL_CURSOR_VIEW_TYPE)
+    .eq("name", LEADS_CACHE_PULL_CURSOR_NAME)
+    .maybeSingle();
+
+  return (data?.config as LeadsCachePullCursorConfig | null) ?? null;
+}
+
+async function saveLeadsCachePullCursor(
+  supabase: SupabaseClient,
+  config: LeadsCachePullCursorConfig
+): Promise<void> {
+  const { data: existing } = await supabase
+    .from("admin_saved_views")
+    .select("id, config")
+    .eq("view_type", LEADS_CACHE_PULL_CURSOR_VIEW_TYPE)
+    .eq("name", LEADS_CACHE_PULL_CURSOR_NAME)
+    .maybeSingle();
+
+  const nextConfig = {
+    ...((existing?.config as LeadsCachePullCursorConfig | null) ?? {}),
+    ...config,
+  };
+
+  if (existing?.id) {
+    await supabase.from("admin_saved_views").update({ config: nextConfig }).eq("id", existing.id);
+    return;
+  }
+
+  const { data: admin } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("app_role", "master_admin")
+    .limit(1)
+    .maybeSingle();
+
+  const createdBy =
+    admin?.id ??
+    (await supabase.from("profiles").select("id").limit(1).maybeSingle()).data?.id;
+
+  if (!createdBy) return;
+
+  await supabase.from("admin_saved_views").insert({
+    name: LEADS_CACHE_PULL_CURSOR_NAME,
+    view_type: LEADS_CACHE_PULL_CURSOR_VIEW_TYPE,
+    config: nextConfig,
+    created_by: createdBy,
+  });
+}
+
 async function queryLeadPagesForCache(editedAfter: string | null): Promise<NotionLeadPage[]> {
   const pages: NotionLeadPage[] = [];
   let cursor: string | null = null;
@@ -94,40 +157,137 @@ async function queryLeadPagesForCache(editedAfter: string | null): Promise<Notio
   return pages;
 }
 
+/**
+ * After lead contact fields change in Notion, package pages are often untouched — so
+ * `_roster_cache` emails stay null until the next package pull. Patch inbox snapshots
+ * from the leads cache so Packages admin / candidate search stay current.
+ */
+export async function patchInboxRosterCacheFromLeads(
+  supabase: SupabaseClient,
+  leadUpdates: Array<{ notionPageId: string; name: string | null; email: string | null }>
+): Promise<number> {
+  if (leadUpdates.length === 0) return 0;
+
+  const byLeadId = new Map(
+    leadUpdates.map((row) => [row.notionPageId, row] as const)
+  );
+
+  const { data: inboxRows, error } = await supabase
+    .from("notion_sync_inbox")
+    .select("id, raw_properties")
+    .not("raw_properties", "is", null);
+
+  if (error || !inboxRows?.length) return 0;
+
+  let patched = 0;
+  for (const row of inboxRows) {
+    const raw = (row.raw_properties ?? {}) as {
+      _roster_cache?: Array<{
+        notionLeadPageId: string;
+        leadName: string;
+        leadEmail: string | null;
+        rosterStatus: string;
+        profileId: string | null;
+        studentPackageId: string | null;
+      }>;
+    };
+    const cache = raw._roster_cache;
+    if (!cache?.length) continue;
+
+    let changed = false;
+    const nextCache = cache.map((entry) => {
+      const update = byLeadId.get(entry.notionLeadPageId);
+      if (!update) return entry;
+      const nextName = update.name?.trim() || entry.leadName;
+      const nextEmail = update.email;
+      if (nextName === entry.leadName && nextEmail === entry.leadEmail) return entry;
+      changed = true;
+      return { ...entry, leadName: nextName, leadEmail: nextEmail };
+    });
+
+    if (!changed) continue;
+
+    const { error: updateError } = await supabase
+      .from("notion_sync_inbox")
+      .update({
+        raw_properties: {
+          ...raw,
+          _roster_cache: nextCache,
+        },
+      })
+      .eq("id", row.id);
+
+    if (!updateError) patched += 1;
+  }
+
+  return patched;
+}
+
 export async function upsertNotionLeadsCache(
   supabase: SupabaseClient,
   options?: { fullSync?: boolean }
-): Promise<{ upserted: number; notionPageCount: number; errors: string[] }> {
+): Promise<{
+  upserted: number;
+  notionPageCount: number;
+  rosterCachesPatched: number;
+  fullSync: boolean;
+  errors: string[];
+}> {
   const { count: existingCount } = await supabase
     .from("notion_leads_cache")
     .select("*", { count: "exact", head: true });
 
-  // Empty cache must always full-crawl; incremental watermark never seeds names/emails.
+  const pullCursor = await loadLeadsCachePullCursor(supabase);
+
+  // Empty cache must always full-crawl. Do not auto-full-sync on a timer here —
+  // a full Leads crawl (~2k pages) can take minutes and starve the rest of notion-sync cron.
+  // Use admin "Full sync" or ?fullLeadsCacheSync=1 for deliberate backfills.
   const shouldFullSync = options?.fullSync === true || (existingCount ?? 0) === 0;
 
   let editedAfter: string | null = null;
   if (!shouldFullSync) {
-    const { data: watermarkRow } = await supabase
-      .from("notion_leads_cache")
-      .select("updated_at")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    editedAfter = (watermarkRow?.updated_at as string | null) ?? null;
+    const cursorTime = pullCursor?.lastEditedTime?.trim() || null;
+    if (cursorTime) {
+      // Overlap so pages edited in the same second as the saved cursor are not missed.
+      editedAfter = new Date(new Date(cursorTime).getTime() - 3000).toISOString();
+    } else {
+      // Migrate from legacy max(updated_at) watermark once.
+      const { data: watermarkRow } = await supabase
+        .from("notion_leads_cache")
+        .select("updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const legacy = (watermarkRow?.updated_at as string | null) ?? null;
+      editedAfter = legacy
+        ? new Date(new Date(legacy).getTime() - 3000).toISOString()
+        : null;
+    }
   }
 
   const pages = await queryLeadPagesForCache(editedAfter);
   let upserted = 0;
   const errors: string[] = [];
+  let maxEdited = pullCursor?.lastEditedTime ?? null;
+  const leadUpdates: Array<{
+    notionPageId: string;
+    name: string | null;
+    email: string | null;
+  }> = [];
 
   for (const page of pages) {
+    const name = leadNameFromPage(page);
+    const email = leadEmailFromPage(page);
+    const phone = leadPhoneFromPage(page);
+    const updatedAt = page.last_edited_time ?? new Date().toISOString();
+
     const { error } = await supabase.from("notion_leads_cache").upsert(
       {
         notion_page_id: page.id,
-        name: leadNameFromPage(page),
-        email: leadEmailFromPage(page),
-        phone: leadPhoneFromPage(page),
-        updated_at: page.last_edited_time ?? new Date().toISOString(),
+        name,
+        email,
+        phone,
+        updated_at: updatedAt,
       },
       { onConflict: "notion_page_id" }
     );
@@ -136,9 +296,28 @@ export async function upsertNotionLeadsCache(
       continue;
     }
     upserted += 1;
+    leadUpdates.push({ notionPageId: page.id, name, email });
+    if (!maxEdited || updatedAt > maxEdited) {
+      maxEdited = updatedAt;
+    }
   }
 
-  return { upserted, notionPageCount: pages.length, errors };
+  const rosterCachesPatched = await patchInboxRosterCacheFromLeads(supabase, leadUpdates);
+
+  const cursorPatch: LeadsCachePullCursorConfig = {};
+  if (maxEdited) cursorPatch.lastEditedTime = maxEdited;
+  if (shouldFullSync) cursorPatch.lastFullSyncAt = new Date().toISOString();
+  if (Object.keys(cursorPatch).length > 0) {
+    await saveLeadsCachePullCursor(supabase, cursorPatch);
+  }
+
+  return {
+    upserted,
+    notionPageCount: pages.length,
+    rosterCachesPatched,
+    fullSync: shouldFullSync,
+    errors,
+  };
 }
 
 async function writeAppUserIdToLead(pageId: string, profileId: string): Promise<void> {

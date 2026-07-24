@@ -318,3 +318,150 @@ export async function linkCohortRecurringCalendarEvent(
   if (insertError) return { ok: false, error: insertError.message };
   return { ok: true, linkedCount: 1 };
 }
+
+/**
+ * Clears the internal cohort ↔ calendar link only. Does not create, update, or
+ * delete anything on Google Calendar.
+ *
+ * Scope mirrors linkCohortRecurringCalendarEvent: whole recurring series via
+ * google_recurring_event_id when present; otherwise the single google_event_id.
+ */
+export async function unlinkCohortRecurringCalendarEvent(
+  supabase: SupabaseClient,
+  params: { cohortId: string }
+): Promise<{ ok: boolean; error?: string; unlinkedCount?: number }> {
+  const { data: cohort, error: cohortError } = await supabase
+    .from("cohorts")
+    .select("id, tutor_id")
+    .eq("id", params.cohortId)
+    .maybeSingle();
+
+  if (cohortError) return { ok: false, error: cohortError.message };
+  if (!cohort?.tutor_id) return { ok: false, error: "Cohort has no tutor assigned." };
+
+  const { data: linkedRows, error: linkedError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, google_event_id, google_recurring_event_id")
+    .eq("tutor_id", cohort.tutor_id)
+    .eq("cohort_id", params.cohortId);
+
+  if (linkedError) return { ok: false, error: linkedError.message };
+  if (!linkedRows?.length) {
+    // Already unlinked — idempotent success so re-link can proceed to link.
+    return { ok: true, unlinkedCount: 0 };
+  }
+
+  const now = new Date().toISOString();
+  const unlinkPatch = {
+    cohort_id: null,
+    match_method: "unmatched" as const,
+    updated_at: now,
+  };
+
+  const seriesIds = [
+    ...new Set(
+      linkedRows
+        .map((row) => row.google_recurring_event_id?.trim())
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  if (seriesIds.length > 0) {
+    const { data: seriesRows, error: seriesLookupError } = await supabase
+      .from("tutor_scheduled_sessions")
+      .select("id, cohort_id")
+      .eq("tutor_id", cohort.tutor_id)
+      .in("google_recurring_event_id", seriesIds);
+
+    if (seriesLookupError) return { ok: false, error: seriesLookupError.message };
+
+    const updatable = (seriesRows ?? []).filter((row) => row.cohort_id === params.cohortId);
+    if (updatable.length === 0) {
+      return { ok: false, error: "No linked calendar sessions for this cohort." };
+    }
+
+    const { error: updateError } = await supabase
+      .from("tutor_scheduled_sessions")
+      .update(unlinkPatch)
+      .in(
+        "id",
+        updatable.map((row) => row.id)
+      );
+
+    if (updateError) return { ok: false, error: updateError.message };
+    return { ok: true, unlinkedCount: updatable.length };
+  }
+
+  // Single-instance fallback: unlink by google_event_id for this cohort's rows.
+  const eventIds = [
+    ...new Set(
+      linkedRows
+        .map((row) => row.google_event_id?.trim())
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  if (eventIds.length === 0) {
+    return { ok: false, error: "Linked sessions are missing Google event ids." };
+  }
+
+  const { data: byEventRows, error: byEventError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, cohort_id")
+    .eq("tutor_id", cohort.tutor_id)
+    .in("google_event_id", eventIds);
+
+  if (byEventError) return { ok: false, error: byEventError.message };
+
+  const updatable = (byEventRows ?? []).filter((row) => row.cohort_id === params.cohortId);
+  if (updatable.length === 0) {
+    return { ok: false, error: "No linked calendar sessions for this cohort." };
+  }
+
+  const { error: updateError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .update(unlinkPatch)
+    .in(
+      "id",
+      updatable.map((row) => row.id)
+    );
+
+  if (updateError) return { ok: false, error: updateError.message };
+  return { ok: true, unlinkedCount: updatable.length };
+}
+
+/**
+ * Unlink the current series (Supabase only), then run the existing link flow
+ * against the newly selected event. Does not merge/overwrite in place.
+ */
+export async function relinkCohortRecurringCalendarEvent(
+  supabase: SupabaseClient,
+  params: {
+    cohortId: string;
+    googleEventId: string;
+    recurringEventId: string;
+    title: string;
+    startsAt: string;
+    endsAt: string;
+  }
+): Promise<{ ok: boolean; error?: string; unlinkedCount?: number; linkedCount?: number }> {
+  const unlink = await unlinkCohortRecurringCalendarEvent(supabase, {
+    cohortId: params.cohortId,
+  });
+  if (!unlink.ok) return { ok: false, error: unlink.error };
+
+  const link = await linkCohortRecurringCalendarEvent(supabase, params);
+  if (!link.ok) {
+    return {
+      ok: false,
+      error: link.error ?? "Unlinked the previous series, but linking the new event failed.",
+      unlinkedCount: unlink.unlinkedCount,
+    };
+  }
+
+  return {
+    ok: true,
+    unlinkedCount: unlink.unlinkedCount,
+    linkedCount: link.linkedCount,
+  };
+}

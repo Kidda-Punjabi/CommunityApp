@@ -3,9 +3,12 @@
 import { useState, useTransition } from "react";
 import {
   linkCohortCalendarMatch,
+  relinkCohortCalendarMatch,
   searchCohortCalendarMatches,
+  unlinkCohortCalendarMatch,
 } from "@/app/admin/packages/actions";
 import type { AdminPackageListRow } from "@/lib/admin/packages/types";
+import { formatSessionWhenUk } from "@/lib/calendar/uk-display-time";
 
 type Candidate = {
   googleEventId: string;
@@ -24,34 +27,227 @@ type PackageCalendarCellProps = {
   onLinked: () => void;
 };
 
-import {
-  formatSessionWhenUk,
-} from "@/lib/calendar/uk-display-time";
-
 export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [searchedEmpty, setSearchedEmpty] = useState(false);
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [relinkMode, setRelinkMode] = useState(false);
 
   if (row.kind !== "cohort") {
     return null;
   }
 
   const linkState = row.calendarLinkState ?? "unlinked";
+  const linked = row.calendarLinkedEvent;
+  const linkedSessionCount = linked?.linkedSessionCount ?? 0;
 
-  if (linkState === "linked" && row.calendarLinkedEvent) {
+  function search() {
+    setError(null);
+    setMessage(null);
+    setSearchedEmpty(false);
+    startTransition(async () => {
+      const result = await searchCohortCalendarMatches(row.id);
+      if (result.error) {
+        setError(result.error);
+        setCandidates(null);
+        return;
+      }
+      if (result.state === "no_tutor" || result.state === "no_connection") {
+        setError(
+          result.state === "no_tutor"
+            ? "Assign a tutor before searching."
+            : "Tutor has no Google Calendar connection."
+        );
+        setCandidates(null);
+        return;
+      }
+      setCandidates(result.candidates);
+      setSearchedEmpty(result.candidates.length === 0);
+    });
+  }
+
+  function link(candidate: Candidate) {
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      const result = relinkMode
+        ? await relinkCohortCalendarMatch({
+            cohortId: row.id,
+            googleEventId: candidate.googleEventId,
+            recurringEventId: candidate.recurringEventId,
+            title: candidate.title,
+            startsAt: candidate.nextStartsAt,
+            endsAt: candidate.nextEndsAt,
+          })
+        : await linkCohortCalendarMatch({
+            cohortId: row.id,
+            googleEventId: candidate.googleEventId,
+            recurringEventId: candidate.recurringEventId,
+            title: candidate.title,
+            startsAt: candidate.nextStartsAt,
+            endsAt: candidate.nextEndsAt,
+          });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setCandidates(null);
+      setSearchedEmpty(false);
+      setRelinkMode(false);
+      setConfirmUnlink(false);
+      setMessage(result.success ?? "Done.");
+      onLinked();
+    });
+  }
+
+  function unlink() {
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      const result = await unlinkCohortCalendarMatch(row.id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setConfirmUnlink(false);
+      setRelinkMode(false);
+      setCandidates(null);
+      setMessage(result.success ?? "Unlinked.");
+      onLinked();
+    });
+  }
+
+  if (linkState === "linked" && linked) {
     return (
-      <div className="min-w-[11rem] space-y-0.5">
-        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-          Event synced
-        </span>
-        <p className="truncate text-[11px] font-medium text-zinc-800" title={row.calendarLinkedEvent.title}>
-          {row.calendarLinkedEvent.title}
-        </p>
-        <p className="text-[10px] text-zinc-500">
-          Next: {formatSessionWhenUk(row.calendarLinkedEvent.startsAt)}
-        </p>
+      <div className="min-w-[11rem] space-y-1.5">
+        <div className="space-y-0.5">
+          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+            Event synced
+          </span>
+          <p
+            className="truncate text-[11px] font-medium text-zinc-800"
+            title={linked.title}
+          >
+            {linked.title}
+          </p>
+          <p className="text-[10px] text-zinc-500">
+            Next: {formatSessionWhenUk(linked.startsAt)}
+          </p>
+          {linkedSessionCount > 0 ? (
+            <p className="text-[10px] text-zinc-400">
+              {linkedSessionCount} linked session{linkedSessionCount === 1 ? "" : "s"}
+            </p>
+          ) : null}
+        </div>
+
+        {confirmUnlink ? (
+          <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2">
+            <p className="text-[10px] font-medium text-amber-950">
+              This will remove the calendar connection for all{" "}
+              {linkedSessionCount || "linked"} session
+              {linkedSessionCount === 1 ? "" : "s"} — are you sure? Google Calendar itself
+              is not changed.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={unlink}
+                className="rounded-md bg-amber-800 px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+              >
+                {pending ? "Unlinking…" : "Yes, unlink"}
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setConfirmUnlink(false)}
+                className="rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-900 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setRelinkMode(true);
+                setConfirmUnlink(false);
+                search();
+              }}
+              className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+            >
+              {pending && relinkMode ? "Searching…" : "Change event"}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setConfirmUnlink(true);
+                setRelinkMode(false);
+                setCandidates(null);
+              }}
+              className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+            >
+              Unlink
+            </button>
+          </div>
+        )}
+
+        {error ? <p className="text-[10px] text-red-600">{error}</p> : null}
+        {message ? <p className="text-[10px] text-emerald-700">{message}</p> : null}
+
+        {relinkMode && candidates && candidates.length > 0 ? (
+          <ul className="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+            <li className="px-1 text-[10px] font-medium text-zinc-500">
+              Pick a new event — the current series will be unlinked first.
+            </li>
+            {candidates.map((candidate) => (
+              <li key={candidate.recurringEventId} className="rounded-md bg-white p-2 shadow-sm">
+                <p className="text-[11px] font-semibold text-zinc-900">{candidate.title}</p>
+                <p className="text-[10px] text-zinc-500">{candidate.timeLabel}</p>
+                <p className="mt-0.5 text-[10px] text-zinc-400">
+                  {candidate.reasons.join(" · ")}
+                </p>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => link(candidate)}
+                  className="mt-1 text-[11px] font-semibold text-violet-600 hover:text-violet-500 disabled:opacity-50"
+                >
+                  {candidate.recurringEventId === linked.recurringEventId
+                    ? "Re-link this event"
+                    : "Link this event instead"}
+                </button>
+              </li>
+            ))}
+            <li>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setCandidates(null);
+                  setRelinkMode(false);
+                  setSearchedEmpty(false);
+                }}
+                className="text-[10px] font-medium text-zinc-500 hover:text-zinc-700"
+              >
+                Cancel change
+              </button>
+            </li>
+          </ul>
+        ) : null}
+
+        {relinkMode && searchedEmpty ? (
+          <p className="text-[10px] text-amber-800">
+            No matching event found — try again or cancel.
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -81,51 +277,6 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
         ) : null}
       </div>
     );
-  }
-
-  function search() {
-    setError(null);
-    setSearchedEmpty(false);
-    startTransition(async () => {
-      const result = await searchCohortCalendarMatches(row.id);
-      if (result.error) {
-        setError(result.error);
-        setCandidates(null);
-        return;
-      }
-      if (result.state === "no_tutor" || result.state === "no_connection") {
-        setError(
-          result.state === "no_tutor"
-            ? "Assign a tutor before searching."
-            : "Tutor has no Google Calendar connection."
-        );
-        setCandidates(null);
-        return;
-      }
-      setCandidates(result.candidates);
-      setSearchedEmpty(result.candidates.length === 0);
-    });
-  }
-
-  function link(candidate: Candidate) {
-    setError(null);
-    startTransition(async () => {
-      const result = await linkCohortCalendarMatch({
-        cohortId: row.id,
-        googleEventId: candidate.googleEventId,
-        recurringEventId: candidate.recurringEventId,
-        title: candidate.title,
-        startsAt: candidate.nextStartsAt,
-        endsAt: candidate.nextEndsAt,
-      });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setCandidates(null);
-      setSearchedEmpty(false);
-      onLinked();
-    });
   }
 
   // Connected calendar, but this cohort has no recurring event linked yet.
@@ -165,6 +316,7 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
       ) : null}
 
       {error ? <p className="text-[10px] text-red-600">{error}</p> : null}
+      {message ? <p className="text-[10px] text-emerald-700">{message}</p> : null}
 
       {candidates && candidates.length > 0 ? (
         <ul className="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2">

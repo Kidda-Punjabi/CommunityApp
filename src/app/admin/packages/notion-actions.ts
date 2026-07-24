@@ -14,7 +14,7 @@ import {
   loadPackageCatalog,
   resolveNotionSyncTargetFromPage,
 } from "@/lib/notion/resolve-package-link";
-import { loadLeadLinkAdminSnapshot } from "@/lib/notion/lead-sync";
+import { loadLeadLinkAdminSnapshot, upsertNotionLeadsCache } from "@/lib/notion/lead-sync";
 import { notionJson } from "@/lib/notion/client";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { revalidatePath } from "next/cache";
@@ -296,6 +296,41 @@ export async function fetchLeadLinkAdminData() {
       conflicts: [],
       error: e instanceof Error ? e.message : "Failed to load lead link data.",
     };
+  }
+}
+
+export async function refreshNotionLeadsCache(
+  fullSync = false
+): Promise<
+  ActionResult & {
+    upserted?: number;
+    notionPageCount?: number;
+    rosterCachesPatched?: number;
+  }
+> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const result = await upsertNotionLeadsCache(supabase, { fullSync });
+    revalidateNotionSync();
+    if (result.errors.length > 0) {
+      return {
+        error: `Upserted ${result.upserted}. First error: ${result.errors[0]}`,
+        upserted: result.upserted,
+        notionPageCount: result.notionPageCount,
+        rosterCachesPatched: result.rosterCachesPatched,
+      };
+    }
+    return {
+      success: result.fullSync
+        ? `Full leads sync: ${result.upserted} upserted, ${result.rosterCachesPatched} package roster cache${result.rosterCachesPatched === 1 ? "" : "s"} patched.`
+        : `Synced ${result.upserted} lead${result.upserted === 1 ? "" : "s"} (${result.rosterCachesPatched} roster cache${result.rosterCachesPatched === 1 ? "" : "s"} patched).`,
+      upserted: result.upserted,
+      notionPageCount: result.notionPageCount,
+      rosterCachesPatched: result.rosterCachesPatched,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Leads cache sync failed." };
   }
 }
 
