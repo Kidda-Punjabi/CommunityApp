@@ -31,7 +31,9 @@ Root `kidda.app` stays on GoHighLevel — do not point app traffic there.
 - [ ] Forgot password link uses `webapp.kidda.app`
 
 ### Checkout
-- [ ] Start checkout; success/cancel return to `webapp.kidda.app` URLs
+- [ ] Stripe checkout success/cancel return to `webapp.kidda.app` URLs
+  - API Checkout Sessions: driven by `NEXT_PUBLIC_APP_URL`
+  - **Payment Links** (e.g. 1-to-1 session `plink_1ToZABL…`): after_completion redirect is configured **in Stripe**, not in app code — confirm Dashboard/API points at webapp
 - [ ] Billing portal return is `https://webapp.kidda.app/dashboard/profile/billing`
 
 ### Calendar

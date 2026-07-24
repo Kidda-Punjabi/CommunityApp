@@ -216,6 +216,9 @@ export async function createCheckoutSession({
   const stripe = getStripe();
   const appUrl = getAppUrl();
 
+  // API-created Checkout Sessions use NEXT_PUBLIC_APP_URL via getAppUrl().
+  // Stripe Payment Links (fallback when no price id) bake after_completion into the
+  // Payment Link object in Stripe — update those in Stripe Dashboard/API separately.
   const successPath =
     checkoutKey === ONE_TO_ONE_SESSION_CHECKOUT_KEY
       ? `${appUrl}/dashboard/schedule?session_id={CHECKOUT_SESSION_ID}`
