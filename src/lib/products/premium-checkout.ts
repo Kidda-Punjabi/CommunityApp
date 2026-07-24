@@ -29,3 +29,11 @@ export function premiumPaymentLinkUrl(
 export function isPremiumCheckoutConfigured(_key?: PremiumCheckoutKey): boolean {
   return true;
 }
+
+/** Optional price IDs for webhook line-item matching (Payment Links remain the buy path). */
+export function premiumPriceIds() {
+  return {
+    quarterly: process.env.STRIPE_PREMIUM_QUARTERLY_PRICE_ID?.trim() || null,
+    annual: process.env.STRIPE_PREMIUM_ANNUAL_PRICE_ID?.trim() || null,
+  };
+}

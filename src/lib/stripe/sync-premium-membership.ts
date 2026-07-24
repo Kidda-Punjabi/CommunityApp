@@ -2,15 +2,21 @@ import "server-only";
 
 import {
   ACTIVE_SUBSCRIPTION_STATUSES,
-  type ProfileMembershipTier,
   type SubscriptionStatus,
 } from "@/lib/membership/profile-tier";
 import { setProfileMembershipTier } from "@/lib/membership/premium-access";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
-import { findUserIdByEmail } from "@/lib/stripe/sync-purchases";
 import { getStripe } from "@/lib/stripe/server";
 import { isPremiumPaymentLinkSession } from "@/lib/stripe/premium-payment-links";
 import type Stripe from "stripe";
+
+function premiumPriceIdSet(): Set<string> {
+  const ids = [
+    process.env.STRIPE_PREMIUM_QUARTERLY_PRICE_ID?.trim(),
+    process.env.STRIPE_PREMIUM_ANNUAL_PRICE_ID?.trim(),
+  ].filter((id): id is string => Boolean(id?.startsWith("price_")));
+  return new Set(ids);
+}
 
 function customerIdOf(
   customer: string | Stripe.Customer | Stripe.DeletedCustomer | null
@@ -23,173 +29,119 @@ function subscriptionIsEntitled(status: string): boolean {
   return (ACTIVE_SUBSCRIPTION_STATUSES as readonly string[]).includes(status);
 }
 
-async function resolveUserIdFromSubscription(
-  subscription: Stripe.Subscription
-): Promise<string | null> {
-  const fromMeta =
-    subscription.metadata?.app_user_id ??
-    subscription.metadata?.supabase_user_id ??
-    null;
-  if (fromMeta) return fromMeta;
-
-  const customerId = customerIdOf(subscription.customer);
-  if (!customerId) return null;
-
-  const stripe = getStripe();
-  const customer = await stripe.customers.retrieve(customerId);
-  if ("deleted" in customer) return null;
-
-  if (customer.metadata?.app_user_id) return customer.metadata.app_user_id;
-  if (customer.email) return findUserIdByEmail(customer.email);
-  return null;
+function subscriptionHasPremiumPrice(subscription: Stripe.Subscription): boolean {
+  const prices = premiumPriceIdSet();
+  if (prices.size === 0) return false;
+  return subscription.items.data.some((item) => prices.has(item.price.id));
 }
 
-async function upsertMembershipRow(params: {
+async function upsertMembershipForUser(params: {
   userId: string;
   customerId: string | null;
-  subscriptionId: string;
+  subscriptionId: string | null;
   status: SubscriptionStatus;
-  tierName: string;
 }) {
   const admin = createServiceRoleClient();
   const now = new Date().toISOString();
 
-  const { data: existing } = await admin
-    .from("memberships")
-    .select("id")
-    .eq("stripe_subscription_id", params.subscriptionId)
-    .maybeSingle();
+  // Prefer match by subscription id, then by user (one Premium row per member).
+  // Live schema has UNIQUE on stripe_subscription_id but not on user_id.
+  let existingId: string | null = null;
 
-  if (existing?.id) {
-    const { error } = await admin
+  if (params.subscriptionId) {
+    const { data } = await admin
       .from("memberships")
-      .update({
-        user_id: params.userId,
-        stripe_customer_id: params.customerId,
-        status: params.status,
-        tier_name: params.tierName,
-        updated_at: now,
-      })
-      .eq("id", existing.id);
+      .select("id")
+      .eq("stripe_subscription_id", params.subscriptionId)
+      .maybeSingle();
+    existingId = data?.id ?? null;
+  }
+
+  if (!existingId) {
+    const { data } = await admin
+      .from("memberships")
+      .select("id")
+      .eq("user_id", params.userId)
+      .eq("tier_name", "premium")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    existingId = data?.id ?? null;
+  }
+
+  const row = {
+    user_id: params.userId,
+    stripe_customer_id: params.customerId,
+    stripe_subscription_id: params.subscriptionId,
+    status: params.status,
+    tier_name: "premium",
+    updated_at: now,
+  };
+
+  if (existingId) {
+    const { error } = await admin.from("memberships").update(row).eq("id", existingId);
     if (error) throw error;
     return;
   }
 
   const { error } = await admin.from("memberships").insert({
-    user_id: params.userId,
-    stripe_customer_id: params.customerId,
-    stripe_subscription_id: params.subscriptionId,
-    status: params.status,
-    tier_name: params.tierName,
+    ...row,
     created_at: now,
-    updated_at: now,
   });
   if (error) throw error;
 }
 
-async function syncProfileTierFromSubscriptions(userId: string) {
-  const admin = createServiceRoleClient();
-  const { data: active } = await admin
-    .from("memberships")
-    .select("id")
-    .eq("user_id", userId)
-    .in("status", [...ACTIVE_SUBSCRIPTION_STATUSES])
-    .limit(1)
-    .maybeSingle();
-
-  const tier: ProfileMembershipTier = active ? "premium" : "free";
-  await setProfileMembershipTier(userId, tier);
-}
-
-async function membershipExistsForSubscription(
-  subscriptionId: string
-): Promise<boolean> {
-  const admin = createServiceRoleClient();
-  const { data } = await admin
-    .from("memberships")
-    .select("id")
-    .eq("stripe_subscription_id", subscriptionId)
-    .maybeSingle();
-  return Boolean(data?.id);
-}
-
-export async function syncPremiumFromSubscription(
-  subscription: Stripe.Subscription,
-  options?: { forcePremium?: boolean }
-): Promise<{ updated: boolean; userId: string | null }> {
-  const knownMembership = await membershipExistsForSubscription(subscription.id);
-  const looksPremium =
-    options?.forcePremium ||
-    knownMembership ||
-    subscription.metadata?.checkout_key?.startsWith("premium") ||
-    subscription.metadata?.tier_name === "premium";
-
-  if (!looksPremium) {
-    return { updated: false, userId: null };
-  }
-
-  const userId = await resolveUserIdFromSubscription(subscription);
-  if (!userId) return { updated: false, userId: null };
-
-  const status = subscription.status as SubscriptionStatus;
-  await upsertMembershipRow({
-    userId,
-    customerId: customerIdOf(subscription.customer),
-    subscriptionId: subscription.id,
-    status,
-    tierName: "premium",
-  });
-
-  if (subscriptionIsEntitled(status)) {
-    await setProfileMembershipTier(userId, "premium");
-  } else {
-    await syncProfileTierFromSubscriptions(userId);
-  }
-
-  return { updated: true, userId };
-}
-
-export async function syncPremiumFromCheckoutSession(
+async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session
-): Promise<{ updated: boolean; userId: string | null }> {
-  if (!(await isPremiumPaymentLinkSession(session))) {
-    return { updated: false, userId: null };
+): Promise<boolean> {
+  const stripe = getStripe();
+  const prices = premiumPriceIdSet();
+
+  let isPremium = false;
+  if (prices.size > 0) {
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
+      expand: ["data.price"],
+    });
+    isPremium = lineItems.data.some((item) => {
+      const priceId = typeof item.price === "string" ? item.price : item.price?.id;
+      return Boolean(priceId && prices.has(priceId));
+    });
   }
 
-  const userId =
-    session.client_reference_id ??
-    session.metadata?.app_user_id ??
-    session.metadata?.supabase_user_id ??
-    (session.customer_details?.email || session.customer_email
-      ? await findUserIdByEmail(
-          (session.customer_details?.email ?? session.customer_email)!
-        )
-      : null);
+  if (!isPremium) {
+    // Fallback when price env vars are not set yet: match Payment Link URLs.
+    isPremium = await isPremiumPaymentLinkSession(session);
+  }
 
-  if (!userId) return { updated: false, userId: null };
+  if (!isPremium) return false;
+
+  const userId = session.client_reference_id;
+  if (!userId) {
+    console.error(
+      "[premium] checkout.session.completed missing client_reference_id",
+      session.id
+    );
+    return true; // handled as error — do not fall through to course sync
+  }
 
   const subscriptionId =
     typeof session.subscription === "string"
       ? session.subscription
       : session.subscription?.id ?? null;
+  const customerId = customerIdOf(session.customer);
 
-  if (!subscriptionId) {
-    if (session.payment_status === "paid" || session.status === "complete") {
-      await setProfileMembershipTier(userId, "premium");
-      return { updated: true, userId };
-    }
-    return { updated: false, userId };
-  }
+  await upsertMembershipForUser({
+    userId,
+    customerId,
+    subscriptionId,
+    status: "active",
+  });
+  await setProfileMembershipTier(userId, "premium");
 
-  const stripe = getStripe();
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-
-  // Ensure later subscription.updated/deleted events still map to this user.
-  if (!subscription.metadata?.app_user_id) {
+  if (subscriptionId) {
     try {
       await stripe.subscriptions.update(subscriptionId, {
         metadata: {
-          ...subscription.metadata,
           app_user_id: userId,
           supabase_user_id: userId,
           tier_name: "premium",
@@ -201,25 +153,117 @@ export async function syncPremiumFromCheckoutSession(
     }
   }
 
-  return syncPremiumFromSubscription(subscription, { forcePremium: true });
+  return true;
 }
 
+async function handleSubscriptionUpdated(
+  subscription: Stripe.Subscription
+): Promise<boolean> {
+  const admin = createServiceRoleClient();
+  const { data: membership } = await admin
+    .from("memberships")
+    .select("user_id")
+    .eq("stripe_subscription_id", subscription.id)
+    .maybeSingle();
+
+  const isPremium =
+    subscriptionHasPremiumPrice(subscription) ||
+    Boolean(membership) ||
+    subscription.metadata?.tier_name === "premium" ||
+    subscription.metadata?.checkout_key?.startsWith("premium");
+
+  if (!isPremium) return false;
+
+  if (!membership?.user_id) {
+    console.error("[premium] no membership row for subscription", subscription.id);
+    return true;
+  }
+
+  const status = subscription.status as SubscriptionStatus;
+  const stillEntitled = subscriptionIsEntitled(status);
+
+  await admin
+    .from("memberships")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("stripe_subscription_id", subscription.id);
+
+  await setProfileMembershipTier(
+    membership.user_id,
+    stillEntitled ? "premium" : "free"
+  );
+
+  return true;
+}
+
+async function handleSubscriptionDeleted(
+  subscription: Stripe.Subscription
+): Promise<boolean> {
+  const admin = createServiceRoleClient();
+  const { data: membership } = await admin
+    .from("memberships")
+    .select("user_id")
+    .eq("stripe_subscription_id", subscription.id)
+    .maybeSingle();
+
+  const isPremium =
+    subscriptionHasPremiumPrice(subscription) ||
+    Boolean(membership) ||
+    subscription.metadata?.tier_name === "premium" ||
+    subscription.metadata?.checkout_key?.startsWith("premium");
+
+  if (!isPremium) return false;
+
+  if (!membership?.user_id) {
+    console.error(
+      "[premium] no membership row for cancelled subscription",
+      subscription.id
+    );
+    return true;
+  }
+
+  await admin
+    .from("memberships")
+    .update({
+      status: "canceled",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("stripe_subscription_id", subscription.id);
+
+  await setProfileMembershipTier(membership.user_id, "free");
+  return true;
+}
+
+/**
+ * Premium subscription webhook branches.
+ * Returns true when this event was a Premium event (handled or error-handled),
+ * so the main webhook can skip course/package sync for that event.
+ *
+ * Audit logging stays in the existing stripe_webhook_events helpers —
+ * do not duplicate inserts here (live columns differ from the sketch).
+ */
+export async function handlePremiumWebhookEvent(
+  event: Stripe.Event
+): Promise<boolean> {
+  switch (event.type) {
+    case "checkout.session.completed":
+      return handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+    case "customer.subscription.updated":
+    case "customer.subscription.created":
+      return handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+    case "customer.subscription.deleted":
+      return handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+    default:
+      return false;
+  }
+}
+
+/** @deprecated Prefer handlePremiumWebhookEvent — kept for older imports. */
 export async function syncPremiumFromStripeEvent(
   event: Stripe.Event
 ): Promise<{ updated: boolean; userId: string | null }> {
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session;
-    return syncPremiumFromCheckoutSession(session);
-  }
-
-  if (
-    event.type === "customer.subscription.created" ||
-    event.type === "customer.subscription.updated" ||
-    event.type === "customer.subscription.deleted"
-  ) {
-    const subscription = event.data.object as Stripe.Subscription;
-    return syncPremiumFromSubscription(subscription);
-  }
-
-  return { updated: false, userId: null };
+  const handled = await handlePremiumWebhookEvent(event);
+  return { updated: handled, userId: null };
 }

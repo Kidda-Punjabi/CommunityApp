@@ -1,6 +1,6 @@
 import { syncBookingCreditFromStripeEvent } from "@/lib/stripe/sync-booking-credit";
 import { syncMembershipFromStripeEvent } from "@/lib/stripe/sync-membership";
-import { syncPremiumFromStripeEvent } from "@/lib/stripe/sync-premium-membership";
+import { handlePremiumWebhookEvent } from "@/lib/stripe/sync-premium-membership";
 import {
   logStripeWebhookReceived,
   logStripeWebhookResult,
@@ -38,11 +38,16 @@ export async function POST(request: Request) {
 
   try {
     const bookingResult = await syncBookingCreditFromStripeEvent(event);
-    await syncPremiumFromStripeEvent(event);
-    await syncMembershipFromStripeEvent(event);
+    const premiumHandled = await handlePremiumWebhookEvent(event);
+
+    // Premium Payment Link checkouts must not also run course/package grant logic.
+    if (!premiumHandled) {
+      await syncMembershipFromStripeEvent(event);
+    }
+
     await logStripeWebhookResult(
       event.id,
-      bookingResult === "processed" ? "processed" : "ignored"
+      bookingResult === "processed" || premiumHandled ? "processed" : "ignored"
     );
     return NextResponse.json({ received: true });
   } catch (error) {
