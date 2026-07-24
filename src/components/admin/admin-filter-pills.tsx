@@ -17,7 +17,9 @@ const tones = {
 
 export function AdminStatusPill({ children, tone = "zinc" }: AdminStatusPillProps) {
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${tones[tone]}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold leading-snug ${tones[tone]}`}
+    >
       {children}
     </span>
   );

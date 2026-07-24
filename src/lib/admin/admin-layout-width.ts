@@ -1,14 +1,8 @@
-/** Admin content max-width — packages and onboarding expand on larger screens. */
-export function getAdminContainerClass(pathname: string): string {
-  if (
-    pathname.startsWith("/admin/packages") ||
-    pathname.startsWith("/admin/sales-calls") ||
-    pathname.startsWith("/admin/onboarding") ||
-    pathname.startsWith("/admin/monthly-rewards") ||
-    pathname.startsWith("/admin/content/calendar")
-  ) {
-    return "mx-auto w-full max-w-lg sm:max-w-3xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[88rem]";
-  }
-
-  return "mx-auto w-full max-w-lg";
+/**
+ * Shared admin content width — expands with the viewport instead of capping at
+ * phone-width max-w-lg. Horizontal padding stays on header/nav/page shells so
+ * we do not double-pad.
+ */
+export function getAdminContainerClass(_pathname: string): string {
+  return "mx-auto w-full max-w-none";
 }

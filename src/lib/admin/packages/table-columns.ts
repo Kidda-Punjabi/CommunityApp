@@ -6,7 +6,8 @@ export const PACKAGE_TABLE_COLUMNS = [
   { id: "waitingForPayment", label: "Waiting for payment" },
   { id: "confirmed", label: "Confirmed" },
   { id: "startDay", label: "Start day" },
-  { id: "tutor", label: "Tutor & calendar" },
+  { id: "tutor", label: "Tutor" },
+  { id: "calendar", label: "Calendar event" },
   { id: "startDate", label: "Start" },
   { id: "endDate", label: "End" },
   { id: "status", label: "Status" },
@@ -32,27 +33,29 @@ export function isPackageColumnVisible(
 export function packageColumnHeaderClass(columnId: PackageTableColumnId): string {
   switch (columnId) {
     case "format":
-      return "hidden px-4 py-3 sm:table-cell lg:w-[8%]";
+      return "hidden px-4 py-3 sm:table-cell lg:w-[7%]";
     case "interested":
-      return "px-4 py-3 lg:w-[12%]";
+      return "px-4 py-3 lg:w-[11%]";
     case "waitingForPayment":
-      return "px-4 py-3 lg:w-[12%]";
+      return "px-4 py-3 lg:w-[11%]";
     case "confirmed":
-      return "px-4 py-3 lg:w-[12%]";
+      return "px-4 py-3 lg:w-[11%]";
     case "startDay":
-      return "hidden px-4 py-3 md:table-cell lg:w-[8%]";
+      return "hidden px-4 py-3 md:table-cell lg:w-[7%]";
     case "tutor":
-      return "px-4 py-3 lg:w-[14%]";
-    case "startDate":
-      return "px-4 py-3 lg:w-[8%]";
-    case "endDate":
-      return "hidden px-4 py-3 sm:table-cell lg:w-[8%]";
-    case "status":
       return "px-4 py-3 lg:w-[10%]";
+    case "calendar":
+      return "px-4 py-3 lg:w-[12%]";
+    case "startDate":
+      return "whitespace-nowrap px-4 py-3 lg:w-[7%]";
+    case "endDate":
+      return "hidden whitespace-nowrap px-4 py-3 sm:table-cell lg:w-[7%]";
+    case "status":
+      return "px-4 py-3 lg:w-[9%]";
     case "progress":
-      return "hidden px-4 py-3 sm:table-cell lg:w-[12%]";
+      return "hidden px-4 py-3 text-center sm:table-cell lg:w-[10%]";
     case "unlocks":
-      return "hidden px-4 py-3 sm:table-cell lg:w-[5%]";
+      return "hidden px-4 py-3 text-center sm:table-cell lg:w-[5%]";
     default:
       return "px-4 py-3";
   }
@@ -64,16 +67,20 @@ export function packageColumnCellClass(columnId: PackageTableColumnId): string {
       return "hidden px-4 py-3 sm:table-cell";
     case "startDay":
       return "hidden px-4 py-3 text-zinc-600 md:table-cell";
-    case "endDate":
-      return "hidden whitespace-nowrap px-4 py-3 text-zinc-600 sm:table-cell";
-    case "unlocks":
-      return "hidden px-4 py-3 text-zinc-600 sm:table-cell";
-    case "progress":
-      return "hidden px-4 py-3 text-zinc-600 sm:table-cell align-top";
     case "startDate":
       return "whitespace-nowrap px-4 py-3 text-zinc-600";
+    case "endDate":
+      return "hidden min-w-[5.5rem] whitespace-nowrap px-4 py-3 text-zinc-600 sm:table-cell";
+    case "unlocks":
+      return "hidden px-4 py-3 text-center text-zinc-600 sm:table-cell";
+    case "progress":
+      return "hidden px-4 py-3 text-center align-middle text-zinc-600 sm:table-cell";
     case "tutor":
-      return "px-4 py-3 text-zinc-600 align-top";
+      return "px-4 py-3 align-top text-zinc-600";
+    case "calendar":
+      return "px-4 py-3 align-top text-zinc-600";
+    case "status":
+      return "px-4 py-3 align-middle";
     default:
       return "px-4 py-3";
   }

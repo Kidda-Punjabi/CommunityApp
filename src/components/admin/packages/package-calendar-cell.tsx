@@ -44,6 +44,14 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
   const linked = row.calendarLinkedEvent;
   const linkedSessionCount = linked?.linkedSessionCount ?? 0;
 
+  function cancelRelink() {
+    setCandidates(null);
+    setRelinkMode(false);
+    setSearchedEmpty(false);
+    setError(null);
+    setMessage(null);
+  }
+
   function search() {
     setError(null);
     setMessage(null);
@@ -121,6 +129,85 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
   }
 
   if (linkState === "linked" && linked) {
+    // Change-event mode: hide the active "synced" display immediately for clarity.
+    // DB unlink only runs when a replacement is confirmed — cancel leaves the link intact.
+    if (relinkMode) {
+      return (
+        <div className="min-w-[11rem] space-y-1.5">
+          <div className="space-y-0.5 rounded-lg border border-dashed border-amber-200 bg-amber-50/70 p-2">
+            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+              Choosing replacement
+            </span>
+            <p className="text-[10px] font-medium text-amber-950">
+              Current link is held until you pick a new event. Cancel keeps{" "}
+              <span className="line-through opacity-70">{linked.title}</span>.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={pending}
+            onClick={cancelRelink}
+            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+          >
+            Cancel change
+          </button>
+
+          {error ? <p className="text-[10px] text-red-600">{error}</p> : null}
+
+          {pending && !candidates && !searchedEmpty ? (
+            <p className="text-[10px] text-zinc-500">Searching calendar…</p>
+          ) : null}
+
+          {candidates && candidates.length > 0 ? (
+            <ul className="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+              <li className="px-1 text-[10px] font-medium text-zinc-500">
+                Confirm a new event to clear the old series and link this one.
+              </li>
+              {candidates.map((candidate) => (
+                <li
+                  key={candidate.recurringEventId}
+                  className="rounded-md bg-white p-2 shadow-sm"
+                >
+                  <p className="text-[11px] font-semibold text-zinc-900">{candidate.title}</p>
+                  <p className="text-[10px] text-zinc-500">{candidate.timeLabel}</p>
+                  <p className="mt-0.5 text-[10px] text-zinc-400">
+                    {candidate.reasons.join(" · ")}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => link(candidate)}
+                    className="mt-1 text-[11px] font-semibold text-violet-600 hover:text-violet-500 disabled:opacity-50"
+                  >
+                    {candidate.recurringEventId === linked.recurringEventId
+                      ? "Keep / re-confirm this event"
+                      : "Use this event instead"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {searchedEmpty ? (
+            <div className="space-y-1">
+              <p className="text-[10px] text-amber-800">
+                No matching event found — try again or cancel.
+              </p>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={search}
+                className="text-[11px] font-semibold text-violet-600 hover:text-violet-500 disabled:opacity-50"
+              >
+                Search again
+              </button>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
     return (
       <div className="min-w-[11rem] space-y-1.5">
         <div className="space-y-0.5">
@@ -182,7 +269,7 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
               }}
               className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
             >
-              {pending && relinkMode ? "Searching…" : "Change event"}
+              {pending ? "Searching…" : "Change event"}
             </button>
             <button
               type="button"
@@ -201,53 +288,6 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
 
         {error ? <p className="text-[10px] text-red-600">{error}</p> : null}
         {message ? <p className="text-[10px] text-emerald-700">{message}</p> : null}
-
-        {relinkMode && candidates && candidates.length > 0 ? (
-          <ul className="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2">
-            <li className="px-1 text-[10px] font-medium text-zinc-500">
-              Pick a new event — the current series will be unlinked first.
-            </li>
-            {candidates.map((candidate) => (
-              <li key={candidate.recurringEventId} className="rounded-md bg-white p-2 shadow-sm">
-                <p className="text-[11px] font-semibold text-zinc-900">{candidate.title}</p>
-                <p className="text-[10px] text-zinc-500">{candidate.timeLabel}</p>
-                <p className="mt-0.5 text-[10px] text-zinc-400">
-                  {candidate.reasons.join(" · ")}
-                </p>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => link(candidate)}
-                  className="mt-1 text-[11px] font-semibold text-violet-600 hover:text-violet-500 disabled:opacity-50"
-                >
-                  {candidate.recurringEventId === linked.recurringEventId
-                    ? "Re-link this event"
-                    : "Link this event instead"}
-                </button>
-              </li>
-            ))}
-            <li>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => {
-                  setCandidates(null);
-                  setRelinkMode(false);
-                  setSearchedEmpty(false);
-                }}
-                className="text-[10px] font-medium text-zinc-500 hover:text-zinc-700"
-              >
-                Cancel change
-              </button>
-            </li>
-          </ul>
-        ) : null}
-
-        {relinkMode && searchedEmpty ? (
-          <p className="text-[10px] text-amber-800">
-            No matching event found — try again or cancel.
-          </p>
-        ) : null}
       </div>
     );
   }
@@ -279,7 +319,6 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
     );
   }
 
-  // Connected calendar, but this cohort has no recurring event linked yet.
   return (
     <div className="min-w-[11rem] space-y-1.5">
       <div className="space-y-0.5">

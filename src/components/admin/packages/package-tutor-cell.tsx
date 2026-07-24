@@ -6,7 +6,6 @@ import {
   resetPackageTutorToNotion,
 } from "@/app/admin/packages/actions";
 import type { AdminPackageKind, AdminPackageListRow } from "@/lib/admin/packages/types";
-import { PackageCalendarCell } from "@/components/admin/packages/package-calendar-cell";
 
 type TutorOption = { id: string; name: string };
 
@@ -18,10 +17,9 @@ type PackageTutorCellProps = {
     tutorName: string | null;
     tutorIdSource: "notion" | "manual";
   }) => void;
-  onCalendarLinked?: () => void;
 };
 
-export function PackageTutorCell({ row, tutors, onUpdated, onCalendarLinked }: PackageTutorCellProps) {
+export function PackageTutorCell({ row, tutors, onUpdated }: PackageTutorCellProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -106,11 +104,6 @@ export function PackageTutorCell({ row, tutors, onUpdated, onCalendarLinked }: P
         )}
       </div>
       {error ? <p className="text-[10px] text-red-600">{error}</p> : null}
-      {row.kind === "cohort" && onCalendarLinked ? (
-        <div className="border-t border-zinc-100 pt-2">
-          <PackageCalendarCell row={row} onLinked={onCalendarLinked} />
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -12,7 +12,7 @@ export function PackageLessonProgressCell({ row }: PackageLessonProgressCellProp
   const [open, setOpen] = useState(false);
 
   if (row.kind !== "cohort" || row.lessonLogCompleted == null || row.lessonLogTotal == null) {
-    return <span className="text-zinc-400">—</span>;
+    return <span className="block text-center text-zinc-400">—</span>;
   }
 
   const label = formatLessonProgressLabel({
@@ -22,21 +22,21 @@ export function PackageLessonProgressCell({ row }: PackageLessonProgressCellProp
   });
 
   if (row.lessonLogEntries.length === 0) {
-    return <span title="No Lessons Log entries synced yet">{label}</span>;
+    return <span className="block text-center" title="No Lessons Log entries synced yet">{label}</span>;
   }
 
   return (
-    <div>
+    <div className="flex flex-col items-center text-center">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="text-left text-sm font-medium text-violet-700 hover:text-violet-600"
+        className="text-sm font-medium text-violet-700 hover:text-violet-600"
         aria-expanded={open}
       >
         {label}
       </button>
       {open ? (
-        <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs text-zinc-600">
+        <ul className="mt-2 max-h-40 w-full space-y-1 overflow-y-auto text-left text-xs text-zinc-600">
           {row.lessonLogEntries.map((entry) => (
             <li key={entry.id}>
               Week {entry.weekNumber} · {entry.lessonDate}

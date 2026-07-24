@@ -15,6 +15,7 @@ import { PackageRunFormModal } from "@/components/admin/packages/package-run-for
 import { PackageRosterCell } from "@/components/admin/packages/package-roster-cell";
 import { PackageLessonProgressCell } from "@/components/admin/packages/package-lesson-progress-cell";
 import { PackageTutorCell } from "@/components/admin/packages/package-tutor-cell";
+import { PackageCalendarCell } from "@/components/admin/packages/package-calendar-cell";
 import {
   AdminPackagesBoardHeader,
   readStoredActiveViewId,
@@ -423,7 +424,7 @@ export function AdminPackagesSection() {
                 <table className="min-w-full text-left text-sm lg:table-fixed lg:w-full">
                   <thead className="border-b border-zinc-100 bg-zinc-50/80 text-xs font-semibold uppercase tracking-wider text-zinc-500">
                     <tr>
-                      <th className="px-4 py-3 lg:w-[16%]">Package</th>
+                      <th className="px-4 py-3 lg:w-[14%]">Package</th>
                       {isPackageColumnVisible(config, "format") ? (
                         <th className={packageColumnHeaderClass("format")}>Format</th>
                       ) : null}
@@ -442,7 +443,10 @@ export function AdminPackagesSection() {
                         <th className={packageColumnHeaderClass("startDay")}>Start day</th>
                       ) : null}
                       {isPackageColumnVisible(config, "tutor") ? (
-                        <th className={packageColumnHeaderClass("tutor")}>Tutor &amp; calendar</th>
+                        <th className={packageColumnHeaderClass("tutor")}>Tutor</th>
+                      ) : null}
+                      {isPackageColumnVisible(config, "calendar") ? (
+                        <th className={packageColumnHeaderClass("calendar")}>Calendar event</th>
                       ) : null}
                       {isPackageColumnVisible(config, "startDate") ? (
                         <th className={packageColumnHeaderClass("startDate")}>Start</th>
@@ -469,7 +473,6 @@ export function AdminPackagesSection() {
                           Lessons unlocked
                         </th>
                       ) : null}
-                      <th className="px-4 py-3 lg:w-[5%]" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
@@ -484,7 +487,14 @@ export function AdminPackagesSection() {
                           >
                             {row.name}
                           </Link>
-                          <p className="text-xs text-zinc-500">{row.courseName}</p>
+                          <button
+                            type="button"
+                            onClick={() => setEditingRow(row)}
+                            className="mt-0.5 block text-[11px] font-semibold text-zinc-500 hover:text-violet-600"
+                          >
+                            Edit
+                          </button>
+                          <p className="mt-1 text-xs text-zinc-500">{row.courseName}</p>
                           {isPackageColumnVisible(config, "format") ? (
                             <p className="mt-1 sm:hidden">
                               <AdminStatusPill tone={packageDeliveryFormatPillTone(format)}>
@@ -546,8 +556,19 @@ export function AdminPackagesSection() {
                                   (current) => ({ ...current, ...patch })
                                 )
                               }
-                              onCalendarLinked={() => void reloadList()}
                             />
+                          </td>
+                        ) : null}
+                        {isPackageColumnVisible(config, "calendar") ? (
+                          <td className={packageColumnCellClass("calendar")}>
+                            {row.kind === "cohort" ? (
+                              <PackageCalendarCell
+                                row={row}
+                                onLinked={() => void reloadList()}
+                              />
+                            ) : (
+                              <span className="text-zinc-400">—</span>
+                            )}
                           </td>
                         ) : null}
                         {isPackageColumnVisible(config, "startDate") ? (
@@ -583,15 +604,6 @@ export function AdminPackagesSection() {
                             )}
                           </td>
                         ) : null}
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setEditingRow(row)}
-                            className="text-xs font-semibold text-violet-600 hover:text-violet-500"
-                          >
-                            Edit
-                          </button>
-                        </td>
                       </tr>
                     );
                     })}

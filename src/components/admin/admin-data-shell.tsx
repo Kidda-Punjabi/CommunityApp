@@ -22,7 +22,12 @@ export function AdminDataShell({
 }: AdminDataShellProps) {
   return (
     <AdminDataProvider data={data} branding={branding} slice={dataSlice}>
-      <AdminWidthContainer className={cn("flex min-h-0 w-full flex-1 flex-col", ui.navClearance)}>
+      <AdminWidthContainer
+        className={cn(
+          "flex min-h-0 w-full flex-1 flex-col px-4 sm:px-5 lg:px-6 xl:px-8",
+          ui.navClearance
+        )}
+      >
         {children}
       </AdminWidthContainer>
     </AdminDataProvider>
