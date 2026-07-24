@@ -6,7 +6,6 @@ Prep after `webapp.kidda.app` is attached in Vercel and
 Root `kidda.app` stays on GoHighLevel — do not point app traffic there.
 `community-app-v2-eosin.vercel.app` must keep working in parallel (no forced redirect away yet).
 
-- [ ] If still using `NEXT_PUBLIC_COURSE_URL_*`, point them at the new GHL host (or leave empty to use in-app `/courses/*`)
 ## Before sharing with students
 
 - [ ] Vercel: custom domain `webapp.kidda.app` attached; TLS valid
