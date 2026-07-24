@@ -162,22 +162,59 @@ export async function resetAdminLessonLogFieldsToNotion(
   }
 }
 
-/** Mark attention as handled without linking (sets reviewed = manual). */
+/** Mark an unlinked entry as acknowledged (no Notion Package to resolve). */
 export async function dismissAdminLessonLogAttention(
   entryId: string
 ): Promise<ActionResult> {
   try {
     await requireAdminFromActions();
+    const { createClient } = await import("@/lib/supabase/server");
+    const authClient = await createClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
     const supabase = createServiceRoleClient();
-    const { updateLessonLogManualFields } = await import("@/lib/notion/lesson-log-sync");
-    const result = await updateLessonLogManualFields(supabase, entryId, {
-      reviewed: true,
-    });
-    if (!result.ok) return { error: result.error };
+    const { data: entry, error: loadError } = await supabase
+      .from("cohort_lesson_log_entries")
+      .select("id, cohort_id, package_instance_id, dismissed_at")
+      .eq("id", entryId)
+      .maybeSingle();
+
+    if (loadError) return { error: loadError.message };
+    if (!entry) return { error: "Lesson log entry not found." };
+    if (entry.cohort_id || entry.package_instance_id) {
+      return {
+        error:
+          "Only unlinked entries (no cohort/package) can be dismissed. Link the package instead.",
+      };
+    }
+    if (entry.dismissed_at) {
+      return { success: "Already dismissed." };
+    }
+
+    const { error } = await supabase
+      .from("cohort_lesson_log_entries")
+      .update({
+        dismissed_at: new Date().toISOString(),
+        dismissed_by: user.id,
+      })
+      .eq("id", entryId)
+      .is("cohort_id", null)
+      .is("package_instance_id", null);
+
+    if (error) {
+      if (error.message.includes("dismissed_at")) {
+        return {
+          error: `${error.message} Run supabase/cohort-lesson-log-dismiss.sql first.`,
+        };
+      }
+      return { error: error.message };
+    }
+
     revalidateLessonLog();
-    return {
-      success: "Dismissed from Needs attention (marked reviewed).",
-    };
+    return { success: "Dismissed — removed from Needs attention." };
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : "Failed to dismiss lesson log attention.",

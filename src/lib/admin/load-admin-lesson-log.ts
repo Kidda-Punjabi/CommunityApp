@@ -31,6 +31,7 @@ export type AdminLessonLogEntry = {
   notionSyncError: string | null;
   notionSyncedAt: string | null;
   source: "notion" | "app";
+  dismissedAt: string | null;
   attentionReasons: LessonLogAttentionReason[];
 };
 
@@ -90,6 +91,7 @@ type EntryRow = {
   notion_sync_error: string | null;
   notion_synced_at: string | null;
   source: string;
+  dismissed_at?: string | null;
 };
 
 function asFieldSource(value: string | null): "notion" | "manual" {
@@ -148,7 +150,7 @@ export async function loadAdminLessonLogSnapshot(
   };
 
   const selectWithSources =
-    "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, status_source, reviewed_source, notes_source, notion_sync_status, notion_sync_error, notion_synced_at, source";
+    "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, status_source, reviewed_source, notes_source, notion_sync_status, notion_sync_error, notion_synced_at, source, dismissed_at";
   const selectWithoutSources =
     "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, notion_sync_status, notion_sync_error, notion_synced_at, source";
 
@@ -163,7 +165,8 @@ export async function loadAdminLessonLogSnapshot(
     if (
       first.error?.message.includes("status_source") ||
       first.error?.message.includes("reviewed_source") ||
-      first.error?.message.includes("notes_source")
+      first.error?.message.includes("notes_source") ||
+      first.error?.message.includes("dismissed_at")
     ) {
       const second = await supabase
         .from("cohort_lesson_log_entries")
@@ -280,20 +283,18 @@ export async function loadAdminLessonLogSnapshot(
       : null;
     const attentionReasons: LessonLogAttentionReason[] = [];
 
-    // Dismissed / reviewed entries stay out of Needs attention (admin Dismiss sets reviewed).
-    if (!row.reviewed) {
-      if (row.notion_tutor_user_id && !resolvedTutorId) {
-        attentionReasons.push("unresolved_tutor");
-        unresolvedTutor += 1;
-      }
-      if (isActionableMissingRecording(row)) {
-        attentionReasons.push("missing_recording");
-        missingRecording += 1;
-      }
-      if (!row.cohort_id && !row.package_instance_id) {
-        attentionReasons.push("unlinked_package");
-        unlinked += 1;
-      }
+    if (row.notion_tutor_user_id && !resolvedTutorId) {
+      attentionReasons.push("unresolved_tutor");
+      unresolvedTutor += 1;
+    }
+    if (isActionableMissingRecording(row)) {
+      attentionReasons.push("missing_recording");
+      missingRecording += 1;
+    }
+    // Unlinked only when still open — dismissed historical empties stay out of the count.
+    if (!row.cohort_id && !row.package_instance_id && !row.dismissed_at) {
+      attentionReasons.push("unlinked_package");
+      unlinked += 1;
     }
     if (attentionReasons.length > 0) attention += 1;
 
@@ -318,6 +319,7 @@ export async function loadAdminLessonLogSnapshot(
       notionSyncError: row.notion_sync_error,
       notionSyncedAt: row.notion_synced_at,
       source: row.source === "app" ? "app" : "notion",
+      dismissedAt: row.dismissed_at ?? null,
       attentionReasons,
     };
 

@@ -537,11 +537,13 @@ export function AdminLessonLogSection() {
                                   Needs attention · {attention}
                                 </p>
                               ) : null}
-                              {attention ? (
+                              {entry.attentionReasons.includes("unlinked_package") &&
+                              !entry.dismissedAt ? (
                                 <button
                                   type="button"
                                   disabled={pending}
                                   className="mt-1 text-xs font-medium text-zinc-600 underline-offset-2 hover:text-zinc-900 hover:underline disabled:opacity-60"
+                                  title="No Notion Package to link — acknowledge and hide from Needs attention"
                                   onClick={() => {
                                     startTransition(async () => {
                                       setError(null);
