@@ -1,10 +1,6 @@
 import { PremiumCheckoutPanel } from "@/components/membership/premium-checkout-panel";
 import { BackLink } from "@/components/navigation/back-link";
 import { loadPremiumAccess } from "@/lib/membership/premium-access";
-import {
-  isPremiumCheckoutConfigured,
-  premiumPriceIds,
-} from "@/lib/products/premium-checkout";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import type { Metadata } from "next";
@@ -28,7 +24,6 @@ export default async function PremiumMembershipPage({
 
   const params = await searchParams;
   const premium = await loadPremiumAccess(supabase, user.id);
-  const ids = premiumPriceIds();
 
   return (
     <div className={ui.page}>
@@ -54,19 +49,8 @@ export default async function PremiumMembershipPage({
       ) : null}
 
       <div className={`mt-8 ${ui.cardBordered}`}>
-        <PremiumCheckoutPanel
-          isPremium={premium.isPremium}
-          quarterlyConfigured={Boolean(ids.quarterly?.startsWith("price_"))}
-          annualConfigured={Boolean(ids.annual?.startsWith("price_"))}
-        />
+        <PremiumCheckoutPanel isPremium={premium.isPremium} userId={user.id} />
       </div>
-
-      {!isPremiumCheckoutConfigured() ? (
-        <p className="mt-4 text-xs text-zinc-500">
-          Waiting on Stripe price IDs: STRIPE_PREMIUM_QUARTERLY_PRICE_ID,
-          STRIPE_PREMIUM_ANNUAL_PRICE_ID.
-        </p>
-      ) : null}
 
       <ul className="mt-8 space-y-2 text-sm text-zinc-600">
         <li>• Topics weeks 4–24</li>

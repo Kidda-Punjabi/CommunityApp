@@ -6,11 +6,6 @@ import {
   resolveCheckoutPriceId,
   resolvePaymentLinkForCheckout,
 } from "@/lib/products/checkout";
-import {
-  isPremiumCheckoutKey,
-  resolvePremiumPriceId,
-  type PremiumCheckoutKey,
-} from "@/lib/products/premium-checkout";
 import { getAppUrl, getStripe } from "@/lib/stripe/server";
 import { createClient } from "@/lib/supabase/server";
 import { isGroupPackageCheckoutKey } from "@/lib/group-purchase/checkout-keys";
@@ -69,13 +64,6 @@ export async function createCheckoutSession({
   oneToOneBookingId,
   courseId,
 }: CreateCheckoutSessionOptions) {
-  if (isPremiumCheckoutKey(checkoutKey)) {
-    return createPremiumCheckoutSession({
-      checkoutKey,
-      embedded,
-    });
-  }
-
   const config = getCheckoutConfig(checkoutKey);
   if (!config) {
     throw new Error("Unknown product.");
@@ -293,81 +281,6 @@ export async function createCheckoutSession({
       .eq("student_id", user.id)
       .eq("status", "pending_payment");
   }
-
-  if (embedded) {
-    if (!session.client_secret) {
-      throw new Error("Could not create embedded checkout session.");
-    }
-    return { type: "embedded" as const, clientSecret: session.client_secret };
-  }
-
-  if (!session.url) {
-    throw new Error("Could not create checkout session.");
-  }
-
-  return { type: "hosted" as const, url: session.url };
-}
-
-async function createPremiumCheckoutSession({
-  checkoutKey,
-  embedded = false,
-}: {
-  checkoutKey: PremiumCheckoutKey;
-  embedded?: boolean;
-}) {
-  const priceId = resolvePremiumPriceId(checkoutKey);
-  if (!priceId) {
-    throw new Error(
-      "Premium checkout is not configured. Add STRIPE_PREMIUM_QUARTERLY_PRICE_ID / STRIPE_PREMIUM_ANNUAL_PRICE_ID."
-    );
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user?.email) {
-    throw new Error("Sign in to subscribe to Premium.");
-  }
-
-  const stripe = getStripe();
-  const appUrl = getAppUrl();
-  const customerId = await resolveStripeCustomerId(user.id, user.email);
-  const successPath = `${appUrl}/dashboard/membership/premium?checkout=success`;
-  const cancelPath = `${appUrl}/dashboard/membership/premium?checkout=cancelled`;
-
-  const baseParams = {
-    mode: "subscription" as const,
-    line_items: [{ price: priceId, quantity: 1 }],
-    allow_promotion_codes: true as const,
-    customer: customerId,
-    client_reference_id: user.id,
-    metadata: {
-      checkout_key: checkoutKey,
-      app_user_id: user.id,
-      supabase_user_id: user.id,
-    },
-    subscription_data: {
-      metadata: {
-        checkout_key: checkoutKey,
-        app_user_id: user.id,
-        supabase_user_id: user.id,
-      },
-    },
-  };
-
-  const session = embedded
-    ? await stripe.checkout.sessions.create({
-        ...baseParams,
-        ui_mode: "embedded_page",
-        return_url: successPath,
-      })
-    : await stripe.checkout.sessions.create({
-        ...baseParams,
-        success_url: successPath,
-        cancel_url: cancelPath,
-      });
 
   if (embedded) {
     if (!session.client_secret) {
