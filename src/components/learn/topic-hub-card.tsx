@@ -54,13 +54,19 @@ export function TopicHubCard({
   return (
     <div className="mx-auto flex max-w-md flex-col items-center text-center">
       <div className="relative">
-        <TripleMasteryRings fills={accessible ? fills : { vocab: 0, sentences: 0, conversation: 0 }} size={148}>
+        <SingleMasteryRing
+          fills={accessible ? fills : { vocab: 0, sentences: 0, conversation: 0 }}
+          stage={accessible ? stage : 1}
+          size={148}
+          stroke={10}
+          muted={!accessible}
+        >
           <span
-            className={`relative z-[1] flex h-[5.25rem] w-[5.25rem] items-center justify-center rounded-full text-white shadow-lg ${visual.fillClass}`}
+            className={`relative z-[1] flex h-[5.75rem] w-[5.75rem] items-center justify-center rounded-full text-white shadow-lg ${visual.fillClass}`}
           >
             <Icon className="h-10 w-10" strokeWidth={2.25} aria-hidden />
           </span>
-        </TripleMasteryRings>
+        </SingleMasteryRing>
         {stagesComplete > 0 ? (
           <span className="absolute bottom-1 right-1 z-[2] flex h-9 min-w-9 items-center justify-center gap-0.5 rounded-full border-2 border-white bg-amber-400 px-1.5 text-amber-950 shadow">
             <Crown className="h-4 w-4 fill-amber-950" aria-hidden />
