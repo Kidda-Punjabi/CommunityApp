@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FlashcardDeckCard } from "@/lib/flashcards/types";
+import { TopicListenButton } from "@/components/learn/topic-listen-button";
 
 type TopicSentenceBuilderProps = {
   lessonId: string;
@@ -129,6 +130,11 @@ export function TopicSentenceBuilder({
 
       <p className="mt-6 text-lg font-semibold text-zinc-900">{card.front_text}</p>
       <p className="mt-1 text-sm text-zinc-500">Tap the tiles in order</p>
+      {card.audioUrl ? (
+        <div className="mt-3 flex justify-center">
+          <TopicListenButton audioUrl={card.audioUrl} label="Listen" />
+        </div>
+      ) : null}
 
       <div className="mt-5 min-h-16 rounded-2xl border border-dashed border-zinc-300 bg-white px-3 py-3">
         <div className="flex flex-wrap justify-center gap-2">

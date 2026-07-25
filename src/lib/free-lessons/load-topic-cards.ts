@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FlashcardDeckCard } from "@/lib/flashcards/types";
+import { loadTopicCardAudioUrls } from "@/lib/free-lessons/topic-card-audio";
 
 type SetRow = {
   id: string;
@@ -57,7 +58,7 @@ export async function loadCommunityTopicCards(
     .eq("deck_id", set.id)
     .order("created_at", { ascending: true });
 
-  const cards = (rows ?? []).map((row) => ({
+  const baseCards = (rows ?? []).map((row) => ({
     id: row.id,
     front_text: row.front_text,
     back_text: row.back_text,
@@ -65,6 +66,18 @@ export async function loadCommunityTopicCards(
     deck_id: row.deck_id,
     deck_name: row.deck_name ?? set.name,
     icon_name: row.icon_name ?? null,
+  }));
+
+  let audioById = new Map<string, string>();
+  try {
+    audioById = await loadTopicCardAudioUrls(supabase, baseCards);
+  } catch (error) {
+    console.error("Failed to load Everyday Punjabi card audio:", error);
+  }
+
+  const cards: FlashcardDeckCard[] = baseCards.map((card) => ({
+    ...card,
+    audioUrl: audioById.get(card.id) ?? null,
   }));
 
   return { deckId: set.id, deckName: set.name, cards };

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { FlashcardDeckCard } from "@/lib/flashcards/types";
 import { markTopicVocabReviewed } from "@/app/dashboard/learn/free/actions";
+import { TopicListenButton } from "@/components/learn/topic-listen-button";
 
 type TopicVocabReviewProps = {
   lessonId: string;
@@ -96,6 +97,12 @@ export function TopicVocabReview({
         ) : null}
         <p className="mt-4 text-xs text-zinc-400">Tap to flip</p>
       </button>
+
+      {card.audioUrl ? (
+        <div className="mt-4 flex justify-center">
+          <TopicListenButton audioUrl={card.audioUrl} label="Listen" />
+        </div>
+      ) : null}
 
       <div className="mt-5 grid grid-cols-2 gap-3">
         <button

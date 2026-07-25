@@ -6,6 +6,8 @@ export type FlashcardDeckCard = {
   deck_id: string | null;
   deck_name: string;
   icon_name?: string | null;
+  /** Approved TTS URL when available (Everyday Punjabi Listen). */
+  audioUrl?: string | null;
 };
 
 export type FlashcardDeckContext = {

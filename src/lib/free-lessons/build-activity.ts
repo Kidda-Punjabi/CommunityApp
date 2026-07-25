@@ -16,6 +16,8 @@ export type ActivityQuestion = {
   options: string[];
   correctIndex: number;
   reveal: string;
+  /** Approved Punjabi TTS for this item when available. */
+  audioUrl: string | null;
 };
 
 export type TopicActivity = {
@@ -79,6 +81,7 @@ function buildVocabQuestions(
   const punjabiPool = cards.map((c) => c.back_text);
 
   return questionCards.map((card) => {
+    const audioUrl = card.audioUrl?.trim() || null;
     if (reverse) {
       const options = uniqueOptions(card.front_text, englishPool, optionCount);
       return {
@@ -88,6 +91,7 @@ function buildVocabQuestions(
         options,
         correctIndex: options.indexOf(card.front_text),
         reveal: card.front_text,
+        audioUrl,
       };
     }
     const options = uniqueOptions(card.back_text, punjabiPool, optionCount);
@@ -98,6 +102,7 @@ function buildVocabQuestions(
       options,
       correctIndex: options.indexOf(card.back_text),
       reveal: card.back_text,
+      audioUrl,
     };
   });
 }
@@ -126,6 +131,7 @@ function buildSentenceQuestions(
       options,
       correctIndex: options.indexOf(card.back_text),
       reveal: card.back_text,
+      audioUrl: card.audioUrl?.trim() || null,
     };
   });
 }
@@ -142,6 +148,7 @@ function buildConversationQuestions(
   const replyPool = cards.map((c) => c.back_text);
 
   return questionCards.map((card, index) => {
+    const audioUrl = card.audioUrl?.trim() || null;
     const askMode = depth >= 2 || index % 2 === 1;
     if (askMode) {
       const options = uniqueOptions(card.back_text, replyPool, optionCount);
@@ -152,6 +159,7 @@ function buildConversationQuestions(
         options,
         correctIndex: options.indexOf(card.back_text),
         reveal: card.back_text,
+        audioUrl,
       };
     }
 
@@ -163,6 +171,7 @@ function buildConversationQuestions(
       options,
       correctIndex: options.indexOf(card.back_text),
       reveal: card.back_text,
+      audioUrl,
     };
   });
 }

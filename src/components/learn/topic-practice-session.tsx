@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { TopicActivity } from "@/lib/free-lessons/build-activity";
 import { completeTopicActivity } from "@/app/dashboard/learn/free/actions";
+import { TopicListenButton } from "@/components/learn/topic-listen-button";
 
 type TopicPracticeSessionProps = {
   lessonId: string;
@@ -178,6 +179,11 @@ export function TopicPracticeSession({
         <p className="text-lg font-semibold text-zinc-900">{question.prompt}</p>
         {question.promptHint ? (
           <p className="mt-1 text-sm text-zinc-500">{question.promptHint}</p>
+        ) : null}
+        {question.audioUrl ? (
+          <div className="mt-4 flex justify-center">
+            <TopicListenButton audioUrl={question.audioUrl} label="Listen" />
+          </div>
         ) : null}
 
         <ul className="mt-5 space-y-2.5">
