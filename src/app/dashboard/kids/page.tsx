@@ -109,7 +109,20 @@ export default async function KidsHomePage() {
                     <span className="font-semibold">{story.title}</span>
                     {!story.unlocked ? (
                       <span className="mt-0.5 block text-xs">Unlock with Premium</span>
-                    ) : null}
+                    ) : story.playableAudioUrl ? (
+                      <audio
+                        className="mt-2 w-full"
+                        controls
+                        preload="none"
+                        src={story.playableAudioUrl}
+                      >
+                        Your browser does not support audio.
+                      </audio>
+                    ) : (
+                      <span className="mt-0.5 block text-xs text-sky-700/70">
+                        Audio coming soon
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
