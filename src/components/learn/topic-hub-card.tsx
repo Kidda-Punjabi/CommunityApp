@@ -1,16 +1,23 @@
 "use client";
 
-import { Crown, Layers, PencilLine, Sparkles } from "lucide-react";
+import { Crown, Layers, MessageCircle, PencilLine, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { getTopicVisual, TOPIC_MASTERY_MAX_LEVEL } from "@/lib/free-lessons/topic-visuals";
+import { TripleMasteryRings } from "@/components/learn/triple-mastery-rings";
+import { getTopicVisual } from "@/lib/free-lessons/topic-visuals";
+import {
+  TOPIC_STAGES,
+  type TopicStageFills,
+  type TopicStageId,
+} from "@/lib/free-lessons/stages";
 import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 
 type TopicHubCardProps = {
   lessonId: string;
   title: string;
   sortIndex: number;
-  masteryLevel: number;
-  ringPercent: number;
+  stage: TopicStageId;
+  depth: number;
+  fills: TopicStageFills;
   hasPractice: boolean;
   activityTitle: string | null;
   vocabReviewed: number;
@@ -20,57 +27,13 @@ type TopicHubCardProps = {
   lockReason: "none" | "sequence" | "premium";
 };
 
-function ProgressRing({
-  percent,
-  color,
-  size,
-  stroke,
-}: {
-  percent: number;
-  color: string;
-  size: number;
-  stroke: number;
-}) {
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - Math.max(0, Math.min(100, percent)) / 100);
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      className="absolute inset-0 -rotate-90"
-      aria-hidden
-    >
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="#E4E4E7"
-        strokeWidth={stroke}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke={color}
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-      />
-    </svg>
-  );
-}
-
 export function TopicHubCard({
   lessonId,
   title,
   sortIndex,
-  masteryLevel,
-  ringPercent,
+  stage,
+  depth,
+  fills,
   hasPractice,
   activityTitle,
   vocabReviewed,
@@ -81,40 +44,29 @@ export function TopicHubCard({
 }: TopicHubCardProps) {
   const visual = getTopicVisual(title, sortIndex);
   const { Icon } = visual;
-  const mastered = masteryLevel >= TOPIC_MASTERY_MAX_LEVEL;
-  const displayRing = mastered ? 100 : ringPercent;
+  const mastered =
+    fills.vocab >= 100 && fills.sentences >= 100 && fills.conversation >= 100;
+  const stagesComplete =
+    (fills.vocab >= 100 ? 1 : 0) +
+    (fills.sentences >= 100 ? 1 : 0) +
+    (fills.conversation >= 100 ? 1 : 0);
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center text-center">
-      <div className="relative inline-flex h-36 w-36 items-center justify-center">
-        <ProgressRing
-          percent={accessible ? displayRing : 0}
-          color={visual.ringColor}
-          size={144}
-          stroke={10}
-        />
-        <span
-          className={`relative z-[1] flex h-[6.5rem] w-[6.5rem] items-center justify-center rounded-full text-white shadow-lg ${visual.fillClass}`}
-        >
-          <Icon className="h-12 w-12" strokeWidth={2.25} aria-hidden />
-        </span>
-        <span
-          className={`absolute bottom-1 right-1 z-[2] flex h-9 min-w-9 items-center justify-center gap-0.5 rounded-full border-2 border-white px-1.5 shadow ${
-            masteryLevel > 0
-              ? "bg-amber-400 text-amber-950"
-              : "bg-zinc-200 text-zinc-400"
-          }`}
-        >
-          <Crown
-            className={`h-4 w-4 ${masteryLevel > 0 ? "fill-amber-950" : "fill-zinc-400"}`}
-            aria-hidden
-          />
-          {masteryLevel > 0 ? (
-            <span className="text-xs font-bold leading-none">
-              {Math.min(TOPIC_MASTERY_MAX_LEVEL, masteryLevel)}
-            </span>
-          ) : null}
-        </span>
+      <div className="relative">
+        <TripleMasteryRings fills={accessible ? fills : { vocab: 0, sentences: 0, conversation: 0 }} size={148}>
+          <span
+            className={`relative z-[1] flex h-[5.25rem] w-[5.25rem] items-center justify-center rounded-full text-white shadow-lg ${visual.fillClass}`}
+          >
+            <Icon className="h-10 w-10" strokeWidth={2.25} aria-hidden />
+          </span>
+        </TripleMasteryRings>
+        {stagesComplete > 0 ? (
+          <span className="absolute bottom-1 right-1 z-[2] flex h-9 min-w-9 items-center justify-center gap-0.5 rounded-full border-2 border-white bg-amber-400 px-1.5 text-amber-950 shadow">
+            <Crown className="h-4 w-4 fill-amber-950" aria-hidden />
+            <span className="text-xs font-bold leading-none">{stagesComplete}</span>
+          </span>
+        ) : null}
       </div>
 
       <h1 className="mt-5 font-heading text-2xl font-semibold text-zinc-900">
@@ -126,14 +78,24 @@ export function TopicHubCard({
           : lockReason === "premium"
             ? "This topic is part of Premium. Unlock to keep practising in order."
             : mastered
-              ? "You’ve mastered this topic. Practise again any time to stay sharp."
-              : masteryLevel === 0
-                ? "Pick a practice mode and build toward mastery."
-                : `Level ${masteryLevel} of ${TOPIC_MASTERY_MAX_LEVEL} · keep going to fill the ring.`}
+              ? "All three stages complete — words, sentences, and conversation."
+              : `Stage ${stage} of 3 · ${TOPIC_STAGES[stage - 1].label} (level ${depth} of 5)`}
       </p>
 
+      {accessible ? (
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium">
+          <span className="text-rose-600">Vocab {Math.round(fills.vocab)}%</span>
+          <span className="text-amber-600">
+            Sentences {Math.round(fills.sentences)}%
+          </span>
+          <span className="text-emerald-600">
+            Talk {Math.round(fills.conversation)}%
+          </span>
+        </div>
+      ) : null}
+
       {accessible && vocabTotal > 0 ? (
-        <p className="mt-3 text-sm font-medium text-zinc-700">
+        <p className="mt-2 text-sm font-medium text-zinc-700">
           {vocabReviewed} of {vocabTotal} words reviewed
         </p>
       ) : null}
@@ -159,21 +121,21 @@ export function TopicHubCard({
             {hasPractice ? (
               <Link
                 href={`/dashboard/learn/free/${lessonId}/practice`}
-                className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3.5 hover:bg-emerald-100/80"
+                className="flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3.5 hover:bg-violet-100/80"
               >
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white">
                   <Sparkles className="h-4 w-4" aria-hidden />
                 </span>
                 <span>
                   <span className="block text-sm font-semibold text-zinc-900">
                     {mastered
                       ? "Practise again"
-                      : masteryLevel === 0
-                        ? `Start · ${activityTitle ?? "Warm-up"}`
-                        : `Continue · ${activityTitle ?? "Next activity"}`}
+                      : activityTitle
+                        ? `Continue · ${activityTitle}`
+                        : "Continue"}
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-500">
-                    Guided activities that get harder as you level up.
+                    Five deep levels in each stage before you move on.
                   </span>
                 </span>
               </Link>
@@ -185,51 +147,112 @@ export function TopicHubCard({
 
             <Link
               href={`/dashboard/learn/free/${lessonId}/vocab`}
-              className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 hover:bg-zinc-50"
+              className={`flex items-start gap-3 rounded-2xl border px-4 py-3.5 ${
+                stage === 1
+                  ? "border-rose-200 bg-rose-50 hover:bg-rose-100/70"
+                  : "border-zinc-200 bg-white hover:bg-zinc-50"
+              }`}
             >
-              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white">
                 <Layers className="h-4 w-4" aria-hidden />
               </span>
               <span>
                 <span className="block text-sm font-semibold text-zinc-900">
-                  Review Vocab
+                  1 · Review Vocab
                 </span>
                 <span className="mt-0.5 block text-xs text-zinc-500">
                   {vocabTotal > 0
-                    ? `${vocabReviewed} of ${vocabTotal} words reviewed in this topic.`
+                    ? `${vocabReviewed} of ${vocabTotal} words · red ring`
                     : "Vocab for this topic is coming soon."}
                 </span>
               </span>
             </Link>
 
-            {sentenceReady ? (
-              <Link
-                href={`/dashboard/learn/free/${lessonId}/sentences`}
-                className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 hover:bg-zinc-50"
-              >
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
-                  <PencilLine className="h-4 w-4" aria-hidden />
-                </span>
-                <span>
-                  <span className="block text-sm font-semibold text-zinc-900">
-                    Sentence Building
+            {fills.vocab >= 100 || stage >= 2 ? (
+              sentenceReady ? (
+                <Link
+                  href={`/dashboard/learn/free/${lessonId}/sentences`}
+                  className={`flex items-start gap-3 rounded-2xl border px-4 py-3.5 ${
+                    stage === 2
+                      ? "border-amber-200 bg-amber-50 hover:bg-amber-100/70"
+                      : "border-zinc-200 bg-white hover:bg-zinc-50"
+                  }`}
+                >
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-white">
+                    <PencilLine className="h-4 w-4" aria-hidden />
                   </span>
-                  <span className="mt-0.5 block text-xs text-zinc-500">
-                    Build phrases from this topic’s words.
+                  <span>
+                    <span className="block text-sm font-semibold text-zinc-900">
+                      2 · Sentence Building
+                    </span>
+                    <span className="mt-0.5 block text-xs text-zinc-500">
+                      Build phrases — yellow ring
+                    </span>
                   </span>
-                </span>
-              </Link>
+                </Link>
+              ) : (
+                <div className="flex items-start gap-3 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3.5">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-200 text-zinc-500">
+                    <PencilLine className="h-4 w-4" aria-hidden />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-zinc-700">
+                      2 · Sentence Building
+                    </span>
+                    <span className="mt-0.5 block text-xs text-zinc-500">
+                      Needs multi-word phrases for this topic.
+                    </span>
+                  </span>
+                </div>
+              )
             ) : (
-              <div className="flex items-start gap-3 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3.5">
+              <div className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3.5 opacity-70">
                 <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-200 text-zinc-500">
                   <PencilLine className="h-4 w-4" aria-hidden />
                 </span>
                 <span>
                   <span className="block text-sm font-semibold text-zinc-700">
-                    Sentence Building
+                    2 · Sentence Building
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-500">
-                    Needs topic-linked sentence content — coming soon.
+                    Unlocks after you clear the Vocab stage.
+                  </span>
+                </span>
+              </div>
+            )}
+
+            {fills.sentences >= 100 || stage >= 3 ? (
+              <Link
+                href={`/dashboard/learn/free/${lessonId}/practice?stage=3`}
+                className={`flex items-start gap-3 rounded-2xl border px-4 py-3.5 ${
+                  stage === 3
+                    ? "border-emerald-200 bg-emerald-50 hover:bg-emerald-100/70"
+                    : "border-zinc-200 bg-white hover:bg-zinc-50"
+                }`}
+              >
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white">
+                  <MessageCircle className="h-4 w-4" aria-hidden />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-zinc-900">
+                    3 · Conversation
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    Answer and ask — green ring
+                  </span>
+                </span>
+              </Link>
+            ) : (
+              <div className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3.5 opacity-70">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-200 text-zinc-500">
+                  <MessageCircle className="h-4 w-4" aria-hidden />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-zinc-700">
+                    3 · Conversation
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    Unlocks after Sentence Building is complete.
                   </span>
                 </span>
               </div>

@@ -4,7 +4,7 @@ import { buildTopicActivity } from "@/lib/free-lessons/build-activity";
 import { loadCommunityTopicCards } from "@/lib/free-lessons/load-topic-cards";
 import { fetchTopicMasteryMap } from "@/lib/free-lessons/mastery";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
-import { TOPIC_MASTERY_MAX_LEVEL } from "@/lib/free-lessons/topic-visuals";
+import { STAGE_DEPTH_MAX, type TopicStageId } from "@/lib/free-lessons/stages";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
@@ -15,10 +15,15 @@ import { notFound, redirect } from "next/navigation";
 
 type PracticePageProps = {
   params: Promise<{ lessonId: string }>;
+  searchParams: Promise<{ stage?: string }>;
 };
 
-export default async function FreeLessonPracticePage({ params }: PracticePageProps) {
+export default async function FreeLessonPracticePage({
+  params,
+  searchParams,
+}: PracticePageProps) {
   const { lessonId } = await params;
+  const { stage: stageParam } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -70,10 +75,26 @@ export default async function FreeLessonPracticePage({ params }: PracticePagePro
     redirect(`/dashboard/learn/free/${lessonId}`);
   }
 
-  const masteryLevel = masteryMap.get(lessonId)?.mastery_level ?? 0;
-  const activityLevel =
-    masteryLevel >= TOPIC_MASTERY_MAX_LEVEL ? 4 : masteryLevel;
-  const activity = buildTopicActivity(topicCards.cards, activityLevel);
+  const mastery = masteryMap.get(lessonId);
+  let stage: TopicStageId = mastery?.stage ?? 1;
+  let depth = mastery?.depth ?? 0;
+
+  const requested = Number(stageParam);
+  if (requested >= 1 && requested <= 3 && requested <= stage) {
+    // Re-practise an unlocked stage; use last depth level for challenge.
+    stage = requested as TopicStageId;
+    depth =
+      requested === (mastery?.stage ?? 1)
+        ? Math.min(depth, STAGE_DEPTH_MAX - 1)
+        : STAGE_DEPTH_MAX - 1;
+  } else if (depth >= STAGE_DEPTH_MAX && stage < 3) {
+    stage = (stage + 1) as TopicStageId;
+    depth = 0;
+  } else if (depth >= STAGE_DEPTH_MAX) {
+    depth = STAGE_DEPTH_MAX - 1;
+  }
+
+  const activity = buildTopicActivity(topicCards.cards, stage, depth);
 
   return (
     <div className={ui.page}>
@@ -92,7 +113,7 @@ export default async function FreeLessonPracticePage({ params }: PracticePagePro
             </p>
             <Link
               href={`/dashboard/learn/free/${lessonId}`}
-              className="inline-flex text-sm font-semibold text-emerald-600 hover:text-emerald-500"
+              className="inline-flex text-sm font-semibold text-violet-600 hover:text-violet-500"
             >
               Back to topic
             </Link>

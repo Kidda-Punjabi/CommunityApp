@@ -1,27 +1,38 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { TOPIC_MASTERY_MAX_LEVEL } from "@/lib/free-lessons/topic-visuals";
+import {
+  advanceMasteryAfterPass,
+  computeStageFills,
+  decodeMasteryUnits,
+  isFullyMastered,
+  isSequenceCompleteFromUnits,
+  masteryUnits,
+  type TopicStageFills,
+  type TopicStageId,
+  STAGE_DEPTH_MAX,
+} from "@/lib/free-lessons/stages";
 
 export type TopicMasteryRow = {
   lesson_id: string;
-  mastery_level: number;
+  /** Current stage being worked (1–3). */
+  stage: TopicStageId;
+  /** Levels cleared in the current stage (0–5). */
+  depth: number;
   progress_percent: number;
+  /** Legacy flat units 0–15 for unlock math. */
+  mastery_level: number;
 };
 
 export type RecordTopicActivityResult = {
-  masteryLevel: number;
+  stage: TopicStageId;
+  depth: number;
   progressPercent: number;
+  masteryLevel: number;
   leveledUp: boolean;
+  stageCleared: boolean;
   mastered: boolean;
+  fills: TopicStageFills;
 };
 
-/**
- * Fallback encoding on lesson_progress when topic_mastery is absent:
- * - last_page_viewed = mastery_level (0–5)
- * - total_pages = progress_percent (0–100)
- * - completed = mastery_level >= 1 (sequence complete)
- *
- * Avoids last_position / seconds_listened, which lesson audio/PDF tracking uses.
- */
 function isMissingTableError(message: string | undefined): boolean {
   if (!message) return false;
   return (
@@ -31,12 +42,24 @@ function isMissingTableError(message: string | undefined): boolean {
   );
 }
 
-function clampLevel(value: number): number {
-  return Math.max(0, Math.min(TOPIC_MASTERY_MAX_LEVEL, Math.round(value)));
-}
-
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function rowFromUnits(
+  lessonId: string,
+  units: number,
+  progressPercent: number
+): TopicMasteryRow {
+  const { stage, depth } = decodeMasteryUnits(units);
+  return {
+    lesson_id: lessonId,
+    stage,
+    depth,
+    progress_percent:
+      isFullyMastered(stage, depth) ? 100 : clampPercent(progressPercent),
+    mastery_level: masteryUnits(stage, depth),
+  };
 }
 
 async function fetchFromLessonProgressFallback(
@@ -54,40 +77,27 @@ async function fetchFromLessonProgressFallback(
 
   return new Map(
     (data ?? []).map((row) => {
-      // Prefer dedicated page fields; fall back to older last_position encoding.
-      const fromPages =
-        row.last_page_viewed != null && Number(row.last_page_viewed) > 0
-          ? Number(row.last_page_viewed)
-          : null;
-      const fromLegacy =
+      // Prefer last_page_viewed as units (0–15). Legacy: last_position 0–5 mapped into vocab stage.
+      let units = 0;
+      if (row.last_page_viewed != null && Number(row.last_page_viewed) > 0) {
+        units = Math.min(15, Math.max(0, Number(row.last_page_viewed)));
+      } else if (
         row.last_position != null &&
-        Number(row.last_position) >= 0 &&
-        Number(row.last_position) <= TOPIC_MASTERY_MAX_LEVEL
-          ? Number(row.last_position)
-          : null;
-
-      let masteryLevel = clampLevel(fromPages ?? fromLegacy ?? 0);
-      if (row.completed && masteryLevel < 1) masteryLevel = 1;
+        Number(row.last_position) > 0 &&
+        Number(row.last_position) <= 5
+      ) {
+        units = Number(row.last_position);
+      } else if (row.completed) {
+        units = 1;
+      }
 
       const progressPercent = clampPercent(
         row.total_pages != null && Number(row.total_pages) >= 0
           ? Number(row.total_pages)
-          : row.seconds_listened != null &&
-              Number(row.seconds_listened) >= 0 &&
-              Number(row.seconds_listened) <= 100
-            ? Number(row.seconds_listened)
-            : 0
+          : 0
       );
 
-      return [
-        row.lesson_id,
-        {
-          lesson_id: row.lesson_id,
-          mastery_level: masteryLevel,
-          progress_percent:
-            masteryLevel >= TOPIC_MASTERY_MAX_LEVEL ? 100 : progressPercent,
-        },
-      ];
+      return [row.lesson_id, rowFromUnits(row.lesson_id, units, progressPercent)];
     })
   );
 }
@@ -96,7 +106,7 @@ async function saveLessonProgressFallback(
   supabase: SupabaseClient,
   userId: string,
   lessonId: string,
-  masteryLevel: number,
+  units: number,
   progressPercent: number
 ): Promise<void> {
   const { data: existing } = await supabase
@@ -110,17 +120,40 @@ async function saveLessonProgressFallback(
     {
       user_id: userId,
       lesson_id: lessonId,
-      completed: masteryLevel >= 1,
-      // Preserve audio fields if already set; only write mastery into page fields.
+      completed: units >= 1,
       last_position: existing?.last_position ?? 0,
       seconds_listened: existing?.seconds_listened ?? 0,
-      last_page_viewed: masteryLevel,
+      last_page_viewed: units,
       total_pages: progressPercent,
-      pdf_completed: masteryLevel >= TOPIC_MASTERY_MAX_LEVEL,
+      pdf_completed: units >= STAGE_DEPTH_MAX * 3,
     },
     { onConflict: "user_id,lesson_id" }
   );
   if (error) throw error;
+}
+
+function mapTopicMasteryDbRow(row: {
+  lesson_id: string;
+  mastery_level?: number | null;
+  progress_percent?: number | null;
+  stage?: number | null;
+  depth?: number | null;
+}): TopicMasteryRow {
+  if (row.stage != null && row.depth != null) {
+    const stage = Math.max(1, Math.min(3, Number(row.stage))) as TopicStageId;
+    const depth = Math.max(0, Math.min(STAGE_DEPTH_MAX, Number(row.depth)));
+    return {
+      lesson_id: row.lesson_id,
+      stage,
+      depth,
+      progress_percent: clampPercent(row.progress_percent ?? 0),
+      mastery_level: masteryUnits(stage, depth),
+    };
+  }
+
+  // Old schema: mastery_level 0–5 treated as vocab-stage depth.
+  const legacy = Math.max(0, Math.min(5, Number(row.mastery_level ?? 0)));
+  return rowFromUnits(row.lesson_id, legacy, row.progress_percent ?? 0);
 }
 
 export async function fetchTopicMasteryMap(
@@ -132,29 +165,34 @@ export async function fetchTopicMasteryMap(
 
   const { data, error } = await supabase
     .from("topic_mastery")
-    .select("lesson_id, mastery_level, progress_percent")
+    .select("lesson_id, mastery_level, progress_percent, stage, depth")
     .eq("user_id", userId)
     .in("lesson_id", lessonIds);
 
   if (error) {
-    if (isMissingTableError(error.message)) {
-      return fetchFromLessonProgressFallback(supabase, userId, lessonIds);
+    if (isMissingTableError(error.message) || error.message.includes("stage")) {
+      // Missing table, or table exists without stage/depth columns yet.
+      if (isMissingTableError(error.message)) {
+        return fetchFromLessonProgressFallback(supabase, userId, lessonIds);
+      }
+      const { data: legacy } = await supabase
+        .from("topic_mastery")
+        .select("lesson_id, mastery_level, progress_percent")
+        .eq("user_id", userId)
+        .in("lesson_id", lessonIds);
+      return new Map(
+        (legacy ?? []).map((row) => [
+          row.lesson_id,
+          mapTopicMasteryDbRow(row),
+        ])
+      );
     }
     console.warn("[topic_mastery] fetch failed:", error.message);
     return new Map();
   }
 
-  // Table exists but may be empty while older progress lives in lesson_progress —
-  // merge fallback for any lesson still missing a mastery row.
   const map = new Map(
-    (data ?? []).map((row) => [
-      row.lesson_id,
-      {
-        lesson_id: row.lesson_id,
-        mastery_level: row.mastery_level ?? 0,
-        progress_percent: row.progress_percent ?? 0,
-      } satisfies TopicMasteryRow,
-    ])
+    (data ?? []).map((row) => [row.lesson_id, mapTopicMasteryDbRow(row)])
   );
 
   const missing = lessonIds.filter((id) => !map.has(id));
@@ -172,18 +210,21 @@ export async function fetchTopicMasteryMap(
 
 export function ringProgressPercent(mastery: TopicMasteryRow | undefined): number {
   if (!mastery) return 0;
-  if (mastery.mastery_level >= TOPIC_MASTERY_MAX_LEVEL) return 100;
-  // Show at least a sliver once sequence-complete so the path doesn't look empty.
-  if (mastery.mastery_level > 0 && mastery.progress_percent === 0) {
-    return Math.round((mastery.mastery_level / TOPIC_MASTERY_MAX_LEVEL) * 100);
-  }
-  return Math.max(0, Math.min(100, mastery.progress_percent));
+  const fills = computeStageFills(
+    mastery.stage,
+    mastery.depth,
+    mastery.progress_percent
+  );
+  return Math.round((fills.vocab + fills.sentences + fills.conversation) / 3);
 }
 
-/**
- * Passing an activity fills the ring and advances one mastery level.
- * Failing still awards partial ring progress.
- */
+export function stageFillsForMastery(
+  mastery: TopicMasteryRow | undefined
+): TopicStageFills {
+  if (!mastery) return { vocab: 0, sentences: 0, conversation: 0 };
+  return computeStageFills(mastery.stage, mastery.depth, mastery.progress_percent);
+}
+
 export async function recordTopicActivityResult(
   supabase: SupabaseClient,
   userId: string,
@@ -194,23 +235,32 @@ export async function recordTopicActivityResult(
   const existingMap = await fetchTopicMasteryMap(supabase, userId, [lessonId]);
   const existing = existingMap.get(lessonId);
 
-  let masteryLevel = existing?.mastery_level ?? 0;
+  let stage: TopicStageId = existing?.stage ?? 1;
+  let depth = existing?.depth ?? 0;
   let progressPercent = existing?.progress_percent ?? 0;
   let leveledUp = false;
+  let stageCleared = false;
 
-  if (masteryLevel >= TOPIC_MASTERY_MAX_LEVEL) {
+  if (isFullyMastered(stage, depth)) {
     return {
-      masteryLevel,
+      stage: 3,
+      depth: STAGE_DEPTH_MAX,
       progressPercent: 100,
+      masteryLevel: masteryUnits(3, STAGE_DEPTH_MAX),
       leveledUp: false,
+      stageCleared: false,
       mastered: true,
+      fills: computeStageFills(3, STAGE_DEPTH_MAX, 100),
     };
   }
 
   if (passed) {
-    masteryLevel = Math.min(TOPIC_MASTERY_MAX_LEVEL, masteryLevel + 1);
-    progressPercent = masteryLevel >= TOPIC_MASTERY_MAX_LEVEL ? 100 : 0;
-    leveledUp = true;
+    const advanced = advanceMasteryAfterPass(stage, depth);
+    stage = advanced.stage;
+    depth = advanced.depth;
+    progressPercent = isFullyMastered(stage, depth) ? 100 : 0;
+    leveledUp = advanced.leveledUp;
+    stageCleared = advanced.stageCleared;
   } else {
     progressPercent = Math.min(
       90,
@@ -218,34 +268,67 @@ export async function recordTopicActivityResult(
     );
   }
 
-  const { error } = await supabase.from("topic_mastery").upsert(
-    {
-      user_id: userId,
-      lesson_id: lessonId,
-      mastery_level: masteryLevel,
-      progress_percent: progressPercent,
-    },
-    { onConflict: "user_id,lesson_id" }
-  );
+  const units = masteryUnits(stage, depth);
+  const payload = {
+    user_id: userId,
+    lesson_id: lessonId,
+    mastery_level: Math.min(5, units), // keep check-friendly if old constraint exists
+    progress_percent: progressPercent,
+    stage,
+    depth,
+  };
+
+  const { error } = await supabase
+    .from("topic_mastery")
+    .upsert(payload, { onConflict: "user_id,lesson_id" });
 
   if (error) {
-    if (isMissingTableError(error.message)) {
+    if (isMissingTableError(error.message) || error.message.includes("stage")) {
+      // Fall back: store units in lesson_progress; try mastery_level-only upsert if table exists.
+      if (!isMissingTableError(error.message)) {
+        await supabase.from("topic_mastery").upsert(
+          {
+            user_id: userId,
+            lesson_id: lessonId,
+            mastery_level: Math.min(5, Math.max(units, 1)),
+            progress_percent: progressPercent,
+          },
+          { onConflict: "user_id,lesson_id" }
+        );
+      }
       await saveLessonProgressFallback(
         supabase,
         userId,
         lessonId,
-        masteryLevel,
+        units,
         progressPercent
       );
     } else {
       throw error;
     }
+  } else {
+    // Also mirror units into lesson_progress for resilient reads.
+    await saveLessonProgressFallback(
+      supabase,
+      userId,
+      lessonId,
+      units,
+      progressPercent
+    ).catch(() => {
+      /* non-fatal */
+    });
   }
 
   return {
-    masteryLevel,
+    stage,
+    depth,
     progressPercent,
+    masteryLevel: units,
     leveledUp,
-    mastered: masteryLevel >= TOPIC_MASTERY_MAX_LEVEL,
+    stageCleared,
+    mastered: isFullyMastered(stage, depth),
+    fills: computeStageFills(stage, depth, progressPercent),
   };
 }
+
+export { isSequenceCompleteFromUnits, isFullyMastered, masteryUnits };

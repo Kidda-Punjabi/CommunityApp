@@ -29,6 +29,8 @@ export function TopicPracticeSession({
     total: number;
     masteryLevel: number;
     mastered: boolean;
+    stageCleared: boolean;
+    stage: number;
   } | null>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +78,8 @@ export function TopicPracticeSession({
           total,
           masteryLevel: result.masteryLevel,
           mastered: result.mastered,
+          stageCleared: result.stageCleared,
+          stage: result.stage,
         });
         router.refresh();
       } catch (err) {
@@ -97,8 +101,10 @@ export function TopicPracticeSession({
           You got {finished.correct} of {finished.total} ({finished.percent}%).
           {finished.passed
             ? finished.mastered
-              ? " You’ve mastered this topic."
-              : ` Mastery level is now ${finished.masteryLevel}.`
+              ? " All three stages complete — words, sentences, and conversation."
+              : finished.stageCleared
+                ? ` Stage cleared — moving on to stage ${finished.stage}.`
+                : " Level up — keep going in this stage."
             : ` Need ${activity.passThreshold}% to level up.`}
         </p>
         <div className="mt-8 flex flex-col gap-3">
@@ -106,7 +112,7 @@ export function TopicPracticeSession({
             <button
               type="button"
               onClick={() => router.push(`/dashboard/learn/free/${lessonId}/practice`)}
-              className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600"
+              className="rounded-2xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
             >
               Next activity →
             </button>
@@ -115,7 +121,7 @@ export function TopicPracticeSession({
             <button
               type="button"
               onClick={() => router.push(`/dashboard/learn/free/${lessonId}/practice`)}
-              className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600"
+              className="rounded-2xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
             >
               Try again
             </button>
@@ -208,7 +214,7 @@ export function TopicPracticeSession({
             type="button"
             disabled={pending}
             onClick={goNext}
-            className="mt-5 w-full rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+            className="mt-5 w-full rounded-2xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-60"
           >
             {pending
               ? "Saving…"

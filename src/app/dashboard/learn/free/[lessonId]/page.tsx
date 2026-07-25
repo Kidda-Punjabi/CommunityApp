@@ -2,7 +2,10 @@ import { TopicHubCard } from "@/components/learn/topic-hub-card";
 import { BackLink } from "@/components/navigation/back-link";
 import { activityMetaForLevel } from "@/lib/free-lessons/activity-meta";
 import { loadCommunityTopicCards } from "@/lib/free-lessons/load-topic-cards";
-import { fetchTopicMasteryMap, ringProgressPercent } from "@/lib/free-lessons/mastery";
+import {
+  fetchTopicMasteryMap,
+  stageFillsForMastery,
+} from "@/lib/free-lessons/mastery";
 import { loadTopicVocabProgress } from "@/lib/free-lessons/topic-vocab-progress";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
@@ -64,8 +67,9 @@ export default async function FreeLessonTopicPage({ params }: TopicPageProps) {
   });
 
   const mastery = masteryMap.get(lessonId);
-  const masteryLevel = mastery?.mastery_level ?? 0;
-  const activityTitle = activityMetaForLevel(masteryLevel)?.title ?? null;
+  const stage = mastery?.stage ?? 1;
+  const depth = mastery?.depth ?? 0;
+  const activityTitle = activityMetaForLevel(stage, depth)?.title ?? null;
 
   return (
     <div className={ui.page}>
@@ -75,8 +79,9 @@ export default async function FreeLessonTopicPage({ params }: TopicPageProps) {
           lessonId={lesson.id}
           title={lesson.title}
           sortIndex={lesson.lesson_number - 1}
-          masteryLevel={masteryLevel}
-          ringPercent={ringProgressPercent(mastery)}
+          stage={stage}
+          depth={depth}
+          fills={stageFillsForMastery(mastery)}
           hasPractice={topicCards.cards.length >= 2}
           activityTitle={activityTitle}
           vocabReviewed={vocab.reviewed}

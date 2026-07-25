@@ -2,7 +2,9 @@
 
 import { Crown, Lock } from "lucide-react";
 import Link from "next/link";
+import { TripleMasteryRings } from "@/components/learn/triple-mastery-rings";
 import { getTopicVisual } from "@/lib/free-lessons/topic-visuals";
+import type { TopicStageFills } from "@/lib/free-lessons/stages";
 import type { TopicLockReason } from "@/lib/free-lessons/unlock";
 import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 
@@ -11,8 +13,7 @@ export type FreeLessonPathItem = {
   title: string;
   sortIndex: number;
   masteryLevel: number;
-  /** 0–100 fill of the ring toward the next level */
-  ringPercent: number;
+  fills: TopicStageFills;
   lockReason: TopicLockReason;
   needsPremium: boolean;
 };
@@ -21,77 +22,31 @@ type FreeLessonsPathProps = {
   items: FreeLessonPathItem[];
 };
 
-function ProgressRing({
-  percent,
-  color,
-  size,
-  stroke,
-}: {
-  percent: number;
-  color: string;
-  size: number;
-  stroke: number;
-}) {
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - Math.max(0, Math.min(100, percent)) / 100);
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      className="absolute inset-0 -rotate-90"
-      aria-hidden
-    >
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="#E4E4E7"
-        strokeWidth={stroke}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke={color}
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        className="transition-[stroke-dashoffset] duration-500 ease-out"
-      />
-    </svg>
-  );
-}
-
 function TopicNode({ item }: { item: FreeLessonPathItem }) {
   const visual = getTopicVisual(item.title, item.sortIndex);
   const { Icon } = visual;
   const locked = item.lockReason !== "none";
-  const mastered = item.masteryLevel >= 5;
-  const crownLevel = Math.min(5, item.masteryLevel);
-  const ringPercent = locked ? 0 : mastered ? 100 : item.ringPercent;
   const showPremiumCue = item.needsPremium && locked;
   const href =
-    item.lockReason === "premium" || (item.lockReason === "sequence" && item.needsPremium)
+    item.lockReason === "premium" ||
+    (item.lockReason === "sequence" && item.needsPremium)
       ? PREMIUM_UNLOCK_PATH
       : item.lockReason === "none"
         ? `/dashboard/learn/free/${item.id}`
         : undefined;
 
+  const emptyFills = { vocab: 0, sentences: 0, conversation: 0 };
+  const fills = locked ? emptyFills : item.fills;
+  // Crown shows completed stages (0–3)
+  const stagesComplete =
+    (item.fills.vocab >= 100 ? 1 : 0) +
+    (item.fills.sentences >= 100 ? 1 : 0) +
+    (item.fills.conversation >= 100 ? 1 : 0);
+
   const circle = (
-    <span className="relative inline-flex h-[5.75rem] w-[5.75rem] items-center justify-center">
-      <ProgressRing
-        percent={ringPercent}
-        color={locked ? "#D4D4D8" : visual.ringColor}
-        size={92}
-        stroke={7}
-      />
+    <TripleMasteryRings fills={fills} size={92}>
       <span
-        className={`relative z-[1] flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full text-white shadow-md transition-transform duration-200 ${
+        className={`relative z-[1] flex h-[3.35rem] w-[3.35rem] items-center justify-center rounded-full text-white shadow-md transition-transform duration-200 ${
           locked
             ? item.lockReason === "premium"
               ? "bg-violet-400"
@@ -101,37 +56,24 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
       >
         {locked ? (
           item.lockReason === "premium" ? (
-            <Crown className="h-8 w-8 fill-white" strokeWidth={2} aria-hidden />
+            <Crown className="h-6 w-6 fill-white" strokeWidth={2} aria-hidden />
           ) : (
-            <Lock className="h-7 w-7" strokeWidth={2.25} aria-hidden />
+            <Lock className="h-5 w-5" strokeWidth={2.25} aria-hidden />
           )
         ) : (
-          <Icon className="h-8 w-8" strokeWidth={2.25} aria-hidden />
+          <Icon className="h-6 w-6" strokeWidth={2.25} aria-hidden />
         )}
       </span>
-      {!locked ? (
+      {!locked && stagesComplete > 0 ? (
         <span
-          className={`absolute -bottom-0.5 -right-0.5 z-[2] flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-full border-2 border-white px-1 shadow-sm ${
-            crownLevel > 0
-              ? "bg-amber-400 text-amber-950"
-              : "bg-zinc-200 text-zinc-400"
-          }`}
-          aria-label={
-            crownLevel > 0 ? `Mastery level ${crownLevel}` : "Not started"
-          }
+          className="absolute -bottom-0.5 -right-0.5 z-[2] flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-full border-2 border-white bg-amber-400 px-1 text-amber-950 shadow-sm"
+          aria-label={`${stagesComplete} of 3 stages complete`}
         >
-          <Crown
-            className={`h-3.5 w-3.5 ${
-              crownLevel > 0 ? "fill-amber-950" : "fill-zinc-400"
-            }`}
-            aria-hidden
-          />
-          {crownLevel > 0 ? (
-            <span className="text-[10px] font-bold leading-none">{crownLevel}</span>
-          ) : null}
+          <Crown className="h-3.5 w-3.5 fill-amber-950" aria-hidden />
+          <span className="text-[10px] font-bold leading-none">{stagesComplete}</span>
         </span>
       ) : null}
-    </span>
+    </TripleMasteryRings>
   );
 
   const label = (
@@ -178,8 +120,19 @@ export function FreeLessonsPath({ items }: FreeLessonsPathProps) {
           Everyday Punjabi
         </h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Finish each topic to unlock the next — at your own pace.
+          Three rings per topic — words, sentences, then conversation.
         </p>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium">
+          <span className="inline-flex items-center gap-1.5 text-rose-600">
+            <span className="h-2 w-2 rounded-full bg-rose-500" /> Vocab
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-amber-600">
+            <span className="h-2 w-2 rounded-full bg-amber-400" /> Sentences
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-emerald-600">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" /> Conversation
+          </span>
+        </div>
       </div>
 
       <ul className="mx-auto grid max-w-md grid-cols-2 justify-items-center gap-x-6 gap-y-8 sm:gap-x-10">

@@ -1,11 +1,13 @@
 import type { FlashcardDeckCard } from "@/lib/flashcards/types";
 import {
-  ACTIVITY_PASS_THRESHOLDS,
-  ACTIVITY_QUESTION_COUNTS,
-  TOPIC_MASTERY_MAX_LEVEL,
-} from "@/lib/free-lessons/topic-visuals";
+  STAGE_ACTIVITY_PASS_THRESHOLDS,
+  STAGE_ACTIVITY_QUESTION_COUNTS,
+  STAGE_DEPTH_MAX,
+  getStageMeta,
+  type TopicStageId,
+} from "@/lib/free-lessons/stages";
 
-export type ActivityLevel = 0 | 1 | 2 | 3 | 4;
+export type ActivityDepth = 0 | 1 | 2 | 3 | 4;
 
 export type ActivityQuestion = {
   id: string;
@@ -13,12 +15,12 @@ export type ActivityQuestion = {
   promptHint: string | null;
   options: string[];
   correctIndex: number;
-  /** Show Gurmukhi answer after choosing (for learning). */
   reveal: string;
 };
 
 export type TopicActivity = {
-  level: ActivityLevel;
+  stage: TopicStageId;
+  depth: ActivityDepth;
   title: string;
   subtitle: string;
   passThreshold: number;
@@ -39,65 +41,48 @@ function uniqueOptions(correct: string, pool: string[], count: number): string[]
   return shuffle([correct, ...others.slice(0, Math.max(0, count - 1))]);
 }
 
-function activityMeta(level: ActivityLevel): { title: string; subtitle: string } {
-  switch (level) {
-    case 0:
-      return {
-        title: "Warm-up",
-        subtitle: "Match the English meaning to the Punjabi phrase.",
-      };
-    case 1:
-      return {
-        title: "Practice",
-        subtitle: "A little harder — more phrases, same idea.",
-      };
-    case 2:
-      return {
-        title: "Challenge",
-        subtitle: "Now go the other way: Punjabi → English.",
-      };
-    case 3:
-      return {
-        title: "Stretch",
-        subtitle: "Tougher mix — stay sharp.",
-      };
-    case 4:
-      return {
-        title: "Mastery check",
-        subtitle: "Prove you’ve got this topic.",
-      };
-  }
+function tokens(text: string): string[] {
+  return text
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
-/**
- * Build the next activity for a topic from its flashcard deck.
- * `masteryLevel` 0–4 = next activity to attempt; 5 = already mastered.
- */
-export function buildTopicActivity(
+function depthMeta(
+  stage: TopicStageId,
+  depth: ActivityDepth
+): { title: string; subtitle: string } {
+  const stageMeta = getStageMeta(stage);
+  const labels = [
+    { title: "Warm-up", subtitle: "A gentle start — get familiar." },
+    { title: "Practice", subtitle: "A little harder — more items." },
+    { title: "Challenge", subtitle: "Switch direction and stay sharp." },
+    { title: "Stretch", subtitle: "Tougher mix — fewer easy wins." },
+    { title: "Stage check", subtitle: `Prove this ${stageMeta.label.toLowerCase()} stage.` },
+  ] as const;
+  return {
+    title: `${stageMeta.label} · ${labels[depth].title}`,
+    subtitle: labels[depth].subtitle,
+  };
+}
+
+function buildVocabQuestions(
   cards: FlashcardDeckCard[],
-  masteryLevel: number
-): TopicActivity | null {
-  if (masteryLevel >= TOPIC_MASTERY_MAX_LEVEL) return null;
-  if (cards.length < 2) return null;
-
-  const level = Math.min(4, Math.max(0, masteryLevel)) as ActivityLevel;
-  const questionCount = Math.min(
-    ACTIVITY_QUESTION_COUNTS[level],
-    cards.length
-  );
-  const optionCount = level >= 3 ? 4 : 3;
-  const reverse = level >= 2;
-  const pool = shuffle(cards).slice(0, Math.max(questionCount, optionCount + 1));
-  const questionCards = shuffle(pool).slice(0, questionCount);
-
+  depth: ActivityDepth
+): ActivityQuestion[] {
+  const questionCount = Math.min(STAGE_ACTIVITY_QUESTION_COUNTS[depth], cards.length);
+  const optionCount = depth >= 3 ? 4 : 3;
+  const reverse = depth >= 2;
+  const pool = shuffle(cards);
+  const questionCards = pool.slice(0, questionCount);
   const englishPool = cards.map((c) => c.front_text);
   const punjabiPool = cards.map((c) => c.back_text);
 
-  const questions: ActivityQuestion[] = questionCards.map((card) => {
+  return questionCards.map((card) => {
     if (reverse) {
       const options = uniqueOptions(card.front_text, englishPool, optionCount);
       return {
-        id: `${card.id}-rev-${level}`,
+        id: `${card.id}-vocab-rev-${depth}`,
         prompt: card.back_text,
         promptHint: card.romanised,
         options,
@@ -105,10 +90,9 @@ export function buildTopicActivity(
         reveal: card.front_text,
       };
     }
-
     const options = uniqueOptions(card.back_text, punjabiPool, optionCount);
     return {
-      id: `${card.id}-fwd-${level}`,
+      id: `${card.id}-vocab-fwd-${depth}`,
       prompt: card.front_text,
       promptHint: null,
       options,
@@ -116,22 +100,100 @@ export function buildTopicActivity(
       reveal: card.back_text,
     };
   });
-
-  const meta = activityMeta(level);
-  return {
-    level,
-    ...meta,
-    passThreshold: ACTIVITY_PASS_THRESHOLDS[level],
-    questions,
-  };
 }
 
-export function scoreActivity(
-  answers: Array<{ correctIndex: number; chosenIndex: number }>
-): { correct: number; total: number; percent: number; passed: boolean; passThreshold: number } {
-  const total = answers.length;
-  const correct = answers.filter((a) => a.chosenIndex === a.correctIndex).length;
-  const percent = total === 0 ? 0 : Math.round((correct / total) * 100);
-  // Caller supplies threshold from the activity; default 70 if unknown.
-  return { correct, total, percent, passed: false, passThreshold: 70 };
+function buildSentenceQuestions(
+  cards: FlashcardDeckCard[],
+  depth: ActivityDepth
+): ActivityQuestion[] {
+  const multi = cards.filter((card) => tokens(card.back_text).length >= 2);
+  const source = multi.length >= 2 ? multi : cards;
+  if (source.length < 2) return [];
+
+  const questionCount = Math.min(STAGE_ACTIVITY_QUESTION_COUNTS[depth], source.length);
+  const optionCount = depth >= 3 ? 4 : 3;
+  const questionCards = shuffle(source).slice(0, questionCount);
+  const phrasePool = source.map((c) => c.back_text);
+
+  return questionCards.map((card) => {
+    // Scrambled display as prompt — pick the correct full phrase.
+    const parts = shuffle(tokens(card.back_text));
+    const options = uniqueOptions(card.back_text, phrasePool, optionCount);
+    return {
+      id: `${card.id}-sent-${depth}`,
+      prompt: `Build: ${card.front_text}`,
+      promptHint: `Tiles: ${parts.join(" · ")}`,
+      options,
+      correctIndex: options.indexOf(card.back_text),
+      reveal: card.back_text,
+    };
+  });
+}
+
+function buildConversationQuestions(
+  cards: FlashcardDeckCard[],
+  depth: ActivityDepth
+): ActivityQuestion[] {
+  if (cards.length < 2) return [];
+
+  const questionCount = Math.min(STAGE_ACTIVITY_QUESTION_COUNTS[depth], cards.length);
+  const optionCount = depth >= 3 ? 4 : 3;
+  const questionCards = shuffle(cards).slice(0, questionCount);
+  const replyPool = cards.map((c) => c.back_text);
+
+  return questionCards.map((card, index) => {
+    const askMode = depth >= 2 || index % 2 === 1;
+    if (askMode) {
+      const options = uniqueOptions(card.back_text, replyPool, optionCount);
+      return {
+        id: `${card.id}-ask-${depth}`,
+        prompt: `How would you ask about: ${card.front_text}?`,
+        promptHint: "Pick the Punjabi you’d say.",
+        options,
+        correctIndex: options.indexOf(card.back_text),
+        reveal: card.back_text,
+      };
+    }
+
+    const options = uniqueOptions(card.back_text, replyPool, optionCount);
+    return {
+      id: `${card.id}-reply-${depth}`,
+      prompt: `Someone asks about “${card.front_text}”. What do you reply?`,
+      promptHint: "Pick the best Punjabi response.",
+      options,
+      correctIndex: options.indexOf(card.back_text),
+      reveal: card.back_text,
+    };
+  });
+}
+
+/**
+ * Build the next activity for the learner’s current stage + depth.
+ * `depth` 0–4 = next activity; 5 = stage already complete (caller should advance).
+ */
+export function buildTopicActivity(
+  cards: FlashcardDeckCard[],
+  stage: TopicStageId,
+  depth: number
+): TopicActivity | null {
+  if (depth >= STAGE_DEPTH_MAX) return null;
+  if (cards.length < 2) return null;
+
+  const activityDepth = Math.min(4, Math.max(0, depth)) as ActivityDepth;
+  let questions: ActivityQuestion[] = [];
+
+  if (stage === 1) questions = buildVocabQuestions(cards, activityDepth);
+  else if (stage === 2) questions = buildSentenceQuestions(cards, activityDepth);
+  else questions = buildConversationQuestions(cards, activityDepth);
+
+  if (questions.length === 0) return null;
+
+  const meta = depthMeta(stage, activityDepth);
+  return {
+    stage,
+    depth: activityDepth,
+    ...meta,
+    passThreshold: STAGE_ACTIVITY_PASS_THRESHOLDS[activityDepth],
+    questions,
+  };
 }

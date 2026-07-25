@@ -1,21 +1,42 @@
 -- =============================================================================
--- Kidda — Per-topic mastery for Free Lessons (Duolingo-style progress)
--- Run in Supabase SQL Editor
+-- Kidda — Per-topic mastery for Everyday Punjabi (3 stages × 5 deep levels)
+-- Run in Supabase SQL Editor when ready — app also falls back to lesson_progress.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.topic_mastery (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   lesson_id UUID NOT NULL REFERENCES public.lessons (id) ON DELETE CASCADE,
-  -- 0 = not started, 1–4 = crowns in progress, 5 = mastered
+  -- Legacy flat field (also used as units 0–15 when stage/depth unavailable)
   mastery_level INTEGER NOT NULL DEFAULT 0
-    CHECK (mastery_level >= 0 AND mastery_level <= 5),
-  -- Progress toward the next mastery level (0–100). At 100, level ups.
+    CHECK (mastery_level >= 0 AND mastery_level <= 15),
   progress_percent INTEGER NOT NULL DEFAULT 0
     CHECK (progress_percent >= 0 AND progress_percent <= 100),
+  -- 1 = Vocab (red), 2 = Sentences (yellow), 3 = Conversation (green)
+  stage INTEGER NOT NULL DEFAULT 1
+    CHECK (stage >= 1 AND stage <= 3),
+  -- Deep levels completed inside the current stage (0–5)
+  depth INTEGER NOT NULL DEFAULT 0
+    CHECK (depth >= 0 AND depth <= 5),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, lesson_id)
 );
+
+ALTER TABLE public.topic_mastery
+  ADD COLUMN IF NOT EXISTS stage INTEGER NOT NULL DEFAULT 1
+    CHECK (stage >= 1 AND stage <= 3);
+
+ALTER TABLE public.topic_mastery
+  ADD COLUMN IF NOT EXISTS depth INTEGER NOT NULL DEFAULT 0
+    CHECK (depth >= 0 AND depth <= 5);
+
+-- Widen legacy mastery_level if an older 0–5 check exists
+ALTER TABLE public.topic_mastery
+  DROP CONSTRAINT IF EXISTS topic_mastery_mastery_level_check;
+
+ALTER TABLE public.topic_mastery
+  ADD CONSTRAINT topic_mastery_mastery_level_check
+  CHECK (mastery_level >= 0 AND mastery_level <= 15);
 
 CREATE INDEX IF NOT EXISTS idx_topic_mastery_user_id
   ON public.topic_mastery (user_id);

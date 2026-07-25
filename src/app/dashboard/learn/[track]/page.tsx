@@ -37,7 +37,7 @@ import {
 } from "@/lib/tutoring/lesson-content-access";
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { fetchCatchupEnabledLessonIds } from "@/lib/catchup/load-catchup";
-import { fetchTopicMasteryMap, ringProgressPercent } from "@/lib/free-lessons/mastery";
+import { fetchTopicMasteryMap, stageFillsForMastery } from "@/lib/free-lessons/mastery";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
@@ -104,7 +104,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
         title: lesson.title,
         sortIndex: index,
         masteryLevel: mastery?.mastery_level ?? 0,
-        ringPercent: ringProgressPercent(mastery),
+        fills: stageFillsForMastery(mastery),
         lockReason: unlock.lockReason,
         needsPremium: unlock.needsPremium,
       };
