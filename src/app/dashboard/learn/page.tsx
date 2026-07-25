@@ -1,8 +1,6 @@
 import { LearnCourseCard } from "@/components/learn-course-card";
 import { ResourceListSection } from "@/components/resources/resource-list-section";
-import {
-  fetchLearnContent,
-} from "@/lib/learning/load-learn-content";
+import { fetchLearnContent } from "@/lib/learning/load-learn-content";
 import {
   canAccessLessonInContext,
   filterLessonsForTrack,
@@ -12,7 +10,6 @@ import {
 import { resolveGroupCohortContentGate } from "@/lib/learning/group-cohort-content-gate";
 import { LEARN_TRACKS, shouldShowLearnCourseProgress } from "@/lib/learning/learn-catalog";
 import { findCoursesForTier } from "@/lib/membership/courses";
-import { loadStudentNextLiveLesson } from "@/lib/lessons/load-student-next-live-lesson";
 import {
   getCachedAuthSession,
   getCachedCourseAccess,
@@ -40,13 +37,12 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap, nextLiveLesson] = await Promise.all([
+  const [access, allLessons, completionMap] = await Promise.all([
     getCachedCourseAccess(supabase, user),
     lessonsPromise,
     lessonsPromise.then((lessons) =>
       fetchLessonCompletionMap(supabase, user.id, lessons)
     ),
-    loadStudentNextLiveLesson(supabase, user.id),
   ]);
 
   const tracks = await Promise.all(
@@ -123,41 +119,7 @@ export default async function LearnPage() {
         <p className="mt-1 text-sm text-zinc-500">
           Browse courses, track your progress, and pick up reference tools when you need them.
         </p>
-        {nextLiveLesson ? (
-          <p className="mt-3 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-900">
-            Next live lesson ({nextLiveLesson.cohortName}):{" "}
-            <span className="font-semibold">
-              {new Date(nextLiveLesson.nextLessonAt).toLocaleString("en-GB", {
-                weekday: "short",
-                day: "numeric",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "UTC",
-              })}
-            </span>
-            {nextLiveLesson.totalLessons > 0 ? (
-              <span className="text-violet-700">
-                {" "}
-                · {nextLiveLesson.completedCount}/{nextLiveLesson.totalLessons} logged
-              </span>
-            ) : null}
-          </p>
-        ) : null}
       </div>
-
-      <section className="mb-10 rounded-2xl border border-zinc-200 bg-zinc-50/80 px-4 py-5 sm:px-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          Your Path
-        </p>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-700">
-          Start with Everyday Punjabi — finish each topic to unlock the next.
-        </p>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-700">
-          Ready to go deeper? Foundational teaches pronunciation. Beginners teaches
-          grammar. Pick based on what you want first.
-        </p>
-      </section>
 
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
         All courses
