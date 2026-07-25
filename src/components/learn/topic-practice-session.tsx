@@ -157,7 +157,7 @@ export function TopicPracticeSession({
         <p className="mt-1 text-sm text-zinc-500">{activity.subtitle}</p>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-100">
           <div
-            className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+            className="h-full rounded-full bg-violet-500 transition-all duration-300"
             style={{
               width: `${((index + (chosen !== null ? 1 : 0)) / activity.questions.length) * 100}%`,
             }}
