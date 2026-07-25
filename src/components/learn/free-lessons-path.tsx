@@ -115,26 +115,6 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
 export function FreeLessonsPath({ items }: FreeLessonsPathProps) {
   return (
     <section>
-      <div className="mb-6 text-center">
-        <h2 className="font-heading text-xl font-semibold text-zinc-900">
-          Everyday Punjabi
-        </h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Three rings per topic — words, sentences, then conversation.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium">
-          <span className="inline-flex items-center gap-1.5 text-rose-600">
-            <span className="h-2 w-2 rounded-full bg-rose-500" /> Vocab
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-amber-600">
-            <span className="h-2 w-2 rounded-full bg-amber-400" /> Sentences
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-emerald-600">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" /> Conversation
-          </span>
-        </div>
-      </div>
-
       <ul className="mx-auto grid max-w-md grid-cols-2 justify-items-center gap-x-6 gap-y-8 sm:gap-x-10">
         {items.map((item, index) => (
           <li

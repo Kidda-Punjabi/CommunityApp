@@ -7,9 +7,9 @@ export const TOPIC_STAGES = [
     label: "Vocab",
     shortLabel: "Words",
     description: "Recognise and recall the words in this topic.",
-    ringColor: "#F43F5E", // rose/red
-    ringClass: "text-rose-500",
-    fillClass: "bg-rose-500",
+    ringColor: "#EAB308", // yellow
+    ringClass: "text-amber-500",
+    fillClass: "bg-amber-400",
   },
   {
     id: 2,
@@ -17,9 +17,9 @@ export const TOPIC_STAGES = [
     label: "Sentences",
     shortLabel: "Build",
     description: "Build phrases and sentences from this topic’s words.",
-    ringColor: "#EAB308", // yellow
-    ringClass: "text-amber-500",
-    fillClass: "bg-amber-400",
+    ringColor: "#22C55E", // green
+    ringClass: "text-emerald-500",
+    fillClass: "bg-emerald-500",
   },
   {
     id: 3,
@@ -27,9 +27,9 @@ export const TOPIC_STAGES = [
     label: "Conversation",
     shortLabel: "Talk",
     description: "Answer questions and ask people about this topic.",
-    ringColor: "#22C55E", // green
-    ringClass: "text-emerald-500",
-    fillClass: "bg-emerald-500",
+    ringColor: "#7C3AED", // Kidda purple (violet-600)
+    ringClass: "text-violet-600",
+    fillClass: "bg-violet-600",
   },
 ] as const;
 

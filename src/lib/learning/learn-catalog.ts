@@ -16,7 +16,7 @@ export const LEARN_TRACKS: LearnTrack[] = [
   {
     id: "free",
     title: "Everyday Punjabi",
-    description: "Finish each topic to unlock the next — free to start, Premium to go further.",
+    description: "Finish each topic to unlock the next.",
     tier: null,
     alwaysUnlocked: true,
   },

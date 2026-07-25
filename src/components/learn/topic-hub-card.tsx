@@ -83,14 +83,10 @@ export function TopicHubCard({
       </p>
 
       {accessible ? (
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium">
-          <span className="text-rose-600">Vocab {Math.round(fills.vocab)}%</span>
-          <span className="text-amber-600">
-            Sentences {Math.round(fills.sentences)}%
-          </span>
-          <span className="text-emerald-600">
-            Talk {Math.round(fills.conversation)}%
-          </span>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium text-zinc-500">
+          <span>Vocab {Math.round(fills.vocab)}%</span>
+          <span>Sentences {Math.round(fills.sentences)}%</span>
+          <span>Talk {Math.round(fills.conversation)}%</span>
         </div>
       ) : null}
 
