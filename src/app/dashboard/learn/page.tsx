@@ -14,8 +14,6 @@ import {
   getCachedAuthSession,
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
-import { fetchTopicMasteryMap } from "@/lib/free-lessons/mastery";
-import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { ui } from "@/lib/ui/styles";
 import {
   fetchLessonCompletionMap,
@@ -45,33 +43,11 @@ export default async function LearnPage() {
     ),
   ]);
 
+  // Everyday Punjabi lives on Home — keep /learn/free routes, omit the Learn hub card.
+  const learnHubTracks = LEARN_TRACKS.filter((track) => track.id !== "free");
+
   const tracks = await Promise.all(
-    LEARN_TRACKS.map(async (track) => {
-      if (track.alwaysUnlocked) {
-        const trackLessons = allLessons
-          .filter((lesson) => lesson.course_id === COMMUNITY_COURSE_ID)
-          .sort((a, b) => a.lesson_number - b.lesson_number);
-        const masteryMap = await fetchTopicMasteryMap(
-          supabase,
-          user.id,
-          trackLessons.map((lesson) => lesson.id)
-        );
-        const completedCount = trackLessons.filter(
-          (lesson) => (masteryMap.get(lesson.id)?.mastery_level ?? 0) >= 1
-        ).length;
-
-        return {
-          track,
-          locked: false,
-          opensOnMessage: null as string | null,
-          lessonCount: trackLessons.length,
-          courseProgress: {
-            completed: completedCount,
-            total: trackLessons.length,
-          },
-        };
-      }
-
+    learnHubTracks.map(async (track) => {
       const locked = !isLearnTrackUnlocked(track, access);
       const trackLessons = track.tier
         ? filterLessonsForTrack(allLessons, access.courses, track.tier)
