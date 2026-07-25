@@ -1,5 +1,4 @@
 import { LearnCourseCard } from "@/components/learn-course-card";
-import { TopicsPathSection } from "@/components/learn/topics-path-section";
 import { ResourceListSection } from "@/components/resources/resource-list-section";
 import {
   fetchLearnContent,
@@ -19,17 +18,15 @@ import {
   getCachedAuthSession,
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
+import { fetchTopicMasteryMap } from "@/lib/free-lessons/mastery";
+import { TOPIC_MASTERY_MAX_LEVEL } from "@/lib/free-lessons/topic-visuals";
+import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { ui } from "@/lib/ui/styles";
 import {
   fetchLessonCompletionMap,
   summarizeCourseProgress,
 } from "@/lib/progress/lesson-completion";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
-import {
-  hasTopicsAccess,
-  isTopicWeekUnlocked,
-} from "@/lib/topics/access";
-import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { redirect } from "next/navigation";
 
 export default async function LearnPage() {
@@ -45,36 +42,30 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap, nextLiveLesson, topicsSubscribed] =
-    await Promise.all([
-      getCachedCourseAccess(supabase, user),
-      lessonsPromise,
-      lessonsPromise.then((lessons) =>
-        fetchLessonCompletionMap(supabase, user.id, lessons)
-      ),
-      loadStudentNextLiveLesson(supabase, user.id),
-      hasTopicsAccess(user.id, supabase),
-    ]);
-
-  const topicsItems = allLessons
-    .filter((lesson) => lesson.course_id === COMMUNITY_COURSE_ID)
-    .sort((a, b) => a.lesson_number - b.lesson_number)
-    .map((lesson) => ({
-      id: lesson.id,
-      weekNumber: lesson.lesson_number,
-      title: lesson.title,
-      presentationUrl: lesson.presentation_url,
-      unlocked: isTopicWeekUnlocked(lesson.lesson_number, topicsSubscribed),
-    }));
+  const [access, allLessons, completionMap, nextLiveLesson] = await Promise.all([
+    getCachedCourseAccess(supabase, user),
+    lessonsPromise,
+    lessonsPromise.then((lessons) =>
+      fetchLessonCompletionMap(supabase, user.id, lessons)
+    ),
+    loadStudentNextLiveLesson(supabase, user.id),
+  ]);
 
   const tracks = await Promise.all(
     LEARN_TRACKS.map(async (track) => {
       if (track.alwaysUnlocked) {
-        const trackLessons = filterFreeLessons(allLessons);
-        const accessibleLessons = trackLessons.filter((lesson) =>
-          canAccessLessonInContext(access, lesson)
+        const trackLessons = filterFreeLessons(allLessons).filter(
+          (lesson) => lesson.course_id === COMMUNITY_COURSE_ID
         );
-        const progress = summarizeCourseProgress(accessibleLessons, completionMap);
+        const masteryMap = await fetchTopicMasteryMap(
+          supabase,
+          user.id,
+          trackLessons.map((lesson) => lesson.id)
+        );
+        const masteredCount = trackLessons.filter(
+          (lesson) =>
+            (masteryMap.get(lesson.id)?.mastery_level ?? 0) >= TOPIC_MASTERY_MAX_LEVEL
+        ).length;
 
         return {
           track,
@@ -82,8 +73,8 @@ export default async function LearnPage() {
           opensOnMessage: null as string | null,
           lessonCount: trackLessons.length,
           courseProgress: {
-            completed: progress.completedLessons,
-            total: progress.totalLessons,
+            completed: masteredCount,
+            total: trackLessons.length,
           },
         };
       }
@@ -163,15 +154,13 @@ export default async function LearnPage() {
           Your Path
         </p>
         <p className="mt-2 text-sm leading-relaxed text-zinc-700">
-          Start with Topics — free to try, practical, no pressure.
+          Start with Free Lessons — pick topics and practise to mastery, no pressure.
         </p>
         <p className="mt-2 text-sm leading-relaxed text-zinc-700">
           Ready to go deeper? Foundational teaches pronunciation. Beginners teaches
           grammar. Pick based on what you want first.
         </p>
       </section>
-
-      {topicsItems.length > 0 ? <TopicsPathSection items={topicsItems} /> : null}
 
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
         All courses

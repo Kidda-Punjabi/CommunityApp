@@ -1,4 +1,5 @@
 import { LearnLessonList } from "@/components/learn-lesson-list";
+import { FreeLessonsPath } from "@/components/learn/free-lessons-path";
 import { GroupCohortOpensPanel } from "@/components/learn/group-cohort-opens-panel";
 import {
   BuyExtraOneToOneCard,
@@ -37,7 +38,11 @@ import {
 } from "@/lib/tutoring/lesson-content-access";
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { fetchCatchupEnabledLessonIds } from "@/lib/catchup/load-catchup";
+import { fetchTopicMasteryMap, ringProgressPercent } from "@/lib/free-lessons/mastery";
+import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { createClient } from "@/lib/supabase/server";
+import { ui } from "@/lib/ui/styles";
+import { BackLink } from "@/components/navigation/back-link";
 import { notFound, redirect } from "next/navigation";
 
 type LearnTrackPageProps = {
@@ -68,32 +73,42 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
     ]);
 
   if (track.alwaysUnlocked) {
-    const lessons = filterFreeLessons(allLessons);
-    const [completionMap, contentUnlockedMap, recordingMap, catchupLessonIds] = await Promise.all([
-      fetchLessonCompletionMap(supabase, user!.id, lessons),
-      fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
-      fetchLessonRecordingsForUser(supabase, user!.id, lessons.map((lesson) => lesson.id)),
-      fetchCatchupEnabledLessonIds(
-        supabase,
-        lessons.map((lesson) => lesson.id)
-      ),
-    ]);
+    const lessons = filterFreeLessons(allLessons)
+      .filter((lesson) => lesson.course_id === COMMUNITY_COURSE_ID)
+      .sort((a, b) => a.lesson_number - b.lesson_number);
+
+    const masteryMap = await fetchTopicMasteryMap(
+      supabase,
+      user!.id,
+      lessons.map((lesson) => lesson.id)
+    );
+
+    const pathItems = lessons.map((lesson, index) => {
+      const mastery = masteryMap.get(lesson.id);
+      return {
+        id: lesson.id,
+        title: lesson.title,
+        sortIndex: index,
+        masteryLevel: mastery?.mastery_level ?? 0,
+        ringPercent: ringProgressPercent(mastery),
+      };
+    });
 
     return (
-      <LearnLessonList
-        title={track.title}
-        subtitle="Survival Phrases, comprehensible input, and free starter lessons."
-        lessons={lessons}
-        access={access}
-        progressMap={lessonProgressMap}
-        flashcardProgressMap={flashcardProgressMap}
-        quizProgressMap={quizProgressMap}
-        completionMap={completionMap}
-        contentUnlockedMap={contentUnlockedMap}
-        recordingMap={recordingMap}
-        catchupLessonIds={catchupLessonIds}
-        showCourseProgress={shouldShowLearnCourseProgress(track.id)}
-      />
+      <div className={ui.page}>
+        <BackLink fallbackHref="/dashboard/learn">← Back</BackLink>
+        <div className="mb-8 mt-4">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+            {track.title}
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">{track.description}</p>
+        </div>
+        {pathItems.length > 0 ? (
+          <FreeLessonsPath items={pathItems} />
+        ) : (
+          <p className="text-sm text-zinc-500">No free lessons yet. Check back soon.</p>
+        )}
+      </div>
     );
   }
 

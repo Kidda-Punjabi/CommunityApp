@@ -16,7 +16,7 @@ export const LEARN_TRACKS: LearnTrack[] = [
   {
     id: "free",
     title: "Free Lessons",
-    description: "Survival Phrases, comprehensible input, and your first taste of Kidda.",
+    description: "Pick a topic and practise to mastery — at your own pace.",
     tier: null,
     alwaysUnlocked: true,
   },

@@ -2,7 +2,7 @@
 -- Kidda — Community course: 24 weeks (lessons) with Canva presentation links
 -- Run AFTER: courses-seed.sql, lesson-presentations.sql
 -- Idempotent: updates existing rows by lesson_number, inserts missing weeks.
--- Access: community members with course_access see all 24 (see tutor-cohort-access.sql).
+-- Access: Practical Punjabi weeks are free lessons (is_free = true) for the Learn Free track.
 -- =============================================================================
 
 ALTER TABLE public.lessons
@@ -65,7 +65,7 @@ UPDATE public.lessons AS l
 SET
   title = w.title,
   presentation_url = w.presentation_url,
-  is_free = false
+  is_free = true
 FROM community_course AS cc,
      week_data AS w
 WHERE l.course_id = cc.id
@@ -110,7 +110,7 @@ week_data (lesson_number, title, presentation_url) AS (
     (24, 'At the Gurdwara & Community Spaces', 'https://canva.link/aw8octp6cthgh3l')
 )
 INSERT INTO public.lessons (course_id, lesson_number, title, presentation_url, is_free)
-SELECT cc.id, w.lesson_number, w.title, w.presentation_url, false
+SELECT cc.id, w.lesson_number, w.title, w.presentation_url, true
 FROM community_course AS cc
 CROSS JOIN week_data AS w
 WHERE NOT EXISTS (
