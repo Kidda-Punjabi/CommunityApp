@@ -74,8 +74,9 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
   const mastered = item.masteryLevel >= 5;
   const crownLevel = Math.min(5, item.masteryLevel);
   const ringPercent = locked ? 0 : mastered ? 100 : item.ringPercent;
+  const showPremiumCue = item.needsPremium && locked;
   const href =
-    item.lockReason === "premium"
+    item.lockReason === "premium" || (item.lockReason === "sequence" && item.needsPremium)
       ? PREMIUM_UNLOCK_PATH
       : item.lockReason === "none"
         ? `/dashboard/learn/free/${item.id}`
@@ -138,12 +139,12 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
       <span className="mt-2.5 line-clamp-2 text-center text-sm font-semibold leading-snug text-zinc-900">
         {item.title}
       </span>
-      {item.lockReason === "sequence" ? (
+      {item.lockReason === "sequence" && !item.needsPremium ? (
         <span className="mt-1 text-center text-xs text-zinc-400">Keep going</span>
       ) : null}
-      {item.lockReason === "premium" ? (
+      {showPremiumCue ? (
         <span className="mt-1 text-center text-xs font-medium text-violet-600">
-          Premium
+          Unlocks with Premium
         </span>
       ) : null}
     </>
