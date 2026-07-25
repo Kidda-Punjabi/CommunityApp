@@ -1,5 +1,6 @@
 import {
-  LIVE_TRANSLATE_MONTHLY_CAP_SECONDS,
+  liveTranslateCapForPremium,
+  liveTranslateCapMinutes,
 } from "@/lib/live-translate/config";
 import { currentMonthKeyUtc, nextMonthResetLabel } from "@/lib/live-translate/month-key";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -16,22 +17,28 @@ type UsageRow = {
   seconds_used: number;
 };
 
-export function usageSnapshotFromSeconds(secondsUsed: number, monthKey = currentMonthKeyUtc()): LiveTranslateUsageSnapshot {
+export function usageSnapshotFromSeconds(
+  secondsUsed: number,
+  monthKey = currentMonthKeyUtc(),
+  capSeconds = liveTranslateCapForPremium(false)
+): LiveTranslateUsageSnapshot {
   const safeUsed = Math.max(0, Math.floor(secondsUsed));
   return {
     monthKey,
     secondsUsed: safeUsed,
-    secondsRemaining: Math.max(LIVE_TRANSLATE_MONTHLY_CAP_SECONDS - safeUsed, 0),
-    capSeconds: LIVE_TRANSLATE_MONTHLY_CAP_SECONDS,
+    secondsRemaining: Math.max(capSeconds - safeUsed, 0),
+    capSeconds,
     resetsOn: nextMonthResetLabel(monthKey),
   };
 }
 
 export async function loadLiveTranslateUsage(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  isPremium = false
 ): Promise<LiveTranslateUsageSnapshot> {
   const monthKey = currentMonthKeyUtc();
+  const capSeconds = liveTranslateCapForPremium(isPremium);
   const { data, error } = await supabase
     .from("live_translate_usage")
     .select("seconds_used")
@@ -41,21 +48,27 @@ export async function loadLiveTranslateUsage(
 
   if (error) {
     if (error.message.includes("live_translate_usage")) {
-      return usageSnapshotFromSeconds(0, monthKey);
+      return usageSnapshotFromSeconds(0, monthKey, capSeconds);
     }
     throw new Error(error.message);
   }
 
-  return usageSnapshotFromSeconds((data as UsageRow | null)?.seconds_used ?? 0, monthKey);
+  return usageSnapshotFromSeconds(
+    (data as UsageRow | null)?.seconds_used ?? 0,
+    monthKey,
+    capSeconds
+  );
 }
 
 export async function incrementLiveTranslateUsage(
   supabase: SupabaseClient,
   userId: string,
-  durationSeconds: number
+  durationSeconds: number,
+  isPremium = false
 ): Promise<LiveTranslateUsageSnapshot> {
   const monthKey = currentMonthKeyUtc();
   const increment = Math.max(0, Math.ceil(durationSeconds));
+  const capSeconds = liveTranslateCapForPremium(isPremium);
 
   const { data: existing, error: readError } = await supabase
     .from("live_translate_usage")
@@ -84,9 +97,14 @@ export async function incrementLiveTranslateUsage(
     throw new Error(writeError.message);
   }
 
-  return usageSnapshotFromSeconds(nextSeconds, monthKey);
+  return usageSnapshotFromSeconds(nextSeconds, monthKey, capSeconds);
 }
 
-export function capReachedMessage(resetsOn: string): string {
-  return `You've used your 15 minutes of Live Translate for this month. Your allowance resets on ${resetsOn}.`;
+export function capReachedMessage(resetsOn: string, capSeconds: number): string {
+  const minutes = Math.round(capSeconds / 60);
+  return `You've used your ${minutes} minutes of Live Translate for this month. Your allowance resets on ${resetsOn}.`;
+}
+
+export function liveTranslateCapLabel(isPremium: boolean): string {
+  return `${liveTranslateCapMinutes(isPremium)} min/month`;
 }

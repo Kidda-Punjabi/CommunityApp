@@ -1,14 +1,17 @@
 import { PremiumCheckoutPanel } from "@/components/membership/premium-checkout-panel";
+import { PremiumComparisonTable } from "@/components/membership/premium-comparison-table";
 import { BackLink } from "@/components/navigation/back-link";
 import { loadPremiumAccess } from "@/lib/membership/premium-access";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Premium | Kidda",
-  description: "Unlock Topics, games, Photo Translate, and Kids bedtime stories with Kidda Premium.",
+  description:
+    "Compare Free vs Kidda Premium — unlock all Topics, games, translate allowances, and Kids bedtime stories.",
 };
 
 export default async function PremiumMembershipPage({
@@ -37,8 +40,8 @@ export default async function PremiumMembershipPage({
         </p>
         <h1 className="mt-1 font-heading text-2xl font-bold text-zinc-900">Kidda Premium</h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-600">
-          Unlock all 24 Topics weeks, the full games catalogue, 30 Photo Translate scans each
-          month, and Kids Mode bedtime stories — billed quarterly or annually.
+          See exactly what Free includes — then upgrade for the full catalogue, higher
+          translate allowances, and all Kids bedtime stories.
         </p>
       </div>
 
@@ -48,16 +51,26 @@ export default async function PremiumMembershipPage({
         </p>
       ) : null}
 
+      <div className="mt-8">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+          Free vs Premium
+        </h2>
+        <PremiumComparisonTable />
+      </div>
+
       <div className={`mt-8 ${ui.cardBordered}`}>
+        <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wider text-zinc-400">
+          Choose your plan
+        </h2>
         <PremiumCheckoutPanel isPremium={premium.isPremium} userId={user.id} />
       </div>
 
-      <ul className="mt-8 space-y-2 text-sm text-zinc-600">
-        <li>• Topics weeks 4–24</li>
-        <li>• All games beyond the free starter set</li>
-        <li>• Photo Translate: 30 scans / month</li>
-        <li>• Kids bedtime stories (parent Premium)</li>
-      </ul>
+      <p className="mt-8 text-center text-sm text-zinc-500">
+        Looking for tutor-led courses instead?{" "}
+        <Link href="/courses" className="font-semibold text-violet-600 hover:text-violet-500">
+          Browse Foundational, Beginners &amp; Community
+        </Link>
+      </p>
     </div>
   );
 }

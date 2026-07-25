@@ -25,6 +25,12 @@ export const KID_AGE_TIERS = [
 
 export type KidAgeTier = (typeof KID_AGE_TIERS)[number]["value"];
 
+/**
+ * Free-taste bedtime stories for parents without Premium.
+ * Matches DB rows with `is_premium = false` (5 of 30).
+ */
+export const FREE_KID_STORY_TASTE_COUNT = 5;
+
 /** Kid-friendly flashcard topic_tags (case-insensitive match). */
 export const KID_FRIENDLY_TOPIC_TAGS = [
   "Animals",

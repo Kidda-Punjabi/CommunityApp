@@ -4,7 +4,6 @@ import { getPronunciationDictionaryLocator } from "@/lib/elevenlabs/pronunciatio
 import { synthesizeSpeech } from "@/lib/elevenlabs/server";
 import { transcribeSpeech } from "@/lib/elevenlabs/speech-to-text";
 import { canAccessLiveTranslate } from "@/lib/live-translate/access";
-import { LIVE_TRANSLATE_MONTHLY_CAP_SECONDS } from "@/lib/live-translate/config";
 import { currentMonthKeyUtc } from "@/lib/live-translate/month-key";
 import {
   directionFromSpokenLanguage,
@@ -18,7 +17,7 @@ import {
   incrementLiveTranslateUsage,
   loadLiveTranslateUsage,
 } from "@/lib/live-translate/usage";
-import { getCourseAccessContext } from "@/lib/membership/unlocked";
+import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -86,13 +85,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
 
-  const access = await getCourseAccessContext(supabase, user);
-  if (!canAccessLiveTranslate(access)) {
+  if (!canAccessLiveTranslate()) {
     return NextResponse.json(
-      { error: "Live Translate is available on paid Kidda plans." },
+      { error: "Live Translate is unavailable." },
       { status: 403 }
     );
   }
+
+  const isPremium = await hasPremiumAccess(supabase, user.id);
 
   const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
   if (!adminClient) {
@@ -132,17 +132,17 @@ export async function POST(request: Request) {
 
   let usage;
   try {
-    usage = await loadLiveTranslateUsage(adminClient, user.id);
+    usage = await loadLiveTranslateUsage(adminClient, user.id, isPremium);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load usage.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  if (usage.secondsUsed >= LIVE_TRANSLATE_MONTHLY_CAP_SECONDS) {
+  if (usage.secondsUsed >= usage.capSeconds) {
     return NextResponse.json(
       {
         error: "cap_reached",
-        message: capReachedMessage(usage.resetsOn),
+        message: capReachedMessage(usage.resetsOn, usage.capSeconds),
         seconds_remaining_this_month: 0,
         seconds_used_this_month: usage.secondsUsed,
         month_key: monthKey,
@@ -152,11 +152,11 @@ export async function POST(request: Request) {
     );
   }
 
-  if (usage.secondsUsed + durationSeconds > LIVE_TRANSLATE_MONTHLY_CAP_SECONDS) {
+  if (usage.secondsUsed + durationSeconds > usage.capSeconds) {
     return NextResponse.json(
       {
         error: "cap_reached",
-        message: capReachedMessage(usage.resetsOn),
+        message: capReachedMessage(usage.resetsOn, usage.capSeconds),
         seconds_remaining_this_month: usage.secondsRemaining,
         seconds_used_this_month: usage.secondsUsed,
         month_key: monthKey,
@@ -224,7 +224,8 @@ export async function POST(request: Request) {
     const updatedUsage = await incrementLiveTranslateUsage(
       adminClient,
       user.id,
-      durationSeconds
+      durationSeconds,
+      isPremium
     );
 
     emit({
@@ -252,13 +253,14 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
 
-  const access = await getCourseAccessContext(supabase, user);
-  if (!canAccessLiveTranslate(access)) {
+  if (!canAccessLiveTranslate()) {
     return NextResponse.json(
-      { error: "Live Translate is available on paid Kidda plans." },
+      { error: "Live Translate is unavailable." },
       { status: 403 }
     );
   }
+
+  const isPremium = await hasPremiumAccess(supabase, user.id);
 
   const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
   if (!adminClient) {
@@ -266,7 +268,7 @@ export async function GET() {
   }
 
   try {
-    const usage = await loadLiveTranslateUsage(adminClient, user.id);
+    const usage = await loadLiveTranslateUsage(adminClient, user.id, isPremium);
     return NextResponse.json({
       seconds_remaining_this_month: usage.secondsRemaining,
       seconds_used_this_month: usage.secondsUsed,

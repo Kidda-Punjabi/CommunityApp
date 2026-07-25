@@ -1,14 +1,11 @@
 import "server-only";
 
 import type { KidAgeTier } from "@/lib/kids/constants";
+import { FREE_KID_STORY_TASTE_COUNT } from "@/lib/kids/constants";
 import { parentHasPremiumAccess } from "@/lib/membership/premium-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/**
- * PLACEHOLDER — free taste story count for parents without Premium.
- * Confirm final count with Gurupma.
- */
-export const FREE_KID_STORY_TASTE_COUNT = 2;
+export { FREE_KID_STORY_TASTE_COUNT };
 
 export const BEDTIME_STORY_AUDIO_CONTENT_TYPE = "bedtime_story";
 

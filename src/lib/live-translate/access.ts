@@ -1,10 +1,7 @@
-import type { CourseAccessContext } from "@/lib/membership/unlocked";
-
 /**
- * Live Translate is for paid members only.
- * Matches other premium gates: course_access via `isFreeOnly`, not legacy
- * `profiles.membership_tier` (which uses foundational/beginners/community).
+ * Live Translate is available to all logged-in members.
+ * Free vs Premium only changes the monthly minute cap.
  */
-export function canAccessLiveTranslate(access: CourseAccessContext): boolean {
-  return !access.isFreeOnly;
+export function canAccessLiveTranslate(): boolean {
+  return true;
 }

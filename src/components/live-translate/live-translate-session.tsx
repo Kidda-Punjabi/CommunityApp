@@ -168,7 +168,7 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
           setMessages([]);
           setStatusMessage(
             payload.message ??
-              `You've used your 15 minutes for this month. Resets on ${
+              `You've used your ${Math.round(usage.capSeconds / 60)} minutes for this month. Resets on ${
                 payload.resets_on ?? usage.resetsOn
               }.`
           );
@@ -299,7 +299,9 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
 
   function handleStart() {
     if (usage.secondsRemaining <= 0) {
-      setStatusMessage(`You've used your 15 minutes for this month. Resets on ${usage.resetsOn}.`);
+      setStatusMessage(
+        `You've used your ${Math.round(usage.capSeconds / 60)} minutes for this month. Resets on ${usage.resetsOn}.`
+      );
       return;
     }
     setError(null);
@@ -354,7 +356,8 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
 
           {usage.secondsRemaining <= 0 ? (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              You&apos;ve used your 15 minutes for this month. Your allowance resets on{" "}
+              You&apos;ve used your {Math.round(usage.capSeconds / 60)} minutes for this
+              month. Your allowance resets on{" "}
               {usage.resetsOn}.
             </p>
           ) : null}
