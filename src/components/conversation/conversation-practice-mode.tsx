@@ -353,7 +353,9 @@ export function ConversationPracticeMode({
   function moveHardToBank(tile: SentenceTile) {
     if (exchangeStep !== "question") return;
     setHardBuilt((prev) => prev.filter((item) => item.id !== tile.id));
-    setHardBank((prev) => [...prev, tile]);
+    setHardBank((prev) =>
+      [...prev, tile].sort((a, b) => a.bankIndex - b.bankIndex)
+    );
   }
 
   function resetToCharacters() {

@@ -21,6 +21,8 @@ export type SentenceTile = {
   id: string;
   word: string;
   romanised: string;
+  /** Original index in the shuffled bank — used to restore position on undo. */
+  bankIndex: number;
 };
 
 export type SentenceBuilderRoundResult = {
@@ -118,6 +120,7 @@ export function buildTileBank(
     id: `${question.id}-${entry.word}-${index}`,
     word: entry.word,
     romanised: entry.romanised,
+    bankIndex: index,
   }));
 }
 

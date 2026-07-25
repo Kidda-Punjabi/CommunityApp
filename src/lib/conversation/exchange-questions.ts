@@ -105,6 +105,7 @@ export function buildHardTileBank(
     id: `${exchangeId}-${tile.gurmukhi}-${index}`,
     word: tile.gurmukhi,
     romanised: tile.romanised,
+    bankIndex: index,
   }));
 }
 

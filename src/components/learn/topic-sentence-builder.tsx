@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FlashcardDeckCard } from "@/lib/flashcards/types";
 import { TopicListenButton } from "@/components/learn/topic-listen-button";
+import { latinRomanised } from "@/lib/conjugation/romanised";
 import {
   shuffleInPlace,
   stripTrailingRomanisation,
@@ -17,8 +18,9 @@ type TopicSentenceBuilderProps = {
 
 type PhraseTile = {
   id: string;
-  gurmukhi: string;
+  word: string;
   romanised: string;
+  bankIndex: number;
 };
 
 function tokens(text: string): string[] {
@@ -51,18 +53,22 @@ function buildBank(card: FlashcardDeckCard, allCards: FlashcardDeckCard[], key: 
   }
   const decoyCount = Math.min(phrase.parts.length >= 4 ? 2 : 1, decoys.length);
   const picked = shuffleInPlace(decoys).slice(0, decoyCount);
-  const bank = shuffleInPlace([
-    ...phrase.parts.map((part, index) => ({
-      id: `${key}-c-${index}`,
-      gurmukhi: part.gurmukhi,
+  const entries = [
+    ...phrase.parts.map((part) => ({
+      word: part.gurmukhi,
       romanised: part.romanised,
     })),
-    ...picked.map((part, index) => ({
-      id: `${key}-d-${index}`,
-      gurmukhi: part.gurmukhi,
+    ...picked.map((part) => ({
+      word: part.gurmukhi,
       romanised: part.romanised,
     })),
-  ]);
+  ];
+  const bank = shuffleInPlace(entries).map((entry, index) => ({
+    id: `${key}-${entry.word}-${index}`,
+    word: entry.word,
+    romanised: entry.romanised,
+    bankIndex: index,
+  }));
   return {
     target: phrase.parts.map((part) => part.gurmukhi),
     bank,
@@ -113,21 +119,23 @@ export function TopicSentenceBuilder({
     setFeedback(null);
   }
 
-  function pickTile(tile: PhraseTile, tileIndex: number) {
+  function moveToBuilt(tile: PhraseTile) {
     if (feedback) return;
+    setBank((prev) => prev.filter((item) => item.id !== tile.id));
     setBuilt((prev) => [...prev, tile]);
-    setBank((prev) => prev.filter((_, i) => i !== tileIndex));
   }
 
-  function undoTile() {
-    if (feedback || built.length === 0) return;
-    const last = built[built.length - 1];
-    setBuilt((prev) => prev.slice(0, -1));
-    setBank((prev) => [...prev, last]);
+  function moveToBank(tile: PhraseTile) {
+    if (feedback) return;
+    setBuilt((prev) => prev.filter((item) => item.id !== tile.id));
+    setBank((prev) =>
+      [...prev, tile].sort((a, b) => a.bankIndex - b.bankIndex)
+    );
   }
 
   function check() {
-    const ok = built.map((tile) => tile.gurmukhi).join(" ") === target.join(" ");
+    if (feedback || built.length === 0) return;
+    const ok = built.map((tile) => tile.word).join(" ") === target.join(" ");
     setFeedback(ok ? "correct" : "wrong");
     setScore((prev) => ({
       correct: prev.correct + (ok ? 1 : 0),
@@ -157,7 +165,7 @@ export function TopicSentenceBuilder({
         <button
           type="button"
           onClick={() => router.push(`/dashboard/learn/free/${lessonId}`)}
-          className="mt-8 rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600"
+          className="mt-8 rounded-2xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
         >
           Back to topic
         </button>
@@ -166,114 +174,125 @@ export function TopicSentenceBuilder({
   }
 
   return (
-    <div className="mx-auto max-w-md text-center">
-      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-        Sentence Building
-      </p>
-      <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900">
-        {topicTitle}
-      </h1>
-      <p className="mt-1 text-xs text-zinc-400">
-        {index + 1} of {pool.length}
-      </p>
-
-      <div className="mt-6 flex items-start justify-center gap-2">
-        <p className="text-lg font-semibold text-zinc-900">{card.front_text}</p>
-        {card.audioUrl ? (
-          <TopicListenButton
-            audioUrl={card.audioUrl}
-            label="Play pronunciation"
-            className="mt-0.5"
-          />
-        ) : null}
+    <div className="mx-auto max-w-md space-y-5 text-center">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          Sentence Building
+        </p>
+        <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900">
+          {topicTitle}
+        </h1>
+        <p className="mt-1 text-xs text-zinc-400">
+          {index + 1} of {pool.length}
+        </p>
       </div>
-      <p className="mt-1 text-sm text-zinc-500">
-        Tap the tiles in order — extras are distractors. Use the romanisation under each tile if you don’t read Gurmukhi.
-      </p>
 
-      <div className="mt-5 min-h-16 rounded-2xl border border-dashed border-zinc-300 bg-white px-3 py-3">
-        <div className="flex flex-wrap justify-center gap-2">
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          Form the sentence in Punjabi
+        </p>
+        <div className="mt-3 flex items-start justify-center gap-2">
+          <p className="text-lg font-semibold text-zinc-900">{card.front_text}</p>
+          {card.audioUrl ? (
+            <TopicListenButton
+              audioUrl={card.audioUrl}
+              label="Play pronunciation"
+              className="mt-0.5"
+            />
+          ) : null}
+        </div>
+      </div>
+
+      <div
+        className={`min-h-20 rounded-xl border-2 border-dashed p-3 transition-colors ${
+          feedback === "correct"
+            ? "border-green-300 bg-green-50"
+            : feedback === "wrong"
+              ? "border-red-300 bg-red-50"
+              : "border-violet-200 bg-violet-50/50"
+        }`}
+      >
+        <div className="flex min-h-10 flex-wrap justify-center gap-2">
           {built.length === 0 ? (
-            <span className="text-sm text-zinc-400">Your sentence…</span>
+            <span className="self-center text-sm text-zinc-400">
+              Tap tiles below to build…
+            </span>
           ) : (
             built.map((tile) => (
-              <span
+              <button
                 key={`built-${tile.id}`}
-                className="rounded-xl bg-emerald-50 px-3 py-1.5 text-left text-sm font-medium text-emerald-900"
+                type="button"
+                onClick={() => moveToBank(tile)}
+                disabled={Boolean(feedback)}
+                className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-80"
               >
-                <span className="block">{tile.gurmukhi}</span>
-                {tile.romanised ? (
-                  <span className="mt-0.5 block text-[11px] font-normal text-violet-600">
-                    {tile.romanised}
+                <span>{tile.word}</span>
+                {latinRomanised(tile.romanised) ? (
+                  <span className="mt-0.5 block text-xs font-normal text-violet-200">
+                    {latinRomanised(tile.romanised)}
                   </span>
                 ) : null}
-              </span>
+              </button>
             ))
           )}
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
-        {bank.map((tile, tileIndex) => (
+      {feedback ? (
+        <div className="space-y-1">
+          {feedback === "correct" ? (
+            <p className="text-sm font-semibold text-emerald-600">Correct!</p>
+          ) : (
+            <p className="text-sm font-semibold text-rose-600">Not quite — try:</p>
+          )}
+          <p className="text-sm font-medium text-zinc-900">{target.join(" ")}</p>
+          {latinRomanised(phraseRomanised) ? (
+            <p className="text-sm text-violet-600">
+              {latinRomanised(phraseRomanised)}
+            </p>
+          ) : phraseRomanised ? (
+            <p className="text-sm text-violet-600">{phraseRomanised}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap justify-center gap-2">
+        {bank.map((tile) => (
           <button
             key={tile.id}
             type="button"
-            onClick={() => pickTile(tile, tileIndex)}
-            className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-left text-sm font-medium text-zinc-900 hover:bg-white"
+            onClick={() => moveToBuilt(tile)}
+            disabled={Boolean(feedback)}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300 disabled:opacity-70"
           >
-            <span className="block">{tile.gurmukhi}</span>
-            {tile.romanised ? (
-              <span className="mt-0.5 block text-[11px] font-normal text-violet-600">
-                {tile.romanised}
+            <span>{tile.word}</span>
+            {latinRomanised(tile.romanised) ? (
+              <span className="mt-0.5 block text-xs font-normal text-violet-600">
+                {latinRomanised(tile.romanised)}
               </span>
             ) : null}
           </button>
         ))}
       </div>
 
-      {feedback === "correct" ? (
-        <p className="mt-4 text-sm font-semibold text-emerald-600">Correct!</p>
-      ) : null}
-      {feedback === "wrong" ? (
-        <div className="mt-4 space-y-1">
-          <p className="text-sm font-semibold text-rose-600">
-            Not quite — try: {target.join(" ")}
-          </p>
-          {phraseRomanised ? (
-            <p className="text-sm text-violet-600">{phraseRomanised}</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="mt-5 flex gap-2">
-        {!feedback ? (
-          <>
-            <button
-              type="button"
-              onClick={undoTile}
-              className="flex-1 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700"
-            >
-              Undo
-            </button>
-            <button
-              type="button"
-              disabled={built.length === 0}
-              onClick={check}
-              className="flex-1 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Check
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={next}
-            className="w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white"
-          >
-            Continue
-          </button>
-        )}
-      </div>
+      {!feedback ? (
+        <button
+          type="button"
+          onClick={check}
+          disabled={built.length === 0}
+          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
+        >
+          Check
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={next}
+          className="w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+        >
+          Continue
+        </button>
+      )}
     </div>
   );
 }

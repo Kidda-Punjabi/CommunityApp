@@ -199,7 +199,9 @@ export function SentenceBuilderMode({
   function moveToBank(tile: SentenceTile) {
     if (feedback) return;
     setBuilt((prev) => prev.filter((item) => item.id !== tile.id));
-    setBank((prev) => [...prev, tile]);
+    setBank((prev) =>
+      [...prev, tile].sort((a, b) => a.bankIndex - b.bankIndex)
+    );
   }
 
   function handleCheck() {

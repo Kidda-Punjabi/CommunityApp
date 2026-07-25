@@ -1,0 +1,65 @@
+---
+description: Everyday Punjabi Learn track — placement, mastery, activities, UX rules
+globs: src/components/learn/**/*,src/lib/free-lessons/**/*,src/app/dashboard/learn/**/*
+alwaysApply: true
+---
+
+# Everyday Punjabi
+
+Self-serve **Learn** track. Product title **Everyday Punjabi**; route track id `"free"`. Fuller notes: `docs/everyday-punjabi.md`.
+
+## Where it sits
+
+- Bottom nav **Learn** → `/dashboard/learn` → first card → `/dashboard/learn/free`
+- Sibling Learn tracks: Foundational / Beginners (paid lesson lists) — **different product surface**
+- Paid **Community** track id `"community"` is live/package weeks — **not** this mastery path (even though free topics load from `COMMUNITY_COURSE_ID`)
+- **Games** tab is separate; practice reuses Match / quiz / tiles / speak patterns but writes `topic_mastery`
+- **Kids** is separate (`/dashboard/kids`)
+
+## What it is
+
+24 community topics (`COMMUNITY_COURSE_ID`). Path of topic nodes → topic hub → practice games that level **Vocab → Sentences → Conversation**. Master a topic (all three stages) → purple shiny badge.
+
+## Mastery (do not invent a different model)
+
+- 3 stages × 5 depths (0–4 attempt; depth 5 = stage complete)
+- Rings: yellow Vocab → green Sentences → purple Conversation
+- Fully mastered = all fills 100% → solid purple icon + shine (`.topic-mastery-*` in `globals.css`)
+- Persist via `topic_mastery` (`src/lib/free-lessons/mastery.ts`)
+- Unlock: sequence (prev topic mastery ≥ 1) + Premium for `!is_free` lessons — Premium does **not** skip sequence
+
+## Practice kinds
+
+Orchestrator: `TopicGamePractice` + `resolveTopicGameActivity` in `activity-games.ts`.
+
+| Stage | Activities |
+|-------|------------|
+| Vocab | match, speed_quiz (incl. reverse) |
+| Sentences | tiles |
+| Conversation | speak (fallback tiles if &lt;2 speakable cards) |
+
+Optional hub helpers: `/vocab` browse, `/sentences` builder (not primary stage scorer).
+
+## UX rules to keep
+
+1. Romanisation under Gurmukhi (`PunjabiWithRomanisation`)
+2. MCQ: select → **Check answer** → then Continue (no instant lock-in)
+3. Listen: normal + **Slow** (0.8×) on `TopicListenButton`
+4. Tiles ≈ Games Sentence Builder: tap built tile to return; restore `bankIndex` order
+5. Speak: retry after miss; after 2 fails → Try again or Skip
+6. Results **Try again** = client remount (`runKey`) — no mastery rollback
+7. Hub: no “X of Y words reviewed” pressure — vocab is optional
+
+## Key paths
+
+- UI: `src/components/learn/`
+- Logic: `src/lib/free-lessons/`
+- Routes: `src/app/dashboard/learn/free/`
+- Actions: `src/app/dashboard/learn/free/actions.ts`
+
+## Do not
+
+- Change Foundational/Beginners slides / `LearnLessonList` for Everyday Punjabi work
+- Treat track `"free"` as “all topics free” — Premium still gates paid lessons
+- Reintroduce hub vocab review counts
+- Casually diverge Learn tiles from Games Sentence Builder tile/`bankIndex` UX
