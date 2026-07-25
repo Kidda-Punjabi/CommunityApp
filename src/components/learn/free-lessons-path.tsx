@@ -37,21 +37,23 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
 
   const emptyFills = { vocab: 0, sentences: 0, conversation: 0 };
   const fills = locked ? emptyFills : item.fills;
-  // Crown shows completed stages (0–3)
   const stagesComplete =
     (item.fills.vocab >= 100 ? 1 : 0) +
     (item.fills.sentences >= 100 ? 1 : 0) +
     (item.fills.conversation >= 100 ? 1 : 0);
+  const mastered = !locked && stagesComplete === 3;
 
   const circle = (
     <SingleMasteryRing fills={fills} size={92} muted={locked}>
       <span
-        className={`relative z-[1] flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full text-white shadow-md transition-transform duration-200 ${
+        className={`relative z-[1] flex h-[3.75rem] w-[3.75rem] items-center justify-center overflow-hidden rounded-full text-white shadow-md transition-transform duration-200 ${
           locked
             ? item.lockReason === "premium"
               ? "bg-violet-400"
               : "bg-zinc-300"
-            : visual.fillClass
+            : mastered
+              ? "bg-violet-600 shadow-[0_6px_20px_-4px_rgba(124,58,237,0.6)]"
+              : visual.fillClass
         } ${href ? "group-hover:scale-105 group-active:scale-95" : ""}`}
       >
         {locked ? (
@@ -61,18 +63,23 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
             <Lock className="h-5 w-5" strokeWidth={2.25} aria-hidden />
           )
         ) : (
-          <Icon className="h-6 w-6" strokeWidth={2.25} aria-hidden />
+          <>
+            <Icon
+              className={`relative z-[1] h-6 w-6 ${
+                mastered ? "topic-mastery-icon-shine" : ""
+              }`}
+              strokeWidth={2.25}
+              aria-hidden
+            />
+            {mastered ? (
+              <span
+                aria-hidden
+                className="topic-mastery-shine pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+              />
+            ) : null}
+          </>
         )}
       </span>
-      {!locked && stagesComplete > 0 ? (
-        <span
-          className="absolute -bottom-0.5 -right-0.5 z-[2] flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-full border-2 border-white bg-amber-400 px-1 text-amber-950 shadow-sm"
-          aria-label={`${stagesComplete} of 3 stages complete`}
-        >
-          <Crown className="h-3.5 w-3.5 fill-amber-950" aria-hidden />
-          <span className="text-[10px] font-bold leading-none">{stagesComplete}</span>
-        </span>
-      ) : null}
     </SingleMasteryRing>
   );
 

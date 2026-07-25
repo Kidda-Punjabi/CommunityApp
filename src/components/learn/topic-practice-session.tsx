@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { TopicActivity } from "@/lib/free-lessons/build-activity";
 import { completeTopicActivity } from "@/app/dashboard/learn/free/actions";
+import { PunjabiWithRomanisation } from "@/components/learn/punjabi-with-romanisation";
 import { TopicListenButton } from "@/components/learn/topic-listen-button";
+import { containsGurmukhi } from "@/lib/free-lessons/topic-game-utils";
 
 type TopicPracticeSessionProps = {
   lessonId: string;
@@ -19,7 +21,8 @@ export function TopicPracticeSession({
 }: TopicPracticeSessionProps) {
   const router = useRouter();
   const [index, setIndex] = useState(0);
-  const [chosen, setChosen] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [revealed, setRevealed] = useState(false);
   const [answers, setAnswers] = useState<
     Array<{ correctIndex: number; chosenIndex: number }>
   >([]);
@@ -36,25 +39,39 @@ export function TopicPracticeSession({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  function restartActivity() {
+    setFinished(null);
+    setError(null);
+    setIndex(0);
+    setSelected(null);
+    setRevealed(false);
+    setAnswers([]);
+  }
+
   const question = activity.questions[index];
-  const locked = chosen !== null;
 
   function selectOption(optionIndex: number) {
-    if (locked || !question) return;
-    setChosen(optionIndex);
+    if (revealed || !question) return;
+    setSelected(optionIndex);
+  }
+
+  function checkAnswer() {
+    if (selected === null || revealed) return;
+    setRevealed(true);
   }
 
   function goNext() {
-    if (chosen === null || !question) return;
+    if (selected === null || !question) return;
     const nextAnswers = [
       ...answers,
-      { correctIndex: question.correctIndex, chosenIndex: chosen },
+      { correctIndex: question.correctIndex, chosenIndex: selected },
     ];
     setAnswers(nextAnswers);
 
     if (index + 1 < activity.questions.length) {
       setIndex((value) => value + 1);
-      setChosen(null);
+      setSelected(null);
+      setRevealed(false);
       return;
     }
 
@@ -82,7 +99,6 @@ export function TopicPracticeSession({
           stageCleared: result.stageCleared,
           stage: result.stage,
         });
-        router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save progress.");
       }
@@ -112,7 +128,11 @@ export function TopicPracticeSession({
           {finished.passed && !finished.mastered ? (
             <button
               type="button"
-              onClick={() => router.push(`/dashboard/learn/free/${lessonId}/practice`)}
+              onClick={() => {
+                router.replace(
+                  `/dashboard/learn/free/${lessonId}/practice?n=${finished.masteryLevel}`
+                );
+              }}
               className="rounded-2xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
             >
               Next activity →
@@ -121,7 +141,7 @@ export function TopicPracticeSession({
           {!finished.passed ? (
             <button
               type="button"
-              onClick={() => router.push(`/dashboard/learn/free/${lessonId}/practice`)}
+              onClick={restartActivity}
               className="rounded-2xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
             >
               Try again
@@ -166,7 +186,7 @@ export function TopicPracticeSession({
           <div
             className="h-full rounded-full bg-violet-500 transition-all duration-300"
             style={{
-              width: `${((index + (chosen !== null ? 1 : 0)) / activity.questions.length) * 100}%`,
+              width: `${((index + (revealed ? 1 : 0)) / activity.questions.length) * 100}%`,
             }}
           />
         </div>
@@ -176,46 +196,79 @@ export function TopicPracticeSession({
       </div>
 
       <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-6 text-center shadow-sm">
-        <p className="text-lg font-semibold text-zinc-900">{question.prompt}</p>
-        {question.promptHint ? (
-          <p className="mt-1 text-sm text-zinc-500">{question.promptHint}</p>
-        ) : null}
-        {question.audioUrl ? (
-          <div className="mt-4 flex justify-center">
-            <TopicListenButton audioUrl={question.audioUrl} label="Listen" />
+        <div className="flex items-start justify-center gap-2">
+          <div className="min-w-0">
+            {containsGurmukhi(question.prompt) ? (
+              <PunjabiWithRomanisation
+                gurmukhi={question.prompt}
+                romanised={question.promptHint}
+                textClassName="block text-lg font-semibold text-zinc-900"
+                romanisedClassName="mt-1 block text-sm font-normal text-violet-600"
+              />
+            ) : (
+              <>
+                <p className="text-lg font-semibold text-zinc-900">{question.prompt}</p>
+                {question.promptHint ? (
+                  <p className="mt-1 text-sm text-zinc-500">{question.promptHint}</p>
+                ) : null}
+              </>
+            )}
           </div>
-        ) : null}
+          {question.audioUrl ? (
+            <TopicListenButton
+              audioUrl={question.audioUrl}
+              label="Play pronunciation"
+              className="mt-0.5"
+            />
+          ) : null}
+        </div>
 
         <ul className="mt-5 space-y-2.5">
           {question.options.map((option, optionIndex) => {
-            const isChosen = chosen === optionIndex;
+            const isSelected = selected === optionIndex;
             const isCorrect = optionIndex === question.correctIndex;
             let style =
               "border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-white";
-            if (locked && isCorrect) {
+            if (revealed && isCorrect) {
               style = "border-emerald-400 bg-emerald-50 text-emerald-900";
-            } else if (locked && isChosen && !isCorrect) {
+            } else if (revealed && isSelected && !isCorrect) {
               style = "border-rose-300 bg-rose-50 text-rose-900";
-            } else if (isChosen) {
-              style = "border-emerald-400 bg-emerald-50";
+            } else if (!revealed && isSelected) {
+              style = "border-violet-400 bg-violet-50 text-violet-900";
             }
 
             return (
               <li key={`${question.id}-${optionIndex}`}>
                 <button
                   type="button"
-                  disabled={locked}
+                  disabled={revealed}
                   onClick={() => selectOption(optionIndex)}
-                  className={`w-full rounded-2xl border px-4 py-3 text-center text-sm font-medium transition ${style} disabled:cursor-default`}
+                  className={`w-full rounded-2xl border px-4 py-3 text-center text-sm font-medium transition disabled:cursor-default ${style}`}
                 >
-                  {option}
+                  {containsGurmukhi(option.text) ? (
+                    <PunjabiWithRomanisation
+                      gurmukhi={option.text}
+                      romanised={option.romanised}
+                    />
+                  ) : (
+                    option.text
+                  )}
                 </button>
               </li>
             );
           })}
         </ul>
 
-        {locked ? (
+        {!revealed ? (
+          <button
+            type="button"
+            disabled={selected === null}
+            onClick={checkAnswer}
+            className="mt-5 w-full rounded-2xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+          >
+            Check answer
+          </button>
+        ) : (
           <button
             type="button"
             disabled={pending}
@@ -228,7 +281,7 @@ export function TopicPracticeSession({
                 ? "Continue"
                 : "See results"}
           </button>
-        ) : null}
+        )}
 
         {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
       </div>

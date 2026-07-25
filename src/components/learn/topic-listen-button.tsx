@@ -1,7 +1,7 @@
 "use client";
 
 import { Volume2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import {
   applySpeechPlaybackRate,
   useSpeechPlaybackRate,
@@ -13,7 +13,7 @@ type TopicListenButtonProps = {
   className?: string;
 };
 
-/** Labeled Listen control for Everyday Punjabi practice. */
+/** Subtle speaker icon for Everyday Punjabi practice audio. */
 export function TopicListenButton({
   audioUrl,
   label = "Listen",
@@ -21,7 +21,6 @@ export function TopicListenButton({
 }: TopicListenButtonProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { rate: speechRate } = useSpeechPlaybackRate();
-  const [playing, setPlaying] = useState(false);
 
   function handlePlay(event: React.MouseEvent) {
     event.stopPropagation();
@@ -29,9 +28,8 @@ export function TopicListenButton({
     if (!audio) return;
     applySpeechPlaybackRate(audio, speechRate);
     audio.currentTime = 0;
-    setPlaying(true);
     void audio.play().catch(() => {
-      setPlaying(false);
+      // Gesture already happened — ignore autoplay rejection.
     });
   }
 
@@ -41,19 +39,11 @@ export function TopicListenButton({
         type="button"
         onClick={handlePlay}
         aria-label={label}
-        className={`inline-flex items-center justify-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition-colors hover:border-violet-300 hover:text-violet-700 ${className}`}
+        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-violet-600 ${className}`}
       >
         <Volume2 className="h-4 w-4" aria-hidden="true" />
-        {playing ? "Playing…" : label}
       </button>
-      <audio
-        ref={audioRef}
-        src={audioUrl}
-        preload="metadata"
-        className="hidden"
-        onEnded={() => setPlaying(false)}
-        onPause={() => setPlaying(false)}
-      />
+      <audio ref={audioRef} src={audioUrl} preload="metadata" className="hidden" />
     </>
   );
 }

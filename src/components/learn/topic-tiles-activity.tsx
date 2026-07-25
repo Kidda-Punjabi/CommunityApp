@@ -1,18 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 import type { FlashcardDeckCard } from "@/lib/flashcards/types";
 import { TopicListenButton } from "@/components/learn/topic-listen-button";
 import {
+  pickCards,
   shuffleInPlace,
   stripTrailingRomanisation,
 } from "@/lib/free-lessons/topic-game-utils";
 
-type TopicSentenceBuilderProps = {
-  lessonId: string;
-  topicTitle: string;
+type TopicTilesActivityProps = {
   cards: FlashcardDeckCard[];
+  itemCount: number;
+  passThreshold: number;
+  title: string;
+  subtitle: string;
+  encourageListen?: boolean;
+  onComplete: (result: { percent: number; correct: number; total: number }) => void;
 };
 
 type PhraseTile = {
@@ -28,7 +32,11 @@ function tokens(text: string): string[] {
     .filter(Boolean);
 }
 
-function cardPhrase(card: FlashcardDeckCard) {
+function cardPhrase(card: FlashcardDeckCard): {
+  gurmukhi: string;
+  romanised: string;
+  parts: Array<{ gurmukhi: string; romanised: string }>;
+} {
   const parsed = stripTrailingRomanisation(card.back_text);
   const romanised = card.romanised?.trim() || parsed.romanised || "";
   const gTokens = tokens(parsed.gurmukhi);
@@ -40,71 +48,147 @@ function cardPhrase(card: FlashcardDeckCard) {
   return { gurmukhi: parsed.gurmukhi, romanised, parts };
 }
 
-function buildBank(card: FlashcardDeckCard, allCards: FlashcardDeckCard[], key: string) {
+function buildBank(
+  card: FlashcardDeckCard,
+  allCards: FlashcardDeckCard[],
+  roundKey: string
+): { target: string[]; bank: PhraseTile[]; phraseRomanised: string } {
   const phrase = cardPhrase(card);
-  const correctSet = new Set(phrase.parts.map((part) => part.gurmukhi));
-  const decoys: Array<{ gurmukhi: string; romanised: string }> = [];
+  const correct = phrase.parts;
+  const correctSet = new Set(correct.map((part) => part.gurmukhi));
+
+  const decoyCandidates: Array<{ gurmukhi: string; romanised: string }> = [];
   for (const other of shuffleInPlace(allCards.filter((item) => item.id !== card.id))) {
     for (const part of cardPhrase(other).parts) {
-      if (!correctSet.has(part.gurmukhi)) decoys.push(part);
+      if (!correctSet.has(part.gurmukhi)) {
+        decoyCandidates.push(part);
+      }
     }
   }
-  const decoyCount = Math.min(phrase.parts.length >= 4 ? 2 : 1, decoys.length);
-  const picked = shuffleInPlace(decoys).slice(0, decoyCount);
+
+  const decoyCount = Math.min(
+    correct.length >= 4 ? 2 : 1,
+    decoyCandidates.length,
+    Math.max(1, correct.length)
+  );
+  const decoys = shuffleInPlace(decoyCandidates).slice(0, decoyCount);
+
   const bank = shuffleInPlace([
-    ...phrase.parts.map((part, index) => ({
-      id: `${key}-c-${index}`,
+    ...correct.map((part, index) => ({
+      id: `${roundKey}-c-${index}-${part.gurmukhi}`,
       gurmukhi: part.gurmukhi,
       romanised: part.romanised,
     })),
-    ...picked.map((part, index) => ({
-      id: `${key}-d-${index}`,
+    ...decoys.map((part, index) => ({
+      id: `${roundKey}-d-${index}-${part.gurmukhi}`,
       gurmukhi: part.gurmukhi,
       romanised: part.romanised,
     })),
   ]);
+
   return {
-    target: phrase.parts.map((part) => part.gurmukhi),
+    target: correct.map((part) => part.gurmukhi),
     bank,
     phraseRomanised: phrase.romanised,
   };
 }
 
-export function TopicSentenceBuilder({
-  lessonId,
-  topicTitle,
-  cards,
-}: TopicSentenceBuilderProps) {
-  const router = useRouter();
-  const pool = useMemo(
-    () => cards.filter((card) => cardPhrase(card).parts.length >= 2),
-    [cards]
+function TileChip({
+  tile,
+  onClick,
+  muted,
+}: {
+  tile: PhraseTile;
+  onClick?: () => void;
+  muted?: boolean;
+}) {
+  const content = (
+    <>
+      <span className="block text-sm font-medium leading-snug">{tile.gurmukhi}</span>
+      {tile.romanised ? (
+        <span className="mt-0.5 block text-[11px] font-normal text-violet-600">
+          {tile.romanised}
+        </span>
+      ) : null}
+    </>
   );
+
+  if (!onClick) {
+    return (
+      <span
+        className={`rounded-xl px-3 py-1.5 text-left ${
+          muted
+            ? "bg-emerald-50 text-emerald-900"
+            : "border border-zinc-200 bg-zinc-50 text-zinc-900"
+        }`}
+      >
+        {content}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-left text-zinc-900 hover:bg-white"
+    >
+      {content}
+    </button>
+  );
+}
+
+export function TopicTilesActivity({
+  cards,
+  itemCount,
+  passThreshold,
+  title,
+  subtitle,
+  encourageListen = false,
+  onComplete,
+}: TopicTilesActivityProps) {
+  const pool = useMemo(() => {
+    const multi = cards.filter((card) => cardPhrase(card).parts.length >= 2);
+    const source = multi.length >= 2 ? multi : cards;
+    return pickCards(source, Math.min(itemCount, source.length));
+  }, [cards, itemCount]);
+
+  const initial = useMemo(
+    () => (pool[0] ? buildBank(pool[0], cards, `${pool[0].id}-0`) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only seed first round
+    [pool]
+  );
+
   const [index, setIndex] = useState(0);
-  const first = pool[0] ? buildBank(pool[0], cards, `${pool[0].id}-0`) : null;
   const [built, setBuilt] = useState<PhraseTile[]>([]);
-  const [bank, setBank] = useState<PhraseTile[]>(() => first?.bank ?? []);
-  const [target, setTarget] = useState<string[]>(() => first?.target ?? []);
+  const [bank, setBank] = useState<PhraseTile[]>(() => initial?.bank ?? []);
+  const [target, setTarget] = useState<string[]>(() => initial?.target ?? []);
   const [phraseRomanised, setPhraseRomanised] = useState(
-    () => first?.phraseRomanised ?? ""
+    () => initial?.phraseRomanised ?? ""
   );
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
-  const [score, setScore] = useState({ correct: 0, total: 0 });
+  const correctCountRef = useRef(0);
 
   if (pool.length === 0) {
     return (
       <p className="text-center text-sm text-zinc-500">
-        Sentence building needs multi-word phrases for this topic — coming soon.
+        Sentence building needs phrases for this topic — coming soon.
       </p>
     );
   }
 
   const card = pool[index];
-  const finished = index >= pool.length;
 
   function resetFor(cardIndex: number) {
     const next = pool[cardIndex];
-    if (!next) return;
+    if (!next) {
+      setBuilt([]);
+      setBank([]);
+      setTarget([]);
+      setPhraseRomanised("");
+      setFeedback(null);
+      return;
+    }
     const round = buildBank(next, cards, `${next.id}-${cardIndex}`);
     setBuilt([]);
     setBank(round.bank);
@@ -129,52 +213,31 @@ export function TopicSentenceBuilder({
   function check() {
     const ok = built.map((tile) => tile.gurmukhi).join(" ") === target.join(" ");
     setFeedback(ok ? "correct" : "wrong");
-    setScore((prev) => ({
-      correct: prev.correct + (ok ? 1 : 0),
-      total: prev.total + 1,
-    }));
+    if (ok) correctCountRef.current += 1;
   }
 
-  function next() {
+  function goNext() {
     const nextIndex = index + 1;
     if (nextIndex >= pool.length) {
-      setIndex(nextIndex);
+      const total = pool.length;
+      const correct = correctCountRef.current;
+      const percent = total === 0 ? 0 : Math.round((correct / total) * 100);
+      onComplete({ percent, correct, total });
       return;
     }
     setIndex(nextIndex);
     resetFor(nextIndex);
   }
 
-  if (finished) {
-    return (
-      <div className="mx-auto max-w-md text-center">
-        <h1 className="font-heading text-2xl font-semibold text-zinc-900">
-          Nice building
-        </h1>
-        <p className="mt-2 text-sm text-zinc-500">
-          You got {score.correct} of {score.total} phrases.
-        </p>
-        <button
-          type="button"
-          onClick={() => router.push(`/dashboard/learn/free/${lessonId}`)}
-          className="mt-8 rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600"
-        >
-          Back to topic
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-md text-center">
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-        Sentence Building
+        Sentence tiles
       </p>
-      <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900">
-        {topicTitle}
-      </h1>
-      <p className="mt-1 text-xs text-zinc-400">
-        {index + 1} of {pool.length}
+      <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900">{title}</h1>
+      <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
+      <p className="mt-2 text-xs text-zinc-400">
+        {index + 1} of {pool.length} · Pass at {passThreshold}%
       </p>
 
       <div className="mt-6 flex items-start justify-center gap-2">
@@ -197,17 +260,7 @@ export function TopicSentenceBuilder({
             <span className="text-sm text-zinc-400">Your sentence…</span>
           ) : (
             built.map((tile) => (
-              <span
-                key={`built-${tile.id}`}
-                className="rounded-xl bg-emerald-50 px-3 py-1.5 text-left text-sm font-medium text-emerald-900"
-              >
-                <span className="block">{tile.gurmukhi}</span>
-                {tile.romanised ? (
-                  <span className="mt-0.5 block text-[11px] font-normal text-violet-600">
-                    {tile.romanised}
-                  </span>
-                ) : null}
-              </span>
+              <TileChip key={`built-${tile.id}`} tile={tile} muted />
             ))
           )}
         </div>
@@ -215,30 +268,24 @@ export function TopicSentenceBuilder({
 
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         {bank.map((tile, tileIndex) => (
-          <button
+          <TileChip
             key={tile.id}
-            type="button"
+            tile={tile}
             onClick={() => pickTile(tile, tileIndex)}
-            className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-left text-sm font-medium text-zinc-900 hover:bg-white"
-          >
-            <span className="block">{tile.gurmukhi}</span>
-            {tile.romanised ? (
-              <span className="mt-0.5 block text-[11px] font-normal text-violet-600">
-                {tile.romanised}
-              </span>
-            ) : null}
-          </button>
+          />
         ))}
       </div>
 
       {feedback === "correct" ? (
-        <p className="mt-4 text-sm font-semibold text-emerald-600">Correct!</p>
+        <p className="mt-4 text-sm font-semibold text-emerald-600">
+          Correct!
+          {encourageListen && card.audioUrl ? " Listen once, then continue." : ""}
+        </p>
       ) : null}
       {feedback === "wrong" ? (
         <div className="mt-4 space-y-1">
-          <p className="text-sm font-semibold text-rose-600">
-            Not quite — try: {target.join(" ")}
-          </p>
+          <p className="text-sm font-semibold text-rose-600">Not quite — try:</p>
+          <p className="text-sm font-medium text-zinc-800">{target.join(" ")}</p>
           {phraseRomanised ? (
             <p className="text-sm text-violet-600">{phraseRomanised}</p>
           ) : null}
@@ -259,7 +306,7 @@ export function TopicSentenceBuilder({
               type="button"
               disabled={built.length === 0}
               onClick={check}
-              className="flex-1 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+              className="flex-1 rounded-2xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               Check
             </button>
@@ -267,10 +314,10 @@ export function TopicSentenceBuilder({
         ) : (
           <button
             type="button"
-            onClick={next}
-            className="w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white"
+            onClick={goNext}
+            className="w-full rounded-2xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white"
           >
-            Continue
+            {index + 1 < pool.length ? "Continue" : "See results"}
           </button>
         )}
       </div>

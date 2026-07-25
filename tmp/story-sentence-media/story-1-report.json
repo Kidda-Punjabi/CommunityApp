@@ -1,0 +1,146 @@
+{
+  "storyId": "bc30d5d3-2e56-42d6-945c-6ad815b25c42",
+  "title": "The Lion and the Mouse",
+  "displayOrder": 1,
+  "sentenceCount": 11,
+  "imagesGenerated": 0,
+  "imageFailures": 0,
+  "audioGenerated": 11,
+  "audioFailures": 0,
+  "elevenLabsCharacters": 551,
+  "estimatedCostUsd": {
+    "geminiImages": 0,
+    "elevenLabsAudio": 0.0992,
+    "total": 0.0992,
+    "notes": [
+      "Gemini Flash Image ~$0.039/image (paid tier)",
+      "ElevenLabs ~$0.18/1k chars (estimate; check your plan)"
+    ],
+    "pendingGeminiIfApproved": 0.429
+  },
+  "items": [
+    {
+      "sentenceId": "67ba6cad-7d26-48fb-ba8a-7d433e0b03d2",
+      "sentence_order": 1,
+      "english": "Once upon a time, a big lion was sleeping in the forest.",
+      "gurmukhi": "ਇੱਕ ਵਾਰ ਦੀ ਗੱਲ ਹੈ, ਜੰਗਲ ਵਿੱਚ ਇੱਕ ਵੱਡਾ ਸ਼ੇਰ ਸੌਂ ਰਿਹਾ ਸੀ।",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/01-67ba6cad-7d26-48fb-ba8a-7d433e0b03d2.mp3",
+      "audio_duration_ms": 3425,
+      "chars": 55,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "b3df6bb7-8eb3-454a-8764-e8b8a14dda1a",
+      "sentence_order": 2,
+      "english": "A tiny mouse, playing nearby, climbed onto the lion's back.",
+      "gurmukhi": "ਇੱਕ ਛੋਟਾ ਜਿਹਾ ਚੂਹਾ ਖੇਡਦਾ-ਖੇਡਦਾ ਸ਼ੇਰ ਦੀ ਪਿੱਠ ਉੱਤੇ ਚੜ੍ਹ ਗਿਆ।",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/02-b3df6bb7-8eb3-454a-8764-e8b8a14dda1a.mp3",
+      "audio_duration_ms": 3660,
+      "chars": 58,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "f1c33717-08ac-4e11-93b6-046088536377",
+      "sentence_order": 3,
+      "english": "The lion woke up angrily and said, \"Why did you wake me up?",
+      "gurmukhi": "ਸ਼ੇਰ ਜਾਗ ਪਿਆ ਅਤੇ ਗੁੱਸੇ ਵਿੱਚ ਬੋਲਿਆ, \"ਤੂੰ ਮੈਨੂੰ ਜਗਾਇਆ ਕਿਉਂ?",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/03-f1c33717-08ac-4e11-93b6-046088536377.mp3",
+      "audio_duration_ms": 3895,
+      "chars": 57,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "17b2d4ec-17a7-4a45-a9ec-8687e0dfeb04",
+      "sentence_order": 4,
+      "english": "The mouse was scared and said, \"I'm sorry, Lion.",
+      "gurmukhi": "ਚੂਹਾ ਡਰ ਗਿਆ ਅਤੇ ਬੋਲਿਆ, \"ਮੈਨੂੰ ਮਾਫ਼ ਕਰੋ, ਸ਼ੇਰ ਜੀ।",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/04-17b2d4ec-17a7-4a45-a9ec-8687e0dfeb04.mp3",
+      "audio_duration_ms": 4078,
+      "chars": 48,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "d1f17a7c-747b-460f-84ce-f7e12f380c2d",
+      "sentence_order": 5,
+      "english": "I was only playing.",
+      "gurmukhi": "ਮੈਂ ਬਸ ਖੇਡ ਰਿਹਾ ਸੀ।",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/05-d1f17a7c-747b-460f-84ce-f7e12f380c2d.mp3",
+      "audio_duration_ms": 1518,
+      "chars": 19,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "2f0e8d9e-0de3-4d9d-817b-09616d7f29e8",
+      "sentence_order": 6,
+      "english": "The lion thought, \"This one is so small,\" and let him go.",
+      "gurmukhi": "ਸ਼ੇਰ ਨੇ ਸੋਚਿਆ, \"ਇਹ ਤਾਂ ਬਹੁਤ ਛੋਟਾ ਹੈ,\" ਅਤੇ ਉਸਨੂੰ ਛੱਡ ਦਿੱਤਾ।",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/06-2f0e8d9e-0de3-4d9d-817b-09616d7f29e8.mp3",
+      "audio_duration_ms": 3738,
+      "chars": 58,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "def74052-dc85-4def-8ed4-23beffe4eda1",
+      "sentence_order": 7,
+      "english": "A few days later, the lion got caught in a hunter's net.",
+      "gurmukhi": "ਕੁਝ ਦਿਨਾਂ ਬਾਅਦ, ਸ਼ੇਰ ਇੱਕ ਸ਼ਿਕਾਰੀ ਦੇ ਜਾਲ ਵਿੱਚ ਫਸ ਗਿਆ।",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/07-def74052-dc85-4def-8ed4-23beffe4eda1.mp3",
+      "audio_duration_ms": 3111,
+      "chars": 52,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "915dea2e-c0a6-461c-b83b-29cc575a0dda",
+      "sentence_order": 8,
+      "english": "He roared loudly.",
+      "gurmukhi": "ਉਹ ਬਹੁਤ ਜ਼ੋਰ ਨਾਲ ਦਹਾੜਿਆ।",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/08-915dea2e-c0a6-461c-b83b-29cc575a0dda.mp3",
+      "audio_duration_ms": 1831,
+      "chars": 24,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "2c30bdbe-1ee9-437f-ba5a-6b67c3c55cd9",
+      "sentence_order": 9,
+      "english": "The little mouse came running and gnawed through the net with his sharp teeth, setting the lion free.",
+      "gurmukhi": "ਛੋਟਾ ਚੂਹਾ ਦੌੜਦਾ ਆਇਆ ਅਤੇ ਆਪਣੇ ਤਿੱਖੇ ਦੰਦਾਂ ਨਾਲ ਜਾਲ ਨੂੰ ਕੁਤਰ ਕੇ ਸ਼ੇਰ ਨੂੰ ਆਜ਼ਾਦ ਕਰ ਦਿੱਤਾ।",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/09-2c30bdbe-1ee9-437f-ba5a-6b67c3c55cd9.mp3",
+      "audio_duration_ms": 5671,
+      "chars": 85,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "aee38eaf-83d4-4db4-964a-8d88df8c0c3d",
+      "sentence_order": 10,
+      "english": "The lion said, \"Thank you, friend.",
+      "gurmukhi": "ਸ਼ੇਰ ਨੇ ਕਿਹਾ, \"ਧੰਨਵਾਦ, ਦੋਸਤ।",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/10-aee38eaf-83d4-4db4-964a-8d88df8c0c3d.mp3",
+      "audio_duration_ms": 1988,
+      "chars": 28,
+      "audio": "generated"
+    },
+    {
+      "sentenceId": "9b126522-26af-4ed6-8554-63fb3551231a",
+      "sentence_order": 11,
+      "english": "Now I understand — everyone can help, big or small.\"",
+      "gurmukhi": "ਹੁਣ ਮੈਂ ਜਾਣ ਗਿਆ — ਹਰ ਕੋਈ ਮਦਦ ਕਰ ਸਕਦਾ ਹੈ, ਭਾਵੇਂ ਛੋਟਾ ਹੋਵੇ ਜਾਂ ਵੱਡਾ।\"",
+      "audio_db": "deferred_until_sql_migration",
+      "audio_url": "https://pztubczhqkzcwtkstpgi.supabase.co/storage/v1/object/public/story-sentence-audio/bc30d5d3-2e56-42d6-945c-6ad815b25c42/11-9b126522-26af-4ed6-8554-63fb3551231a.mp3",
+      "audio_duration_ms": 4705,
+      "chars": 67,
+      "audio": "generated"
+    }
+  ],
+  "imageStatus": "blocked_gemini_billing",
+  "imageBlocker": "GEMINI_API_KEY project is on free tier for image models (quota limit 0). Enable paid billing in Google AI Studio, then re-run images."
+}

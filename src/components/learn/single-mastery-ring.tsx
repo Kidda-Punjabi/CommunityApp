@@ -16,6 +16,8 @@ type SingleMasteryRingProps = {
   children?: React.ReactNode;
 };
 
+const MASTERY_PURPLE = "#7C3AED";
+
 function activeStageFromFills(fills: TopicStageFills): TopicStageId {
   if (fills.vocab < 100) return 1;
   if (fills.sentences < 100) return 2;
@@ -28,9 +30,15 @@ function fillPercentForStage(fills: TopicStageFills, stage: TopicStageId): numbe
   return fills.conversation;
 }
 
+function isFullyMastered(fills: TopicStageFills): boolean {
+  return (
+    fills.vocab >= 100 && fills.sentences >= 100 && fills.conversation >= 100
+  );
+}
+
 /**
  * One progress ring — colour matches the current mastery stage
- * (yellow → green → Kidda purple).
+ * (yellow → green → Kidda purple). Fully mastered topics get a solid purple ring.
  */
 export function SingleMasteryRing({
   fills,
@@ -40,9 +48,14 @@ export function SingleMasteryRing({
   muted = false,
   children,
 }: SingleMasteryRingProps) {
+  const mastered = !muted && isFullyMastered(fills);
   const stage = stageOverride ?? activeStageFromFills(fills);
-  const percent = muted ? 0 : fillPercentForStage(fills, stage);
-  const color = muted ? "#D4D4D8" : TOPIC_STAGES[stage - 1].ringColor;
+  const percent = muted ? 0 : mastered ? 100 : fillPercentForStage(fills, stage);
+  const color = muted
+    ? "#D4D4D8"
+    : mastered
+      ? MASTERY_PURPLE
+      : TOPIC_STAGES[stage - 1].ringColor;
 
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -50,7 +63,9 @@ export function SingleMasteryRing({
 
   return (
     <span
-      className="relative inline-flex items-center justify-center"
+      className={`relative inline-flex items-center justify-center ${
+        mastered ? "topic-mastery-ring-glow" : ""
+      }`}
       style={{ width: size, height: size }}
     >
       <svg

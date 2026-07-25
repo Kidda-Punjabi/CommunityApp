@@ -21,9 +21,8 @@ import {
   type SpeakingPracticeAttempts,
   type SpeakingPracticeCard,
 } from "@/lib/games/speaking-practice";
-import { normalizeSpeechTranscript } from "@/lib/games/voice-practice";
+import { formatHeardTranscript, VOICE_PRACTICE_MAX_ATTEMPTS } from "@/lib/games/voice-practice";
 import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
-import { VOICE_PRACTICE_MAX_ATTEMPTS } from "@/lib/games/voice-practice";
 import { createClient } from "@/lib/supabase/client";
 
 const ADVANCE_MS = 1400;
@@ -241,7 +240,7 @@ export function SpeakingPracticeMode({
       }
 
       const transcript = payload.transcript ?? "";
-      const displayTranscript = normalizeSpeechTranscript(transcript) || transcript;
+      const displayTranscript = formatHeardTranscript(transcript) || transcript;
       const similarity = matchSpeakingTranscript(transcript, {
         romanised: current.romanised,
         punjabi: current.punjabi,

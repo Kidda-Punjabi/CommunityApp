@@ -42,8 +42,15 @@ export async function POST(request: Request) {
   }
 
   const flashcardId = String(formData.get("flashcard_id") ?? "").trim() || null;
-  const targetRomanised = String(formData.get("target_romanised") ?? "").trim() || null;
-  const targetPunjabi = String(formData.get("target_punjabi") ?? "").trim() || null;
+  // Accept both Games field names and legacy Everyday Punjabi names.
+  const targetRomanised =
+    String(
+      formData.get("target_romanised") ?? formData.get("romanised") ?? ""
+    ).trim() || null;
+  const targetPunjabi =
+    String(
+      formData.get("target_punjabi") ?? formData.get("expected") ?? ""
+    ).trim() || null;
   const keyterms = [targetRomanised, targetPunjabi].filter(Boolean) as string[];
 
   const { data: limitData, error: limitError } = await supabase.rpc(

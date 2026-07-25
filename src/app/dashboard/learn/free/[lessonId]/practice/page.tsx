@@ -1,6 +1,6 @@
-import { TopicPracticeSession } from "@/components/learn/topic-practice-session";
+import { TopicGamePractice } from "@/components/learn/topic-game-practice";
 import { BackLink } from "@/components/navigation/back-link";
-import { buildTopicActivity } from "@/lib/free-lessons/build-activity";
+import { resolveTopicGameActivity } from "@/lib/free-lessons/activity-games";
 import { loadCommunityTopicCards } from "@/lib/free-lessons/load-topic-cards";
 import { fetchTopicMasteryMap } from "@/lib/free-lessons/mastery";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
@@ -15,7 +15,7 @@ import { notFound, redirect } from "next/navigation";
 
 type PracticePageProps = {
   params: Promise<{ lessonId: string }>;
-  searchParams: Promise<{ stage?: string }>;
+  searchParams: Promise<{ stage?: string; n?: string; retry?: string }>;
 };
 
 export default async function FreeLessonPracticePage({
@@ -23,7 +23,7 @@ export default async function FreeLessonPracticePage({
   searchParams,
 }: PracticePageProps) {
   const { lessonId } = await params;
-  const { stage: stageParam } = await searchParams;
+  const { stage: stageParam, n: nextParam, retry: retryParam } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -81,7 +81,6 @@ export default async function FreeLessonPracticePage({
 
   const requested = Number(stageParam);
   if (requested >= 1 && requested <= 3 && requested <= stage) {
-    // Re-practise an unlocked stage; use last depth level for challenge.
     stage = requested as TopicStageId;
     depth =
       requested === (mastery?.stage ?? 1)
@@ -94,17 +93,19 @@ export default async function FreeLessonPracticePage({
     depth = STAGE_DEPTH_MAX - 1;
   }
 
-  const activity = buildTopicActivity(topicCards.cards, stage, depth);
+  const spec = resolveTopicGameActivity(stage, depth);
 
   return (
     <div className={ui.page}>
       <BackLink href={`/dashboard/learn/free/${lessonId}`}>← {lesson.title}</BackLink>
       <div className="mt-6">
-        {activity ? (
-          <TopicPracticeSession
+        {spec && topicCards.cards.length >= 2 ? (
+          <TopicGamePractice
+            key={`${nextParam ?? "start"}-${retryParam ?? "0"}-${stage}-${depth}`}
             lessonId={lesson.id}
             topicTitle={lesson.title}
-            activity={activity}
+            cards={topicCards.cards}
+            spec={spec}
           />
         ) : (
           <div className="space-y-3 text-center">

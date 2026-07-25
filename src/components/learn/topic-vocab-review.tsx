@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { FlashcardDeckCard } from "@/lib/flashcards/types";
 import { markTopicVocabReviewed } from "@/app/dashboard/learn/free/actions";
+import { PunjabiWithRomanisation } from "@/components/learn/punjabi-with-romanisation";
 import { TopicListenButton } from "@/components/learn/topic-listen-button";
+import { cardPunjabiDisplay } from "@/lib/free-lessons/topic-game-utils";
 
 type TopicVocabReviewProps = {
   lessonId: string;
@@ -56,6 +58,8 @@ export function TopicVocabReview({
     );
   }
 
+  const punjabi = cardPunjabiDisplay(card);
+
   function markAndAdvance(confident: boolean) {
     startTransition(async () => {
       await markTopicVocabReviewed({
@@ -81,28 +85,39 @@ export function TopicVocabReview({
         {index + 1} of {cards.length} · {reviewed.size} reviewed
       </p>
 
-      <button
-        type="button"
-        onClick={() => setFlipped((value) => !value)}
-        className="mt-6 flex min-h-48 w-full flex-col items-center justify-center rounded-3xl border border-zinc-200 bg-white px-6 py-8 shadow-sm"
-      >
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-          {flipped ? "Punjabi" : "English"}
-        </p>
-        <p className="mt-3 text-2xl font-semibold leading-snug text-zinc-900">
-          {flipped ? card.back_text : card.front_text}
-        </p>
-        {flipped && card.romanised ? (
-          <p className="mt-2 text-sm text-zinc-500">{card.romanised}</p>
+      <div className="relative mt-6">
+        <button
+          type="button"
+          onClick={() => setFlipped((value) => !value)}
+          className="flex min-h-48 w-full flex-col items-center justify-center rounded-3xl border border-zinc-200 bg-white px-6 py-8 shadow-sm"
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+            {flipped ? "Punjabi" : "English"}
+          </p>
+          {flipped ? (
+            <PunjabiWithRomanisation
+              gurmukhi={punjabi.gurmukhi}
+              romanised={punjabi.romanised}
+              className="mt-3"
+              textClassName="block text-2xl font-semibold leading-snug text-zinc-900"
+              romanisedClassName="mt-2 block text-sm font-normal text-violet-600"
+            />
+          ) : (
+            <p className="mt-3 text-2xl font-semibold leading-snug text-zinc-900">
+              {card.front_text}
+            </p>
+          )}
+          <p className="mt-4 text-xs text-zinc-400">Tap to flip</p>
+        </button>
+        {card.audioUrl ? (
+          <div className="absolute right-3 top-3">
+            <TopicListenButton
+              audioUrl={card.audioUrl}
+              label="Play pronunciation"
+            />
+          </div>
         ) : null}
-        <p className="mt-4 text-xs text-zinc-400">Tap to flip</p>
-      </button>
-
-      {card.audioUrl ? (
-        <div className="mt-4 flex justify-center">
-          <TopicListenButton audioUrl={card.audioUrl} label="Listen" />
-        </div>
-      ) : null}
+      </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
         <button

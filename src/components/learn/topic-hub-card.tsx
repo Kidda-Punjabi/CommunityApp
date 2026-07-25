@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Layers, MessageCircle, PencilLine, Sparkles } from "lucide-react";
+import { Layers, MessageCircle, PencilLine, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { SingleMasteryRing } from "@/components/learn/single-mastery-ring";
 import { getTopicVisual } from "@/lib/free-lessons/topic-visuals";
@@ -20,7 +20,6 @@ type TopicHubCardProps = {
   fills: TopicStageFills;
   hasPractice: boolean;
   activityTitle: string | null;
-  vocabReviewed: number;
   vocabTotal: number;
   sentenceReady: boolean;
   accessible: boolean;
@@ -36,7 +35,6 @@ export function TopicHubCard({
   fills,
   hasPractice,
   activityTitle,
-  vocabReviewed,
   vocabTotal,
   sentenceReady,
   accessible,
@@ -46,10 +44,6 @@ export function TopicHubCard({
   const { Icon } = visual;
   const mastered =
     fills.vocab >= 100 && fills.sentences >= 100 && fills.conversation >= 100;
-  const stagesComplete =
-    (fills.vocab >= 100 ? 1 : 0) +
-    (fills.sentences >= 100 ? 1 : 0) +
-    (fills.conversation >= 100 ? 1 : 0);
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center text-center">
@@ -62,17 +56,27 @@ export function TopicHubCard({
           muted={!accessible}
         >
           <span
-            className={`relative z-[1] flex h-[5.75rem] w-[5.75rem] items-center justify-center rounded-full text-white shadow-lg ${visual.fillClass}`}
+            className={`relative z-[1] flex h-[5.75rem] w-[5.75rem] items-center justify-center overflow-hidden rounded-full shadow-lg ${
+              mastered
+                ? "bg-violet-600 text-white shadow-[0_8px_28px_-6px_rgba(124,58,237,0.65)]"
+                : `text-white ${visual.fillClass}`
+            }`}
           >
-            <Icon className="h-10 w-10" strokeWidth={2.25} aria-hidden />
+            <Icon
+              className={`relative z-[1] h-10 w-10 ${
+                mastered ? "topic-mastery-icon-shine" : ""
+              }`}
+              strokeWidth={2.25}
+              aria-hidden
+            />
+            {mastered ? (
+              <span
+                aria-hidden
+                className="topic-mastery-shine pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+              />
+            ) : null}
           </span>
         </SingleMasteryRing>
-        {stagesComplete > 0 ? (
-          <span className="absolute bottom-1 right-1 z-[2] flex h-9 min-w-9 items-center justify-center gap-0.5 rounded-full border-2 border-white bg-amber-400 px-1.5 text-amber-950 shadow">
-            <Crown className="h-4 w-4 fill-amber-950" aria-hidden />
-            <span className="text-xs font-bold leading-none">{stagesComplete}</span>
-          </span>
-        ) : null}
       </div>
 
       <h1 className="mt-5 font-heading text-2xl font-semibold text-zinc-900">
@@ -87,20 +91,6 @@ export function TopicHubCard({
               ? "All three stages complete — words, sentences, and conversation."
               : `Stage ${stage} of 3 · ${TOPIC_STAGES[stage - 1].label} (level ${depth} of 5)`}
       </p>
-
-      {accessible ? (
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium text-zinc-500">
-          <span>Vocab {Math.round(fills.vocab)}%</span>
-          <span>Sentences {Math.round(fills.sentences)}%</span>
-          <span>Talk {Math.round(fills.conversation)}%</span>
-        </div>
-      ) : null}
-
-      {accessible && vocabTotal > 0 ? (
-        <p className="mt-2 text-sm font-medium text-zinc-700">
-          {vocabReviewed} of {vocabTotal} words reviewed
-        </p>
-      ) : null}
 
       <div className="mt-8 flex w-full flex-col gap-3 text-left">
         {lockReason === "premium" ? (
@@ -137,7 +127,7 @@ export function TopicHubCard({
                         : "Continue"}
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-500">
-                    Five deep levels in each stage before you move on.
+                    Real games for this stage — match, tiles, and speaking.
                   </span>
                 </span>
               </Link>
@@ -164,7 +154,7 @@ export function TopicHubCard({
                 </span>
                 <span className="mt-0.5 block text-xs text-zinc-500">
                   {vocabTotal > 0
-                    ? `${vocabReviewed} of ${vocabTotal} words reviewed`
+                    ? "Optional — browse words from this topic"
                     : "Vocab for this topic is coming soon."}
                 </span>
               </span>

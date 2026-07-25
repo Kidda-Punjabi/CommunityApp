@@ -6,7 +6,6 @@ import {
   fetchTopicMasteryMap,
   stageFillsForMastery,
 } from "@/lib/free-lessons/mastery";
-import { loadTopicVocabProgress } from "@/lib/free-lessons/topic-vocab-progress";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
@@ -49,11 +48,10 @@ export default async function FreeLessonTopicPage({ params }: TopicPageProps) {
 
   const lessonIds = [lessonId, previousLesson?.id].filter(Boolean) as string[];
 
-  const [hasPremium, masteryMap, topicCards, vocab] = await Promise.all([
+  const [hasPremium, masteryMap, topicCards] = await Promise.all([
     hasPremiumAccess(supabase, user.id),
     fetchTopicMasteryMap(supabase, user.id, lessonIds),
     loadCommunityTopicCards(supabase, lesson.lesson_number),
-    loadTopicVocabProgress(supabase, user.id, lesson.lesson_number),
   ]);
 
   const previousMastery = previousLesson
@@ -70,6 +68,9 @@ export default async function FreeLessonTopicPage({ params }: TopicPageProps) {
   const stage = mastery?.stage ?? 1;
   const depth = mastery?.depth ?? 0;
   const activityTitle = activityMetaForLevel(stage, depth)?.title ?? null;
+  const sentenceReady = topicCards.cards.some(
+    (card) => card.back_text.trim().split(/\s+/).filter(Boolean).length >= 2
+  );
 
   return (
     <div className={ui.page}>
@@ -84,9 +85,8 @@ export default async function FreeLessonTopicPage({ params }: TopicPageProps) {
           fills={stageFillsForMastery(mastery)}
           hasPractice={topicCards.cards.length >= 2}
           activityTitle={activityTitle}
-          vocabReviewed={vocab.reviewed}
-          vocabTotal={vocab.total}
-          sentenceReady={vocab.sentenceCapable >= 1}
+          vocabTotal={topicCards.cards.length}
+          sentenceReady={sentenceReady}
           accessible={unlock.accessible}
           lockReason={unlock.lockReason}
         />
