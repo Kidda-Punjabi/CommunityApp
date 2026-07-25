@@ -2,7 +2,7 @@
 
 import { Crown, Lock } from "lucide-react";
 import Link from "next/link";
-import { TripleMasteryRings } from "@/components/learn/triple-mastery-rings";
+import { SingleMasteryRing } from "@/components/learn/single-mastery-ring";
 import { getTopicVisual } from "@/lib/free-lessons/topic-visuals";
 import type { TopicStageFills } from "@/lib/free-lessons/stages";
 import type { TopicLockReason } from "@/lib/free-lessons/unlock";
@@ -44,9 +44,9 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
     (item.fills.conversation >= 100 ? 1 : 0);
 
   const circle = (
-    <TripleMasteryRings fills={fills} size={92}>
+    <SingleMasteryRing fills={fills} size={92} muted={locked}>
       <span
-        className={`relative z-[1] flex h-[3.35rem] w-[3.35rem] items-center justify-center rounded-full text-white shadow-md transition-transform duration-200 ${
+        className={`relative z-[1] flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full text-white shadow-md transition-transform duration-200 ${
           locked
             ? item.lockReason === "premium"
               ? "bg-violet-400"
@@ -73,7 +73,7 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
           <span className="text-[10px] font-bold leading-none">{stagesComplete}</span>
         </span>
       ) : null}
-    </TripleMasteryRings>
+    </SingleMasteryRing>
   );
 
   const label = (

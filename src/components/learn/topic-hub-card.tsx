@@ -2,7 +2,7 @@
 
 import { Crown, Layers, MessageCircle, PencilLine, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { TripleMasteryRings } from "@/components/learn/triple-mastery-rings";
+import { SingleMasteryRing } from "@/components/learn/single-mastery-ring";
 import { getTopicVisual } from "@/lib/free-lessons/topic-visuals";
 import {
   TOPIC_STAGES,
@@ -145,11 +145,11 @@ export function TopicHubCard({
               href={`/dashboard/learn/free/${lessonId}/vocab`}
               className={`flex items-start gap-3 rounded-2xl border px-4 py-3.5 ${
                 stage === 1
-                  ? "border-rose-200 bg-rose-50 hover:bg-rose-100/70"
+                  ? "border-amber-200 bg-amber-50 hover:bg-amber-100/70"
                   : "border-zinc-200 bg-white hover:bg-zinc-50"
               }`}
             >
-              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white">
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-white">
                 <Layers className="h-4 w-4" aria-hidden />
               </span>
               <span>
@@ -158,7 +158,7 @@ export function TopicHubCard({
                 </span>
                 <span className="mt-0.5 block text-xs text-zinc-500">
                   {vocabTotal > 0
-                    ? `${vocabReviewed} of ${vocabTotal} words · red ring`
+                    ? `${vocabReviewed} of ${vocabTotal} words reviewed`
                     : "Vocab for this topic is coming soon."}
                 </span>
               </span>
@@ -170,11 +170,11 @@ export function TopicHubCard({
                   href={`/dashboard/learn/free/${lessonId}/sentences`}
                   className={`flex items-start gap-3 rounded-2xl border px-4 py-3.5 ${
                     stage === 2
-                      ? "border-amber-200 bg-amber-50 hover:bg-amber-100/70"
+                      ? "border-emerald-200 bg-emerald-50 hover:bg-emerald-100/70"
                       : "border-zinc-200 bg-white hover:bg-zinc-50"
                   }`}
                 >
-                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-white">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white">
                     <PencilLine className="h-4 w-4" aria-hidden />
                   </span>
                   <span>
@@ -182,7 +182,7 @@ export function TopicHubCard({
                       2 · Sentence Building
                     </span>
                     <span className="mt-0.5 block text-xs text-zinc-500">
-                      Build phrases — yellow ring
+                      Build phrases from this topic
                     </span>
                   </span>
                 </Link>
@@ -222,11 +222,11 @@ export function TopicHubCard({
                 href={`/dashboard/learn/free/${lessonId}/practice?stage=3`}
                 className={`flex items-start gap-3 rounded-2xl border px-4 py-3.5 ${
                   stage === 3
-                    ? "border-emerald-200 bg-emerald-50 hover:bg-emerald-100/70"
+                    ? "border-violet-200 bg-violet-50 hover:bg-violet-100/70"
                     : "border-zinc-200 bg-white hover:bg-zinc-50"
                 }`}
               >
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white">
                   <MessageCircle className="h-4 w-4" aria-hidden />
                 </span>
                 <span>
@@ -234,7 +234,7 @@ export function TopicHubCard({
                     3 · Conversation
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-500">
-                    Answer and ask — green ring
+                    Answer and ask about this topic
                   </span>
                 </span>
               </Link>
