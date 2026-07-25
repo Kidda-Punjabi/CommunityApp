@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GameType, UserGameStats } from "./types";
 import { awardGameSessionPoints } from "@/lib/leaderboard/points";
+import { recordStreakActivity } from "@/lib/progress/streak";
 
 export type GameScoreMetadata = Record<string, unknown>;
 
@@ -81,6 +82,9 @@ export async function saveGameScore(
   const pointsEarned = await awardGameSessionPoints(supabase, metadata);
 
   await updateUserGameStats(supabase, userId, gameType, score);
+  await recordStreakActivity(supabase, userId).catch(() => {
+    /* non-fatal — score already saved; streak is once-per-day */
+  });
 
   return {
     isNewBest,
@@ -114,6 +118,9 @@ export async function saveGameScoreIfBest(
   if (!isNewBest) {
     const pointsEarned = await awardGameSessionPoints(supabase, metadata);
     await updateUserGameStats(supabase, userId, gameType, score, false);
+    await recordStreakActivity(supabase, userId).catch(() => {
+      /* non-fatal — once-per-day */
+    });
     return { isNewBest: false, previousBest, currentBest: previousBest, pointsEarned };
   }
 
@@ -130,6 +137,9 @@ export async function saveGameScoreIfBest(
   const pointsEarned = await awardGameSessionPoints(supabase, metadata);
 
   await updateUserGameStats(supabase, userId, gameType, score, true);
+  await recordStreakActivity(supabase, userId).catch(() => {
+    /* non-fatal — once-per-day */
+  });
 
   return { isNewBest: true, previousBest, currentBest: score, pointsEarned };
 }

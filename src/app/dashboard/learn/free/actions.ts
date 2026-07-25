@@ -2,6 +2,7 @@
 
 import { recordTopicActivityResult } from "@/lib/free-lessons/mastery";
 import { saveFlashcardConfidence } from "@/lib/progress/flashcard-progress";
+import { recordStreakActivity } from "@/lib/progress/streak";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -27,6 +28,13 @@ export async function completeTopicActivity(input: {
     input.passed,
     scorePercent
   );
+
+  // Depth-level pass counts as learning for the day (once-per-day in update_user_streak).
+  if (input.passed) {
+    await recordStreakActivity(supabase, user.id).catch(() => {
+      /* non-fatal — mastery already saved */
+    });
+  }
 
   revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/learn/free");

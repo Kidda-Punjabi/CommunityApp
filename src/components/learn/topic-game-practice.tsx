@@ -92,7 +92,7 @@ export function TopicGamePractice({
           You got {finished.correct} of {finished.total} ({finished.percent}%).
           {finished.passed
             ? finished.mastered
-              ? " All three stages complete — words, sentences, and conversation."
+              ? " All three stages complete — words, sentences, and speaking."
               : finished.stageCleared
                 ? ` Stage cleared — moving on to stage ${finished.stage}.`
                 : " Level up — keep going in this stage."

@@ -35,7 +35,7 @@ Learners work through **~24 everyday topics** in order. Each topic has **three s
 
 1. **Vocab** (words) — yellow ring  
 2. **Sentences** (build phrases) — green ring  
-3. **Conversation** (speak / talk) — purple ring  
+3. **Speaking** (say it out loud) — purple ring  
 
 Inside each stage there are **five practice depths** (Warm-up → Stage check). Passing raises depth; finishing depth 5 clears the stage and unlocks the next.
 
@@ -58,7 +58,7 @@ Orchestrator: `TopicGamePractice` ← `resolveTopicGameActivity(stage, depth)`.
 |-------|------------|
 | Vocab | Match pairs; Speed quiz (English↔Punjabi, reverse at higher depths) |
 | Sentences | Sentence tiles (distractors + romanisation; aligned with Games Sentence Builder) |
-| Conversation | Speak it (STT); falls back to tiles if too few romanised phrases |
+| Speaking | Speak it (STT); falls back to tiles if too few romanised phrases |
 
 Supporting (optional, not the main mastery scorer):
 
@@ -81,6 +81,13 @@ Legacy MCQ session (`TopicPracticeSession` / `build-activity.ts`) is **not** the
 8. **Mastered badge** — purple + shine only when all three stages are complete; no crown count chip  
 
 Speak STT may return Devanagari/Hindi script; matching latinises it. “Heard” feedback prefers Latin for learners who don’t read Gurmukhi.
+
+---
+
+Persist via **`topic_mastery`** only (`src/lib/free-lessons/mastery.ts`). Do not encode mastery into `lesson_progress` PDF fields (`last_page_viewed` / `total_pages` / `pdf_completed`) — those belong to Foundational/Beginners PDFs on the same Community lesson IDs.
+
+Apply schema: `supabase/topic-mastery.sql`  
+Backfill: `supabase/topic-mastery-backfill.sql` or `scripts/backfill-topic-mastery.ts`
 
 ---
 

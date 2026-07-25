@@ -270,12 +270,15 @@ async function main() {
             characterBible: bible,
             references: refs,
           });
-          const ext = extensionForMime(generated.mimeType);
-          const path = `${storyRow.id}/${String(row.sentence_order).padStart(2, "0")}-${row.id}.${ext}`;
+          const path = `${storyRow.id}/${row.sentence_order}.png`;
           const { error: uploadError } = await supabase.storage
             .from(IMAGE_BUCKET)
             .upload(path, generated.bytes, {
-              contentType: generated.mimeType,
+              contentType: generated.mimeType.includes("jpeg")
+                ? "image/jpeg"
+                : generated.mimeType.includes("webp")
+                  ? "image/webp"
+                  : "image/png",
               upsert: true,
             });
           if (uploadError) throw new Error(uploadError.message);

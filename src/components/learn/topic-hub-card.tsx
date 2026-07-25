@@ -88,7 +88,7 @@ export function TopicHubCard({
           : lockReason === "premium"
             ? "This topic is part of Premium. Unlock to keep practising in order."
             : mastered
-              ? "All three stages complete — words, sentences, and conversation."
+              ? "All three stages complete — words, sentences, and speaking."
               : `Stage ${stage} of 3 · ${TOPIC_STAGES[stage - 1].label} (level ${depth} of 5)`}
       </p>
 
@@ -227,10 +227,10 @@ export function TopicHubCard({
                 </span>
                 <span>
                   <span className="block text-sm font-semibold text-zinc-900">
-                    3 · Conversation
+                    3 · Speaking
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-500">
-                    Answer and ask about this topic
+                    Practise saying it out loud
                   </span>
                 </span>
               </Link>
@@ -241,7 +241,7 @@ export function TopicHubCard({
                 </span>
                 <span>
                   <span className="block text-sm font-semibold text-zinc-700">
-                    3 · Conversation
+                    3 · Speaking
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-500">
                     Unlocks after Sentence Building is complete.

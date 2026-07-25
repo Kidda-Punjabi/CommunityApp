@@ -4,6 +4,7 @@ import {
   awardGameSessionPoints,
   buildGameAccuracyMetadata,
 } from "@/lib/leaderboard/points";
+import { recordStreakActivity } from "@/lib/progress/streak";
 
 export type MatchScoreRow = {
   deck_name: string;
@@ -90,6 +91,9 @@ export async function saveMatchScoreIfBest(
 
   const pointsEarned = await awardGameSessionPoints(supabase, metadata);
   await updateUserGameStats(supabase, userId, "match", score, isNewBest);
+  await recordStreakActivity(supabase, userId).catch(() => {
+    /* non-fatal — once-per-day */
+  });
 
   return {
     isNewBest,

@@ -18,7 +18,7 @@ export type TopicMasteryRow = {
   /** Levels cleared in the current stage (0–5). */
   depth: number;
   progress_percent: number;
-  /** Legacy flat units 0–15 for unlock math. */
+  /** Flat units 0–15 for unlock math. */
   mastery_level: number;
 };
 
@@ -33,103 +33,12 @@ export type RecordTopicActivityResult = {
   fills: TopicStageFills;
 };
 
-function isMissingTableError(message: string | undefined): boolean {
-  if (!message) return false;
-  return (
-    message.includes("topic_mastery") ||
-    message.includes("schema cache") ||
-    message.includes("does not exist")
-  );
-}
-
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function rowFromUnits(
-  lessonId: string,
-  units: number,
-  progressPercent: number
-): TopicMasteryRow {
-  const { stage, depth } = decodeMasteryUnits(units);
-  return {
-    lesson_id: lessonId,
-    stage,
-    depth,
-    progress_percent:
-      isFullyMastered(stage, depth) ? 100 : clampPercent(progressPercent),
-    mastery_level: masteryUnits(stage, depth),
-  };
-}
-
-async function fetchFromLessonProgressFallback(
-  supabase: SupabaseClient,
-  userId: string,
-  lessonIds: string[]
-): Promise<Map<string, TopicMasteryRow>> {
-  const { data } = await supabase
-    .from("lesson_progress")
-    .select(
-      "lesson_id, completed, last_position, seconds_listened, last_page_viewed, total_pages"
-    )
-    .eq("user_id", userId)
-    .in("lesson_id", lessonIds);
-
-  return new Map(
-    (data ?? []).map((row) => {
-      // Prefer last_page_viewed as units (0–15). Legacy: last_position 0–5 mapped into vocab stage.
-      let units = 0;
-      if (row.last_page_viewed != null && Number(row.last_page_viewed) > 0) {
-        units = Math.min(15, Math.max(0, Number(row.last_page_viewed)));
-      } else if (
-        row.last_position != null &&
-        Number(row.last_position) > 0 &&
-        Number(row.last_position) <= 5
-      ) {
-        units = Number(row.last_position);
-      } else if (row.completed) {
-        units = 1;
-      }
-
-      const progressPercent = clampPercent(
-        row.total_pages != null && Number(row.total_pages) >= 0
-          ? Number(row.total_pages)
-          : 0
-      );
-
-      return [row.lesson_id, rowFromUnits(row.lesson_id, units, progressPercent)];
-    })
-  );
-}
-
-async function saveLessonProgressFallback(
-  supabase: SupabaseClient,
-  userId: string,
-  lessonId: string,
-  units: number,
-  progressPercent: number
-): Promise<void> {
-  const { data: existing } = await supabase
-    .from("lesson_progress")
-    .select("seconds_listened, last_position")
-    .eq("user_id", userId)
-    .eq("lesson_id", lessonId)
-    .maybeSingle();
-
-  const { error } = await supabase.from("lesson_progress").upsert(
-    {
-      user_id: userId,
-      lesson_id: lessonId,
-      completed: units >= 1,
-      last_position: existing?.last_position ?? 0,
-      seconds_listened: existing?.seconds_listened ?? 0,
-      last_page_viewed: units,
-      total_pages: progressPercent,
-      pdf_completed: units >= STAGE_DEPTH_MAX * 3,
-    },
-    { onConflict: "user_id,lesson_id" }
-  );
-  if (error) throw error;
+function clampUnits(value: number): number {
+  return Math.max(0, Math.min(STAGE_DEPTH_MAX * 3, Math.round(value)));
 }
 
 function mapTopicMasteryDbRow(row: {
@@ -151,9 +60,17 @@ function mapTopicMasteryDbRow(row: {
     };
   }
 
-  // Old schema: mastery_level 0–5 treated as vocab-stage depth.
-  const legacy = Math.max(0, Math.min(5, Number(row.mastery_level ?? 0)));
-  return rowFromUnits(row.lesson_id, legacy, row.progress_percent ?? 0);
+  // Legacy rows without stage/depth: mastery_level held flat units 0–15
+  // (older code sometimes clamped to 0–5 vocab-only depth).
+  const units = clampUnits(Number(row.mastery_level ?? 0));
+  const { stage, depth } = decodeMasteryUnits(units);
+  return {
+    lesson_id: row.lesson_id,
+    stage,
+    depth,
+    progress_percent: clampPercent(row.progress_percent ?? 0),
+    mastery_level: masteryUnits(stage, depth),
+  };
 }
 
 export async function fetchTopicMasteryMap(
@@ -170,42 +87,13 @@ export async function fetchTopicMasteryMap(
     .in("lesson_id", lessonIds);
 
   if (error) {
-    if (isMissingTableError(error.message) || error.message.includes("stage")) {
-      // Missing table, or table exists without stage/depth columns yet.
-      if (isMissingTableError(error.message)) {
-        return fetchFromLessonProgressFallback(supabase, userId, lessonIds);
-      }
-      const { data: legacy } = await supabase
-        .from("topic_mastery")
-        .select("lesson_id, mastery_level, progress_percent")
-        .eq("user_id", userId)
-        .in("lesson_id", lessonIds);
-      return new Map(
-        (legacy ?? []).map((row) => [
-          row.lesson_id,
-          mapTopicMasteryDbRow(row),
-        ])
-      );
-    }
     console.warn("[topic_mastery] fetch failed:", error.message);
-    return new Map();
+    throw error;
   }
 
-  const map = new Map(
+  return new Map(
     (data ?? []).map((row) => [row.lesson_id, mapTopicMasteryDbRow(row)])
   );
-
-  const missing = lessonIds.filter((id) => !map.has(id));
-  if (missing.length > 0) {
-    const fallback = await fetchFromLessonProgressFallback(supabase, userId, missing);
-    for (const [id, row] of fallback) {
-      if (row.mastery_level > 0 || row.progress_percent > 0) {
-        map.set(id, row);
-      }
-    }
-  }
-
-  return map;
 }
 
 export function ringProgressPercent(mastery: TopicMasteryRow | undefined): number {
@@ -268,11 +156,11 @@ export async function recordTopicActivityResult(
     );
   }
 
-  const units = masteryUnits(stage, depth);
+  const units = clampUnits(masteryUnits(stage, depth));
   const payload = {
     user_id: userId,
     lesson_id: lessonId,
-    mastery_level: Math.min(5, units), // keep check-friendly if old constraint exists
+    mastery_level: units,
     progress_percent: progressPercent,
     stage,
     depth,
@@ -282,42 +170,7 @@ export async function recordTopicActivityResult(
     .from("topic_mastery")
     .upsert(payload, { onConflict: "user_id,lesson_id" });
 
-  if (error) {
-    if (isMissingTableError(error.message) || error.message.includes("stage")) {
-      // Fall back: store units in lesson_progress; try mastery_level-only upsert if table exists.
-      if (!isMissingTableError(error.message)) {
-        await supabase.from("topic_mastery").upsert(
-          {
-            user_id: userId,
-            lesson_id: lessonId,
-            mastery_level: Math.min(5, Math.max(units, 1)),
-            progress_percent: progressPercent,
-          },
-          { onConflict: "user_id,lesson_id" }
-        );
-      }
-      await saveLessonProgressFallback(
-        supabase,
-        userId,
-        lessonId,
-        units,
-        progressPercent
-      );
-    } else {
-      throw error;
-    }
-  } else {
-    // Also mirror units into lesson_progress for resilient reads.
-    await saveLessonProgressFallback(
-      supabase,
-      userId,
-      lessonId,
-      units,
-      progressPercent
-    ).catch(() => {
-      /* non-fatal */
-    });
-  }
+  if (error) throw error;
 
   return {
     stage,

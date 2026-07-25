@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.topic_mastery (
     CHECK (mastery_level >= 0 AND mastery_level <= 15),
   progress_percent INTEGER NOT NULL DEFAULT 0
     CHECK (progress_percent >= 0 AND progress_percent <= 100),
-  -- 1 = Vocab (red), 2 = Sentences (yellow), 3 = Conversation (green)
+  -- 1 = Vocab (yellow), 2 = Sentences (green), 3 = Speaking (purple)
   stage INTEGER NOT NULL DEFAULT 1
     CHECK (stage >= 1 AND stage <= 3),
   -- Deep levels completed inside the current stage (0–5)

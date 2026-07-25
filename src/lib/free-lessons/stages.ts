@@ -23,10 +23,10 @@ export const TOPIC_STAGES = [
   },
   {
     id: 3,
-    key: "conversation" as const,
-    label: "Conversation",
-    shortLabel: "Talk",
-    description: "Answer questions and ask people about this topic.",
+    key: "speaking" as const,
+    label: "Speaking",
+    shortLabel: "Speak",
+    description: "Practise saying this topic’s phrases out loud.",
     ringColor: "#7C3AED", // Kidda purple (violet-600)
     ringClass: "text-violet-600",
     fillClass: "bg-violet-600",
@@ -48,6 +48,7 @@ export const STAGE_ACTIVITY_PASS_THRESHOLDS = [60, 70, 75, 80, 85] as const;
 export type TopicStageFills = {
   vocab: number;
   sentences: number;
+  /** Stage 3 fill — kept as `conversation` for ring math compatibility. */
   conversation: number;
 };
 

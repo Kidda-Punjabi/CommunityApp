@@ -37,7 +37,7 @@ const DEPTH_LABELS = [
  *
  * Vocab → Match / Speed quiz (from Games)
  * Sentences → Tile builder
- * Conversation → Speaking (+ tiles for one stretch level)
+ * Speaking → Speak aloud (+ tiles for one stretch level)
  */
 export function resolveTopicGameActivity(
   stage: TopicStageId,
@@ -93,11 +93,11 @@ export function resolveTopicGameActivity(
     };
   }
 
-  // Stage 3 — conversation / speaking focused
+  // Stage 3 — speaking focused
   const talkKinds: TopicGameKind[] = [
     "speak",
     "speak",
-    "tiles", // conversational phrase building
+    "tiles", // phrase building stretch
     "speak",
     "speak",
   ];
@@ -110,7 +110,7 @@ export function resolveTopicGameActivity(
     subtitle:
       kind === "speak"
         ? "Say the Punjabi out loud — we’ll check your speaking."
-        : "Build the reply you’d say in conversation.",
+        : "Build the phrase you’d say out loud.",
     itemCount,
     passThreshold,
   };

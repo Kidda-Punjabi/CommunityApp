@@ -5,6 +5,7 @@ import { canResolveRound, computeRoundResolution } from "@/lib/battle/resolve-ro
 import { loadBattleRound, loadBattleSession } from "@/lib/battle/load-battle";
 import type { BattleRoundRow, BattleSessionRow } from "@/lib/battle/types";
 import type { BattleGameSource } from "@/lib/battle/constants";
+import { recordStreakActivity } from "@/lib/progress/streak";
 
 export async function ensureCurrentBattleRound(
   supabase: SupabaseClient,
@@ -112,6 +113,21 @@ export async function resolveBattleRoundIfReady(
 
   const updatedSession = result.session ?? session;
   const updatedRound = (await loadBattleRound(supabase, sessionId, roundNumber)) ?? round;
+
+  // Finishing a battle counts as learning for the day (once-per-day RPC).
+  if (resolution.sessionCompleted) {
+    const playerIds = [session.player_one_id];
+    if (session.player_two_id && !session.is_bot_opponent) {
+      playerIds.push(session.player_two_id);
+    }
+    await Promise.all(
+      playerIds.map((id) =>
+        recordStreakActivity(supabase, id).catch(() => {
+          /* non-fatal */
+        })
+      )
+    );
+  }
 
   return {
     resolved: true,

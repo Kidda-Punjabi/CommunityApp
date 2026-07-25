@@ -8,10 +8,12 @@ export const STORY_SCENE_IMAGE_MODEL = "gemini-2.5-flash-image";
 /** Fallback if 2.5 Flash Image is unavailable on the project. */
 export const STORY_SCENE_IMAGE_MODEL_FALLBACK = "gemini-3.1-flash-image";
 
-export const STORY_SCENE_STYLE_PROMPT = `Warm children's book illustration, soft rounded shapes, gentle watercolor-like textures,
-Punjab village atmosphere (earthy ochre, warm terracotta, soft green fields, peepal trees, golden evening light),
-friendly expressive animal characters, consistent character design across scenes,
-no text, no letters, no watermarks, no UI chrome, no photorealism.`;
+export const STORY_SCENE_STYLE_PROMPT = `Warm, gentle children's-book illustration.
+Soft rounded shapes, flat/soft illustrated style (not photorealistic, not 3D).
+Warm colour palette: ochre, terracotta, soft green, warm cream background.
+Evocative of Punjab village life (fields, peepal trees, golden evening light).
+Friendly expressive animal characters with consistent character design across scenes.
+No text, no letters, no watermarks, no UI chrome.`;
 
 export type GeneratedStoryImage = {
   bytes: Buffer;

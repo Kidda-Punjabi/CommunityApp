@@ -18,14 +18,14 @@ Self-serve **Learn** track. Product title **Everyday Punjabi**; route track id `
 
 ## What it is
 
-24 community topics (`COMMUNITY_COURSE_ID`). Path of topic nodes → topic hub → practice games that level **Vocab → Sentences → Conversation**. Master a topic (all three stages) → purple shiny badge.
+24 community topics (`COMMUNITY_COURSE_ID`). Path of topic nodes → topic hub → practice games that level **Vocab → Sentences → Speaking**. Master a topic (all three stages) → purple shiny badge.
 
 ## Mastery (do not invent a different model)
 
 - 3 stages × 5 depths (0–4 attempt; depth 5 = stage complete)
-- Rings: yellow Vocab → green Sentences → purple Conversation
+- Rings: yellow Vocab → green Sentences → purple Speaking
 - Fully mastered = all fills 100% → solid purple icon + shine (`.topic-mastery-*` in `globals.css`)
-- Persist via `topic_mastery` (`src/lib/free-lessons/mastery.ts`)
+- Persist via `topic_mastery` (`src/lib/free-lessons/mastery.ts`) — do **not** write mastery into `lesson_progress` PDF fields
 - Unlock: sequence (prev topic mastery ≥ 1) + Premium for `!is_free` lessons — Premium does **not** skip sequence
 
 ## Practice kinds
@@ -36,7 +36,7 @@ Orchestrator: `TopicGamePractice` + `resolveTopicGameActivity` in `activity-game
 |-------|------------|
 | Vocab | match, speed_quiz (incl. reverse) |
 | Sentences | tiles |
-| Conversation | speak (fallback tiles if &lt;2 speakable cards) |
+| Speaking | speak (fallback tiles if &lt;2 speakable cards) |
 
 Optional hub helpers: `/vocab` browse, `/sentences` builder (not primary stage scorer).
 
