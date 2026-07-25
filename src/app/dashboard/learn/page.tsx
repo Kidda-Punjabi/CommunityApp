@@ -2,7 +2,6 @@ import { LearnCourseCard } from "@/components/learn-course-card";
 import { ResourceListSection } from "@/components/resources/resource-list-section";
 import {
   fetchLearnContent,
-  filterFreeLessons,
 } from "@/lib/learning/load-learn-content";
 import {
   canAccessLessonInContext,
@@ -19,7 +18,6 @@ import {
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
 import { fetchTopicMasteryMap } from "@/lib/free-lessons/mastery";
-import { TOPIC_MASTERY_MAX_LEVEL } from "@/lib/free-lessons/topic-visuals";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { ui } from "@/lib/ui/styles";
 import {
@@ -54,17 +52,16 @@ export default async function LearnPage() {
   const tracks = await Promise.all(
     LEARN_TRACKS.map(async (track) => {
       if (track.alwaysUnlocked) {
-        const trackLessons = filterFreeLessons(allLessons).filter(
-          (lesson) => lesson.course_id === COMMUNITY_COURSE_ID
-        );
+        const trackLessons = allLessons
+          .filter((lesson) => lesson.course_id === COMMUNITY_COURSE_ID)
+          .sort((a, b) => a.lesson_number - b.lesson_number);
         const masteryMap = await fetchTopicMasteryMap(
           supabase,
           user.id,
           trackLessons.map((lesson) => lesson.id)
         );
-        const masteredCount = trackLessons.filter(
-          (lesson) =>
-            (masteryMap.get(lesson.id)?.mastery_level ?? 0) >= TOPIC_MASTERY_MAX_LEVEL
+        const completedCount = trackLessons.filter(
+          (lesson) => (masteryMap.get(lesson.id)?.mastery_level ?? 0) >= 1
         ).length;
 
         return {
@@ -73,7 +70,7 @@ export default async function LearnPage() {
           opensOnMessage: null as string | null,
           lessonCount: trackLessons.length,
           courseProgress: {
-            completed: masteredCount,
+            completed: completedCount,
             total: trackLessons.length,
           },
         };
@@ -154,7 +151,7 @@ export default async function LearnPage() {
           Your Path
         </p>
         <p className="mt-2 text-sm leading-relaxed text-zinc-700">
-          Start with Free Lessons — pick topics and practise to mastery, no pressure.
+          Start with Everyday Punjabi — finish each topic to unlock the next.
         </p>
         <p className="mt-2 text-sm leading-relaxed text-zinc-700">
           Ready to go deeper? Foundational teaches pronunciation. Beginners teaches

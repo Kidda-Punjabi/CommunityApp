@@ -3,6 +3,9 @@ import { BackLink } from "@/components/navigation/back-link";
 import { activityMetaForLevel } from "@/lib/free-lessons/activity-meta";
 import { loadCommunityTopicCards } from "@/lib/free-lessons/load-topic-cards";
 import { fetchTopicMasteryMap, ringProgressPercent } from "@/lib/free-lessons/mastery";
+import { loadTopicVocabProgress } from "@/lib/free-lessons/topic-vocab-progress";
+import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
+import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -27,18 +30,38 @@ export default async function FreeLessonTopicPage({ params }: TopicPageProps) {
     .eq("id", lessonId)
     .maybeSingle();
 
-  if (
-    !lesson ||
-    lesson.course_id !== COMMUNITY_COURSE_ID ||
-    !lesson.is_free
-  ) {
+  if (!lesson || lesson.course_id !== COMMUNITY_COURSE_ID) {
     notFound();
   }
 
-  const [masteryMap, topicCards] = await Promise.all([
-    fetchTopicMasteryMap(supabase, user.id, [lessonId]),
+  const { data: previousLesson } =
+    lesson.lesson_number > 1
+      ? await supabase
+          .from("lessons")
+          .select("id")
+          .eq("course_id", COMMUNITY_COURSE_ID)
+          .eq("lesson_number", lesson.lesson_number - 1)
+          .maybeSingle()
+      : { data: null };
+
+  const lessonIds = [lessonId, previousLesson?.id].filter(Boolean) as string[];
+
+  const [hasPremium, masteryMap, topicCards, vocab] = await Promise.all([
+    hasPremiumAccess(supabase, user.id),
+    fetchTopicMasteryMap(supabase, user.id, lessonIds),
     loadCommunityTopicCards(supabase, lesson.lesson_number),
+    loadTopicVocabProgress(supabase, user.id, lesson.lesson_number),
   ]);
+
+  const previousMastery = previousLesson
+    ? masteryMap.get(previousLesson.id)?.mastery_level ?? 0
+    : null;
+  const unlock = resolveTopicUnlockState({
+    lessonNumber: lesson.lesson_number,
+    isFree: Boolean(lesson.is_free),
+    hasPremium,
+    previousMasteryLevel: previousMastery,
+  });
 
   const mastery = masteryMap.get(lessonId);
   const masteryLevel = mastery?.mastery_level ?? 0;
@@ -46,7 +69,7 @@ export default async function FreeLessonTopicPage({ params }: TopicPageProps) {
 
   return (
     <div className={ui.page}>
-      <BackLink fallbackHref="/dashboard/learn/free">← Free Lessons</BackLink>
+      <BackLink href="/dashboard/learn/free">← Everyday Punjabi</BackLink>
       <div className="mt-8">
         <TopicHubCard
           lessonId={lesson.id}
@@ -54,9 +77,13 @@ export default async function FreeLessonTopicPage({ params }: TopicPageProps) {
           sortIndex={lesson.lesson_number - 1}
           masteryLevel={masteryLevel}
           ringPercent={ringProgressPercent(mastery)}
-          presentationUrl={lesson.presentation_url}
           hasPractice={topicCards.cards.length >= 2}
           activityTitle={activityTitle}
+          vocabReviewed={vocab.reviewed}
+          vocabTotal={vocab.total}
+          sentenceReady={vocab.sentenceCapable >= 1}
+          accessible={unlock.accessible}
+          lockReason={unlock.lockReason}
         />
       </div>
     </div>

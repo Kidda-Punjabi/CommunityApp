@@ -11,21 +11,28 @@ export const backLinkClass =
 type BackLinkProps = {
   children?: ReactNode;
   fallbackHref?: string;
+  /**
+   * When set, always navigate to this href (no history.back).
+   * Use inside activity flows where history would replay in-lesson steps.
+   */
+  href?: string;
   className?: string;
 };
 
 export function BackLink({
   children = "← Back",
   fallbackHref,
+  href,
   className,
 }: BackLinkProps) {
   const tabNav = useOptionalTabNav();
   const classNames = cn(backLinkClass, className);
+  const target = href ?? fallbackHref ?? "/";
 
-  // Public pages (e.g. /courses) sit outside TabNavProvider — use a plain link.
-  if (!tabNav) {
+  // Forced destination, or public pages outside TabNavProvider.
+  if (href || !tabNav) {
     return (
-      <Link href={fallbackHref ?? "/"} className={classNames}>
+      <Link href={target} className={classNames}>
         {children}
       </Link>
     );

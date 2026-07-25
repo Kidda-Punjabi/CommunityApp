@@ -1,6 +1,7 @@
 "use server";
 
 import { recordTopicActivityResult } from "@/lib/free-lessons/mastery";
+import { saveFlashcardConfidence } from "@/lib/progress/flashcard-progress";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -27,9 +28,35 @@ export async function completeTopicActivity(input: {
     scorePercent
   );
 
+  revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/learn/free");
   revalidatePath(`/dashboard/learn/free/${input.lessonId}`);
   revalidatePath(`/dashboard/learn/free/${input.lessonId}/practice`);
 
   return result;
+}
+
+export async function markTopicVocabReviewed(input: {
+  lessonId: string;
+  flashcardId: string;
+  confident: boolean;
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("You must be signed in.");
+  }
+
+  await saveFlashcardConfidence(
+    supabase,
+    user.id,
+    input.flashcardId,
+    input.confident ? "confident" : "not_confident"
+  );
+
+  revalidatePath(`/dashboard/learn/free/${input.lessonId}`);
+  revalidatePath(`/dashboard/learn/free/${input.lessonId}/vocab`);
 }

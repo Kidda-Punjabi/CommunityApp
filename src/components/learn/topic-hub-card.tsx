@@ -1,8 +1,9 @@
 "use client";
 
-import { Crown } from "lucide-react";
+import { Crown, Layers, PencilLine, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { getTopicVisual, TOPIC_MASTERY_MAX_LEVEL } from "@/lib/free-lessons/topic-visuals";
+import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 
 type TopicHubCardProps = {
   lessonId: string;
@@ -10,9 +11,13 @@ type TopicHubCardProps = {
   sortIndex: number;
   masteryLevel: number;
   ringPercent: number;
-  presentationUrl: string | null;
   hasPractice: boolean;
   activityTitle: string | null;
+  vocabReviewed: number;
+  vocabTotal: number;
+  sentenceReady: boolean;
+  accessible: boolean;
+  lockReason: "none" | "sequence" | "premium";
 };
 
 function ProgressRing({
@@ -66,9 +71,13 @@ export function TopicHubCard({
   sortIndex,
   masteryLevel,
   ringPercent,
-  presentationUrl,
   hasPractice,
   activityTitle,
+  vocabReviewed,
+  vocabTotal,
+  sentenceReady,
+  accessible,
+  lockReason,
 }: TopicHubCardProps) {
   const visual = getTopicVisual(title, sortIndex);
   const { Icon } = visual;
@@ -79,7 +88,7 @@ export function TopicHubCard({
     <div className="mx-auto flex max-w-md flex-col items-center text-center">
       <div className="relative inline-flex h-36 w-36 items-center justify-center">
         <ProgressRing
-          percent={displayRing}
+          percent={accessible ? displayRing : 0}
           color={visual.ringColor}
           size={144}
           stroke={10}
@@ -112,40 +121,120 @@ export function TopicHubCard({
         {title}
       </h1>
       <p className="mt-2 text-sm text-zinc-500">
-        {mastered
-          ? "You’ve mastered this topic. Practise again any time to stay sharp."
-          : masteryLevel === 0
-            ? "Start with an activity and build toward mastery."
-            : `Level ${masteryLevel} of ${TOPIC_MASTERY_MAX_LEVEL} · keep going to fill the ring.`}
+        {lockReason === "sequence"
+          ? "Finish the previous topic to unlock this one."
+          : lockReason === "premium"
+            ? "This topic is part of Premium. Unlock to keep practising in order."
+            : mastered
+              ? "You’ve mastered this topic. Practise again any time to stay sharp."
+              : masteryLevel === 0
+                ? "Pick a practice mode and build toward mastery."
+                : `Level ${masteryLevel} of ${TOPIC_MASTERY_MAX_LEVEL} · keep going to fill the ring.`}
       </p>
 
-      <div className="mt-8 flex w-full flex-col gap-3">
-        {hasPractice ? (
-          <Link
-            href={`/dashboard/learn/free/${lessonId}/practice`}
-            className="rounded-2xl bg-emerald-500 px-5 py-3.5 text-center text-sm font-semibold text-white hover:bg-emerald-600"
-          >
-            {mastered
-              ? "Practise again"
-              : masteryLevel === 0
-                ? `Start · ${activityTitle ?? "Warm-up"}`
-                : `Continue · ${activityTitle ?? "Next activity"}`}
-          </Link>
-        ) : (
-          <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Practice activities for this topic are coming soon.
-          </p>
-        )}
+      {accessible && vocabTotal > 0 ? (
+        <p className="mt-3 text-sm font-medium text-zinc-700">
+          {vocabReviewed} of {vocabTotal} words reviewed
+        </p>
+      ) : null}
 
-        {presentationUrl ? (
-          <a
-            href={presentationUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-2xl border border-zinc-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+      <div className="mt-8 flex w-full flex-col gap-3 text-left">
+        {lockReason === "premium" ? (
+          <Link
+            href={PREMIUM_UNLOCK_PATH}
+            className="rounded-2xl bg-violet-600 px-5 py-3.5 text-center text-sm font-semibold text-white hover:bg-violet-500"
           >
-            Review lesson slides
-          </a>
+            Unlock with Premium
+          </Link>
+        ) : null}
+
+        {lockReason === "sequence" ? (
+          <p className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-center text-sm text-zinc-600">
+            Complete the topics before this one first.
+          </p>
+        ) : null}
+
+        {accessible ? (
+          <>
+            {hasPractice ? (
+              <Link
+                href={`/dashboard/learn/free/${lessonId}/practice`}
+                className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3.5 hover:bg-emerald-100/80"
+              >
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white">
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-zinc-900">
+                    {mastered
+                      ? "Practise again"
+                      : masteryLevel === 0
+                        ? `Start · ${activityTitle ?? "Warm-up"}`
+                        : `Continue · ${activityTitle ?? "Next activity"}`}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    Guided activities that get harder as you level up.
+                  </span>
+                </span>
+              </Link>
+            ) : (
+              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Practice activities for this topic are coming soon.
+              </p>
+            )}
+
+            <Link
+              href={`/dashboard/learn/free/${lessonId}/vocab`}
+              className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 hover:bg-zinc-50"
+            >
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                <Layers className="h-4 w-4" aria-hidden />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-zinc-900">
+                  Review Vocab
+                </span>
+                <span className="mt-0.5 block text-xs text-zinc-500">
+                  {vocabTotal > 0
+                    ? `${vocabReviewed} of ${vocabTotal} words reviewed in this topic.`
+                    : "Vocab for this topic is coming soon."}
+                </span>
+              </span>
+            </Link>
+
+            {sentenceReady ? (
+              <Link
+                href={`/dashboard/learn/free/${lessonId}/sentences`}
+                className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 hover:bg-zinc-50"
+              >
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+                  <PencilLine className="h-4 w-4" aria-hidden />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-zinc-900">
+                    Sentence Building
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    Build phrases from this topic’s words.
+                  </span>
+                </span>
+              </Link>
+            ) : (
+              <div className="flex items-start gap-3 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3.5">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-200 text-zinc-500">
+                  <PencilLine className="h-4 w-4" aria-hidden />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-zinc-700">
+                    Sentence Building
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    Needs topic-linked sentence content — coming soon.
+                  </span>
+                </span>
+              </div>
+            )}
+          </>
         ) : null}
       </div>
     </div>

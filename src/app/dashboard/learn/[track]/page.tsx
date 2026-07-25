@@ -11,7 +11,6 @@ import {
 } from "@/lib/packages/load-student-packages";
 import {
   fetchLearnContent,
-  filterFreeLessons,
 } from "@/lib/learning/load-learn-content";
 import {
   filterLessonsForTrack,
@@ -39,6 +38,8 @@ import {
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { fetchCatchupEnabledLessonIds } from "@/lib/catchup/load-catchup";
 import { fetchTopicMasteryMap, ringProgressPercent } from "@/lib/free-lessons/mastery";
+import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
+import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -73,31 +74,46 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
     ]);
 
   if (track.alwaysUnlocked) {
-    const lessons = filterFreeLessons(allLessons)
+    const lessons = allLessons
       .filter((lesson) => lesson.course_id === COMMUNITY_COURSE_ID)
       .sort((a, b) => a.lesson_number - b.lesson_number);
 
-    const masteryMap = await fetchTopicMasteryMap(
-      supabase,
-      user!.id,
-      lessons.map((lesson) => lesson.id)
-    );
+    const [hasPremium, masteryMap] = await Promise.all([
+      hasPremiumAccess(supabase, user!.id),
+      fetchTopicMasteryMap(
+        supabase,
+        user!.id,
+        lessons.map((lesson) => lesson.id)
+      ),
+    ]);
 
     const pathItems = lessons.map((lesson, index) => {
       const mastery = masteryMap.get(lesson.id);
+      const previous =
+        index > 0 ? masteryMap.get(lessons[index - 1].id) : undefined;
+      const unlock = resolveTopicUnlockState({
+        lessonNumber: lesson.lesson_number,
+        isFree: Boolean(lesson.is_free),
+        hasPremium,
+        previousMasteryLevel:
+          index === 0 ? null : (previous?.mastery_level ?? 0),
+      });
+
       return {
         id: lesson.id,
         title: lesson.title,
         sortIndex: index,
         masteryLevel: mastery?.mastery_level ?? 0,
         ringPercent: ringProgressPercent(mastery),
+        lockReason: unlock.lockReason,
+        needsPremium: unlock.needsPremium,
       };
     });
 
     return (
       <div className={ui.page}>
-        <BackLink fallbackHref="/dashboard/learn">← Back</BackLink>
-        <div className="mb-8 mt-4">
+        <BackLink href="/dashboard/learn">← Back</BackLink>
+        <div className="mb-8 mt-4 text-center">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
             {track.title}
           </h1>
@@ -106,7 +122,9 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
         {pathItems.length > 0 ? (
           <FreeLessonsPath items={pathItems} />
         ) : (
-          <p className="text-sm text-zinc-500">No free lessons yet. Check back soon.</p>
+          <p className="text-center text-sm text-zinc-500">
+            No topics yet. Check back soon.
+          </p>
         )}
       </div>
     );

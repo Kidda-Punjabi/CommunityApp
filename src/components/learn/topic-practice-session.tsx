@@ -77,6 +77,7 @@ export function TopicPracticeSession({
           masteryLevel: result.masteryLevel,
           mastered: result.mastered,
         });
+        router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save progress.");
       }
@@ -128,10 +129,10 @@ export function TopicPracticeSession({
           </button>
           <button
             type="button"
-            onClick={() => router.push("/dashboard/learn/free")}
+            onClick={() => router.replace("/dashboard/learn/free")}
             className="text-sm font-medium text-zinc-500 hover:text-zinc-800"
           >
-            All free lessons
+            All topics
           </button>
         </div>
       </div>
@@ -145,7 +146,7 @@ export function TopicPracticeSession({
   }
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto max-w-md text-center">
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
           {topicTitle}
@@ -167,7 +168,7 @@ export function TopicPracticeSession({
         </p>
       </div>
 
-      <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-6 shadow-sm">
+      <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-6 text-center shadow-sm">
         <p className="text-lg font-semibold text-zinc-900">{question.prompt}</p>
         {question.promptHint ? (
           <p className="mt-1 text-sm text-zinc-500">{question.promptHint}</p>
@@ -193,7 +194,7 @@ export function TopicPracticeSession({
                   type="button"
                   disabled={locked}
                   onClick={() => selectOption(optionIndex)}
-                  className={`w-full rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${style} disabled:cursor-default`}
+                  className={`w-full rounded-2xl border px-4 py-3 text-center text-sm font-medium transition ${style} disabled:cursor-default`}
                 >
                   {option}
                 </button>

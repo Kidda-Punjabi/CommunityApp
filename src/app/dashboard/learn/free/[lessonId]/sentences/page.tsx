@@ -1,29 +1,25 @@
-import { TopicPracticeSession } from "@/components/learn/topic-practice-session";
+import { TopicSentenceBuilder } from "@/components/learn/topic-sentence-builder";
 import { BackLink } from "@/components/navigation/back-link";
-import { buildTopicActivity } from "@/lib/free-lessons/build-activity";
 import { loadCommunityTopicCards } from "@/lib/free-lessons/load-topic-cards";
 import { fetchTopicMasteryMap } from "@/lib/free-lessons/mastery";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
-import { TOPIC_MASTERY_MAX_LEVEL } from "@/lib/free-lessons/topic-visuals";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-type PracticePageProps = {
+type SentencesPageProps = {
   params: Promise<{ lessonId: string }>;
 };
 
-export default async function FreeLessonPracticePage({ params }: PracticePageProps) {
+export default async function FreeLessonSentencesPage({ params }: SentencesPageProps) {
   const { lessonId } = await params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) redirect("/login");
 
   const { data: lesson } = await supabase
@@ -32,9 +28,7 @@ export default async function FreeLessonPracticePage({ params }: PracticePagePro
     .eq("id", lessonId)
     .maybeSingle();
 
-  if (!lesson || lesson.course_id !== COMMUNITY_COURSE_ID) {
-    notFound();
-  }
+  if (!lesson || lesson.course_id !== COMMUNITY_COURSE_ID) notFound();
 
   const { data: previousLesson } =
     lesson.lesson_number > 1
@@ -70,34 +64,15 @@ export default async function FreeLessonPracticePage({ params }: PracticePagePro
     redirect(`/dashboard/learn/free/${lessonId}`);
   }
 
-  const masteryLevel = masteryMap.get(lessonId)?.mastery_level ?? 0;
-  const activityLevel =
-    masteryLevel >= TOPIC_MASTERY_MAX_LEVEL ? 4 : masteryLevel;
-  const activity = buildTopicActivity(topicCards.cards, activityLevel);
-
   return (
     <div className={ui.page}>
       <BackLink href={`/dashboard/learn/free/${lessonId}`}>← {lesson.title}</BackLink>
       <div className="mt-6">
-        {activity ? (
-          <TopicPracticeSession
-            lessonId={lesson.id}
-            topicTitle={lesson.title}
-            activity={activity}
-          />
-        ) : (
-          <div className="space-y-3 text-center">
-            <p className="text-sm text-zinc-500">
-              Practice activities for this topic are coming soon.
-            </p>
-            <Link
-              href={`/dashboard/learn/free/${lessonId}`}
-              className="inline-flex text-sm font-semibold text-emerald-600 hover:text-emerald-500"
-            >
-              Back to topic
-            </Link>
-          </div>
-        )}
+        <TopicSentenceBuilder
+          lessonId={lesson.id}
+          topicTitle={lesson.title}
+          cards={topicCards.cards}
+        />
       </div>
     </div>
   );
