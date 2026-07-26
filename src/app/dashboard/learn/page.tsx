@@ -1,14 +1,13 @@
-import { LearnCourseCard } from "@/components/learn-course-card";
+import { LearnCourseTiles, type LearnHubTile } from "@/components/learn/learn-course-tiles";
 import { ResourceListSection } from "@/components/resources/resource-list-section";
 import { fetchLearnContent } from "@/lib/learning/load-learn-content";
 import {
   canAccessLessonInContext,
   filterLessonsForTrack,
   isLearnTrackUnlocked,
-  lessonCountForTrack,
 } from "@/lib/learning/learn-access";
 import { resolveGroupCohortContentGate } from "@/lib/learning/group-cohort-content-gate";
-import { LEARN_TRACKS, shouldShowLearnCourseProgress } from "@/lib/learning/learn-catalog";
+import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
 import { findCoursesForTier } from "@/lib/membership/courses";
 import {
   getCachedAuthSession,
@@ -21,6 +20,17 @@ import {
 } from "@/lib/progress/lesson-completion";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 import { redirect } from "next/navigation";
+
+function shortStartsStatus(startDate: string): string {
+  const day = startDate.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return "Starts soon";
+  const label = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${day}T12:00:00Z`));
+  return `Starts ${label}`;
+}
 
 export default async function LearnPage() {
   const session = await getCachedAuthSession();
@@ -43,85 +53,107 @@ export default async function LearnPage() {
     ),
   ]);
 
-  // Everyday Punjabi lives on Home — keep /learn/free routes, omit the Learn hub card.
-  const learnHubTracks = LEARN_TRACKS.filter((track) => track.id !== "free");
+  const foundational = getLearnTrack("foundational")!;
+  const beginners = getLearnTrack("beginners")!;
 
-  const tracks = await Promise.all(
-    learnHubTracks.map(async (track) => {
-      const locked = !isLearnTrackUnlocked(track, access);
-      const trackLessons = track.tier
-        ? filterLessonsForTrack(allLessons, access.courses, track.tier)
-        : [];
+  const foundationalLocked = !isLearnTrackUnlocked(foundational, access);
+  const beginnersLocked = !isLearnTrackUnlocked(beginners, access);
 
-      let opensOnMessage: string | null = null;
-      if (!locked && track.tier) {
-        const courseIds = findCoursesForTier(access.courses, track.tier).map((c) => c.id);
-        const gate = await resolveGroupCohortContentGate(supabase, user.id, courseIds);
-        if (gate?.gated) opensOnMessage = gate.message;
-      }
-
-      const accessibleLessons =
-        locked || opensOnMessage
-          ? []
-          : trackLessons.filter((lesson) => canAccessLessonInContext(access, lesson));
-
-      return {
-        track,
-        locked,
-        opensOnMessage,
-        lessonCount: track.tier
-          ? lessonCountForTrack(allLessons, access.courses, track.tier)
-          : 0,
-        courseProgress:
-          locked || opensOnMessage
-            ? undefined
-            : !shouldShowLearnCourseProgress(track.id)
-              ? undefined
-              : (() => {
-                  const progress = summarizeCourseProgress(accessibleLessons, completionMap);
-                  return {
-                    completed: progress.completedLessons,
-                    total: progress.totalLessons,
-                  };
-                })(),
-      };
-    })
+  const foundationalLessons = filterLessonsForTrack(
+    allLessons,
+    access.courses,
+    "foundational"
   );
+  const beginnersCourseIds = findCoursesForTier(access.courses, "beginners").map(
+    (c) => c.id
+  );
+
+  let beginnersGate: Awaited<ReturnType<typeof resolveGroupCohortContentGate>> = null;
+  if (!beginnersLocked) {
+    beginnersGate = await resolveGroupCohortContentGate(
+      supabase,
+      user.id,
+      beginnersCourseIds
+    );
+  }
+
+  const foundationalAccessible = foundationalLocked
+    ? []
+    : foundationalLessons.filter((lesson) => canAccessLessonInContext(access, lesson));
+  const foundationalProgress = foundationalLocked
+    ? null
+    : summarizeCourseProgress(foundationalAccessible, completionMap);
+
+  const foundationalPercent =
+    foundationalProgress && foundationalProgress.totalLessons > 0
+      ? Math.round(
+          (foundationalProgress.completedLessons / foundationalProgress.totalLessons) * 100
+        )
+      : null;
+
+  const foundationalStatus = foundationalLocked
+    ? "Unlock to start"
+    : foundationalProgress && foundationalProgress.totalLessons > 0
+      ? `${foundationalProgress.completedLessons} of ${foundationalProgress.totalLessons} lessons`
+      : "Lessons ready";
+
+  const beginnersStatus = beginnersLocked
+    ? "Unlock to start"
+    : beginnersGate?.gated
+      ? shortStartsStatus(beginnersGate.startDate)
+      : "Lessons ready";
+
+  const tiles: LearnHubTile[] = [
+    {
+      id: "foundational",
+      kind: "link",
+      href: foundationalLocked
+        ? foundational.unlockUrl ?? "/courses/foundational"
+        : learnTrackPath("foundational"),
+      title: "Foundational course",
+      status: foundationalStatus,
+      percent: foundationalLocked ? null : foundationalPercent,
+      tone: "accent",
+    },
+    {
+      id: "beginners",
+      kind: "link",
+      href: beginnersLocked
+        ? beginners.unlockUrl ?? "/courses/beginners"
+        : learnTrackPath("beginners"),
+      title: "Beginners course",
+      status: beginnersStatus,
+      tone: "amber",
+    },
+    {
+      id: "more",
+      kind: "static",
+      title: "More courses",
+      status: "Coming soon",
+      tone: "muted",
+    },
+    {
+      id: "resources",
+      kind: "link",
+      href: "/dashboard/learn#resources",
+      title: "Resources",
+      status: "Tools & shortcuts",
+      tone: "sky",
+    },
+  ];
 
   return (
     <div className={ui.page}>
-      <div className="mb-8">
+      <div className="mb-5">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Browse courses, track your progress, and pick up reference tools when you need them.
+          Courses and tools in one place.
         </p>
       </div>
 
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
-        All courses
-      </h2>
+      <LearnCourseTiles tiles={tiles} />
 
-      <div className={ui.stack}>
-        {tracks.map(({ track, locked, opensOnMessage, lessonCount, courseProgress }) => (
-          <LearnCourseCard
-            key={track.id}
-            track={track}
-            locked={locked}
-            opensOnMessage={opensOnMessage}
-            lessonCount={lessonCount}
-            courseProgress={
-              courseProgress
-                ? {
-                    completed: courseProgress.completed,
-                    total: courseProgress.total,
-                  }
-                : undefined
-            }
-          />
-        ))}
-      </div>
-
-      <div className="mt-10">
+      <div id="resources" className="mt-10 scroll-mt-4">
         <ResourceListSection />
       </div>
     </div>

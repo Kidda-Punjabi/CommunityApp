@@ -1,11 +1,17 @@
+import { CommunityCourseEntry } from "@/components/community/community-course-entry";
 import { CommunityForumPreviewSection } from "@/components/community/community-forum-preview-section";
 import { NextClassCard } from "@/components/community/next-class-card";
 import { PlayTogetherSection } from "@/components/community/play-together-section";
 import { WeeklyLeaderboardCard } from "@/components/community/weekly-leaderboard-card";
 import { FriendsSummaryRow } from "@/components/profile/friends-summary-row";
 import { getCommunityTabData } from "@/lib/cache/tab-page-cache";
+import { isLearnTrackUnlocked } from "@/lib/learning/learn-access";
+import { getLearnTrack } from "@/lib/learning/learn-catalog";
 import { loadKidSession } from "@/lib/kids/session";
-import { getCachedAuthSession } from "@/lib/supabase/cached-session";
+import {
+  getCachedAuthSession,
+  getCachedCourseAccess,
+} from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import { redirect } from "next/navigation";
 
@@ -13,17 +19,20 @@ export default async function CommunityPage() {
   const session = await getCachedAuthSession();
   if (!session) redirect("/login");
 
-  const {
-    friendsData,
-    leaderboard,
-    preparedUpcoming,
-    forumPosts,
-    forumOnboarding,
-  } = await getCommunityTabData(session.user.id);
+  const [
+    { friendsData, leaderboard, preparedUpcoming, forumPosts, forumOnboarding },
+    access,
+  ] = await Promise.all([
+    getCommunityTabData(session.user.id),
+    getCachedCourseAccess(session.supabase, session.user),
+  ]);
 
   const kidSession = await loadKidSession(session.user.id);
   const hideForum = kidSession.activeKidProfile !== null;
   const nextClass = preparedUpcoming[0] ?? null;
+
+  const communityTrack = getLearnTrack("community")!;
+  const showCommunityCourse = isLearnTrackUnlocked(communityTrack, access);
 
   return (
     <div className={ui.page}>
@@ -35,6 +44,8 @@ export default async function CommunityPage() {
       </div>
 
       <div className={ui.stackLoose}>
+        {showCommunityCourse ? <CommunityCourseEntry /> : null}
+
         {!hideForum && (
           <CommunityForumPreviewSection posts={forumPosts} onboarding={forumOnboarding} />
         )}
