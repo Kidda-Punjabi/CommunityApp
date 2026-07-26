@@ -41,5 +41,10 @@ export default async function Home({ searchParams }: HomeProps) {
 
   const continueAs = await getContinueAsUser();
 
+  // Already signed in — skip the marketing "Continue as…" gate entirely.
+  if (continueAs?.sessionActive) {
+    redirect("/dashboard/home");
+  }
+
   return <MarketingLanding continueAs={continueAs} />;
 }
