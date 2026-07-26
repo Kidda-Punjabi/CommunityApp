@@ -1,5 +1,4 @@
 import { LearnCourseTiles, type LearnHubTile } from "@/components/learn/learn-course-tiles";
-import { ResourceListSection } from "@/components/resources/resource-list-section";
 import { fetchLearnContent } from "@/lib/learning/load-learn-content";
 import {
   canAccessLessonInContext,
@@ -135,7 +134,7 @@ export default async function LearnPage() {
     {
       id: "resources",
       kind: "link",
-      href: "/dashboard/learn#resources",
+      href: "/dashboard/learn/resources",
       title: "Resources",
       status: "Tools & shortcuts",
       tone: "sky",
@@ -152,10 +151,6 @@ export default async function LearnPage() {
       </div>
 
       <LearnCourseTiles tiles={tiles} />
-
-      <div id="resources" className="mt-10 scroll-mt-4">
-        <ResourceListSection />
-      </div>
     </div>
   );
 }

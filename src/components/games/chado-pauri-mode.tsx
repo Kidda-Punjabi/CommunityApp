@@ -32,6 +32,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ui } from "@/lib/ui/styles";
 
 const FEEDBACK_MS = 1200;
+const PENDING_MS = 2000;
 
 type Phase = "ready" | "playing" | "finished";
 
@@ -63,8 +64,8 @@ export function ChadoPauriMode({
   const [tutorHint, setTutorHint] = useState<string | null>(null);
   const [usedFlashcardIds, setUsedFlashcardIds] = useState<Set<string>>(new Set());
   const [rungResults, setRungResults] = useState<ChadoPauriRungResult[]>([]);
-  const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<"pending" | "correct" | "wrong" | null>(null);
   const [fallbackCount, setFallbackCount] = useState(0);
   const [won, setWon] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
@@ -191,10 +192,19 @@ export function ChadoPauriMode({
     loadQuestion(nextIndex, usedFlashcardIds);
   }
 
-  function handleAnswer(option: ChadoPauriOption) {
-    if (!question || feedback || selectedAnswer) return;
-
+  function handleSelect(option: ChadoPauriOption) {
+    if (!question || feedback) return;
     setSelectedAnswer(option.text);
+  }
+
+  function handleSubmit() {
+    if (!question || !selectedAnswer || feedback) return;
+
+    const option = displayOptions.find((o) => o.text === selectedAnswer);
+    if (!option) return;
+
+    setFeedback("pending");
+
     const isCorrect = option.isCorrect;
 
     const rungResult: ChadoPauriRungResult = {
@@ -205,18 +215,20 @@ export function ChadoPauriMode({
       lifelines_used: [...lifelinesUsedThisQuestion],
     };
 
-    setRungResults((prev) => [...prev, rungResult]);
+    advanceTimerRef.current = window.setTimeout(() => {
+      setRungResults((prev) => [...prev, rungResult]);
 
-    if (isCorrect) {
-      setFeedback("correct");
-      advanceTimerRef.current = window.setTimeout(() => {
-        advanceAfterCorrect();
-      }, FEEDBACK_MS);
-      return;
-    }
+      if (isCorrect) {
+        setFeedback("correct");
+        advanceTimerRef.current = window.setTimeout(() => {
+          advanceAfterCorrect();
+        }, FEEDBACK_MS);
+        return;
+      }
 
-    setFeedback("wrong");
-    finishGame(lockedInScore, false);
+      setFeedback("wrong");
+      finishGame(lockedInScore, false);
+    }, PENDING_MS);
   }
 
   function handleHalfAndHalf() {
@@ -361,6 +373,12 @@ export function ChadoPauriMode({
         </div>
       ) : null}
 
+      {feedback === "pending" ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-800">
+          Checking…
+        </p>
+      ) : null}
+
       {feedback === "correct" ? (
         <p className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-center text-sm font-medium text-green-800">
           Correct — climbing to the next rung…
@@ -370,23 +388,26 @@ export function ChadoPauriMode({
       <div className="grid grid-cols-1 gap-2">
         {displayOptions.map((option) => {
           const isSelected = selectedAnswer === option.text;
-          const showCorrect = feedback && option.isCorrect;
+          const showCorrect = feedback === "correct" && option.isCorrect;
           const showWrong = feedback === "wrong" && isSelected && !option.isCorrect;
+          const showPending = feedback === "pending" && isSelected;
 
           return (
             <button
               key={option.key}
               type="button"
               disabled={Boolean(feedback)}
-              onClick={() => handleAnswer(option)}
+              onClick={() => handleSelect(option)}
               className={`rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors ${
                 showCorrect
                   ? "border-green-300 bg-green-50 text-green-900"
                   : showWrong
                     ? "border-red-300 bg-red-50 text-red-900"
-                    : isSelected
-                      ? "border-violet-400 bg-violet-50 text-violet-900"
-                      : "border-zinc-200 bg-white text-zinc-800 hover:border-violet-200 hover:bg-violet-50/50"
+                    : showPending
+                      ? "border-amber-400 bg-amber-50 text-amber-950"
+                      : isSelected
+                        ? "border-2 border-violet-600 bg-violet-50 text-violet-900"
+                        : "border-zinc-200 bg-white text-zinc-800 hover:border-violet-200 hover:bg-violet-50/50"
               }`}
             >
               <FlashcardBilingualLine
@@ -397,6 +418,17 @@ export function ChadoPauriMode({
           );
         })}
       </div>
+
+      {!feedback ? (
+        <button
+          type="button"
+          disabled={!selectedAnswer}
+          onClick={handleSubmit}
+          className={ui.btnPrimaryBlock}
+        >
+          Submit answer
+        </button>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {(Object.keys(LIFELINE_LABELS) as LifelineId[]).map((id) => (

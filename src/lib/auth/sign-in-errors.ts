@@ -21,9 +21,11 @@ function isInvalidCredentialsError(error: AuthError): boolean {
   );
 }
 
-async function authUserExistsForEmail(email: string): Promise<boolean | null> {
+type AuthUserLookup = "missing" | "unconfirmed" | "confirmed" | null;
+
+async function lookupAuthUserForEmail(email: string): Promise<AuthUserLookup> {
   const normalized = normalizeEmail(email);
-  if (!normalized.includes("@")) return false;
+  if (!normalized.includes("@")) return "missing";
 
   const supabase = createServiceRoleClient();
   let page = 1;
@@ -37,11 +39,11 @@ async function authUserExistsForEmail(email: string): Promise<boolean | null> {
 
     for (const user of data.users) {
       if (user.email && normalizeEmail(user.email) === normalized) {
-        return true;
+        return user.email_confirmed_at ? "confirmed" : "unconfirmed";
       }
     }
 
-    if (data.users.length < 200) return false;
+    if (data.users.length < 200) return "missing";
     page += 1;
   }
 }
@@ -53,11 +55,15 @@ export async function resolveSignInError(
 ): Promise<ResolvedSignInError> {
   const messageLower = error.message.toLowerCase();
 
-  if (messageLower.includes("email not confirmed")) {
+  const code = (error as AuthError & { code?: string }).code;
+  if (
+    code === "email_not_confirmed" ||
+    messageLower.includes("email not confirmed")
+  ) {
     return {
       kind: "email_unconfirmed",
       message:
-        "This email is registered but not confirmed yet. Check your inbox for the confirmation link, or sign up again to resend it.",
+        "Confirm your email before signing in. Open the link we sent you — or resend it below.",
     };
   }
 
@@ -65,19 +71,27 @@ export async function resolveSignInError(
     return { kind: "generic", message: error.message };
   }
 
-  const exists = await authUserExistsForEmail(email);
-  if (exists === null) {
+  // Unconfirmed accounts often surface as invalid credentials — check explicitly.
+  const lookup = await lookupAuthUserForEmail(email);
+  if (lookup === null) {
     return {
       kind: "generic",
       message:
         "We couldn't sign you in with those details. Check your password, use Forgot password, or sign up if you're new to Kidda.",
     };
   }
-  if (!exists) {
+  if (lookup === "missing") {
     return {
       kind: "no_account",
       message:
         "We don't have an account with that email yet. If you're new to Kidda, create an account below — or double-check the address you typed.",
+    };
+  }
+  if (lookup === "unconfirmed") {
+    return {
+      kind: "email_unconfirmed",
+      message:
+        "Confirm your email before signing in. Open the link we sent you — or resend it below.",
     };
   }
 

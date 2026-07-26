@@ -24,8 +24,12 @@ export default async function GameRoomPage({ params }: GameRoomPageProps) {
     redirect(`/dashboard/group-games/room/${roomId}/play`);
   }
 
-  if (view.room.status === "cancelled" || view.room.status === "completed") {
+  if (view.room.status === "cancelled") {
     redirect("/dashboard/group-games?cancelled=1");
+  }
+
+  if (view.room.status === "completed") {
+    redirect(`/dashboard/group-games/room/${roomId}/play`);
   }
 
   return (

@@ -80,7 +80,7 @@ export async function buildJeopardyBoard(
   const filters = contentFiltersFromSettings(settings);
   const { data, error } = await supabase
     .from("flashcards")
-    .select("id, front_text, back_text, category, difficulty, topic_tags");
+    .select("id, front_text, back_text, romanised, category, difficulty, topic_tags");
 
   if (error) throw error;
 

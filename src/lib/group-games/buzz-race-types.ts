@@ -1,9 +1,13 @@
-/** Shared MCQ question shape used by Buzz-in and Jeopardy. */
+/** Shared MCQ question shape used by Buzz-in, Jeopardy, and Point Race. */
 export type McqQuestionPayload = {
   flashcard_id: string;
   prompt: string;
+  /** Optional romanised for the prompt (usually English prompts stay null). */
+  prompt_romanised?: string | null;
   correct_answer: string;
   options: string[];
+  /** Parallel to options — romanised Gurmukhi when the option is Punjabi. */
+  options_romanised?: (string | null)[];
 };
 
 export type BuzzRacePhase = "open" | "buzzed" | "result" | "waiting" | "finished";

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   claimBuzzIn,
   resolveBuzzInTimeout,
@@ -27,6 +28,7 @@ type BuzzInArenaProps = {
 };
 
 export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
+  const router = useRouter();
   const [room, setRoom] = useState(initialRoom);
   const [state, setState] = useState(initialState);
   const [round, setRound] = useState<BuzzInRoundRow | null>(initialState.currentRound);
@@ -39,6 +41,7 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
   const resultTimerRef = useRef<number | null>(null);
 
   const { currentUserId, isPlaying } = state;
+  const isHost = room.host_id === currentUserId;
   const isBuzzer = round?.buzzed_by === currentUserId;
   const question = round?.question_payload;
 
@@ -136,6 +139,11 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
         currentRoundNumber: nextRoundNumber ?? prev.currentRoundNumber,
       }));
 
+      if (next.status === "lobby") {
+        router.push(`/dashboard/group-games/room/${next.id}`);
+        return;
+      }
+
       if (next.status === "completed") {
         setPhase("finished");
         void refreshScoreboard();
@@ -146,7 +154,7 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
         void fetchRoundByNumber(nextRoundNumber);
       }
     },
-    [fetchRoundByNumber, refreshScoreboard, room.settings?.current_round]
+    [fetchRoundByNumber, refreshScoreboard, room.settings?.current_round, router]
   );
 
   const handleRoundChange = useCallback(
@@ -241,6 +249,9 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
           title="Buzz-in"
           entries={state.scoreboard}
           currentUserId={currentUserId}
+          roomId={room.id}
+          isHost={isHost}
+          currentGameType="buzz_in"
         />
       ) : null}
 

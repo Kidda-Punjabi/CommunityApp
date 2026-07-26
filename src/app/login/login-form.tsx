@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { PasswordInput } from "@/components/auth/password-input";
+import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 import { login, type AuthState } from "./actions";
 
 const initialState: AuthState = {};
@@ -16,6 +17,7 @@ type LoginFormProps = {
 
 export function LoginForm({ defaultEmail, rememberedAccount = false, nextPath }: LoginFormProps) {
   const [state, formAction, pending] = useActionState(login, initialState);
+  const resendEmail = state.email ?? defaultEmail ?? "";
 
   return (
     <form action={formAction} className="space-y-5">
@@ -62,14 +64,23 @@ export function LoginForm({ defaultEmail, rememberedAccount = false, nextPath }:
 
       {state.error && (
         <div className="space-y-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-          <p>{state.error}</p>
-          {state.errorKind === "no_account" ? (
-            <p>
-              <Link href="/signup" className="font-medium text-violet-700 underline hover:text-violet-600">
-                Create a Kidda account
-              </Link>
-            </p>
-          ) : null}
+          {state.errorKind === "email_unconfirmed" ? (
+            <CheckEmailPanel email={resendEmail} variant="inline" />
+          ) : (
+            <>
+              <p>{state.error}</p>
+              {state.errorKind === "no_account" ? (
+                <p>
+                  <Link
+                    href="/signup"
+                    className="font-medium text-violet-700 underline hover:text-violet-600"
+                  >
+                    Create a Kidda account
+                  </Link>
+                </p>
+              ) : null}
+            </>
+          )}
         </div>
       )}
 

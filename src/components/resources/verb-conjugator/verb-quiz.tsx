@@ -27,7 +27,7 @@ function buildQuestion(verbs: Verb[]) {
 
   const correct = conjugate(verb, tense.id, personOption.person, gender);
 
-  const distractors = new Set<string>();
+  const distractors = new Map<string, string>();
   while (distractors.size < 3) {
     const otherVerb = pickRandom(verbs);
     const otherTense = pickRandom(TENSE_CATALOG);
@@ -35,11 +35,15 @@ function buildQuestion(verbs: Verb[]) {
     const otherGender: Gender = Math.random() > 0.5 ? "masculine" : "feminine";
     const wrong = conjugate(otherVerb, otherTense.id, otherPerson.person, otherGender);
     if (wrong.fullPunjabi !== correct.fullPunjabi) {
-      distractors.add(wrong.fullPunjabi);
+      distractors.set(wrong.fullPunjabi, wrong.fullRomanised);
     }
   }
 
-  const options = [correct.fullPunjabi, ...distractors].sort(() => Math.random() - 0.5);
+  const options = [correct.fullPunjabi, ...distractors.keys()].sort(() => Math.random() - 0.5);
+  const romanisedByOption: Record<string, string> = {
+    [correct.fullPunjabi]: correct.fullRomanised,
+    ...Object.fromEntries(distractors),
+  };
 
   return {
     verb,
@@ -50,6 +54,7 @@ function buildQuestion(verbs: Verb[]) {
     gender,
     correct,
     options,
+    romanisedByOption,
     prompt: `How do you say "${correct.englishGloss}"?`,
   };
 }
@@ -132,7 +137,12 @@ export function VerbConjugatorQuiz({ verbs }: VerbConjugatorQuizProps) {
               }}
               className={className}
             >
-              {option}
+              <span className="block font-medium">{option}</span>
+              {question.romanisedByOption[option] ? (
+                <span className="mt-0.5 block text-sm font-normal text-zinc-500">
+                  {question.romanisedByOption[option]}
+                </span>
+              ) : null}
             </button>
           );
         })}
@@ -147,7 +157,13 @@ export function VerbConjugatorQuiz({ verbs }: VerbConjugatorQuizProps) {
           </p>
           {!isCorrect && (
             <p className="text-sm text-zinc-600">
-              Answer: <span className="font-medium">{question.correct.fullPunjabi}</span>
+              Answer:{" "}
+              <span className="font-medium">
+                {question.correct.fullPunjabi}
+                {question.correct.fullRomanised
+                  ? ` (${question.correct.fullRomanised})`
+                  : ""}
+              </span>
             </p>
           )}
           <button

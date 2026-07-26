@@ -35,7 +35,7 @@ export async function loadFlashcardPool(
   const filters = topicFiltersFromSettings(settings);
   const { data, error } = await supabase
     .from("flashcards")
-    .select("id, front_text, back_text, category, difficulty, topic_tags");
+    .select("id, front_text, back_text, romanised, category, difficulty, topic_tags");
 
   if (error) throw error;
 

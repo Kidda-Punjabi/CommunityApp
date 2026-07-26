@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   claimJeopardyBuzz,
   resolveJeopardyTimeout,
@@ -43,6 +44,7 @@ function deriveViewMode(
 }
 
 export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps) {
+  const router = useRouter();
   const [room, setRoom] = useState(initialRoom);
   const [state, setState] = useState(initialState);
   const [tiles, setTiles] = useState(initialState.tiles);
@@ -58,6 +60,7 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
     currentPickerId: room.current_picker_id ?? state.currentPickerId,
   };
 
+  const isHost = room.host_id === currentUserId;
   const isPicker = currentPickerId === currentUserId;
   const viewMode = deriveViewMode(activeTile, room.status, showResult);
   const buzzPhase = deriveBuzzRacePhase(activeTile, room.status);
@@ -145,11 +148,15 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
         currentPickerId: next.current_picker_id ?? prev.currentPickerId,
         roomStatus: next.status as JeopardyGameState["roomStatus"],
       }));
+      if (next.status === "lobby") {
+        router.push(`/dashboard/group-games/room/${next.id}`);
+        return;
+      }
       if (next.status === "completed") {
         void refreshScoreboard();
       }
     },
-    [refreshScoreboard]
+    [refreshScoreboard, router]
   );
 
   const handleTileChange = useCallback(
@@ -246,6 +253,9 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
           title="Jeopardy"
           entries={state.scoreboard}
           currentUserId={currentUserId}
+          roomId={room.id}
+          isHost={isHost}
+          currentGameType="jeopardy"
         />
       ) : (
         <>

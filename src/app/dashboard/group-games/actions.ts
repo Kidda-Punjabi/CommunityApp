@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { GROUP_GAME_TYPES } from "@/lib/game-rooms/constants";
+import { DEFAULT_QUESTION_COUNT, GROUP_GAME_TYPES } from "@/lib/game-rooms/constants";
 import type { GroupGameType } from "@/lib/game-rooms/types";
 import {
   buildRoomContentSettings,
@@ -167,4 +167,43 @@ export async function leaveGameRoom(roomId: string): Promise<GroupGameActionResu
 
   revalidatePath("/dashboard/group-games");
   return { roomId };
+}
+
+export async function resetGameRoomToLobby(input: {
+  roomId: string;
+  gameType?: GroupGameType;
+  questionCount?: number;
+  topicTags?: string[];
+}): Promise<GroupGameActionResult> {
+  const supabase = await createClient();
+  const room = await loadGameRoom(supabase, input.roomId);
+  if (!room) return { error: "Room not found." };
+
+  const nextType = input.gameType ?? room.game_type;
+  if (!isGroupGameType(nextType)) {
+    return { error: "Pick a group game type." };
+  }
+
+  const questionCount = input.questionCount ?? room.settings?.question_count ?? DEFAULT_QUESTION_COUNT;
+  const topicTags = input.topicTags ?? room.settings?.topic_tags ?? [];
+  const settings = buildRoomContentSettings({
+    questionCount:
+      typeof questionCount === "number" && Number.isFinite(questionCount)
+        ? questionCount
+        : DEFAULT_QUESTION_COUNT,
+    gameType: nextType,
+    topicTags: Array.isArray(topicTags) ? topicTags : [],
+  });
+
+  const { error } = await supabase.rpc("reset_game_room_to_lobby", {
+    p_room_id: input.roomId,
+    p_game_type: nextType,
+    p_settings: settings,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/dashboard/group-games/room/${input.roomId}`);
+  revalidatePath(`/dashboard/group-games/room/${input.roomId}/play`);
+  return { roomId: input.roomId };
 }

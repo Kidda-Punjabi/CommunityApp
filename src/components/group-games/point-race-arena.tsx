@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { submitRaceAnswerAction } from "@/app/dashboard/group-games/race-actions";
 import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { GroupGameLeaderboard } from "@/components/group-games/group-game-leaderboard";
 import { GroupGameScoreboard } from "@/components/group-games/group-game-scoreboard";
+import { ChadoPauriGroupOptionLabel } from "@/components/group-games/chado-pauri-group-option-label";
+import { McqOptionLabel } from "@/components/group-games/mcq-option-label";
 import { usePointRaceRealtime } from "@/hooks/use-point-race-realtime";
 import { POINT_RACE_FEEDBACK_MS } from "@/lib/point-race/constants";
 import type { PointRaceGameState, RaceStanding } from "@/lib/point-race/types";
@@ -13,25 +16,30 @@ import type { GameRoomRow } from "@/lib/game-rooms/types";
 import { createClient } from "@/lib/supabase/client";
 import { ui } from "@/lib/ui/styles";
 
+const PENDING_MS = 2000;
+
 type PointRaceArenaProps = {
   initialState: PointRaceGameState;
   initialRoom: GameRoomRow;
 };
 
 export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProps) {
+  const router = useRouter();
   const [room, setRoom] = useState(initialRoom);
   const [state, setState] = useState(initialState);
   const [myQuestion, setMyQuestion] = useState(
     initialState.myRaceState?.current_question_payload ?? null
   );
   const [standings, setStandings] = useState(initialState.standings);
-  const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
+  const [feedback, setFeedback] = useState<"pending" | "correct" | "wrong" | null>(null);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [lastCorrectAnswer, setLastCorrectAnswer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const feedbackTimerRef = useRef<number | null>(null);
 
   const { currentUserId, isPlaying, winScore } = state;
+  const isHost = room.host_id === currentUserId;
   const winnerId =
     typeof room.settings?.winner_id === "string"
       ? room.settings.winner_id
@@ -46,26 +54,30 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
     const { data, error: rpcError } = await supabase.rpc("list_race_standings", {
       p_room_id: room.id,
     });
-    if (rpcError || !data?.length) return;
+    if (rpcError || !data) return;
 
-    const playerIds = data.map((row: { player_id: string }) => row.player_id);
+    const rows = data as Array<{
+      player_id: string;
+      score: number;
+      questions_answered: number;
+      is_winner: boolean;
+    }>;
+
     const { data: profiles } = await supabase
       .from("profiles")
       .select("id, full_name, preferred_name")
-      .in("id", playerIds);
+      .in(
+        "id",
+        rows.map((row) => row.player_id)
+      );
 
     const profileMap = new Map(
       (profiles ?? []).map((p) => [p.id, getDisplayName(p) ?? "Player"])
     );
 
     setStandings(
-      data.map(
-        (row: {
-          player_id: string;
-          score: number;
-          questions_answered: number;
-          is_winner: boolean;
-        }): RaceStanding => ({
+      rows.map(
+        (row): RaceStanding => ({
           playerId: row.player_id,
           displayName: profileMap.get(row.player_id) ?? "Player",
           score: row.score,
@@ -79,9 +91,13 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
   const handleRoomChange = useCallback(
     (next: GameRoomRow) => {
       setRoom(next);
+      if (next.status === "lobby") {
+        router.push(`/dashboard/group-games/room/${next.id}`);
+        return;
+      }
       if (next.status === "completed") void refreshStandings();
     },
-    [refreshStandings]
+    [refreshStandings, router]
   );
 
   usePointRaceRealtime({
@@ -98,28 +114,56 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
     onStandingsChange: refreshStandings,
   });
 
-  const handleAnswer = (answer: string) => {
-    if (!isPlaying || !myQuestion || pending || room.status !== "in_progress") return;
-
+  const handleSelect = (answer: string) => {
+    if (!isPlaying || !myQuestion || pending || feedback || room.status !== "in_progress") {
+      return;
+    }
     setError(null);
+    setSelectedAnswer(answer);
+  };
+
+  const handleSubmit = () => {
+    if (
+      !selectedAnswer ||
+      !isPlaying ||
+      !myQuestion ||
+      pending ||
+      feedback ||
+      room.status !== "in_progress"
+    ) {
+      return;
+    }
+
+    const answer = selectedAnswer;
+    setFeedback("pending");
+
     startTransition(async () => {
+      await new Promise((r) => setTimeout(r, PENDING_MS));
+
       const result = await submitRaceAnswerAction(answer);
 
       if (result.error) {
         setError(result.error);
+        setFeedback(null);
+        setSelectedAnswer(null);
         return;
       }
 
-      if (result.alreadyAnswered || result.gameEnded) return;
+      if (result.alreadyAnswered || result.gameEnded) {
+        setFeedback(null);
+        setSelectedAnswer(null);
+        return;
+      }
 
       setFeedback(result.wasCorrect ? "correct" : "wrong");
       setLastCorrectAnswer(result.correctAnswer ?? null);
-      if (result.nextQuestion) setMyQuestion(result.nextQuestion);
 
       if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
       feedbackTimerRef.current = window.setTimeout(() => {
         setFeedback(null);
+        setSelectedAnswer(null);
         setLastCorrectAnswer(null);
+        if (result.nextQuestion) setMyQuestion(result.nextQuestion);
       }, POINT_RACE_FEEDBACK_MS);
 
       void refreshStandings();
@@ -144,6 +188,10 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
   }));
 
   const finished = room.status === "completed";
+  const lastCorrectIndex =
+    lastCorrectAnswer && myQuestion ? myQuestion.options.indexOf(lastCorrectAnswer) : -1;
+  const lastCorrectRomanised =
+    lastCorrectIndex >= 0 ? (myQuestion?.options_romanised?.[lastCorrectIndex] ?? null) : null;
 
   return (
     <div className="space-y-5">
@@ -175,6 +223,9 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
           title="Point Race"
           entries={scoreboardEntries}
           currentUserId={currentUserId}
+          roomId={room.id}
+          isHost={isHost}
+          currentGameType="point_race"
         />
       ) : (
         <>
@@ -187,7 +238,9 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
                   ? "ring-2 ring-emerald-400"
                   : feedback === "wrong"
                     ? "ring-2 ring-rose-400"
-                    : ""
+                    : feedback === "pending"
+                      ? "ring-2 ring-amber-400"
+                      : ""
               }`}
             >
               <div className="text-center">
@@ -199,31 +252,67 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
                 </p>
               </div>
 
-              {feedback ? (
-                <p
+              {feedback && feedback !== "pending" ? (
+                <div
                   className={`text-center text-sm font-semibold ${
                     feedback === "correct" ? "text-emerald-600" : "text-rose-600"
                   }`}
                 >
-                  {feedback === "correct"
-                    ? "Correct!"
-                    : `Not quite — it was “${lastCorrectAnswer}”`}
-                </p>
+                  {feedback === "correct" ? (
+                    "Correct!"
+                  ) : (
+                    <span className="inline-flex flex-wrap items-center justify-center gap-1">
+                      Not quite — it was{" "}
+                      <ChadoPauriGroupOptionLabel
+                        gurmukhi={lastCorrectAnswer ?? ""}
+                        romanised={lastCorrectRomanised}
+                      />
+                    </span>
+                  )}
+                </div>
+              ) : null}
+
+              {feedback === "pending" ? (
+                <p className="text-center text-sm font-semibold text-amber-700">Checking…</p>
               ) : null}
 
               <div className="grid gap-3">
-                {myQuestion.options.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    disabled={pending || feedback !== null}
-                    onClick={() => handleAnswer(option)}
-                    className={`${ui.cardBordered} w-full px-4 py-4 text-center text-lg font-semibold text-zinc-900 transition-colors enabled:hover:border-violet-300 enabled:hover:bg-violet-50 disabled:opacity-60`}
-                  >
-                    {option}
-                  </button>
-                ))}
+                {myQuestion.options.map((option) => {
+                  const isSelected = selectedAnswer === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      disabled={pending || feedback !== null}
+                      onClick={() => handleSelect(option)}
+                      className={`${ui.cardBordered} w-full px-4 py-4 text-center text-lg transition-colors disabled:opacity-90 ${
+                        feedback === "pending" && isSelected
+                          ? "border-amber-400 bg-amber-50"
+                          : feedback === "correct" && isSelected
+                            ? "border-emerald-500 bg-emerald-50"
+                            : feedback === "wrong" && isSelected
+                              ? "border-rose-500 bg-rose-50"
+                              : isSelected
+                                ? "border-2 border-violet-600 bg-violet-50"
+                                : "enabled:hover:border-violet-300 enabled:hover:bg-violet-50"
+                      }`}
+                    >
+                      <McqOptionLabel question={myQuestion} option={option} />
+                    </button>
+                  );
+                })}
               </div>
+
+              {!feedback ? (
+                <button
+                  type="button"
+                  disabled={!selectedAnswer || pending}
+                  onClick={handleSubmit}
+                  className={ui.btnPrimaryBlock}
+                >
+                  Submit answer
+                </button>
+              ) : null}
             </section>
           ) : null}
 

@@ -111,7 +111,10 @@ export async function signup(
         resetError.message
       );
     }
+    redirect(
+      `/login?message=${encodeURIComponent("If an account exists for that email, check your inbox for next steps.")}`
+    );
   }
 
-  redirect("/login?message=Check your email to confirm your account.");
+  redirect(`/signup/check-email?email=${encodeURIComponent(email.trim())}`);
 }

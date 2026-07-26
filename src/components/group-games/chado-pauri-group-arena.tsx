@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   submitLadderAnswerAction,
   useAskRoomAction,
@@ -31,6 +32,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ui } from "@/lib/ui/styles";
 
 const OPTION_LABELS = ["A", "B", "C", "D"] as const;
+const PENDING_MS = 2000;
 
 type ChadoPauriGroupArenaProps = {
   initialState: LadderGameState;
@@ -43,6 +45,7 @@ export function ChadoPauriGroupArena({
   initialRoom,
   optionRomanisedByBackText,
 }: ChadoPauriGroupArenaProps) {
+  const router = useRouter();
   const [room, setRoom] = useState(initialRoom);
   const [state, setState] = useState(initialState);
   const [runs, setRuns] = useState(initialState.runs);
@@ -50,7 +53,8 @@ export function ChadoPauriGroupArena({
   const [turnOrder, setTurnOrder] = useState(initialState.turnOrder);
   const [hotSeatPlayerId, setHotSeatPlayerId] = useState(initialState.hotSeatPlayerId);
   const [question, setQuestion] = useState(initialState.currentQuestion);
-  const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<"pending" | "correct" | "wrong" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const activeRunIdRef = useRef(activeRun?.id ?? null);
@@ -60,6 +64,7 @@ export function ChadoPauriGroupArena({
   }, [activeRun?.id]);
 
   const { currentUserId } = state;
+  const isHost = room.host_id === currentUserId;
   const isHotSeat = hotSeatPlayerId === currentUserId;
   const askRoomUsesRemaining = ladderAskRoomUsesRemaining(room.settings);
   const halfHalfUsed = ladderHalfHalfUsed(room.settings);
@@ -141,6 +146,7 @@ export function ChadoPauriGroupArena({
   useEffect(() => {
     if (question && !question.resolved_at) {
       setFeedback(null);
+      setSelectedAnswer(null);
     }
   }, [question?.id, question?.resolved_at]);
 
@@ -173,9 +179,13 @@ export function ChadoPauriGroupArena({
       if (next.current_picker_id) {
         setHotSeatPlayerId(next.current_picker_id);
       }
+      if (next.status === "lobby") {
+        router.push(`/dashboard/group-games/room/${next.id}`);
+        return;
+      }
       if (next.status === "completed") void refreshScoreboard();
     },
-    [refreshScoreboard]
+    [refreshScoreboard, router]
   );
 
   const handleRunChange = useCallback(
@@ -206,12 +216,24 @@ export function ChadoPauriGroupArena({
 
   const displayOptions = isHotSeat ? visibleOptions : question?.question_payload.options ?? [];
 
-  const handleAnswer = (answer: string) => {
+  const handleSelect = (answer: string) => {
     if (!question || !isHotSeat || pending || feedback) return;
     setError(null);
+    setSelectedAnswer(answer);
+  };
+
+  const handleSubmit = () => {
+    if (!question || !selectedAnswer || !isHotSeat || pending || feedback) return;
+    const answer = selectedAnswer;
+    setFeedback("pending");
     startTransition(async () => {
+      await new Promise((r) => setTimeout(r, PENDING_MS));
       const result = await submitLadderAnswerAction(question.id, answer);
-      if (result.error) setError(result.error);
+      if (result.error) {
+        setError(result.error);
+        setFeedback(null);
+        setSelectedAnswer(null);
+      }
     });
   };
 
@@ -254,6 +276,9 @@ export function ChadoPauriGroupArena({
         title="Chado Pauri (Group)"
         entries={state.scoreboard}
         currentUserId={currentUserId}
+        roomId={room.id}
+        isHost={isHost}
+        currentGameType="chado_pauri_group"
       />
     );
   }
@@ -347,30 +372,53 @@ export function ChadoPauriGroupArena({
             />
           ) : null}
 
-          <section className={`${ui.card} space-y-3`}>
+          <section
+            className={`${ui.card} space-y-3 ${
+              feedback === "correct"
+                ? "ring-2 ring-emerald-400"
+                : feedback === "wrong"
+                  ? "ring-2 ring-rose-400"
+                  : feedback === "pending"
+                    ? "ring-2 ring-amber-400"
+                    : ""
+            }`}
+          >
             <div className="text-center">
               <p className="text-lg font-bold leading-snug text-zinc-900 sm:text-xl">
                 {question.question_payload.prompt}
               </p>
             </div>
 
-            {isHotSeat && !feedback ? (
+            {isHotSeat ? (
               <div className="grid gap-2">
-                {visibleOptions.map((option, index) => (
-                  <button
-                    key={option}
-                    type="button"
-                    disabled={pending}
-                    onClick={() => handleAnswer(option)}
-                    className={`${ui.cardBordered} px-4 py-3 text-center enabled:hover:border-violet-300 enabled:hover:bg-violet-50 sm:py-3.5`}
-                  >
-                    <ChadoPauriGroupOptionLabel
-                      gurmukhi={option}
-                      romanised={romanisedForOption(option)}
-                      label={OPTION_LABELS[index] ?? String(index + 1)}
-                    />
-                  </button>
-                ))}
+                {visibleOptions.map((option, index) => {
+                  const isSelected = selectedAnswer === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      disabled={pending || feedback !== null}
+                      onClick={() => handleSelect(option)}
+                      className={`${ui.cardBordered} px-4 py-3 text-center transition-colors disabled:opacity-90 sm:py-3.5 ${
+                        feedback === "pending" && isSelected
+                          ? "border-amber-400 bg-amber-50"
+                          : feedback === "correct" && isSelected
+                            ? "border-emerald-500 bg-emerald-50"
+                            : feedback === "wrong" && isSelected
+                              ? "border-rose-500 bg-rose-50"
+                              : isSelected
+                                ? "border-2 border-violet-600 bg-violet-50"
+                                : "enabled:hover:border-violet-300 enabled:hover:bg-violet-50"
+                      }`}
+                    >
+                      <ChadoPauriGroupOptionLabel
+                        gurmukhi={option}
+                        romanised={romanisedForOption(option)}
+                        label={OPTION_LABELS[index] ?? String(index + 1)}
+                      />
+                    </button>
+                  );
+                })}
               </div>
             ) : null}
 
@@ -398,7 +446,11 @@ export function ChadoPauriGroupArena({
               </div>
             ) : null}
 
-            {feedback ? (
+            {feedback === "pending" ? (
+              <p className="text-center text-sm font-semibold text-amber-700">Checking…</p>
+            ) : null}
+
+            {feedback && feedback !== "pending" ? (
               <p
                 className={`text-center text-sm font-semibold ${
                   feedback === "correct" ? "text-green-600" : "text-rose-600"
@@ -406,6 +458,17 @@ export function ChadoPauriGroupArena({
               >
                 {feedback === "correct" ? "Correct!" : "Wrong — game over."}
               </p>
+            ) : null}
+
+            {isHotSeat && !feedback ? (
+              <button
+                type="button"
+                disabled={!selectedAnswer || pending}
+                onClick={handleSubmit}
+                className={ui.btnPrimaryBlock}
+              >
+                Submit answer
+              </button>
             ) : null}
           </section>
         </>

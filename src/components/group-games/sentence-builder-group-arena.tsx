@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { submitTilePlacementAction } from "@/app/dashboard/group-games/sentence-actions";
 import { GroupGameLeaderboard } from "@/components/group-games/group-game-leaderboard";
 import { GroupGameScoreboard } from "@/components/group-games/group-game-scoreboard";
@@ -33,6 +34,7 @@ export function SentenceBuilderGroupArena({
   initialState,
   initialRoom,
 }: SentenceBuilderGroupArenaProps) {
+  const router = useRouter();
   const [room, setRoom] = useState(initialRoom);
   const [state, setState] = useState(initialState);
   const [rounds, setRounds] = useState(initialState.rounds);
@@ -49,6 +51,7 @@ export function SentenceBuilderGroupArena({
   const feedbackTimerRef = useRef<number | null>(null);
 
   const { currentUserId, isPlaying, scoreboard, totalRounds } = state;
+  const isHost = room.host_id === currentUserId;
 
   const turnPlayerId = activeRound?.current_turn_player_id ?? null;
   const isMyTurn = Boolean(isPlaying && turnPlayerId === currentUserId);
@@ -140,9 +143,13 @@ export function SentenceBuilderGroupArena({
   const handleRoomChange = useCallback(
     (next: GameRoomRow) => {
       setRoom(next);
+      if (next.status === "lobby") {
+        router.push(`/dashboard/group-games/room/${next.id}`);
+        return;
+      }
       if (next.status === "completed") void refreshScoreboard();
     },
-    [refreshScoreboard]
+    [refreshScoreboard, router]
   );
 
   useSentenceBuilderRealtime({
@@ -186,6 +193,9 @@ export function SentenceBuilderGroupArena({
         title="Collaborative Sentence Builder"
         entries={scoreboard}
         currentUserId={currentUserId}
+        roomId={room.id}
+        isHost={isHost}
+        currentGameType="sentence_builder_group"
       />
     );
   }

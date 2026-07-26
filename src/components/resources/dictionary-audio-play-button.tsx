@@ -4,6 +4,7 @@ import { Volume2 } from "lucide-react";
 import { useRef } from "react";
 import {
   applySpeechPlaybackRate,
+  NORMAL_SPEECH_RATE,
   SLOW_SPEECH_RATE,
   useSpeechPlaybackRate,
 } from "@/lib/audio/speech-playback";
@@ -20,13 +21,13 @@ export function DictionaryAudioPlayButton({
   size = "md",
 }: DictionaryAudioPlayButtonProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const { rate: speechRate, isSlow: isSlowAudio, toggleSlow: toggleSlowAudio } =
-    useSpeechPlaybackRate();
+  const { isSlow: isSlowAudio, setRate } = useSpeechPlaybackRate();
 
-  function handlePlay() {
+  function playAt(rate: number) {
     const audio = audioRef.current;
     if (!audio) return;
-    applySpeechPlaybackRate(audio, speechRate);
+    setRate(rate);
+    applySpeechPlaybackRate(audio, rate);
     audio.currentTime = 0;
     void audio.play().catch(() => {
       // Autoplay policies may block without prior gesture — user tapped Play.
@@ -40,7 +41,7 @@ export function DictionaryAudioPlayButton({
       <div className="flex items-center gap-1.5">
         <button
           type="button"
-          onClick={handlePlay}
+          onClick={() => playAt(NORMAL_SPEECH_RATE)}
           aria-label={label}
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-violet-300 hover:text-violet-600"
         >
@@ -48,14 +49,14 @@ export function DictionaryAudioPlayButton({
         </button>
         <button
           type="button"
-          onClick={toggleSlowAudio}
-          aria-label={`Toggle slow audio (${isSlowAudio ? "on" : "off"})`}
+          onClick={() => playAt(SLOW_SPEECH_RATE)}
+          aria-label="Play slowly"
           className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[12px] leading-none ${
             isSlowAudio
               ? "border-violet-300 bg-violet-50 text-violet-700"
               : "border-zinc-200 bg-white text-zinc-500"
           }`}
-          title={isSlowAudio ? `Slow audio on (${SLOW_SPEECH_RATE.toFixed(1)}x)` : "Use slower audio"}
+          title={`Play slower (${SLOW_SPEECH_RATE.toFixed(1)}×)`}
         >
           🐢
         </button>

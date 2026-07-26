@@ -10,6 +10,8 @@ import { resolveSignInError, type SignInErrorKind } from "@/lib/auth/sign-in-err
 export type AuthState = {
   error?: string;
   errorKind?: SignInErrorKind;
+  /** Echoed back so resend can target the right inbox. */
+  email?: string;
 };
 
 export async function login(
@@ -32,7 +34,11 @@ export async function login(
 
   if (error) {
     const resolved = await resolveSignInError(email, error);
-    return { error: resolved.message, errorKind: resolved.kind };
+    return {
+      error: resolved.message,
+      errorKind: resolved.kind,
+      email: email.trim(),
+    };
   }
 
   // Heal purchase grants for already-linked leads. Password login never hits
