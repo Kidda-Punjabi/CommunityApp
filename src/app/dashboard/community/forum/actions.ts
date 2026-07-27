@@ -1,5 +1,6 @@
 "use server";
 
+import { isMasterAdmin } from "@/lib/auth/admin-access";
 import {
   canAccessForum,
   canModerateForum,
@@ -158,6 +159,7 @@ export async function createForumPost(
 
 export async function createForumReply(
   postId: string,
+  parentReplyId: string | null,
   _prev: ForumActionResult,
   formData: FormData
 ): Promise<ForumActionResult> {
@@ -170,10 +172,25 @@ export async function createForumReply(
   const { supabase, userId } = session;
   await requireIntroComplete(supabase, userId);
 
+  const parentId = parentReplyId?.trim() || null;
+  if (parentId) {
+    const { data: parent, error: parentError } = await supabase
+      .from("forum_replies")
+      .select("id, post_id, status")
+      .eq("id", parentId)
+      .maybeSingle();
+
+    if (parentError) return { error: parentError.message };
+    if (!parent || parent.post_id !== postId || parent.status !== "visible") {
+      return { error: "That reply is no longer available." };
+    }
+  }
+
   const { error } = await supabase.from("forum_replies").insert({
     post_id: postId,
     author_id: userId,
     body,
+    ...(parentId ? { parent_reply_id: parentId } : {}),
   });
 
   if (error) return { error: error.message };
@@ -181,6 +198,97 @@ export async function createForumReply(
   revalidatePath(`/dashboard/community/forum/${postId}`);
   revalidatePath("/dashboard/community/forum");
   return { success: "Reply posted." };
+}
+
+export async function updateForumPost(
+  postId: string,
+  _prev: ForumActionResult,
+  formData: FormData
+): Promise<ForumActionResult> {
+  const session = await requireForumMember();
+  if (!session.ok) return session.result;
+
+  const { supabase, userId } = session;
+  await requireIntroComplete(supabase, userId);
+
+  const { data: post, error: loadError } = await supabase
+    .from("forum_posts")
+    .select("id, author_id, status")
+    .eq("id", postId)
+    .maybeSingle();
+
+  if (loadError) return { error: loadError.message };
+  if (!post || post.status !== "visible") return { error: "Post not found." };
+  if (post.author_id !== userId) return { error: "You can only edit your own posts." };
+
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  if (!title || !body) return { error: "Title and message are required." };
+
+  const editedAt = new Date().toISOString();
+  let { error } = await supabase
+    .from("forum_posts")
+    .update({ title, body, edited_at: editedAt })
+    .eq("id", postId)
+    .eq("author_id", userId);
+
+  if (error?.message?.toLowerCase().includes("edited_at")) {
+    const fallback = await supabase
+      .from("forum_posts")
+      .update({ title, body })
+      .eq("id", postId)
+      .eq("author_id", userId);
+    error = fallback.error;
+  }
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/dashboard/community/forum/${postId}`);
+  revalidatePath("/dashboard/community/forum");
+  revalidatePath("/dashboard/community");
+  return { success: "Post updated." };
+}
+
+export async function deleteForumPost(postId: string): Promise<ForumActionResult> {
+  const session = await requireForumMember();
+  if (!session.ok) return session.result;
+
+  const { supabase, userId } = session;
+
+  const { data: post, error: loadError } = await supabase
+    .from("forum_posts")
+    .select("id, author_id, status")
+    .eq("id", postId)
+    .maybeSingle();
+
+  if (loadError) return { error: loadError.message };
+  if (!post || post.status !== "visible") return { error: "Post not found." };
+
+  const isAuthor = post.author_id === userId;
+  const isAdmin = await isMasterAdmin(userId, supabase);
+  if (!isAuthor && !isAdmin) {
+    return { error: "You do not have permission to delete this post." };
+  }
+
+  const { error } = await supabase
+    .from("forum_posts")
+    .update({ status: "deleted" })
+    .eq("id", postId);
+
+  if (error) {
+    if (error.message.toLowerCase().includes("deleted")) {
+      return {
+        error:
+          'Database migration required: run supabase/forum-post-edited-threaded-replies.sql',
+      };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard/community/forum");
+  revalidatePath("/dashboard/community");
+  revalidatePath(`/dashboard/community/forum/${postId}`);
+  redirect("/dashboard/community/forum");
 }
 
 export async function toggleForumPostLike(postId: string): Promise<ForumActionResult> {

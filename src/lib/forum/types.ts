@@ -1,6 +1,6 @@
 import type { AppRole } from "@/lib/auth/admin-access";
 
-export type ForumContentStatus = "visible" | "hidden" | "removed";
+export type ForumContentStatus = "visible" | "hidden" | "removed" | "deleted";
 export type ForumReportStatus = "open" | "resolved" | "dismissed";
 
 export type ForumAuthor = {
@@ -17,8 +17,10 @@ export type ForumPostSummary = {
   likeCount: number;
   replyCount: number;
   createdAt: string;
+  editedAt: string | null;
   author: ForumAuthor;
   likedByViewer: boolean;
+  bodySnippet?: string;
 };
 
 export type ForumPostDetail = ForumPostSummary & {
@@ -33,9 +35,11 @@ export type ForumReply = {
   id: string;
   body: string;
   createdAt: string;
+  parentReplyId: string | null;
   author: ForumAuthor;
   likedByViewer: boolean;
   likeCount: number;
+  children: ForumReply[];
 };
 
 export type ForumReportRow = {

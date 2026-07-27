@@ -4,6 +4,7 @@ import { loadCurrentUserAppRoles } from "@/lib/tutoring/tutor-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FORUM_STAFF_ROLES } from "./access";
 import type { ForumAuthor, ForumPostDetail, ForumPostPreview, ForumPostSummary, ForumReply, ForumReportRow } from "./types";
+import { buildReplyTree } from "./build-reply-tree";
 
 type ProfileRow = {
   id: string;
@@ -19,6 +20,7 @@ type PostRow = {
   category: string | null;
   like_count: number;
   created_at: string;
+  edited_at?: string | null;
   author_id: string;
   profiles: ProfileRow | ProfileRow[] | null;
 };
@@ -29,6 +31,7 @@ type ReplyRow = {
   created_at: string;
   author_id: string;
   post_id: string;
+  parent_reply_id: string | null;
   profiles: ProfileRow | ProfileRow[] | null;
 };
 
@@ -153,7 +156,8 @@ function mapPostSummary(
   row: PostRow,
   staffRolesByUser: Map<string, AppRole[]>,
   replyCounts: Map<string, number>,
-  likedPostIds: Set<string>
+  likedPostIds: Set<string>,
+  bodySnippet?: string
 ): ForumPostSummary {
   const profile = unwrapProfile(row.profiles, row.author_id);
   return {
@@ -163,9 +167,17 @@ function mapPostSummary(
     likeCount: row.like_count,
     replyCount: replyCounts.get(row.id) ?? 0,
     createdAt: row.created_at,
+    editedAt: row.edited_at ?? null,
     author: toAuthor(profile, staffRolesByUser.get(row.author_id) ?? []),
     likedByViewer: likedPostIds.has(row.id),
+    ...(bodySnippet ? { bodySnippet } : {}),
   };
+}
+
+export function snippetForumBody(body: string, maxLength = 140): string {
+  const trimmed = body.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength).trimEnd()}…`;
 }
 
 export async function loadForumPosts(
@@ -175,7 +187,7 @@ export async function loadForumPosts(
   const { data, error } = await supabase
     .from("forum_posts")
     .select(
-      "id, title, category, like_count, created_at, author_id, profiles:author_id (id, full_name, preferred_name, avatar_url)"
+      "id, title, body, category, like_count, created_at, edited_at, author_id, profiles:author_id (id, full_name, preferred_name, avatar_url)"
     )
     .eq("status", "visible")
     .order("created_at", { ascending: false });
@@ -193,14 +205,18 @@ export async function loadForumPosts(
   ]);
 
   return rows.map((row) =>
-    mapPostSummary(row, staffRolesByUser, replyCounts, likedPostIds)
+    mapPostSummary(
+      row,
+      staffRolesByUser,
+      replyCounts,
+      likedPostIds,
+      snippetForumBody(row.body)
+    )
   );
 }
 
 function snippetBody(body: string, maxLength = 100): string {
-  const trimmed = body.trim().replace(/\s+/g, " ");
-  if (trimmed.length <= maxLength) return trimmed;
-  return `${trimmed.slice(0, maxLength).trimEnd()}…`;
+  return snippetForumBody(body, maxLength);
 }
 
 export async function loadForumPostPreviews(
@@ -230,7 +246,7 @@ export async function loadForumPostPreviews(
   ]);
 
   return rows.map((row) => ({
-    ...mapPostSummary(row, staffRolesByUser, replyCounts, likedPostIds),
+    ...mapPostSummary(row, staffRolesByUser, replyCounts, likedPostIds, snippetBody(row.body)),
     bodySnippet: snippetBody(row.body),
   }));
 }
@@ -240,34 +256,72 @@ export async function loadForumPostDetail(
   viewerUserId: string,
   postId: string
 ): Promise<{ post: ForumPostDetail; replies: ForumReply[] } | null> {
-  const { data: postRow, error: postError } = await supabase
+  const postSelect =
+    "id, title, body, category, like_count, created_at, edited_at, author_id, status, profiles:author_id (id, full_name, preferred_name, avatar_url)";
+
+  type PostDetailRow = PostRow & { body: string; status: string };
+
+  let postRow: PostDetailRow | null = null;
+  const postResult = await supabase
     .from("forum_posts")
-    .select(
-      "id, title, body, category, like_count, created_at, author_id, status, profiles:author_id (id, full_name, preferred_name, avatar_url)"
-    )
+    .select(postSelect)
     .eq("id", postId)
     .maybeSingle();
 
-  if (postError) throw postError;
+  if (postResult.error?.message?.toLowerCase().includes("edited_at")) {
+    const fallback = await supabase
+      .from("forum_posts")
+      .select(
+        "id, title, body, category, like_count, created_at, author_id, status, profiles:author_id (id, full_name, preferred_name, avatar_url)"
+      )
+      .eq("id", postId)
+      .maybeSingle();
+    if (fallback.error) throw fallback.error;
+    postRow = fallback.data as PostDetailRow;
+  } else if (postResult.error) {
+    throw postResult.error;
+  } else {
+    postRow = postResult.data as PostDetailRow;
+  }
+
   if (!postRow || postRow.status !== "visible") return null;
 
-  const { data: replyRows, error: replyError } = await supabase
+  const replySelect =
+    "id, body, created_at, author_id, post_id, parent_reply_id, profiles:author_id (id, full_name, preferred_name, avatar_url)";
+
+  let replyRows: ReplyRow[] = [];
+  const replyResult = await supabase
     .from("forum_replies")
-    .select(
-      "id, body, created_at, author_id, post_id, profiles:author_id (id, full_name, preferred_name, avatar_url)"
-    )
+    .select(replySelect)
     .eq("post_id", postId)
     .eq("status", "visible")
     .order("created_at", { ascending: true });
 
-  if (replyError) throw replyError;
+  if (replyResult.error?.message?.toLowerCase().includes("parent_reply_id")) {
+    const fallback = await supabase
+      .from("forum_replies")
+      .select(
+        "id, body, created_at, author_id, post_id, profiles:author_id (id, full_name, preferred_name, avatar_url)"
+      )
+      .eq("post_id", postId)
+      .eq("status", "visible")
+      .order("created_at", { ascending: true });
+    if (fallback.error) throw fallback.error;
+    replyRows = ((fallback.data ?? []) as Omit<ReplyRow, "parent_reply_id">[]).map((row) => ({
+      ...row,
+      parent_reply_id: null,
+    }));
+  } else if (replyResult.error) {
+    throw replyResult.error;
+  } else {
+    replyRows = (replyResult.data ?? []) as ReplyRow[];
+  }
 
   const post = postRow as PostRow & { body: string };
-  const replies = (replyRows ?? []) as ReplyRow[];
   const authorIds = [
-    ...new Set([post.author_id, ...replies.map((reply) => reply.author_id)]),
+    ...new Set([post.author_id, ...replyRows.map((reply) => reply.author_id)]),
   ];
-  const replyIds = replies.map((reply) => reply.id);
+  const replyIds = replyRows.map((reply) => reply.id);
 
   const [staffRolesByUser, replyCounts, likedPostIds, likedReplyIds, replyLikeCounts] =
     await Promise.all([
@@ -280,19 +334,23 @@ export async function loadForumPostDetail(
 
   const summary = mapPostSummary(post, staffRolesByUser, replyCounts, likedPostIds);
 
+  const flatReplies: ForumReply[] = replyRows.map((reply) => {
+    const profile = unwrapProfile(reply.profiles, reply.author_id);
+    return {
+      id: reply.id,
+      body: reply.body,
+      createdAt: reply.created_at,
+      parentReplyId: reply.parent_reply_id,
+      author: toAuthor(profile, staffRolesByUser.get(reply.author_id) ?? []),
+      likedByViewer: likedReplyIds.has(reply.id),
+      likeCount: replyLikeCounts.get(reply.id) ?? 0,
+      children: [],
+    };
+  });
+
   return {
     post: { ...summary, body: post.body },
-    replies: replies.map((reply) => {
-      const profile = unwrapProfile(reply.profiles, reply.author_id);
-      return {
-        id: reply.id,
-        body: reply.body,
-        createdAt: reply.created_at,
-        author: toAuthor(profile, staffRolesByUser.get(reply.author_id) ?? []),
-        likedByViewer: likedReplyIds.has(reply.id),
-        likeCount: replyLikeCounts.get(reply.id) ?? 0,
-      };
-    }),
+    replies: buildReplyTree(flatReplies),
   };
 }
 

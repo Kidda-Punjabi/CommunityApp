@@ -31,7 +31,7 @@ export function CommunityForumPreviewSection({
       {posts.length > 0 ? (
         <div className={ui.stack}>
           {posts.map((post) => (
-            <ForumPostCard key={post.id} post={post} bodySnippet={post.bodySnippet} />
+            <ForumPostCard key={post.id} post={post} />
           ))}
         </div>
       ) : (

@@ -1,11 +1,15 @@
 import { ForumCategoryBadge } from "@/components/forum/forum-category-badge";
+import { ForumEditedLabel } from "@/components/forum/forum-edited-label";
 import { ForumLikeButton } from "@/components/forum/forum-like-button";
-import { ForumReplyForm, ForumReplyItem } from "@/components/forum/forum-reply-section";
+import { ForumPostManage } from "@/components/forum/forum-post-manage";
+import { ForumReplyForm, ForumReplyThread } from "@/components/forum/forum-reply-section";
 import { ForumReportDialog } from "@/components/forum/forum-report-dialog";
 import { StaffRoleBadge } from "@/components/forum/staff-role-badge";
 import { UserAvatar } from "@/components/profile/user-avatar";
+import { isMasterAdmin } from "@/lib/auth/admin-access";
 import { canAccessForum, forumComposerPath, loadForumOnboardingState } from "@/lib/forum/access";
 import { loadForumPostDetail } from "@/lib/forum/load-forum";
+import type { ForumReply } from "@/lib/forum/types";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -19,6 +23,10 @@ function formatForumDate(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+function countReplies(replies: ForumReply[]): number {
+  return replies.reduce((total, reply) => total + 1 + countReplies(reply.children), 0);
 }
 
 type PageProps = {
@@ -38,11 +46,15 @@ export default async function ForumPostPage({ params }: PageProps) {
   const detail = await loadForumPostDetail(supabase, user.id, postId);
   if (!detail) notFound();
 
-  const onboarding = await loadForumOnboardingState(supabase, user.id);
+  const [onboarding, viewerIsMasterAdmin] = await Promise.all([
+    loadForumOnboardingState(supabase, user.id),
+    isMasterAdmin(user.id, supabase),
+  ]);
   const canReply = onboarding.hasAgreedGuidelines && onboarding.hasCompletedIntro;
   const composerHref = forumComposerPath(onboarding);
 
   const { post, replies } = detail;
+  const replyCount = countReplies(replies);
 
   return (
     <div className={ui.page}>
@@ -68,6 +80,7 @@ export default async function ForumPostPage({ params }: PageProps) {
               <span className="text-sm font-medium text-zinc-900">{post.author.displayName}</span>
               <StaffRoleBadge roles={post.author.staffRoles} />
               <span className="text-xs text-zinc-400">{formatForumDate(post.createdAt)}</span>
+              <ForumEditedLabel editedAt={post.editedAt} />
             </div>
             <h1 className="mt-2 font-heading text-xl font-bold text-zinc-900">{post.title}</h1>
             {post.category ? (
@@ -90,17 +103,19 @@ export default async function ForumPostPage({ params }: PageProps) {
           />
           <ForumReportDialog targetType="post" targetId={post.id} />
         </div>
+
+        <ForumPostManage
+          post={post}
+          viewerUserId={user.id}
+          isMasterAdmin={viewerIsMasterAdmin}
+        />
       </article>
 
       <section className="mt-6">
         <h2 className="mb-4 font-heading text-lg font-semibold text-zinc-900">
-          {replies.length} repl{replies.length === 1 ? "y" : "ies"}
+          {replyCount} repl{replyCount === 1 ? "y" : "ies"}
         </h2>
-        <div className={ui.stack}>
-          {replies.map((reply) => (
-            <ForumReplyItem key={reply.id} reply={reply} postId={post.id} />
-          ))}
-        </div>
+        <ForumReplyThread replies={replies} postId={post.id} canReply={canReply} />
       </section>
 
       <div className="mt-6">

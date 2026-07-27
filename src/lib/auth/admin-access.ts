@@ -47,6 +47,13 @@ async function hasMasterAdminRole(
   }
 }
 
+export async function isMasterAdmin(
+  userId: string,
+  sessionClient?: SupabaseClient
+): Promise<boolean> {
+  return hasMasterAdminRole(userId, sessionClient);
+}
+
 export async function canAccessAdminPanel(
   user: User | null,
   sessionClient?: SupabaseClient

@@ -6,6 +6,7 @@ import { ForumLikeButton } from "@/components/forum/forum-like-button";
 import { StaffRoleBadge } from "@/components/forum/staff-role-badge";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import type { ForumPostSummary } from "@/lib/forum/types";
+import { ForumEditedLabel } from "@/components/forum/forum-edited-label";
 import { ui } from "@/lib/ui/styles";
 
 function formatForumDate(iso: string): string {
@@ -18,10 +19,10 @@ function formatForumDate(iso: string): string {
 
 type ForumPostCardProps = {
   post: ForumPostSummary;
-  bodySnippet?: string | null;
 };
 
-export function ForumPostCard({ post, bodySnippet }: ForumPostCardProps) {
+export function ForumPostCard({ post }: ForumPostCardProps) {
+  const bodySnippet = post.bodySnippet;
   return (
     <article className={ui.cardBordered}>
       <Link
@@ -42,6 +43,7 @@ export function ForumPostCard({ post, bodySnippet }: ForumPostCardProps) {
               <span className="text-sm font-medium text-zinc-900">{post.author.displayName}</span>
               <StaffRoleBadge roles={post.author.staffRoles} />
               <span className="text-xs text-zinc-400">{formatForumDate(post.createdAt)}</span>
+              <ForumEditedLabel editedAt={post.editedAt} />
             </div>
             <h3 className="mt-1 font-heading text-base font-semibold text-zinc-900">{post.title}</h3>
             {post.category ? (
