@@ -949,6 +949,7 @@ export async function loadAdminPackageDetail(
   let active = true;
   let packageId: string | null = null;
   let packageName: string | null = null;
+  let autoUnlockOnLog: boolean | undefined;
 
   if (kind === "community") {
     const product = await fetchCommunityPackageProduct(supabase);
@@ -956,17 +957,35 @@ export async function loadAdminPackageDetail(
     packageId = product?.id ?? null;
     packageName = product?.name ?? null;
   } else if (kind === "cohort") {
-    const { data: cohort } = await supabase
+    const cohortSelect = await supabase
       .from("cohorts")
-      .select("active, course_id")
+      .select("active, course_id, auto_unlock_on_log")
       .eq("id", id)
       .maybeSingle();
-    active = cohort?.active ?? true;
+
+    let cohortCourseId = base.courseId;
+    if (cohortSelect.error?.message?.toLowerCase().includes("auto_unlock_on_log")) {
+      const fallback = await supabase
+        .from("cohorts")
+        .select("active, course_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (fallback.error) throw fallback.error;
+      active = fallback.data?.active ?? true;
+      cohortCourseId = fallback.data?.course_id ?? base.courseId;
+      autoUnlockOnLog = true;
+    } else if (cohortSelect.error) {
+      throw cohortSelect.error;
+    } else {
+      active = cohortSelect.data?.active ?? true;
+      cohortCourseId = cohortSelect.data?.course_id ?? base.courseId;
+      autoUnlockOnLog = cohortSelect.data?.auto_unlock_on_log !== false;
+    }
 
     const { data: groupPkg } = await supabase
       .from("packages")
       .select("id, name")
-      .eq("course_id", cohort?.course_id ?? base.courseId)
+      .eq("course_id", cohortCourseId)
       .eq("delivery_mode", "group")
       .maybeSingle();
     packageId = groupPkg?.id ?? null;
@@ -1001,6 +1020,7 @@ export async function loadAdminPackageDetail(
       active,
       packageId,
       packageName,
+      ...(kind === "cohort" ? { autoUnlockOnLog: autoUnlockOnLog ?? true } : {}),
       lessonLog,
       sessionLog,
     },

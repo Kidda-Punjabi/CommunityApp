@@ -78,6 +78,42 @@ export async function fetchAdminPackageDetail(
   }
 }
 
+export async function updateCohortAutoUnlockOnLog(
+  cohortId: string,
+  enabled: boolean
+): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { error } = await supabase
+      .from("cohorts")
+      .update({ auto_unlock_on_log: enabled })
+      .eq("id", cohortId);
+
+    if (error) {
+      if (error.message.toLowerCase().includes("auto_unlock_on_log")) {
+        return {
+          error:
+            "Database migration required: run supabase/cohort-auto-unlock-on-log.sql in Supabase.",
+        };
+      }
+      return { error: error.message };
+    }
+
+    revalidatePackages(cohortId);
+    revalidatePath("/admin/lesson-log");
+    return {
+      success: enabled
+        ? "Auto-unlock on log is on — logging sessions will unlock lessons for students."
+        : "Auto-unlock on log is off — use Unlock in the lesson log to release content.",
+    };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Failed to update auto-unlock setting.",
+    };
+  }
+}
+
 export async function resolvePackageKind(id: string): Promise<AdminPackageKind | null> {
   const supabase = await requireAdminFromActions();
   const communityProduct = await fetchCommunityPackageProduct(supabase);

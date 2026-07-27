@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { createAdminLessonLogEntry } from "@/app/admin/lesson-log/actions";
+import { updateCohortAutoUnlockOnLog } from "@/app/admin/packages/actions";
 import type { AdminPackageKind, PackageSessionLogEntry } from "@/lib/admin/packages/types";
 
 function todayDateInput(): string {
@@ -21,6 +22,8 @@ type PackageSessionLogSectionProps = {
   kind: AdminPackageKind;
   runId: string;
   entries: PackageSessionLogEntry[];
+  /** Cohort-only: when true (default), logging unlocks linked curriculum. */
+  autoUnlockOnLog?: boolean;
   onLogged: () => void;
 };
 
@@ -28,6 +31,7 @@ export function PackageSessionLogSection({
   kind,
   runId,
   entries,
+  autoUnlockOnLog,
   onLogged,
 }: PackageSessionLogSectionProps) {
   const [pending, startTransition] = useTransition();
@@ -50,8 +54,36 @@ export function PackageSessionLogSection({
           <p className="mt-1 text-xs text-zinc-500">
             Session log for this package (date-ordered, like Notion Lessons Log). Cancelled entries
             are hidden from default progress counts.
+            {kind === "cohort"
+              ? " With auto-unlock on, logging a session releases that lesson in Learn."
+              : null}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {kind === "cohort" && autoUnlockOnLog !== undefined ? (
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+              <input
+                type="checkbox"
+                checked={autoUnlockOnLog}
+                disabled={pending}
+                onChange={(e) => {
+                  startTransition(async () => {
+                    setError(null);
+                    setMessage(null);
+                    const result = await updateCohortAutoUnlockOnLog(runId, e.target.checked);
+                    if (result.error) {
+                      setError(result.error);
+                      return;
+                    }
+                    setMessage(result.success ?? "Updated auto-unlock setting.");
+                    onLogged();
+                  });
+                }}
+                className="rounded border-zinc-300 text-violet-600 focus:ring-violet-500"
+              />
+              <span className="font-medium">Auto-unlock on log</span>
+            </label>
+          ) : null}
         <div className="flex flex-wrap gap-2">
           <Link
             href="/admin/lesson-log"
@@ -67,6 +99,7 @@ export function PackageSessionLogSection({
           >
             {showForm ? "Hide form" : "Log lesson"}
           </button>
+        </div>
         </div>
       </div>
 

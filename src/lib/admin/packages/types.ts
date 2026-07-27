@@ -159,6 +159,8 @@ export type AdminPackageDetail = AdminPackageListRow & {
   active: boolean;
   packageId: string | null;
   packageName: string | null;
+  /** Cohort-only: logging a session auto-unlocks linked curriculum (default true). */
+  autoUnlockOnLog?: boolean;
   /** Unlocked curriculum lessons (cohort_lesson_unlocks). */
   lessonLog: PackageLessonLogEntry[];
   /** Chronological session log (cohort_lesson_log_entries), Notion-style. */

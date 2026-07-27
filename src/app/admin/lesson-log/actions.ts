@@ -111,6 +111,10 @@ export async function createAdminLessonLogEntry(input: {
     if (!result.ok) return { error: result.error };
     revalidateLessonLog();
     revalidatePath("/dashboard/tutor/log-lesson");
+    if (input.kind === "cohort") {
+      revalidatePath("/dashboard/learn");
+      revalidatePath(`/admin/packages/${input.runId}`);
+    }
     return {
       success: "Lesson logged in the app and Notion.",
       entryId: result.entryId,
@@ -198,17 +202,14 @@ export async function unlockAdminLessonLogEntry(entryId: string): Promise<Action
       };
     }
 
-    const { error } = await supabase.from("cohort_lesson_unlocks").upsert(
-      {
-        cohort_id: entry.cohort_id,
-        lesson_id: lessonId,
-        unlocked_by: user.id,
-        unlocked_at: new Date().toISOString(),
-      },
-      { onConflict: "cohort_id,lesson_id" }
-    );
+    const { unlockLessonForCohort } = await import("@/lib/lessons/cohort-lesson-unlock");
+    const result = await unlockLessonForCohort(supabase, {
+      cohortId: entry.cohort_id,
+      lessonId,
+      unlockedBy: user.id,
+    });
 
-    if (error) return { error: error.message };
+    if (!result.ok) return { error: result.reason };
 
     revalidateLessonLog();
     revalidatePath("/admin/packages");

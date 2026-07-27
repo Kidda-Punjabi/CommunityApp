@@ -59,6 +59,7 @@ export async function logCohortLessonAction(
   revalidatePath("/dashboard/tutor/log-lesson");
   revalidatePath("/dashboard/tutor/lessons");
   revalidatePath("/admin/packages");
+  revalidatePath("/dashboard/learn");
 
   return { success: "Lesson logged — saved in the app and Notion." };
 }

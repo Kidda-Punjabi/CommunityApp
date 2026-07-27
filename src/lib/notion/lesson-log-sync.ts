@@ -551,6 +551,15 @@ export async function createLessonLogInNotionAndSupabase(
       "@/lib/lessons/lesson-log-lesson-link"
     );
     await syncCohortLessonLogLessonIds(supabase, target.cohortId);
+
+    const { maybeAutoUnlockAfterLessonLog } = await import(
+      "@/lib/lessons/cohort-lesson-unlock"
+    );
+    await maybeAutoUnlockAfterLessonLog(supabase, {
+      cohortId: target.cohortId,
+      entryId: inserted.id,
+      unlockedBy: input.loggedBy?.trim() || null,
+    });
   }
 
   return { ok: true, entryId: inserted.id, notionPageId };

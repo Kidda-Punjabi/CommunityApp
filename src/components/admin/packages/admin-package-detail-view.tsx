@@ -527,6 +527,7 @@ export function AdminPackageDetailView({
           kind={detail.kind}
           runId={detail.id}
           entries={detail.sessionLog}
+          autoUnlockOnLog={detail.kind === "cohort" ? detail.autoUnlockOnLog : undefined}
           onLogged={() => router.refresh()}
         />
       )}
@@ -537,8 +538,9 @@ export function AdminPackageDetailView({
           Unlocked in Learn
         </h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Curriculum lessons unlocked for students (cohort_lesson_unlocks). Unlock from the lesson
-          log edit panel per session.
+          Curriculum lessons unlocked for students (cohort_lesson_unlocks). Unlocks automatically
+          when sessions are logged if Auto-unlock on log is on above, or manually from the lesson
+          log edit panel.
         </p>
         {detail.lessonLog.length === 0 ? (
           <p className="mt-4 text-sm text-zinc-500">No lessons logged yet.</p>

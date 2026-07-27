@@ -705,8 +705,9 @@ export function AdminLessonLogSection() {
                                   ) : null}
                                   <p className="text-[11px] text-zinc-600">
                                     Manual override for status/reviewed/notes — does not push to
-                                    Notion. Logging a session does not unlock content for students
-                                    unless you use Unlock above.
+                                    Notion. Logging unlocks the linked lesson for students when the
+                                    cohort&apos;s Auto-unlock on log is on (package detail); use
+                                    Unlock below anytime.
                                   </p>
                                   <div className="flex flex-wrap gap-2">
                                     <select
