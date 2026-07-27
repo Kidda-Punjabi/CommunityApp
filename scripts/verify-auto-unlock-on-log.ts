@@ -23,18 +23,24 @@ async function ensureMigration(supabase: SupabaseClient) {
     .eq("id", COHORT_ID)
     .maybeSingle();
   if (error?.message?.toLowerCase().includes("auto_unlock_on_log")) {
-    throw new Error(
-      "Apply supabase/cohort-auto-unlock-on-log.sql first (node --import tsx scripts/apply-cohort-auto-unlock-on-log.ts)."
-    );
+    const { data } = await supabase.from("admin_saved_views").select("id").limit(1);
+    if (!data) {
+      throw new Error("Neither cohorts.auto_unlock_on_log nor admin_saved_views is available.");
+    }
+    console.log("Note: using admin_saved_views fallback until cohort-auto-unlock-on-log.sql is applied.");
   }
 }
 
-async function setAutoUnlock(supabase: SupabaseClient, enabled: boolean) {
-  const { error } = await supabase
-    .from("cohorts")
-    .update({ auto_unlock_on_log: enabled })
-    .eq("id", COHORT_ID);
-  if (error) throw new Error(`setAutoUnlock: ${error.message}`);
+async function setAutoUnlock(supabase: SupabaseClient, enabled: boolean, updatedBy: string) {
+  const { setCohortAutoUnlockOnLogEnabled } = await import(
+    "../src/lib/lessons/cohort-lesson-unlock.ts"
+  );
+  const result = await setCohortAutoUnlockOnLogEnabled(supabase, {
+    cohortId: COHORT_ID,
+    enabled,
+    updatedBy,
+  });
+  if (!result.ok) throw new Error(`setAutoUnlock: ${result.reason}`);
 }
 
 async function unlockRowForLesson(
@@ -87,11 +93,12 @@ async function main() {
     "../src/lib/lessons/lesson-log-lesson-link.ts"
   );
 
-  const { data: cohort } = await supabase
+  const { data: cohort, error: cohortError } = await supabase
     .from("cohorts")
-    .select("tutor_id, auto_unlock_on_log")
+    .select("tutor_id")
     .eq("id", COHORT_ID)
     .maybeSingle();
+  if (cohortError) throw new Error(cohortError.message);
   if (!cohort?.tutor_id) throw new Error("Cohort missing tutor_id for logged_by.");
 
   const loggedBy = cohort.tutor_id as string;
@@ -104,7 +111,7 @@ async function main() {
 
   try {
     console.log("Step 1: auto_unlock ON — log session, expect unlock row…");
-    await setAutoUnlock(supabase, true);
+    await setAutoUnlock(supabase, true, loggedBy);
     const step1 = await createLessonLogInNotionAndSupabase(supabase, {
       cohortId: COHORT_ID,
       lessonDate: date1,
@@ -124,7 +131,7 @@ async function main() {
     );
 
     console.log("Step 2: auto_unlock OFF — log next session, expect NO unlock row…");
-    await setAutoUnlock(supabase, false);
+    await setAutoUnlock(supabase, false, loggedBy);
     const step2 = await createLessonLogInNotionAndSupabase(supabase, {
       cohortId: COHORT_ID,
       lessonDate: date2,
@@ -157,7 +164,7 @@ async function main() {
         : `  FAIL — manual unlock did not create row (${manual.ok ? "unknown" : manual.reason})`
     );
   } finally {
-    await setAutoUnlock(supabase, true);
+    await setAutoUnlock(supabase, true, loggedBy);
     for (const row of created.reverse()) {
       if (row.lessonId) {
         await supabase

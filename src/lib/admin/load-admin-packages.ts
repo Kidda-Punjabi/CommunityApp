@@ -964,6 +964,10 @@ export async function loadAdminPackageDetail(
       .maybeSingle();
 
     let cohortCourseId = base.courseId;
+    const { cohortAutoUnlockOnLogEnabled } = await import(
+      "@/lib/lessons/cohort-lesson-unlock"
+    );
+
     if (cohortSelect.error?.message?.toLowerCase().includes("auto_unlock_on_log")) {
       const fallback = await supabase
         .from("cohorts")
@@ -973,13 +977,13 @@ export async function loadAdminPackageDetail(
       if (fallback.error) throw fallback.error;
       active = fallback.data?.active ?? true;
       cohortCourseId = fallback.data?.course_id ?? base.courseId;
-      autoUnlockOnLog = true;
+      autoUnlockOnLog = await cohortAutoUnlockOnLogEnabled(supabase, id);
     } else if (cohortSelect.error) {
       throw cohortSelect.error;
     } else {
       active = cohortSelect.data?.active ?? true;
       cohortCourseId = cohortSelect.data?.course_id ?? base.courseId;
-      autoUnlockOnLog = cohortSelect.data?.auto_unlock_on_log !== false;
+      autoUnlockOnLog = await cohortAutoUnlockOnLogEnabled(supabase, id);
     }
 
     const { data: groupPkg } = await supabase

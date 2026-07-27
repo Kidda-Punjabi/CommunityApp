@@ -35,7 +35,25 @@ function isMissingAutoUnlockColumn(message: string): boolean {
   return message.toLowerCase().includes("auto_unlock_on_log");
 }
 
-/** Read per-cohort auto-unlock preference (defaults true if column not migrated). */
+const AUTO_UNLOCK_VIEW_TYPE = "cohort_auto_unlock_on_log";
+
+async function readAutoUnlockFromSavedView(
+  supabase: SupabaseClient,
+  cohortId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("admin_saved_views")
+    .select("config")
+    .eq("view_type", AUTO_UNLOCK_VIEW_TYPE)
+    .eq("name", cohortId)
+    .maybeSingle();
+
+  if (error || !data) return true;
+  const config = data.config as { auto_unlock_on_log?: boolean } | null;
+  return config?.auto_unlock_on_log !== false;
+}
+
+/** Read per-cohort auto-unlock preference (defaults true). */
 export async function cohortAutoUnlockOnLogEnabled(
   supabase: SupabaseClient,
   cohortId: string
@@ -47,10 +65,58 @@ export async function cohortAutoUnlockOnLogEnabled(
     .maybeSingle();
 
   if (error) {
-    if (isMissingAutoUnlockColumn(error.message)) return true;
+    if (isMissingAutoUnlockColumn(error.message)) {
+      return readAutoUnlockFromSavedView(supabase, cohortId);
+    }
     throw error;
   }
   return data?.auto_unlock_on_log !== false;
+}
+
+/** Persist per-cohort auto-unlock preference (column preferred; saved-view fallback pre-migration). */
+export async function setCohortAutoUnlockOnLogEnabled(
+  supabase: SupabaseClient,
+  options: {
+    cohortId: string;
+    enabled: boolean;
+    updatedBy: string;
+  }
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const { error } = await supabase
+    .from("cohorts")
+    .update({ auto_unlock_on_log: options.enabled })
+    .eq("id", options.cohortId);
+
+  if (!error) return { ok: true };
+
+  if (!isMissingAutoUnlockColumn(error.message)) {
+    return { ok: false, reason: error.message };
+  }
+
+  const { data: existing } = await supabase
+    .from("admin_saved_views")
+    .select("id")
+    .eq("view_type", AUTO_UNLOCK_VIEW_TYPE)
+    .eq("name", options.cohortId)
+    .maybeSingle();
+
+  if (existing?.id) {
+    const { error: updateError } = await supabase
+      .from("admin_saved_views")
+      .update({ config: { auto_unlock_on_log: options.enabled } })
+      .eq("id", existing.id);
+    if (updateError) return { ok: false, reason: updateError.message };
+    return { ok: true };
+  }
+
+  const { error: insertError } = await supabase.from("admin_saved_views").insert({
+    view_type: AUTO_UNLOCK_VIEW_TYPE,
+    name: options.cohortId,
+    config: { auto_unlock_on_log: options.enabled },
+    created_by: options.updatedBy,
+  });
+  if (insertError) return { ok: false, reason: insertError.message };
+  return { ok: true };
 }
 
 /**

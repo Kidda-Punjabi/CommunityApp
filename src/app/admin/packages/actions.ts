@@ -84,21 +84,22 @@ export async function updateCohortAutoUnlockOnLog(
 ): Promise<ActionResult> {
   try {
     await requireAdminFromActions();
-    const supabase = createServiceRoleClient();
-    const { error } = await supabase
-      .from("cohorts")
-      .update({ auto_unlock_on_log: enabled })
-      .eq("id", cohortId);
+    const authClient = await createClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
 
-    if (error) {
-      if (error.message.toLowerCase().includes("auto_unlock_on_log")) {
-        return {
-          error:
-            "Database migration required: run supabase/cohort-auto-unlock-on-log.sql in Supabase.",
-        };
-      }
-      return { error: error.message };
-    }
+    const supabase = createServiceRoleClient();
+    const { setCohortAutoUnlockOnLogEnabled } = await import(
+      "@/lib/lessons/cohort-lesson-unlock"
+    );
+    const result = await setCohortAutoUnlockOnLogEnabled(supabase, {
+      cohortId,
+      enabled,
+      updatedBy: user.id,
+    });
+    if (!result.ok) return { error: result.reason };
 
     revalidatePackages(cohortId);
     revalidatePath("/admin/lesson-log");
