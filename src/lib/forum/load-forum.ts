@@ -184,17 +184,34 @@ export async function loadForumPosts(
   supabase: SupabaseClient,
   viewerUserId: string
 ): Promise<ForumPostSummary[]> {
-  const { data, error } = await supabase
+  const postSelect =
+    "id, title, body, category, like_count, created_at, edited_at, author_id, profiles:author_id (id, full_name, preferred_name, avatar_url)";
+
+  let data: PostRow[] | null = null;
+
+  const primary = await supabase
     .from("forum_posts")
-    .select(
-      "id, title, body, category, like_count, created_at, edited_at, author_id, profiles:author_id (id, full_name, preferred_name, avatar_url)"
-    )
+    .select(postSelect)
     .eq("status", "visible")
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (primary.error?.message?.toLowerCase().includes("edited_at")) {
+    const fallback = await supabase
+      .from("forum_posts")
+      .select(
+        "id, title, body, category, like_count, created_at, author_id, profiles:author_id (id, full_name, preferred_name, avatar_url)"
+      )
+      .eq("status", "visible")
+      .order("created_at", { ascending: false });
+    if (fallback.error) throw fallback.error;
+    data = (fallback.data ?? []).map((row) => ({ ...row, edited_at: null }));
+  } else if (primary.error) {
+    throw primary.error;
+  } else {
+    data = (primary.data ?? []) as PostRow[];
+  }
 
-  const rows = (data ?? []) as PostRow[];
+  const rows = data ?? [];
   const postIds = rows.map((row) => row.id);
   const authorIds = [...new Set(rows.map((row) => row.author_id))];
 
