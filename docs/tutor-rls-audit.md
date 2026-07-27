@@ -17,17 +17,16 @@ Audit date: 2026-07-27. Scope: admin-facing tables where tutors have missing or 
 - `onboarding_checklists` — `tutor_can_access_student_package(student_package_id)`
 - `cohort_lesson_unlocks` — `tutor_can_manage_cohort(cohort_id)` (in `tutor-cohort-assigned-read.sql`)
 
-## Remaining over-broad tutor access (not changed in this pass)
+## Remaining over-broad tutor access (addressed in tutor-rls-remaining-gaps.sql)
 
-| Table | Policy pattern | Risk |
-|-------|----------------|------|
-| `cohort_members` | `Staff read/manage cohort members` uses `is_tutor()` with no cohort assignment check | Any tutor can read/edit all cohort rosters |
-| `package_instances` | Multiple policies use `is_tutor()` alone (`package-instances-and-schema-fixes.sql`, `cohort-package-management-revamp.sql`) | Any tutor can read/manage all 1-1 package instances |
-| `course_enrollments` | Tutors can only manage rows where `tutor_id = auth.uid()` — **correctly scoped** | — |
-| `student_lesson_unlocks` | Scoped to enrollment tutor — **correct** | — |
-| `lesson_recordings` | Updated in `tutor-cohort-assigned-read.sql` to use `tutor_can_manage_cohort` — **likely OK if that migration ran** | Verify prod has assigned-read version, not base `tutor-cohort-access.sql` |
-| Storage `lesson-recordings` | `is_tutor()` on upload/update/delete | Any tutor can mutate any recording object path |
-| Notion admin tables (`notion_tutor_map`, sync cursors, etc.) | Staff-wide or master_admin only | Tutors typically blocked — OK unless a tutor workflow needs them |
+| Table | Policy pattern | Fix |
+|-------|----------------|-----|
+| `cohort_members` | was `is_tutor()` unscoped | `tutor_can_manage_cohort(cohort_id)` |
+| `package_instances` | read allowed any `is_tutor()` | assigned `tutor_id` / community_lead / master_admin |
+| Storage `lesson-recordings` | `is_tutor()` unscoped | path must match assigned student or cohort |
+
+Apply: `supabase/tutor-rls-remaining-gaps.sql` via SQL Editor or `scripts/apply-tutor-rls-remaining-gaps.ts`.
+
 
 ## Remaining missing tutor access (not changed in this pass)
 
