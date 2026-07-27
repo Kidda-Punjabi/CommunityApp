@@ -37,21 +37,6 @@ function formatDate(iso: string | null): string {
   }).format(new Date(iso));
 }
 
-function AppOnboardingStatus({ complete }: { complete: boolean }) {
-  return (
-    <span
-      className={
-        complete
-          ? "inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700"
-          : "inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600"
-      }
-      title="Whether the learner finished in-app orientation (profile setup, feature tour)"
-    >
-      App: {complete ? "Done" : "Pending"}
-    </span>
-  );
-}
-
 function checklistValue(
   row: { checklist: OnboardingChecklistRow | null },
   key: keyof OnboardingChecklistRow
@@ -292,9 +277,14 @@ export function AdminOnboardingSection() {
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Package onboarding</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Post-purchase setup for live packages — welcome email, calendar, tutor handoff, WhatsApp,
-          and package assignment. Separate from{" "}
-          <span className="font-medium text-zinc-700">app onboarding</span> (in-app orientation
-          tracked on each learner&apos;s profile).
+          and package assignment.
+        </p>
+        <p className="mt-2 text-xs text-zinc-400">
+          App signup progress (email, placement, practice) is on{" "}
+          <Link href="/admin/app-onboarding" className="font-medium text-violet-600 hover:text-violet-500">
+            App onboarding
+          </Link>
+          .
         </p>
       </div>
 
@@ -350,9 +340,6 @@ export function AdminOnboardingSection() {
                 <th className="px-3 py-3">Package</th>
                 <th className="hidden px-3 py-3 md:table-cell">Tutor</th>
                 <th className="px-3 py-3">Membership</th>
-                <th className="px-3 py-3" title="In-app orientation (profiles.has_seen_onboarding)">
-                  App onboarding
-                </th>
                 <th className="hidden px-3 py-3 sm:table-cell">Payment</th>
                 <th
                   className="px-2 py-3 text-center text-violet-700"
@@ -367,7 +354,6 @@ export function AdminOnboardingSection() {
                 <th className="px-3 py-2" />
                 <th className="px-3 py-2" />
                 <th className="hidden px-3 py-2 md:table-cell" />
-                <th className="px-3 py-2" />
                 <th className="px-3 py-2" />
                 <th className="hidden px-3 py-2 sm:table-cell" />
                 {ONBOARDING_CHECKLIST_COLUMNS.map((column) => (
@@ -448,13 +434,6 @@ export function AdminOnboardingSection() {
                         </option>
                       ))}
                     </select>
-                  </td>
-                  <td className="px-3 py-3">
-                    {indexInGroup === 0 ? (
-                      <AppOnboardingStatus complete={row.hasSeenAppOnboarding} />
-                    ) : (
-                      <span className="text-zinc-300">—</span>
-                    )}
                   </td>
                   <td className="hidden whitespace-nowrap px-3 py-3 text-zinc-600 sm:table-cell">
                     {formatDate(row.paymentDate ?? row.purchasedAt.slice(0, 10))}
@@ -538,7 +517,6 @@ export function AdminOnboardingSection() {
                       <th className="hidden px-4 py-3 md:table-cell">Tutor</th>
                       <th className="hidden px-4 py-3 sm:table-cell">Payment</th>
                       <th className="px-4 py-3">Completed</th>
-                      <th className="px-4 py-3">App onboarding</th>
                       <th className="px-4 py-3">Membership</th>
                       {ONBOARDING_CHECKLIST_COLUMNS.map((column) => (
                         <th
@@ -580,9 +558,6 @@ export function AdminOnboardingSection() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
                           {formatDate(row.completedAt?.slice(0, 10) ?? null)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <AppOnboardingStatus complete={row.hasSeenAppOnboarding} />
                         </td>
                         <td className="px-4 py-3">
                           <AdminStatusPill tone="green">

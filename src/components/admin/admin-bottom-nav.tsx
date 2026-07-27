@@ -64,6 +64,15 @@ function OnboardingIcon({ active }: { active: boolean }) {
   );
 }
 
+function AppOnboardIcon({ active }: { active: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.875a1.125 1.125 0 0 1 2.25 0v8.219c.517.162 1.02.382 1.5.659 1.591.914 2.675 2.626 2.675 4.591v1.093c0 .621-.504 1.125-1.125 1.125h-7.875c-.621 0-1.125-.504-1.125-1.125v-1.093c0-1.965 1.084-3.677 2.675-4.591.48-.277.983-.497 1.5-.659V1.875Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 19.125a3.375 3.375 0 1 0 6.75 0" />
+    </svg>
+  );
+}
+
 function SalesIcon({ active }: { active: boolean }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
@@ -109,6 +118,11 @@ const navItems: NavItem[] = [
     match: (pathname) => pathname.startsWith("/admin/onboarding"),
   },
   {
+    href: "/admin/app-onboarding",
+    label: "App onboard",
+    match: (pathname) => pathname.startsWith("/admin/app-onboarding"),
+  },
+  {
     href: "/admin/sales-calls",
     label: "Sales",
     match: (pathname) => pathname.startsWith("/admin/sales-calls"),
@@ -137,8 +151,10 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
       return <PackagesIcon active={active} />;
     case "Lessons":
       return <LessonsIcon active={active} />;
-    case "Onboard":
+    case "Pkg onboard":
       return <OnboardingIcon active={active} />;
+    case "App onboard":
+      return <AppOnboardIcon active={active} />;
     case "Sales":
       return <SalesIcon active={active} />;
     case "Content":
