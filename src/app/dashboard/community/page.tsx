@@ -1,9 +1,9 @@
 import { CommunityCourseEntry } from "@/components/community/community-course-entry";
 import { CommunityForumPreviewSection } from "@/components/community/community-forum-preview-section";
+import { CommunityFriendsLeaderboardCard } from "@/components/community/community-friends-leaderboard-card";
 import { NextClassCard } from "@/components/community/next-class-card";
 import { PlayTogetherSection } from "@/components/community/play-together-section";
-import { WeeklyLeaderboardCard } from "@/components/community/weekly-leaderboard-card";
-import { FriendsSummaryRow } from "@/components/profile/friends-summary-row";
+import { hasConfirmedCommunityPackage } from "@/lib/community/access";
 import { getCommunityTabData } from "@/lib/cache/tab-page-cache";
 import { isLearnTrackUnlocked } from "@/lib/learning/learn-access";
 import { getLearnTrack } from "@/lib/learning/learn-catalog";
@@ -22,28 +22,30 @@ export default async function CommunityPage() {
   const [
     { friendsData, leaderboard, preparedUpcoming, forumPosts, forumOnboarding },
     access,
+    hasCommunityPackage,
   ] = await Promise.all([
     getCommunityTabData(session.user.id),
     getCachedCourseAccess(session.supabase, session.user),
+    hasConfirmedCommunityPackage(session.supabase, session.user.id),
   ]);
 
   const kidSession = await loadKidSession(session.user.id);
   const hideForum = kidSession.activeKidProfile !== null;
-  const nextClass = preparedUpcoming[0] ?? null;
+  const nextClass = hasCommunityPackage ? (preparedUpcoming[0] ?? null) : null;
 
   const communityTrack = getLearnTrack("community")!;
   const showCommunityCourse = isLearnTrackUnlocked(communityTrack, access);
 
   return (
     <div className={ui.page}>
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Community</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Forum, live classes, games, and friends learning with you.
         </p>
       </div>
 
-      <div className={ui.stackLoose}>
+      <div className={ui.stack}>
         {showCommunityCourse ? <CommunityCourseEntry /> : null}
 
         {!hideForum && (
@@ -54,11 +56,10 @@ export default async function CommunityPage() {
 
         <PlayTogetherSection />
 
-        <FriendsSummaryRow friends={friendsData.friends} variant="community" />
-
-        <section id="leaderboard" className="scroll-mt-4">
-          <WeeklyLeaderboardCard data={leaderboard} />
-        </section>
+        <CommunityFriendsLeaderboardCard
+          friends={friendsData.friends}
+          leaderboard={leaderboard}
+        />
       </div>
     </div>
   );

@@ -78,7 +78,7 @@ export const getCommunityTabData = cache(async (userId: string) => {
       loadFriendsProfileData(supabase, userId),
       loadLeaderboard(supabase, currentWeekStart, userId),
       supabase.from("events").select("*").order("starts_at", { ascending: true }),
-      loadForumPostPreviews(supabase, userId, 2),
+      loadForumPostPreviews(supabase, userId, 1),
       loadForumOnboardingState(supabase, userId),
     ]);
 
