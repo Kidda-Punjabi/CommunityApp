@@ -15,7 +15,6 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT public.is_master_admin()
-    OR public.is_tutor()
     OR EXISTS (
       SELECT 1
       FROM public.cohorts co
@@ -40,9 +39,7 @@ DROP POLICY IF EXISTS "Staff read cohorts" ON public.cohorts;
 CREATE POLICY "Staff read cohorts"
   ON public.cohorts FOR SELECT TO authenticated
   USING (
-    public.is_master_admin()
-    OR public.is_tutor()
-    OR tutor_id = auth.uid()
+    public.tutor_can_manage_cohort(id)
     OR EXISTS (
       SELECT 1
       FROM public.cohort_members cm
@@ -50,13 +47,13 @@ CREATE POLICY "Staff read cohorts"
         AND cm.user_id = auth.uid()
         AND cm.left_at IS NULL
     )
-    OR EXISTS (
-      SELECT 1
-      FROM public.course_enrollments ce
-      WHERE ce.cohort_id = id
-        AND ce.tutor_id = auth.uid()
-    )
   );
+
+DROP POLICY IF EXISTS "Staff manage cohorts" ON public.cohorts;
+CREATE POLICY "Staff manage cohorts"
+  ON public.cohorts FOR ALL TO authenticated
+  USING (public.tutor_can_manage_cohort(id))
+  WITH CHECK (public.tutor_can_manage_cohort(id));
 
 -- ---------------------------------------------------------------------------
 -- Cohort lesson unlocks: read + manage for assigned tutors

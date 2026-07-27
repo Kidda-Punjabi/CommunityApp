@@ -105,7 +105,7 @@ const navItems: NavItem[] = [
   },
   {
     href: "/admin/onboarding",
-    label: "Onboard",
+    label: "Pkg onboard",
     match: (pathname) => pathname.startsWith("/admin/onboarding"),
   },
   {

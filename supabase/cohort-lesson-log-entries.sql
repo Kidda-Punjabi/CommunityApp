@@ -105,7 +105,7 @@ CREATE POLICY "Students read own cohort lesson logs"
     )
   );
 
--- Writes go through service role / server actions (Notion sync + tutor log).
+-- Tutor INSERT/UPDATE policies: see supabase/tutor-rls-scoping-fixes.sql
 GRANT SELECT ON public.cohort_lesson_log_entries TO authenticated;
 
 NOTIFY pgrst, 'reload schema';

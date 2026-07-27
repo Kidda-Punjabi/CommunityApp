@@ -44,7 +44,7 @@ export function OnboardingChecklistModal({
   studentPackageId,
   studentLabel,
   checklistType,
-  title = "Onboarding checklist",
+  title = "Package onboarding checklist",
   onClose,
   onSaved,
 }: OnboardingChecklistModalProps) {

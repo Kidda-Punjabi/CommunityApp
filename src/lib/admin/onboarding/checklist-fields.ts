@@ -12,7 +12,7 @@ export const ONBOARDING_CHECKLIST_COLUMNS: Array<{
   { key: "packageCreated", label: "Package created", header: "Pkg ✓" },
   { key: "whatsappChatMade", label: "WhatsApp chat made", header: "WhatsApp" },
   { key: "scheduleWhatsappChat", label: "Schedule WhatsApp chat", header: "Sched. WA" },
-  { key: "onboardingCompleted", label: "Onboarding completed", header: "Done" },
+  { key: "onboardingCompleted", label: "Package onboarding completed", header: "Pkg done" },
 ];
 
 export const ONBOARDING_CHECKLIST_TOGGLE_KEYS = ONBOARDING_CHECKLIST_COLUMNS.map(

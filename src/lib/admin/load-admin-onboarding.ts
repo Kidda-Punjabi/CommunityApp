@@ -22,6 +22,7 @@ type ProfileRow = {
   id: string;
   full_name: string | null;
   preferred_name: string | null;
+  has_seen_onboarding: boolean | null;
 };
 
 type StudentPackageRow = {
@@ -257,7 +258,7 @@ export async function loadAdminOnboardingQueue(
         "id, user_id, status, package_id, course_id, enrollment_id, package_instance_id, purchased_at, packages(name, slug, delivery_mode, includes_live_sessions), courses(name)"
       )
       .in("status", ["interested", "waiting_for_payment", "confirmed", "withdrawn"]),
-    supabase.from("profiles").select("id, full_name, preferred_name"),
+    supabase.from("profiles").select("id, full_name, preferred_name, has_seen_onboarding"),
     supabase.from("onboarding_checklists").select("*"),
   ]);
 
@@ -367,6 +368,7 @@ export async function loadAdminOnboardingQueue(
     );
     const email = emailById.get(sp.user_id) ?? null;
     const paymentDate = checklist?.paymentDate ?? null;
+    const hasSeenAppOnboarding = Boolean(profileById.get(sp.user_id)?.has_seen_onboarding);
 
     if (isCompletedOnboarding(membershipStatus, checklist)) {
       completedRows.push({
@@ -383,6 +385,7 @@ export async function loadAdminOnboardingQueue(
         completedAt: checklistUpdatedAt(checklistRaw),
         checklistType: run.checklistType,
         checklist,
+        hasSeenAppOnboarding,
       });
     }
 
@@ -424,6 +427,7 @@ export async function loadAdminOnboardingQueue(
       queue,
       paymentDate,
       purchasedAt: sp.purchased_at,
+      hasSeenAppOnboarding,
     });
   }
 

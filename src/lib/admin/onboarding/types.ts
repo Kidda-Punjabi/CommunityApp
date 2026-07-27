@@ -36,6 +36,8 @@ export type AdminOnboardingRow = {
   queue: OnboardingQueue;
   paymentDate: string | null;
   purchasedAt: string;
+  /** Learner finished in-app orientation (profiles.has_seen_onboarding). */
+  hasSeenAppOnboarding: boolean;
 };
 
 export type AdminOnboardingCompletedRow = {
@@ -52,6 +54,7 @@ export type AdminOnboardingCompletedRow = {
   completedAt: string | null;
   checklistType: "group" | "one_to_one";
   checklist: OnboardingChecklistRow | null;
+  hasSeenAppOnboarding: boolean;
 };
 
 export type AdminOnboardingSummary = {

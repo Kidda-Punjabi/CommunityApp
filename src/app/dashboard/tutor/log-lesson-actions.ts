@@ -36,21 +36,24 @@ export async function logCohortLessonAction(
   if (!canManage) return { error: "You are not the tutor for this cohort." };
 
   const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
-  if (!adminClient) return { error: adminError };
 
-  const { data: tutorMap } = await adminClient
-    .from("notion_tutor_map")
-    .select("notion_user_id")
-    .eq("tutor_id", user.id)
-    .maybeSingle();
+  let notionTutorUserId: string | null = null;
+  if (adminClient) {
+    const { data: tutorMap } = await adminClient
+      .from("notion_tutor_map")
+      .select("notion_user_id")
+      .eq("tutor_id", user.id)
+      .maybeSingle();
+    notionTutorUserId = tutorMap?.notion_user_id ?? null;
+  }
 
-  const result = await createLessonLogInNotionAndSupabase(adminClient, {
+  const result = await createLessonLogInNotionAndSupabase(supabase, {
     cohortId,
     lessonDate,
     notes: notes || null,
     recordingUrl: recordingUrl || null,
     loggedBy: user.id,
-    notionTutorUserId: tutorMap?.notion_user_id ?? null,
+    notionTutorUserId,
   });
 
   if (!result.ok) return { error: result.error };

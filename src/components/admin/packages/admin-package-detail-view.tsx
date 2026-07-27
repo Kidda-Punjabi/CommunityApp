@@ -114,7 +114,7 @@ function RosterSection({
                         onClick={() => setChecklistMember(member)}
                         className="text-xs font-semibold text-violet-600 hover:text-violet-500"
                       >
-                        Checklist →
+                        Package checklist →
                       </button>
                     )}
                   </>
