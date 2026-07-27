@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { loadTutorCoverInbox } from "@/app/dashboard/tutor/cover-actions";
 import { CalendarSchemaNotice } from "@/components/schedule/calendar-schema-notice";
-import { TutorRequestsInbox } from "@/components/tutor/tutor-requests-section";
+import { TutorCoverInbox } from "@/components/tutor/tutor-cover-section";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
+import { TutorRequestsInbox } from "@/components/tutor/tutor-requests-section";
 import {
   loadTutorPendingCohortSwitchRequests,
   loadTutorPendingRescheduleRequests,
@@ -24,12 +26,14 @@ export default async function TutorRequestsPage() {
     requests: [],
     schemaReady: true,
   };
+  let coverLoad: Awaited<ReturnType<typeof loadTutorCoverInbox>> = { items: [] };
   let loadError: string | null = null;
 
   try {
-    [rescheduleLoad, cohortSwitchLoad] = await Promise.all([
+    [rescheduleLoad, cohortSwitchLoad, coverLoad] = await Promise.all([
       loadTutorPendingRescheduleRequests(supabase, user!.id),
       loadTutorPendingCohortSwitchRequests(supabase, user!.id),
+      loadTutorCoverInbox(user!.id),
     ]);
   } catch (error) {
     loadError = formatCalendarLoadError(error);
@@ -42,7 +46,7 @@ export default async function TutorRequestsPage() {
     <div className={ui.page}>
       <TutorPageHeader
         title="Student requests"
-        subtitle="Review reschedule and alternate cohort requests from your students."
+        subtitle="Review reschedule and alternate cohort requests, plus cover assignments."
       />
 
       {loadError ? (
@@ -57,13 +61,19 @@ export default async function TutorRequestsPage() {
         </p>
       ) : null}
 
+      <TutorCoverInbox items={coverLoad.items} />
+      {coverLoad.error ? <p className="mb-4 text-sm text-amber-700">{coverLoad.error}</p> : null}
+
       <TutorRequestsInbox
         rescheduleRequests={rescheduleLoad.requests}
         cohortSwitchRequests={cohortSwitchLoad.requests}
       />
 
       <p className="mt-8 text-center text-sm text-zinc-500">
-        <Link href="/dashboard/tutor/calendar" className="font-medium text-violet-600 hover:text-violet-500">
+        <Link
+          href="/dashboard/tutor/calendar"
+          className="font-medium text-violet-600 hover:text-violet-500"
+        >
           Back to calendar
         </Link>
       </p>

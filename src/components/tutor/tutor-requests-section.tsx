@@ -1,12 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import {
   resolveCohortSwitchRequest,
   resolveRescheduleRequest,
   type CalendarActionResult,
 } from "@/app/dashboard/tutor/calendar-actions";
+import { loadTutorRescheduleSlots } from "@/app/dashboard/tutor/reschedule-slot-actions";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
+import type { BookableSlot } from "@/lib/tutoring/availability/types";
 import { ui } from "@/lib/ui/styles";
 
 const initial: CalendarActionResult = {};
@@ -86,6 +88,26 @@ export function TutorRequestsInbox({
 
 function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestItem }) {
   const [state, action, pending] = useActionState(resolveRescheduleRequest, initial);
+  const [slots, setSlots] = useState<BookableSlot[]>([]);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [slotsLoading, setSlotsLoading] = useState(true);
+  const [selected, setSelected] = useState("");
+
+  useEffect(() => {
+    if (!request.sessionStartsAt || !request.sessionEndsAt) {
+      setSlotsLoading(false);
+      return;
+    }
+    void loadTutorRescheduleSlots(request.sessionStartsAt, request.sessionEndsAt).then(
+      (result) => {
+        setSlots(result.slots);
+        setSlotsError(result.error ?? null);
+        setSlotsLoading(false);
+      }
+    );
+  }, [request.sessionStartsAt, request.sessionEndsAt]);
+
+  const selectedSlot = slots.find((slot) => slot.startsAt === selected);
 
   return (
     <div className={`${ui.cardBordered} space-y-3`}>
@@ -103,13 +125,67 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
         </p>
       ) : null}
 
-      <ResolveRequestForm
-        requestId={request.id}
-        action={action}
-        pending={pending}
-        state={state}
-        approveHint="Approve, then update the time in Google Calendar and sync."
-      />
+      <form action={action} className="space-y-3 border-t border-zinc-100 pt-3">
+        <input type="hidden" name="request_id" value={request.id} />
+        <input type="hidden" name="new_starts_at" value={selectedSlot?.startsAt ?? ""} />
+        <input type="hidden" name="new_ends_at" value={selectedSlot?.endsAt ?? ""} />
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">
+            Pick an available time to approve
+          </label>
+          {slotsLoading ? (
+            <p className="text-sm text-zinc-500">Loading your free slots…</p>
+          ) : slotsError ? (
+            <p className="text-sm text-amber-700">{slotsError}</p>
+          ) : (
+            <select
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+            >
+              <option value="">Select a time…</option>
+              {slots.map((slot) => (
+                <option key={slot.startsAt} value={slot.startsAt}>
+                  {slot.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <textarea
+          name="tutor_response"
+          rows={2}
+          placeholder="Optional note to the student"
+          className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm"
+        />
+        {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
+        {state.success ? <p className="text-sm text-emerald-700">{state.success}</p> : null}
+        <p className="text-xs text-zinc-500">
+          Approving updates the lesson time in the app and Google Calendar invite.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="submit"
+            name="decision"
+            value="approved"
+            disabled={pending || !selectedSlot}
+            className={ui.btnPrimary}
+          >
+            Approve + update calendar
+          </button>
+          <button
+            type="submit"
+            name="decision"
+            value="denied"
+            disabled={pending}
+            className={ui.btnSecondary}
+          >
+            Decline
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -133,13 +209,40 @@ function CohortSwitchRequestCard({ request }: { request: TutorCohortSwitchReques
       </p>
       {request.message ? <p className="text-sm text-zinc-600">{request.message}</p> : null}
 
-      <ResolveRequestForm
-        requestId={request.id}
-        action={action}
-        pending={pending}
-        state={state}
-        approveHint="If approved, add the student to the alternate cohort's calendar invite."
-      />
+      <form action={action} className="space-y-3 border-t border-zinc-100 pt-3">
+        <input type="hidden" name="request_id" value={request.id} />
+        <textarea
+          name="tutor_response"
+          rows={2}
+          placeholder="Optional note to the student"
+          className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm"
+        />
+        {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
+        {state.success ? <p className="text-sm text-emerald-700">{state.success}</p> : null}
+        <p className="text-xs text-zinc-500">
+          If approved, add the student to the alternate cohort&apos;s calendar invite.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="submit"
+            name="decision"
+            value="approved"
+            disabled={pending}
+            className={ui.btnPrimary}
+          >
+            Approve
+          </button>
+          <button
+            type="submit"
+            name="decision"
+            value="denied"
+            disabled={pending}
+            className={ui.btnSecondary}
+          >
+            Decline
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -168,54 +271,5 @@ function RequestHeader({
         </p>
       ) : null}
     </div>
-  );
-}
-
-function ResolveRequestForm({
-  requestId,
-  action,
-  pending,
-  state,
-  approveHint,
-}: {
-  requestId: string;
-  action: (payload: FormData) => void;
-  pending: boolean;
-  state: CalendarActionResult;
-  approveHint: string;
-}) {
-  return (
-    <form action={action} className="space-y-3 border-t border-zinc-100 pt-3">
-      <input type="hidden" name="request_id" value={requestId} />
-      <textarea
-        name="tutor_response"
-        rows={2}
-        placeholder="Optional note to the student"
-        className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm"
-      />
-      {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
-      {state.success ? <p className="text-sm text-emerald-700">{state.success}</p> : null}
-      <p className="text-xs text-zinc-500">{approveHint}</p>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="submit"
-          name="decision"
-          value="approved"
-          disabled={pending}
-          className={ui.btnPrimary}
-        >
-          Approve
-        </button>
-        <button
-          type="submit"
-          name="decision"
-          value="denied"
-          disabled={pending}
-          className={ui.btnSecondary}
-        >
-          Decline
-        </button>
-      </div>
-    </form>
   );
 }

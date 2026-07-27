@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import {
   cancelCohortSwitchRequest,
@@ -59,7 +60,7 @@ export function UpcomingLessonsList({ sessions, hasBookingCredit = false }: Upco
         <MonthLessonsCalendar
           sessions={sessions.map((session) => ({
             id: session.id,
-            title: session.title,
+            title: session.lessonLabel,
             starts_at: session.starts_at,
             ends_at: session.ends_at,
             meet_link: session.meet_link,
@@ -73,8 +74,6 @@ export function UpcomingLessonsList({ sessions, hasBookingCredit = false }: Upco
 }
 
 function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
-  const [showRescheduleForm, setShowRescheduleForm] = useState(false);
-  const [showCohortSwitchForm, setShowCohortSwitchForm] = useState(false);
   const hoursLeft = hoursUntilSession(session.starts_at);
   const isGroupLesson = Boolean(session.cohort_id);
   const cohortSwitchCutoffHours = COHORT_SWITCH_CUTOFF_MS / (60 * 60 * 1000);
@@ -96,10 +95,13 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
           ) : !isGroupLesson ? (
             <p className="mt-1 text-xs font-medium text-zinc-500">1-to-1</p>
           ) : null}
-          <p className="mt-1 font-semibold text-zinc-900">{session.title}</p>
+          <p className="mt-1 font-semibold text-zinc-900">{session.lessonLabel}</p>
           <p className="mt-1 text-sm text-zinc-500">
             {formatSessionWhen(session.starts_at, session.ends_at)}
           </p>
+          {session.title && session.title !== session.lessonLabel ? (
+            <p className="mt-1 truncate text-xs text-zinc-400">{session.title}</p>
+          ) : null}
           {cohortSwitchLocked ? (
             <p className="mt-2 text-xs font-medium text-amber-700">
               Starts in {Math.max(1, Math.round(hoursLeft))}h — alternate cohort requests are
@@ -133,7 +135,7 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
 
       {session.rescheduleRequest?.status === "approved" ? (
         <p className="mt-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          Your tutor approved a reschedule. Check with them for the new time.
+          Your tutor approved a reschedule. Check your calendar for the updated time.
           {session.rescheduleRequest.tutor_response
             ? ` Note: ${session.rescheduleRequest.tutor_response}`
             : ""}
@@ -153,68 +155,11 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
         <PendingCohortSwitchBanner requestId={session.cohortSwitchRequest.id} />
       ) : null}
 
-      {session.cohortSwitchRequest?.status === "approved" ? (
-        <p className="mt-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          Your tutor approved joining another cohort for this lesson.
-          {session.cohortSwitchRequest.tutor_response
-            ? ` Note: ${session.cohortSwitchRequest.tutor_response}`
-            : " Check with them for the updated group invite."}
-        </p>
-      ) : null}
-
-      {session.cohortSwitchRequest?.status === "denied" ? (
-        <p className="mt-3 rounded-2xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
-          Alternate cohort request declined.
-          {session.cohortSwitchRequest.tutor_response
-            ? ` ${session.cohortSwitchRequest.tutor_response}`
-            : " Please attend your usual group or contact your tutor."}
-        </p>
-      ) : null}
-
-      {session.canRequestReschedule && !showRescheduleForm ? (
-        <button
-          type="button"
-          className={`mt-3 ${ui.btnGhost}`}
-          onClick={() => setShowRescheduleForm(true)}
-        >
-          Request to reschedule
-        </button>
-      ) : null}
-
-      {session.canRequestCohortSwitch && !showCohortSwitchForm ? (
-        <button
-          type="button"
-          className={`mt-3 ${ui.btnGhost}`}
-          onClick={() => setShowCohortSwitchForm(true)}
-        >
-          Request to join alternate cohort
-        </button>
-      ) : null}
-
-      {!session.canRequestReschedule && session.rescheduleLockedReason && !isGroupLesson ? (
-        <p className="mt-3 text-sm text-zinc-500">{session.rescheduleLockedReason}</p>
-      ) : null}
-
-      {!session.canRequestCohortSwitch &&
-      isGroupLesson &&
-      session.cohortSwitchLockedReason &&
-      !session.cohortSwitchRequest ? (
-        <p className="mt-3 text-sm text-zinc-500">{session.cohortSwitchLockedReason}</p>
-      ) : null}
-
-      {showRescheduleForm ? (
-        <RescheduleRequestForm
-          sessionId={session.id}
-          onDone={() => setShowRescheduleForm(false)}
-        />
-      ) : null}
-
-      {showCohortSwitchForm ? (
-        <CohortSwitchRequestForm
-          session={session}
-          onDone={() => setShowCohortSwitchForm(false)}
-        />
-      ) : null}
+      <div className="mt-3">
+        <Link href={`/dashboard/schedule/${session.id}`} className={ui.btnGhost}>
+          View lesson →
+        </Link>
+      </div>
     </li>
   );
 }
@@ -275,12 +220,12 @@ function PendingCohortSwitchBanner({ requestId }: { requestId: string }) {
   );
 }
 
-function RescheduleRequestForm({
+export function RescheduleRequestForm({
   sessionId,
   onDone,
 }: {
   sessionId: string;
-  onDone: () => void;
+  onDone?: () => void;
 }) {
   const [state, action, pending] = useActionState(requestLessonReschedule, initial);
 
@@ -323,20 +268,22 @@ function RescheduleRequestForm({
         <button type="submit" disabled={pending} className={ui.btnPrimary}>
           {pending ? "Sending…" : "Send request"}
         </button>
-        <button type="button" onClick={onDone} className={ui.btnGhost}>
-          Cancel
-        </button>
+        {onDone ? (
+          <button type="button" onClick={onDone} className={ui.btnGhost}>
+            Cancel
+          </button>
+        ) : null}
       </div>
     </form>
   );
 }
 
-function CohortSwitchRequestForm({
+export function CohortSwitchRequestForm({
   session,
   onDone,
 }: {
   session: StudentScheduledSession;
-  onDone: () => void;
+  onDone?: () => void;
 }) {
   const [state, action, pending] = useActionState(requestCohortSwitch, initial);
 
@@ -374,7 +321,7 @@ function CohortSwitchRequestForm({
         <textarea
           name="message"
           rows={3}
-          className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm"
+          className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm"
           placeholder="Brief explanation for your tutor"
         />
       </div>
@@ -387,9 +334,11 @@ function CohortSwitchRequestForm({
         <button type="submit" disabled={pending} className={ui.btnPrimary}>
           {pending ? "Sending…" : "Send request"}
         </button>
-        <button type="button" onClick={onDone} className={ui.btnGhost}>
-          Cancel
-        </button>
+        {onDone ? (
+          <button type="button" onClick={onDone} className={ui.btnGhost}>
+            Cancel
+          </button>
+        ) : null}
       </div>
     </form>
   );

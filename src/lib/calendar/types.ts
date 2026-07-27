@@ -65,6 +65,10 @@ export type AlternateCohortOption = {
 export type StudentScheduledSession = ScheduledSessionRow & {
   tutorName: string;
   cohortName: string | null;
+  /** Curriculum week number derived like cohort lesson logs (Lesson N). */
+  lessonNumber: number | null;
+  /** e.g. "Lesson 3 — 2 Aug" */
+  lessonLabel: string;
   rescheduleRequest: RescheduleRequestRow | null;
   canRequestReschedule: boolean;
   rescheduleLockedReason: string | null;

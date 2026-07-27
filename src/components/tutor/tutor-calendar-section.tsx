@@ -13,6 +13,7 @@ import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type { TutorScheduledSession } from "@/lib/calendar/types";
 import { LessonsViewToggle, type LessonsViewMode } from "@/components/schedule/lessons-view-toggle";
 import { MonthLessonsCalendar } from "@/components/schedule/month-lessons-calendar";
+import { TutorCoverRequestForm } from "@/components/tutor/tutor-cover-section";
 import { ui } from "@/lib/ui/styles";
 
 const initial: CalendarActionResult = {};
@@ -348,6 +349,7 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
           {logPending ? "Saving log…" : "Save lesson log"}
         </button>
       </form>
+      <TutorCoverRequestForm sessionId={session.id} />
     </li>
   );
 }

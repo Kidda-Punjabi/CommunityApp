@@ -92,9 +92,15 @@ export async function resolveRescheduleRequest(
   const requestId = String(formData.get("request_id") ?? "").trim();
   const decision = String(formData.get("decision") ?? "").trim();
   const tutorResponse = String(formData.get("tutor_response") ?? "").trim();
+  const newStartsAt = String(formData.get("new_starts_at") ?? "").trim();
+  const newEndsAt = String(formData.get("new_ends_at") ?? "").trim();
 
   if (!requestId || !["approved", "denied"].includes(decision)) {
     return { error: "Invalid request." };
+  }
+
+  if (decision === "approved" && (!newStartsAt || !newEndsAt)) {
+    return { error: "Pick an available alternative time to approve this reschedule." };
   }
 
   const supabase = await createClient();
@@ -103,11 +109,45 @@ export async function resolveRescheduleRequest(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
+  const { data: request, error: requestError } = await supabase
+    .from("lesson_reschedule_requests")
+    .select("id, session_id, status")
+    .eq("id", requestId)
+    .maybeSingle();
+
+  if (requestError || !request) return { error: "Request not found." };
+  if (request.status !== "pending") return { error: "This request was already resolved." };
+
+  if (decision === "approved") {
+    const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
+    if (!adminClient) return { error: adminError };
+
+    const { applyRescheduleSlotToSession } = await import("@/lib/calendar/tutor-cover");
+    const applied = await applyRescheduleSlotToSession(adminClient, {
+      sessionId: request.session_id,
+      startsAt: newStartsAt,
+      endsAt: newEndsAt,
+    });
+    if (!applied.ok) return { error: applied.error };
+  }
+
+  const responseNote =
+    decision === "approved"
+      ? tutorResponse ||
+        `Rescheduled to ${new Date(newStartsAt).toLocaleString("en-GB", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          hour: "numeric",
+          minute: "2-digit",
+        })}`
+      : tutorResponse || null;
+
   const { error } = await supabase
     .from("lesson_reschedule_requests")
     .update({
       status: decision,
-      tutor_response: tutorResponse || null,
+      tutor_response: responseNote,
       resolved_at: new Date().toISOString(),
       resolved_by: user.id,
     })
@@ -118,10 +158,12 @@ export async function resolveRescheduleRequest(
 
   revalidatePath("/dashboard/tutor/calendar");
   revalidatePath("/dashboard/tutor/requests");
+  revalidatePath("/dashboard/schedule");
+  revalidatePath("/admin/reschedule-requests");
   return {
     success:
       decision === "approved"
-        ? "Request approved. Update the time in Google Calendar, then sync."
+        ? "Request approved — calendar invite updated to the new time."
         : "Request declined.",
   };
 }

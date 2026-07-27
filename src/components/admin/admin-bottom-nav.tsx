@@ -123,6 +123,11 @@ const navItems: NavItem[] = [
     match: (pathname) => pathname.startsWith("/admin/app-onboarding"),
   },
   {
+    href: "/admin/reschedule-requests",
+    label: "Reschedule",
+    match: (pathname) => pathname.startsWith("/admin/reschedule-requests"),
+  },
+  {
     href: "/admin/sales-calls",
     label: "Sales",
     match: (pathname) => pathname.startsWith("/admin/sales-calls"),
@@ -155,6 +160,8 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
       return <OnboardingIcon active={active} />;
     case "App onboard":
       return <AppOnboardIcon active={active} />;
+    case "Reschedule":
+      return <OnboardingIcon active={active} />;
     case "Sales":
       return <SalesIcon active={active} />;
     case "Content":

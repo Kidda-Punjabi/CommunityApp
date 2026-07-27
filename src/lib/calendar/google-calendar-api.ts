@@ -231,6 +231,35 @@ export type CreateGoogleCalendarEventResult = {
 };
 
 /**
+ * Updates event start/end times and notifies attendees (sendUpdates=all).
+ */
+export async function updateGoogleCalendarEventTimes(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  params: { startsAt: string; endsAt: string; timeZone: string }
+): Promise<void> {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
+
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      start: { dateTime: params.startsAt, timeZone: params.timeZone },
+      end: { dateTime: params.endsAt, timeZone: params.timeZone },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Google Calendar update event times failed: ${text}`);
+  }
+}
+
+/**
  * Creates a timed event on the tutor calendar with a Google Meet link and sends invites.
  */
 export async function createGoogleCalendarEventWithMeet(

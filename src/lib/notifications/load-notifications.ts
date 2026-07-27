@@ -240,6 +240,21 @@ export function notificationSummary(item: NotificationItem): string {
       const cohortName = item.payload.cohort_name;
       return `${name} joined cohort ${typeof cohortName === "string" ? cohortName : "group class"}`;
     }
+    case "tutor_cover_assigned": {
+      const title = String(item.payload.session_title ?? "a lesson");
+      const deadline = item.payload.decision_deadline
+        ? new Date(String(item.payload.decision_deadline)).toLocaleString("en-GB", {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : null;
+      return deadline
+        ? `Cover assigned for ${title} — decline by ${deadline} if you can’t make it`
+        : `Cover assigned for ${title}`;
+    }
     default:
       return "New notification";
   }

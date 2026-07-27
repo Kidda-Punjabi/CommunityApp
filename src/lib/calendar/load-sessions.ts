@@ -12,6 +12,7 @@ import type {
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isCalendarSchemaMissingError } from "@/lib/calendar/schema";
 import { isStoredSessionExcluded, type CalendarExclusionRow } from "@/lib/calendar/exclusions";
+import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
 import { isSessionVisibleToStudent, type StudentEnrollmentContext } from "@/lib/calendar/session-visibility";
 
 const IN_FILTER_CHUNK_SIZE = 80;
@@ -236,9 +237,11 @@ export async function loadStudentUpcomingSessions(
       .map((cohort) => ({ id: cohort.id, name: cohort.name }));
   }
 
+  const labelled = await attachLessonLabelsToSessions(supabase, visible);
+
   return {
     schemaReady: true,
-    sessions: visible.map((session) => {
+    sessions: labelled.map((session) => {
       const rescheduleRequest = requestBySession.get(session.id) ?? null;
       const eligibility = getRescheduleEligibility(session, rescheduleRequest);
       const cohortSwitchRequest = cohortSwitchBySession.get(session.id) ?? null;
@@ -255,6 +258,8 @@ export async function loadStudentUpcomingSessions(
         cohortName: session.cohort_id
           ? (cohortMetaById.get(session.cohort_id)?.name ?? null)
           : null,
+        lessonNumber: session.lessonNumber,
+        lessonLabel: session.lessonLabel,
         rescheduleRequest,
         canRequestReschedule: eligibility.canRequest,
         rescheduleLockedReason: eligibility.lockedReason,
