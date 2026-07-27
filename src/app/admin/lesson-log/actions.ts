@@ -233,3 +233,102 @@ export async function dismissAdminLessonLogAttention(
     };
   }
 }
+
+export async function fetchAdminLessonLogRoster(entryId: string) {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { loadLessonLogRosterContext } = await import(
+      "@/lib/lessons/lesson-log-roster"
+    );
+    const result = await loadLessonLogRosterContext(supabase, entryId);
+    if ("error" in result) {
+      return { error: result.error, context: null };
+    }
+    return { context: result, error: undefined as string | undefined };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Failed to load attendance roster.",
+      context: null,
+    };
+  }
+}
+
+export async function saveAdminLessonLogAttendanceHomework(
+  entryId: string,
+  marks: Array<{
+    studentId: string;
+    attended: boolean;
+    homeworkCompleted: boolean;
+  }>
+): Promise<
+  ActionResult & {
+    unmatchedPresent?: Array<{ studentId: string; studentName: string }>;
+    unmatchedHomework?: Array<{ studentId: string; studentName: string }>;
+    notionPushed?: boolean;
+  }
+> {
+  try {
+    await requireAdminFromActions();
+    const { createClient } = await import("@/lib/supabase/server");
+    const authClient = await createClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const supabase = createServiceRoleClient();
+    const { saveLessonLogAttendanceHomework } = await import(
+      "@/lib/lessons/save-lesson-log-attendance-homework"
+    );
+    const result = await saveLessonLogAttendanceHomework(supabase, {
+      lessonLogEntryId: entryId,
+      marks,
+      markedBy: user.id,
+    });
+
+    if (!result.ok) return { error: result.error };
+
+    revalidateLessonLog();
+    revalidatePath("/dashboard/tutor/attendance");
+
+    const unmatchedNames = [
+      ...new Set([
+        ...result.unmatchedPresent.map((s) => s.studentName),
+        ...result.unmatchedHomework.map((s) => s.studentName),
+      ]),
+    ];
+
+    let success = `Saved attendance + homework for ${result.savedAttendance} student${result.savedAttendance === 1 ? "" : "s"}`;
+    if (result.curriculumLessonTitle) {
+      success += ` (${result.curriculumLessonTitle})`;
+    }
+    if (result.notionPushed) {
+      success += " and pushed Attendees/Homework to Notion.";
+    } else {
+      success +=
+        " in the app. No Notion page linked on this log entry — Notion was not updated.";
+    }
+    if (result.homeworkTableMissing) {
+      success +=
+        " Note: app homework table not migrated yet (Notion Homework still updated). Run supabase/cohort-lesson-homework.sql.";
+    }
+    if (unmatchedNames.length > 0) {
+      success += ` Warning: no Notion Lead App User ID for: ${unmatchedNames.join(", ")}.`;
+    }
+
+    return {
+      success,
+      unmatchedPresent: result.unmatchedPresent,
+      unmatchedHomework: result.unmatchedHomework,
+      notionPushed: result.notionPushed,
+    };
+  } catch (e) {
+    return {
+      error:
+        e instanceof Error
+          ? e.message
+          : "Failed to save attendance/homework.",
+    };
+  }
+}

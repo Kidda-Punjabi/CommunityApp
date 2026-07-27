@@ -15,6 +15,7 @@ import {
   saveNotionTutorMapping,
   searchNotionWorkspaceUsers,
 } from "@/app/admin/packages/notion-actions";
+import { LessonLogAttendanceHomeworkPanel } from "@/components/admin/lesson-log/lesson-log-attendance-homework-panel";
 import type {
   AdminLessonLogEntry,
   AdminLessonLogGroup,
@@ -823,6 +824,12 @@ export function AdminLessonLogSection() {
                                       </button>
                                     )}
                                   </div>
+                                  <LessonLogAttendanceHomeworkPanel
+                                    entryId={entry.id}
+                                    isCohort={group.kind === "cohort"}
+                                    onMessage={setMessage}
+                                    onError={setError}
+                                  />
                                 </div>
                               ) : null}
                             </div>

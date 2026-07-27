@@ -116,9 +116,102 @@ export async function saveCohortLessonAttendance(
 
     if (error) return { error: error.message };
 
+    // Best-effort Notion Attendees push when a matching Lessons Log entry exists.
+    let notionNote = "";
+    try {
+      const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
+      const admin = createServiceRoleClient();
+      const { data: lesson } = await admin
+        .from("lessons")
+        .select("lesson_number")
+        .eq("id", lessonId)
+        .maybeSingle();
+      const lessonNumber = Number(lesson?.lesson_number) || 0;
+
+      const { isCountableLessonLogStatus } = await import(
+        "@/lib/lessons/lesson-log-progress"
+      );
+      const { data: logRows } = await admin
+        .from("cohort_lesson_log_entries")
+        .select("id, notion_page_id, status, lesson_date")
+        .eq("cohort_id", cohortId)
+        .order("lesson_date", { ascending: true });
+
+      const countable = (logRows ?? []).filter((row) =>
+        isCountableLessonLogStatus(row.status as string | null)
+      );
+      const matched = lessonNumber > 0 ? countable[lessonNumber - 1] : null;
+
+      if (matched?.notion_page_id) {
+        const {
+          matchStudentsToNotionLeads,
+          pushLessonLogAttendanceHomeworkToNotion,
+          readLessonLogAttendanceHomeworkFromNotion,
+        } = await import("@/lib/notion/lesson-log-attendance-sync");
+
+        const { data: profiles } = await admin
+          .from("profiles")
+          .select("id, full_name, preferred_name")
+          .in(
+            "id",
+            marks.map((m) => m.studentId)
+          );
+        const nameById = new Map(
+          (profiles ?? []).map((profile) => {
+            const name =
+              (profile.preferred_name as string | null)?.trim() ||
+              (profile.full_name as string | null)?.trim() ||
+              "Student";
+            return [profile.id as string, name] as const;
+          })
+        );
+
+        const leadMatches = await matchStudentsToNotionLeads(
+          admin,
+          marks.map((mark) => ({
+            studentId: mark.studentId,
+            studentName: nameById.get(mark.studentId) ?? "Student",
+          }))
+        );
+        const matchById = new Map(leadMatches.map((m) => [m.studentId, m]));
+        const unmatched: string[] = [];
+        const attendeeLeadPageIds: string[] = [];
+        for (const mark of marks) {
+          if (!mark.attended) continue;
+          const match = matchById.get(mark.studentId);
+          if (match?.ok) attendeeLeadPageIds.push(match.leadPageId);
+          else unmatched.push(nameById.get(mark.studentId) ?? "Student");
+        }
+
+        // Preserve existing Homework relation; only replace Attendees.
+        const existing = await readLessonLogAttendanceHomeworkFromNotion(
+          matched.notion_page_id
+        );
+        await pushLessonLogAttendanceHomeworkToNotion({
+          notionPageId: matched.notion_page_id,
+          attendeeLeadPageIds,
+          homeworkLeadPageIds: existing.homeworkLeadIds,
+          updateAttendees: true,
+          updateHomework: false,
+        });
+
+        notionNote = " Notion Attendees updated.";
+        if (unmatched.length > 0) {
+          notionNote += ` Warning: no Notion Lead App User ID for: ${unmatched.join(", ")}.`;
+        }
+      }
+    } catch (notionError) {
+      notionNote = ` Notion sync failed: ${
+        notionError instanceof Error ? notionError.message : "unknown error"
+      }.`;
+    }
+
     revalidatePath("/dashboard/tutor");
     revalidatePath("/dashboard/tutor/attendance");
-    return { success: `Attendance saved for ${marks.length} student${marks.length === 1 ? "" : "s"}.` };
+    revalidatePath("/admin/lesson-log");
+    return {
+      success: `Attendance saved for ${marks.length} student${marks.length === 1 ? "" : "s"}.${notionNote}`,
+    };
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : "Failed to save attendance.",
