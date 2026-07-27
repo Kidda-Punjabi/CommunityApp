@@ -257,7 +257,7 @@ export async function upsertLessonLogEntryFromNotion(
 
   const { data: existing } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, source, status_source, reviewed_source, notes_source")
+    .select("id, source, status_source, reviewed_source, notes_source, status, dismissed_at")
     .eq("notion_page_id", page.pageId)
     .maybeSingle();
 
@@ -288,6 +288,22 @@ export async function upsertLessonLogEntryFromNotion(
     existing
   );
 
+  // Effective status after manual locks — auto-dismiss Cancelled so it leaves the default list.
+  const effectiveStatus =
+    typeof patch.status !== "undefined"
+      ? (patch.status as string | null)
+      : ((existing?.status as string | null | undefined) ?? null);
+  if (effectiveStatus === "Cancelled" && !existing?.dismissed_at) {
+    patch.dismissed_at = now;
+  } else if (
+    typeof patch.status !== "undefined" &&
+    patch.status !== "Cancelled" &&
+    existing?.status === "Cancelled"
+  ) {
+    patch.dismissed_at = null;
+    patch.dismissed_by = null;
+  }
+
   if (existing?.id) {
     const { error } = await supabase
       .from("cohort_lesson_log_entries")
@@ -295,6 +311,9 @@ export async function upsertLessonLogEntryFromNotion(
       .eq("id", existing.id);
     if (error) throw new Error(error.message);
   } else {
+    if (effectiveStatus === "Cancelled") {
+      patch.dismissed_at = now;
+    }
     const { error } = await supabase.from("cohort_lesson_log_entries").insert(patch);
     if (error) throw new Error(error.message);
   }
@@ -503,6 +522,9 @@ export async function createLessonLogInNotionAndSupabase(
       notion_sync_error: null,
       notion_synced_at: now,
       notion_last_edited_at: now,
+      ...(status === "Cancelled"
+        ? { dismissed_at: now, dismissed_by: input.loggedBy?.trim() || null }
+        : {}),
     })
     .select("id")
     .single();
@@ -523,6 +545,11 @@ export type UpdateLessonLogManualFieldsInput = {
   status?: "Scheduled" | "Completed" | "Cancelled" | null;
   reviewed?: boolean;
   notes?: string | null;
+  recordingUrl?: string | null;
+  slidesUrl?: string | null;
+  flashcardsUrl?: string | null;
+  /** When status becomes Cancelled, set dismissed_at/dismissed_by so it leaves the default list. */
+  dismissedBy?: string | null;
 };
 
 /**
@@ -539,6 +566,14 @@ export async function updateLessonLogManualFields(
   if (fields.status !== undefined) {
     patch.status = fields.status;
     patch.status_source = "manual";
+    if (fields.status === "Cancelled") {
+      patch.dismissed_at = new Date().toISOString();
+      patch.dismissed_by = fields.dismissedBy ?? null;
+    } else {
+      // Re-opening a cancelled lesson brings it back into the default list.
+      patch.dismissed_at = null;
+      patch.dismissed_by = null;
+    }
   }
   if (fields.reviewed !== undefined) {
     patch.reviewed = fields.reviewed;
@@ -547,6 +582,15 @@ export async function updateLessonLogManualFields(
   if (fields.notes !== undefined) {
     patch.notes = fields.notes?.trim() || null;
     patch.notes_source = "manual";
+  }
+  if (fields.recordingUrl !== undefined) {
+    patch.recording_url = fields.recordingUrl?.trim() || null;
+  }
+  if (fields.slidesUrl !== undefined) {
+    patch.slides_url = fields.slidesUrl?.trim() || null;
+  }
+  if (fields.flashcardsUrl !== undefined) {
+    patch.flashcards_url = fields.flashcardsUrl?.trim() || null;
   }
 
   if (Object.keys(patch).length === 0) {
@@ -560,6 +604,21 @@ export async function updateLessonLogManualFields(
 
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/** One-shot / on-load: Cancelled rows without dismissed_at get dismissed so they leave the default list. */
+export async function backfillCancelledLessonLogDismissals(
+  supabase: SupabaseClient
+): Promise<void> {
+  const { error } = await supabase
+    .from("cohort_lesson_log_entries")
+    .update({ dismissed_at: new Date().toISOString() })
+    .eq("status", "Cancelled")
+    .is("dismissed_at", null);
+
+  if (error && !error.message.includes("dismissed_at")) {
+    console.error("backfillCancelledLessonLogDismissals:", error.message);
+  }
 }
 
 /**

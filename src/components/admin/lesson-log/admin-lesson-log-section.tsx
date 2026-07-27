@@ -20,7 +20,13 @@ import type {
   AdminLessonLogGroup,
   LessonLogStatus,
 } from "@/lib/admin/load-admin-lesson-log";
+import { uploadToStorageAsAdmin } from "@/lib/supabase/admin-upload";
 import { ui } from "@/lib/ui/styles";
+
+const LESSON_LOG_MEDIA_BUCKET = "lesson-log-media" as const;
+/** Client-side guard aligned with bucket fileSizeLimit (500MB). */
+const MAX_RECORDING_UPLOAD_BYTES = 524_288_000;
+const MAX_DOC_UPLOAD_BYTES = 52_428_800;
 
 function todayDateInput(): string {
   return new Date().toISOString().slice(0, 10);
@@ -68,6 +74,7 @@ export function AdminLessonLogSection() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [includeCancelled, setIncludeCancelled] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [tutorMap, setTutorMap] = useState<
     Awaited<ReturnType<typeof fetchNotionTutorMapData>>
@@ -93,7 +100,13 @@ export function AdminLessonLogSection() {
     status: LessonLogStatus | "";
     reviewed: boolean;
     notes: string;
+    recordingUrl: string;
+    slidesUrl: string;
+    flashcardsUrl: string;
   } | null>(null);
+  const [uploadingField, setUploadingField] = useState<
+    "recordingUrl" | "slidesUrl" | "flashcardsUrl" | null
+  >(null);
 
   function reload() {
     startTransition(async () => {
@@ -116,9 +129,14 @@ export function AdminLessonLogSection() {
   const filteredGroups = useMemo(() => {
     if (!snapshot) return [];
     const q = search.trim().toLowerCase();
+    const showCancelled = includeCancelled || statusFilter === "Cancelled";
     return snapshot.groups
       .map((group) => {
         let entries = group.entries;
+        // Default day-to-day view: Cancelled lessons are hidden (also dismissed_at on save).
+        if (!showCancelled) {
+          entries = entries.filter((e) => e.status !== "Cancelled");
+        }
         if (statusFilter) {
           entries = entries.filter((e) => e.status === statusFilter);
         }
@@ -161,7 +179,34 @@ export function AdminLessonLogSection() {
     dateFrom,
     dateTo,
     attentionOnly,
+    includeCancelled,
   ]);
+
+  async function uploadLessonLogMedia(
+    field: "recordingUrl" | "slidesUrl" | "flashcardsUrl",
+    file: File
+  ) {
+    if (!editDraft) return;
+    const maxBytes =
+      field === "recordingUrl" ? MAX_RECORDING_UPLOAD_BYTES : MAX_DOC_UPLOAD_BYTES;
+    if (file.size > maxBytes) {
+      setError(
+        `File too large (${Math.round(file.size / 1_000_000)}MB). Max is ${Math.round(maxBytes / 1_000_000)}MB for ${field === "recordingUrl" ? "recordings" : "slides/flashcards"}.`
+      );
+      return;
+    }
+    setUploadingField(field);
+    setError(null);
+    try {
+      const url = await uploadToStorageAsAdmin(LESSON_LOG_MEDIA_BUCKET, file);
+      setEditDraft({ ...editDraft, [field]: url });
+      setMessage(`Uploaded — save to persist the ${field.replace("Url", "")} link.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setUploadingField(null);
+    }
+  }
 
   function groupShouldAutoExpand(group: AdminLessonLogGroup): boolean {
     if (group.syncState === "error") return true;
@@ -377,12 +422,22 @@ export function AdminLessonLogSection() {
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Filters</p>
             <button
               type="button"
-              className={`mt-2 text-sm font-medium ${
+              className={`mt-2 block text-sm font-medium ${
                 attentionOnly ? "text-amber-800" : "text-violet-700"
               }`}
               onClick={() => setAttentionOnly((v) => !v)}
             >
               {attentionOnly ? "Showing attention only" : "Show needs attention"}
+            </button>
+            <button
+              type="button"
+              className={`mt-1 block text-sm font-medium ${
+                includeCancelled ? "text-zinc-800" : "text-violet-700"
+              }`}
+              onClick={() => setIncludeCancelled((v) => !v)}
+              title="Cancelled lessons are hidden by default and do not count toward progress"
+            >
+              {includeCancelled ? "Including cancelled" : "Include cancelled"}
             </button>
           </div>
         </div>
@@ -580,19 +635,24 @@ export function AdminLessonLogSection() {
                                           status: entry.status ?? "",
                                           reviewed: entry.reviewed,
                                           notes: entry.notes ?? "",
+                                          recordingUrl: entry.recordingUrl ?? "",
+                                          slidesUrl: entry.slidesUrl ?? "",
+                                          flashcardsUrl: entry.flashcardsUrl ?? "",
                                         }
                                   )
                                 }
                               >
                                 {editDraft?.entryId === entry.id
                                   ? "Cancel edit"
-                                  : "Edit status / reviewed / notes"}
+                                  : "Edit status / media / notes"}
                               </button>
                               {editDraft?.entryId === entry.id ? (
                                 <div className="mt-2 space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
                                   <p className="text-[11px] text-zinc-600">
                                     Saves as manual override (like Packages tutor_id_source) — pull
-                                    will not overwrite until reset. Does not push back to Notion.
+                                    will not overwrite status/reviewed/notes until reset. Does not
+                                    push back to Notion. Setting Cancelled hides this entry from the
+                                    default list and excludes it from lesson progress.
                                   </p>
                                   <div className="flex flex-wrap gap-2">
                                     <select
@@ -633,10 +693,66 @@ export function AdminLessonLogSection() {
                                     className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs"
                                     placeholder="Notes"
                                   />
+                                  {(
+                                    [
+                                      {
+                                        key: "recordingUrl" as const,
+                                        label: "Recording",
+                                        accept: "video/*,audio/*",
+                                      },
+                                      {
+                                        key: "slidesUrl" as const,
+                                        label: "Slides",
+                                        accept: ".pdf,image/*,.ppt,.pptx",
+                                      },
+                                      {
+                                        key: "flashcardsUrl" as const,
+                                        label: "Flashcards",
+                                        accept: ".pdf,image/*,.zip",
+                                      },
+                                    ] as const
+                                  ).map((field) => (
+                                    <div key={field.key} className="space-y-1">
+                                      <label className="block text-[11px] font-medium text-zinc-600">
+                                        {field.label}
+                                      </label>
+                                      <div className="flex flex-wrap gap-2">
+                                        <input
+                                          value={editDraft[field.key]}
+                                          onChange={(e) =>
+                                            setEditDraft({
+                                              ...editDraft,
+                                              [field.key]: e.target.value,
+                                            })
+                                          }
+                                          placeholder={`${field.label} URL`}
+                                          className="min-w-[12rem] flex-1 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs"
+                                        />
+                                        <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+                                          {uploadingField === field.key
+                                            ? "Uploading…"
+                                            : "Upload"}
+                                          <input
+                                            type="file"
+                                            accept={field.accept}
+                                            className="sr-only"
+                                            disabled={uploadingField !== null || pending}
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              e.target.value = "";
+                                              if (file) {
+                                                void uploadLessonLogMedia(field.key, file);
+                                              }
+                                            }}
+                                          />
+                                        </label>
+                                      </div>
+                                    </div>
+                                  ))}
                                   <div className="flex flex-wrap gap-2">
                                     <button
                                       type="button"
-                                      disabled={pending}
+                                      disabled={pending || uploadingField !== null}
                                       className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-60"
                                       onClick={() => {
                                         startTransition(async () => {
@@ -648,6 +764,9 @@ export function AdminLessonLogSection() {
                                               status: editDraft.status || null,
                                               reviewed: editDraft.reviewed,
                                               notes: editDraft.notes,
+                                              recordingUrl: editDraft.recordingUrl,
+                                              slidesUrl: editDraft.slidesUrl,
+                                              flashcardsUrl: editDraft.flashcardsUrl,
                                             }
                                           );
                                           if (result.error) {

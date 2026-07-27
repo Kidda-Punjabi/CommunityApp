@@ -61,6 +61,8 @@ export type AdminPackageListRow = {
   lessonLogCompleted: number | null;
   lessonLogTotal: number | null;
   lessonLogNextAt: string | null;
+  /** Next curriculum lesson title (by sequential lesson_number). */
+  lessonLogNextTitle: string | null;
   lessonLogEntries: Array<{
     id: string;
     weekNumber: number;

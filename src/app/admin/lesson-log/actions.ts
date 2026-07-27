@@ -127,18 +127,30 @@ export async function updateAdminLessonLogFields(
     status?: "Scheduled" | "Completed" | "Cancelled" | null;
     reviewed?: boolean;
     notes?: string | null;
+    recordingUrl?: string | null;
+    slidesUrl?: string | null;
+    flashcardsUrl?: string | null;
   }
 ): Promise<ActionResult> {
   try {
     await requireAdminFromActions();
+    const { createClient } = await import("@/lib/supabase/server");
+    const authClient = await createClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+
     const supabase = createServiceRoleClient();
     const { updateLessonLogManualFields } = await import("@/lib/notion/lesson-log-sync");
-    const result = await updateLessonLogManualFields(supabase, entryId, fields);
+    const result = await updateLessonLogManualFields(supabase, entryId, {
+      ...fields,
+      dismissedBy: user?.id ?? null,
+    });
     if (!result.ok) return { error: result.error };
     revalidateLessonLog();
     return {
       success:
-        "Saved as manual override — Notion pull will not overwrite these fields until reset.",
+        "Saved as manual override — Notion pull will not overwrite status/reviewed/notes until reset. Recording/slides/flashcards URLs are stored in the app (Notion pull may refresh them from Notion).",
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update lesson log." };

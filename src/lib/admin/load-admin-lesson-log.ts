@@ -131,6 +131,12 @@ function asSyncStatus(value: string | null): "pending" | "synced" | "error" {
 export async function loadAdminLessonLogSnapshot(
   supabase: SupabaseClient
 ): Promise<AdminLessonLogSnapshot> {
+  // Ensure historical Cancelled rows leave the default day-to-day list.
+  const { backfillCancelledLessonLogDismissals } = await import(
+    "@/lib/notion/lesson-log-sync"
+  );
+  await backfillCancelledLessonLogDismissals(supabase);
+
   const empty: AdminLessonLogSnapshot = {
     groups: [],
     totals: {

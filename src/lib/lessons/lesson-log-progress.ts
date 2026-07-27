@@ -9,6 +9,7 @@ export type LessonLogEntrySummary = {
   recordingUrl: string | null;
   notes: string | null;
   weekNumber: number;
+  status?: string | null;
 };
 
 export type CohortLessonProgress = {
@@ -17,8 +18,15 @@ export type CohortLessonProgress = {
   remainingCount: number;
   lastLessonDate: string | null;
   nextLessonAt: string | null;
+  /** Title of the next curriculum lesson (by lesson_number), when known. */
+  nextLessonTitle: string | null;
   entries: LessonLogEntrySummary[];
 };
+
+/** Cancelled logs must never count as completed weeks. */
+export function isCountableLessonLogStatus(status: string | null | undefined): boolean {
+  return status !== "Cancelled";
+}
 
 /** Assign week numbers by chronological order (date, then id). */
 export function numberLessonLogEntries<T extends { id: string; lessonDate: string }>(
@@ -141,6 +149,18 @@ function nextWeeklyOccurrenceOnWeekday(
     candidate.setUTCDate(candidate.getUTCDate() + 7);
   }
   return candidate;
+}
+
+/** Next curriculum title assuming sequential delivery: lesson_number = completedCount + 1. */
+export function resolveNextLessonTitle(
+  lessonsOrdered: Array<{ lessonNumber: number; title: string }>,
+  completedCount: number
+): string | null {
+  if (completedCount < 0) return null;
+  const nextNumber = completedCount + 1;
+  const byNumber = lessonsOrdered.find((lesson) => lesson.lessonNumber === nextNumber);
+  if (byNumber) return byNumber.title;
+  return lessonsOrdered[completedCount]?.title ?? null;
 }
 
 export function formatLessonProgressLabel(progress: {

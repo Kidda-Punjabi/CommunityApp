@@ -327,6 +327,7 @@ export async function loadAdminPackagesList(
       linkedSessionCount: number;
     }
   >();
+  const nowIso = new Date().toISOString();
   for (const row of recurringSessions ?? []) {
     if (!row.cohort_id || !row.google_recurring_event_id) continue;
     const existing = linkedEventByCohortId.get(row.cohort_id);
@@ -341,7 +342,13 @@ export async function loadAdminPackagesList(
       continue;
     }
     existing.linkedSessionCount += 1;
-    if (row.starts_at < existing.startsAt) {
+    // Prefer soonest upcoming session; fall back to earliest overall if all past.
+    const existingIsFuture = existing.startsAt >= nowIso;
+    const rowIsFuture = row.starts_at >= nowIso;
+    const shouldReplace =
+      (rowIsFuture && !existingIsFuture) ||
+      (rowIsFuture === existingIsFuture && row.starts_at < existing.startsAt);
+    if (shouldReplace) {
       existing.title = row.title;
       existing.startsAt = row.starts_at;
       existing.endsAt = row.ends_at;
@@ -780,6 +787,7 @@ export async function loadAdminPackagesList(
       lessonLogCompleted: progress?.completedCount ?? 0,
       lessonLogTotal: progress?.totalLessons ?? 0,
       lessonLogNextAt: progress?.nextLessonAt ?? null,
+      lessonLogNextTitle: progress?.nextLessonTitle ?? null,
       lessonLogEntries: (progress?.entries ?? []).map((entry) => ({
         id: entry.id,
         weekNumber: entry.weekNumber,
@@ -846,6 +854,7 @@ export async function loadAdminPackagesList(
       lessonLogCompleted: null,
       lessonLogTotal: null,
       lessonLogNextAt: null,
+      lessonLogNextTitle: null,
       lessonLogEntries: [],
       weeklySessionStart: null,
       weeklySessionEnd: null,
@@ -914,6 +923,7 @@ async function loadCommunityPackageRow(
     lessonLogCompleted: null,
     lessonLogTotal: null,
     lessonLogNextAt: null,
+    lessonLogNextTitle: null,
     lessonLogEntries: [],
     weeklySessionStart: null,
     weeklySessionEnd: null,

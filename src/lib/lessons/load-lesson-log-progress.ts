@@ -2,7 +2,9 @@ import "server-only";
 
 import {
   computeNextLessonAfterLog,
+  isCountableLessonLogStatus,
   numberLessonLogEntries,
+  resolveNextLessonTitle,
   type CohortLessonProgress,
   type LessonLogEntrySummary,
 } from "@/lib/lessons/lesson-log-progress";
@@ -28,6 +30,37 @@ export async function loadCourseLessonTotals(
   return totals;
 }
 
+/** Lessons ordered by lesson_number for next-topic derivation. */
+export async function loadCourseLessonsOrdered(
+  supabase: SupabaseClient,
+  courseIds: string[]
+): Promise<Map<string, Array<{ lessonNumber: number; title: string }>>> {
+  const byCourse = new Map<string, Array<{ lessonNumber: number; title: string }>>();
+  if (courseIds.length === 0) return byCourse;
+
+  const { data, error } = await supabase
+    .from("lessons")
+    .select("course_id, lesson_number, title")
+    .in("course_id", courseIds)
+    .order("lesson_number", { ascending: true });
+
+  if (error) {
+    if (isMissingLessonLogSchema(error.message)) return byCourse;
+    throw error;
+  }
+
+  for (const row of data ?? []) {
+    const courseId = row.course_id as string;
+    const list = byCourse.get(courseId) ?? [];
+    list.push({
+      lessonNumber: Number(row.lesson_number) || list.length + 1,
+      title: String(row.title ?? "Untitled lesson"),
+    });
+    byCourse.set(courseId, list);
+  }
+  return byCourse;
+}
+
 export async function loadLessonLogEntriesForCohorts(
   supabase: SupabaseClient,
   cohortIds: string[]
@@ -37,7 +70,7 @@ export async function loadLessonLogEntriesForCohorts(
 
   const { data, error } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, cohort_id, lesson_date, lesson_title, recording_url, notes")
+    .select("id, cohort_id, lesson_date, lesson_title, recording_url, notes, status")
     .in("cohort_id", cohortIds)
     .order("lesson_date", { ascending: true });
 
@@ -54,11 +87,13 @@ export async function loadLessonLogEntriesForCohorts(
       lessonTitle: string | null;
       recordingUrl: string | null;
       notes: string | null;
+      status: string | null;
     }>
   >();
 
   for (const row of data ?? []) {
     if (!row.cohort_id) continue;
+    if (!isCountableLessonLogStatus(row.status as string | null)) continue;
     const list = rawByCohort.get(row.cohort_id) ?? [];
     list.push({
       id: row.id,
@@ -66,6 +101,7 @@ export async function loadLessonLogEntriesForCohorts(
       lessonTitle: row.lesson_title,
       recordingUrl: row.recording_url,
       notes: row.notes,
+      status: (row.status as string | null) ?? null,
     });
     rawByCohort.set(row.cohort_id, list);
   }
@@ -80,6 +116,7 @@ export async function loadLessonLogEntriesForCohorts(
         recordingUrl: entry.recordingUrl,
         notes: entry.notes,
         weekNumber: entry.weekNumber,
+        status: entry.status,
       }))
     );
   }
@@ -94,6 +131,7 @@ export async function buildCohortLessonProgress(options: {
   startDate?: string | null;
   entries: LessonLogEntrySummary[];
   totalLessons: number;
+  courseLessonsOrdered?: Array<{ lessonNumber: number; title: string }>;
 }): Promise<CohortLessonProgress> {
   const entries = [...options.entries].sort((a, b) => a.weekNumber - b.weekNumber);
   const completedCount = entries.length;
@@ -114,6 +152,10 @@ export async function buildCohortLessonProgress(options: {
     remainingCount: Math.max(0, options.totalLessons - completedCount),
     lastLessonDate,
     nextLessonAt: next?.toISOString() ?? null,
+    nextLessonTitle: resolveNextLessonTitle(
+      options.courseLessonsOrdered ?? [],
+      completedCount
+    ),
     entries,
   };
 }
@@ -131,12 +173,14 @@ export async function loadCohortLessonProgressMap(
   const result = new Map<string, CohortLessonProgress>();
   if (cohorts.length === 0) return result;
 
-  const [totals, entriesByCohort] = await Promise.all([
+  const courseIds = [...new Set(cohorts.map((c) => c.courseId))];
+  const [totals, entriesByCohort, lessonsByCourse] = await Promise.all([
     loadCourseLessonTotals(supabase),
     loadLessonLogEntriesForCohorts(
       supabase,
       cohorts.map((c) => c.id)
     ),
+    loadCourseLessonsOrdered(supabase, courseIds),
   ]);
 
   for (const cohort of cohorts) {
@@ -147,6 +191,7 @@ export async function loadCohortLessonProgressMap(
       startDate: cohort.startDate ?? null,
       entries: entriesByCohort.get(cohort.id) ?? [],
       totalLessons: totals.get(cohort.courseId) ?? 0,
+      courseLessonsOrdered: lessonsByCourse.get(cohort.courseId) ?? [],
     });
     result.set(cohort.id, progress);
   }

@@ -460,7 +460,7 @@ export function AdminPackagesSection() {
                       {isPackageColumnVisible(config, "progress") ? (
                         <th
                           className={packageColumnHeaderClass("progress")}
-                          title="Lessons Log progress (completed / total · next weekly session)"
+                          title="Lessons completed (Cancelled excluded) · next date · next topic"
                         >
                           Lesson progress
                         </th>
