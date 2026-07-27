@@ -128,8 +128,6 @@ export async function updateAdminLessonLogFields(
     reviewed?: boolean;
     notes?: string | null;
     recordingUrl?: string | null;
-    slidesUrl?: string | null;
-    flashcardsUrl?: string | null;
   }
 ): Promise<ActionResult> {
   try {
@@ -150,10 +148,77 @@ export async function updateAdminLessonLogFields(
     revalidateLessonLog();
     return {
       success:
-        "Saved as manual override — Notion pull will not overwrite status/reviewed/notes until reset. Recording/slides/flashcards URLs are stored in the app (Notion pull may refresh them from Notion).",
+        "Saved as manual override — Notion pull will not overwrite status/reviewed/notes until reset. Recording URL is stored in the app (Notion pull may refresh it from Notion).",
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update lesson log." };
+  }
+}
+
+export async function unlockAdminLessonLogEntry(entryId: string): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const { createClient } = await import("@/lib/supabase/server");
+    const authClient = await createClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const supabase = createServiceRoleClient();
+    const { data: entry, error: loadError } = await supabase
+      .from("cohort_lesson_log_entries")
+      .select("id, cohort_id, lesson_id, status")
+      .eq("id", entryId)
+      .maybeSingle();
+
+    if (loadError) return { error: loadError.message };
+    if (!entry) return { error: "Lesson log entry not found." };
+    if (!entry.cohort_id) {
+      return { error: "Only cohort lesson logs can be unlocked for students." };
+    }
+
+    let lessonId = entry.lesson_id as string | null;
+    if (!lessonId) {
+      const { resolveCurriculumLessonForLogEntry } = await import(
+        "@/lib/lessons/lesson-log-roster"
+      );
+      const curriculum = await resolveCurriculumLessonForLogEntry(
+        supabase,
+        entry.cohort_id,
+        entry.id
+      );
+      lessonId = curriculum?.lessonId ?? null;
+    }
+
+    if (!lessonId) {
+      return {
+        error:
+          "No curriculum lesson linked yet. Cancelled entries are excluded — ensure this log entry is in the lesson sequence.",
+      };
+    }
+
+    const { error } = await supabase.from("cohort_lesson_unlocks").upsert(
+      {
+        cohort_id: entry.cohort_id,
+        lesson_id: lessonId,
+        unlocked_by: user.id,
+        unlocked_at: new Date().toISOString(),
+      },
+      { onConflict: "cohort_id,lesson_id" }
+    );
+
+    if (error) return { error: error.message };
+
+    revalidateLessonLog();
+    revalidatePath("/admin/packages");
+    revalidatePath("/dashboard/learn");
+    revalidatePath("/dashboard/tutor");
+    return { success: "Lesson unlocked for this cohort in Learn." };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Failed to unlock lesson.",
+    };
   }
 }
 

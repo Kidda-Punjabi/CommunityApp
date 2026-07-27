@@ -8,6 +8,7 @@ import type {
   CohortCalendarLinkState,
   OnboardingChecklistRow,
   PackageLessonLogEntry,
+  PackageSessionLogEntry,
   PackagesRosterMember,
 } from "@/lib/admin/packages/types";
 import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin/package-status";
@@ -987,6 +988,13 @@ export async function loadAdminPackageDetail(
       ? []
       : await loadLessonLog(supabase, kind, id, base.courseId);
 
+  const sessionLog =
+    kind === "cohort"
+      ? await loadPackageSessionLog(supabase, id)
+      : kind === "package_instance"
+        ? await loadPackageInstanceSessionLog(supabase, id)
+        : [];
+
   return {
     detail: {
       ...base,
@@ -994,8 +1002,106 @@ export async function loadAdminPackageDetail(
       packageId,
       packageName,
       lessonLog,
+      sessionLog,
     },
   };
+}
+
+async function loadPackageSessionLog(
+  supabase: SupabaseClient,
+  cohortId: string
+): Promise<PackageSessionLogEntry[]> {
+  const { syncCohortLessonLogLessonIds } = await import(
+    "@/lib/lessons/lesson-log-lesson-link"
+  );
+  await syncCohortLessonLogLessonIds(supabase, cohortId);
+
+  const { data: entries, error } = await supabase
+    .from("cohort_lesson_log_entries")
+    .select(
+      "id, lesson_date, lesson_title, status, recording_url, lesson_id, cohort_id"
+    )
+    .eq("cohort_id", cohortId)
+    .order("lesson_date", { ascending: false });
+
+  let rows = entries;
+  if (error?.message?.toLowerCase().includes("lesson_id")) {
+    const fallback = await supabase
+      .from("cohort_lesson_log_entries")
+      .select("id, lesson_date, lesson_title, status, recording_url, cohort_id")
+      .eq("cohort_id", cohortId)
+      .order("lesson_date", { ascending: false });
+    if (fallback.error) {
+      if (fallback.error.message.toLowerCase().includes("cohort_lesson_log_entries")) return [];
+      throw fallback.error;
+    }
+    rows = (fallback.data ?? []).map((row) => ({ ...row, lesson_id: null }));
+  } else if (error) {
+    if (error.message.toLowerCase().includes("cohort_lesson_log_entries")) return [];
+    throw error;
+  }
+
+  const lessonIds = [...new Set((entries ?? []).map((e) => e.lesson_id).filter(Boolean))] as string[];
+  const { data: lessons } = lessonIds.length
+    ? await supabase
+        .from("lessons")
+        .select("id, lesson_number, title")
+        .in("id", lessonIds)
+    : { data: [] };
+
+  const lessonById = new Map((lessons ?? []).map((l) => [l.id, l] as const));
+
+  const { data: unlocks } = await supabase
+    .from("cohort_lesson_unlocks")
+    .select("lesson_id")
+    .eq("cohort_id", cohortId);
+
+  const unlockedIds = new Set((unlocks ?? []).map((u) => u.lesson_id));
+
+  const { formatCurriculumLessonLabel } = await import(
+    "@/lib/lessons/lesson-log-lesson-link"
+  );
+
+  return (rows ?? []).map((row) => {
+    const lesson = row.lesson_id ? lessonById.get(row.lesson_id) : null;
+    return {
+      id: row.id,
+      lessonDate: row.lesson_date,
+      lessonTitle: row.lesson_title,
+      status: row.status,
+      curriculumLessonLabel: lesson
+        ? formatCurriculumLessonLabel(lesson.lesson_number, lesson.title)
+        : null,
+      recordingUrl: row.recording_url,
+      isUnlocked: row.lesson_id ? unlockedIds.has(row.lesson_id) : false,
+    };
+  });
+}
+
+async function loadPackageInstanceSessionLog(
+  supabase: SupabaseClient,
+  packageInstanceId: string
+): Promise<PackageSessionLogEntry[]> {
+  const { data: entries, error } = await supabase
+    .from("cohort_lesson_log_entries")
+    .select("id, lesson_date, lesson_title, status, recording_url")
+    .eq("package_instance_id", packageInstanceId)
+    .order("lesson_date", { ascending: false });
+
+  if (error) {
+    if (error.message.toLowerCase().includes("cohort_lesson_log_entries")) return [];
+    throw error;
+  }
+
+  return (entries ?? []).map((row) => ({
+    id: row.id,
+    lessonDate: row.lesson_date,
+    lessonTitle: row.lesson_title,
+    status: row.status,
+    curriculumLessonLabel: null,
+    recordingUrl: row.recording_url,
+    isUnlocked: false,
+  }));
 }
 
 async function loadLessonLog(

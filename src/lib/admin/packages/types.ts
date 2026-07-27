@@ -129,6 +129,17 @@ export type PackageLessonLogEntry = {
   unlockedAt: string;
 };
 
+/** Session-level Lessons Log rows (Notion mirror) for a cohort/package run. */
+export type PackageSessionLogEntry = {
+  id: string;
+  lessonDate: string;
+  lessonTitle: string | null;
+  status: string | null;
+  curriculumLessonLabel: string | null;
+  recordingUrl: string | null;
+  isUnlocked: boolean;
+};
+
 export type OnboardingChecklistRow = {
   id: string;
   checklistType: "group" | "one_to_one";
@@ -148,5 +159,8 @@ export type AdminPackageDetail = AdminPackageListRow & {
   active: boolean;
   packageId: string | null;
   packageName: string | null;
+  /** Unlocked curriculum lessons (cohort_lesson_unlocks). */
   lessonLog: PackageLessonLogEntry[];
+  /** Chronological session log (cohort_lesson_log_entries), Notion-style. */
+  sessionLog: PackageSessionLogEntry[];
 };

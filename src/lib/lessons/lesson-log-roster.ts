@@ -1,7 +1,9 @@
 import "server-only";
 
 import { getDisplayName } from "@/lib/profile/display-name";
-import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
+import {
+  resolveCurriculumLessonForCohortLogEntry,
+} from "@/lib/lessons/lesson-log-lesson-link";
 import { matchStudentsToNotionLeads } from "@/lib/notion/lesson-log-attendance-sync";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -35,8 +37,8 @@ function isMissingAttendanceSchema(message: string): boolean {
 }
 
 /**
- * Map a cohort lesson-log entry to a curriculum lessons.id by sequential position
- * among non-cancelled log entries (same assumption as next-lesson-topic).
+ * Map a cohort lesson-log entry to a curriculum lessons.id.
+ * Prefers stored lesson_id; falls back to sequential position derivation.
  */
 export async function resolveCurriculumLessonForLogEntry(
   supabase: SupabaseClient,
@@ -47,59 +49,36 @@ export async function resolveCurriculumLessonForLogEntry(
   lessonNumber: number;
   title: string;
 } | null> {
-  const { data: cohort, error: cohortError } = await supabase
-    .from("cohorts")
-    .select("course_id")
-    .eq("id", cohortId)
-    .maybeSingle();
-
-  if (cohortError) throw cohortError;
-  if (!cohort?.course_id) return null;
-
-  const { data: logRows, error: logError } = await supabase
+  const { data: entry, error: entryError } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, lesson_date, status")
-    .eq("cohort_id", cohortId)
-    .order("lesson_date", { ascending: true });
-
-  if (logError) throw logError;
-
-  const countable = (logRows ?? []).filter((row) =>
-    isCountableLessonLogStatus(row.status as string | null)
-  );
-  const index = countable.findIndex((row) => row.id === lessonLogEntryId);
-  if (index < 0) return null;
-
-  const lessonNumber = index + 1;
-  const { data: lesson, error: lessonError } = await supabase
-    .from("lessons")
-    .select("id, lesson_number, title")
-    .eq("course_id", cohort.course_id)
-    .eq("lesson_number", lessonNumber)
+    .select("lesson_id, status")
+    .eq("id", lessonLogEntryId)
     .maybeSingle();
 
-  if (lessonError) throw lessonError;
-  if (!lesson) {
-    // Fallback: ordered list position if lesson_number gaps exist.
-    const { data: ordered } = await supabase
-      .from("lessons")
-      .select("id, lesson_number, title")
-      .eq("course_id", cohort.course_id)
-      .order("lesson_number", { ascending: true });
-    const fallback = ordered?.[index];
-    if (!fallback) return null;
-    return {
-      lessonId: fallback.id,
-      lessonNumber: fallback.lesson_number,
-      title: fallback.title,
-    };
+  if (entryError) {
+    if (entryError.message.toLowerCase().includes("lesson_id")) {
+      return resolveCurriculumLessonForCohortLogEntry(supabase, cohortId, lessonLogEntryId);
+    }
+    throw entryError;
   }
 
-  return {
-    lessonId: lesson.id,
-    lessonNumber: lesson.lesson_number,
-    title: lesson.title,
-  };
+  if (entry?.lesson_id) {
+    const { data: lesson, error: lessonError } = await supabase
+      .from("lessons")
+      .select("id, lesson_number, title")
+      .eq("id", entry.lesson_id)
+      .maybeSingle();
+    if (lessonError) throw lessonError;
+    if (lesson) {
+      return {
+        lessonId: lesson.id,
+        lessonNumber: lesson.lesson_number,
+        title: lesson.title,
+      };
+    }
+  }
+
+  return resolveCurriculumLessonForCohortLogEntry(supabase, cohortId, lessonLogEntryId);
 }
 
 export async function loadLessonLogRosterContext(

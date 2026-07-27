@@ -9,6 +9,7 @@ import {
   refreshLessonLogFromNotion,
   resetAdminLessonLogFieldsToNotion,
   updateAdminLessonLogFields,
+  unlockAdminLessonLogEntry,
 } from "@/app/admin/lesson-log/actions";
 import {
   fetchNotionTutorMapData,
@@ -27,7 +28,6 @@ import { ui } from "@/lib/ui/styles";
 const LESSON_LOG_MEDIA_BUCKET = "lesson-log-media" as const;
 /** Client-side guard aligned with bucket fileSizeLimit (500MB). */
 const MAX_RECORDING_UPLOAD_BYTES = 524_288_000;
-const MAX_DOC_UPLOAD_BYTES = 52_428_800;
 
 function todayDateInput(): string {
   return new Date().toISOString().slice(0, 10);
@@ -102,12 +102,8 @@ export function AdminLessonLogSection() {
     reviewed: boolean;
     notes: string;
     recordingUrl: string;
-    slidesUrl: string;
-    flashcardsUrl: string;
   } | null>(null);
-  const [uploadingField, setUploadingField] = useState<
-    "recordingUrl" | "slidesUrl" | "flashcardsUrl" | null
-  >(null);
+  const [uploadingRecording, setUploadingRecording] = useState(false);
 
   function reload() {
     startTransition(async () => {
@@ -183,29 +179,24 @@ export function AdminLessonLogSection() {
     includeCancelled,
   ]);
 
-  async function uploadLessonLogMedia(
-    field: "recordingUrl" | "slidesUrl" | "flashcardsUrl",
-    file: File
-  ) {
+  async function uploadLessonLogRecording(file: File) {
     if (!editDraft) return;
-    const maxBytes =
-      field === "recordingUrl" ? MAX_RECORDING_UPLOAD_BYTES : MAX_DOC_UPLOAD_BYTES;
-    if (file.size > maxBytes) {
+    if (file.size > MAX_RECORDING_UPLOAD_BYTES) {
       setError(
-        `File too large (${Math.round(file.size / 1_000_000)}MB). Max is ${Math.round(maxBytes / 1_000_000)}MB for ${field === "recordingUrl" ? "recordings" : "slides/flashcards"}.`
+        `File too large (${Math.round(file.size / 1_000_000)}MB). Max is ${Math.round(MAX_RECORDING_UPLOAD_BYTES / 1_000_000)}MB for recordings.`
       );
       return;
     }
-    setUploadingField(field);
+    setUploadingRecording(true);
     setError(null);
     try {
       const url = await uploadToStorageAsAdmin(LESSON_LOG_MEDIA_BUCKET, file);
-      setEditDraft({ ...editDraft, [field]: url });
-      setMessage(`Uploaded — save to persist the ${field.replace("Url", "")} link.`);
+      setEditDraft({ ...editDraft, recordingUrl: url });
+      setMessage("Uploaded — save to persist the recording link.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
-      setUploadingField(null);
+      setUploadingRecording(false);
     }
   }
 
@@ -573,7 +564,7 @@ export function AdminLessonLogSection() {
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-zinc-900">
-                                {entry.lessonTitle ?? "Untitled lesson"}
+                                {entry.curriculumLessonLabel ?? entry.lessonTitle ?? "Untitled lesson"}
                               </p>
                               <p className="mt-0.5 text-xs text-zinc-500">
                                 {formatDate(entry.lessonDate)}
@@ -588,6 +579,11 @@ export function AdminLessonLogSection() {
                                     ? " · Tutor unmapped"
                                     : ""}
                               </p>
+                              {entry.curriculumLessonLabel && entry.lessonTitle ? (
+                                <p className="mt-0.5 text-[11px] text-zinc-500">
+                                  Notion title: {entry.lessonTitle}
+                                </p>
+                              ) : null}
                               {attention ? (
                                 <p className="mt-1 text-[11px] font-semibold text-amber-700">
                                   Needs attention · {attention}
@@ -637,23 +633,80 @@ export function AdminLessonLogSection() {
                                           reviewed: entry.reviewed,
                                           notes: entry.notes ?? "",
                                           recordingUrl: entry.recordingUrl ?? "",
-                                          slidesUrl: entry.slidesUrl ?? "",
-                                          flashcardsUrl: entry.flashcardsUrl ?? "",
                                         }
                                   )
                                 }
                               >
                                 {editDraft?.entryId === entry.id
                                   ? "Cancel edit"
-                                  : "Edit status / media / notes"}
+                                  : "Edit session"}
                               </button>
                               {editDraft?.entryId === entry.id ? (
                                 <div className="mt-2 space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                                  {entry.curriculumLessonLabel ? (
+                                    <p className="text-xs font-semibold text-zinc-900">
+                                      {entry.curriculumLessonLabel}
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-amber-800">
+                                      No curriculum lesson linked (Cancelled entries are excluded
+                                      from the sequence).
+                                    </p>
+                                  )}
+                                  <div className="flex flex-wrap gap-2 text-[11px]">
+                                    {entry.curriculumPdfUrl ? (
+                                      <a
+                                        href={entry.curriculumPdfUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-medium text-violet-700 hover:text-violet-500"
+                                      >
+                                        Slides (PDF)
+                                      </a>
+                                    ) : entry.curriculumLessonLabel ? (
+                                      <span className="text-zinc-500">No slides PDF in admin content</span>
+                                    ) : null}
+                                    {entry.curriculumFlashcardSetName ? (
+                                      <Link
+                                        href="/admin/content?tab=flashcards"
+                                        className="font-medium text-violet-700 hover:text-violet-500"
+                                      >
+                                        Flashcards: {entry.curriculumFlashcardSetName}
+                                      </Link>
+                                    ) : entry.curriculumLessonLabel ? (
+                                      <span className="text-zinc-500">No flashcard set for this week</span>
+                                    ) : null}
+                                  </div>
+                                  {entry.isUnlockedForCohort ? (
+                                    <p className="text-[11px] font-medium text-emerald-700">
+                                      Unlocked for students in Learn
+                                    </p>
+                                  ) : entry.curriculumLessonId && group.kind === "cohort" ? (
+                                    <button
+                                      type="button"
+                                      disabled={pending}
+                                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-900 disabled:opacity-60"
+                                      onClick={() => {
+                                        startTransition(async () => {
+                                          setError(null);
+                                          setMessage(null);
+                                          const result = await unlockAdminLessonLogEntry(entry.id);
+                                          if (result.error) {
+                                            setError(result.error);
+                                            return;
+                                          }
+                                          setMessage(result.success ?? "Unlocked.");
+                                          reload();
+                                        });
+                                      }}
+                                    >
+                                      Unlock this lesson for cohort
+                                    </button>
+                                  ) : null}
                                   <p className="text-[11px] text-zinc-600">
-                                    Saves as manual override (like Packages tutor_id_source) — pull
-                                    will not overwrite status/reviewed/notes until reset. Does not
-                                    push back to Notion. Setting Cancelled hides this entry from the
-                                    default list and excludes it from lesson progress.
+                                    Manual override for status/reviewed/notes — does not push to
+                                    Notion. Logging a session does not unlock content for students
+                                    unless you use Unlock above.
                                   </p>
                                   <div className="flex flex-wrap gap-2">
                                     <select
@@ -694,66 +747,44 @@ export function AdminLessonLogSection() {
                                     className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs"
                                     placeholder="Notes"
                                   />
-                                  {(
-                                    [
-                                      {
-                                        key: "recordingUrl" as const,
-                                        label: "Recording",
-                                        accept: "video/*,audio/*",
-                                      },
-                                      {
-                                        key: "slidesUrl" as const,
-                                        label: "Slides",
-                                        accept: ".pdf,image/*,.ppt,.pptx",
-                                      },
-                                      {
-                                        key: "flashcardsUrl" as const,
-                                        label: "Flashcards",
-                                        accept: ".pdf,image/*,.zip",
-                                      },
-                                    ] as const
-                                  ).map((field) => (
-                                    <div key={field.key} className="space-y-1">
-                                      <label className="block text-[11px] font-medium text-zinc-600">
-                                        {field.label}
-                                      </label>
-                                      <div className="flex flex-wrap gap-2">
+                                  <div className="space-y-1">
+                                    <label className="block text-[11px] font-medium text-zinc-600">
+                                      Recording
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                      <input
+                                        value={editDraft.recordingUrl}
+                                        onChange={(e) =>
+                                          setEditDraft({
+                                            ...editDraft,
+                                            recordingUrl: e.target.value,
+                                          })
+                                        }
+                                        placeholder="Recording URL"
+                                        className="min-w-[12rem] flex-1 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs"
+                                      />
+                                      <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+                                        {uploadingRecording ? "Uploading…" : "Upload"}
                                         <input
-                                          value={editDraft[field.key]}
-                                          onChange={(e) =>
-                                            setEditDraft({
-                                              ...editDraft,
-                                              [field.key]: e.target.value,
-                                            })
-                                          }
-                                          placeholder={`${field.label} URL`}
-                                          className="min-w-[12rem] flex-1 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs"
+                                          type="file"
+                                          accept="video/*,audio/*"
+                                          className="sr-only"
+                                          disabled={uploadingRecording || pending}
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            e.target.value = "";
+                                            if (file) {
+                                              void uploadLessonLogRecording(file);
+                                            }
+                                          }}
                                         />
-                                        <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
-                                          {uploadingField === field.key
-                                            ? "Uploading…"
-                                            : "Upload"}
-                                          <input
-                                            type="file"
-                                            accept={field.accept}
-                                            className="sr-only"
-                                            disabled={uploadingField !== null || pending}
-                                            onChange={(e) => {
-                                              const file = e.target.files?.[0];
-                                              e.target.value = "";
-                                              if (file) {
-                                                void uploadLessonLogMedia(field.key, file);
-                                              }
-                                            }}
-                                          />
-                                        </label>
-                                      </div>
+                                      </label>
                                     </div>
-                                  ))}
+                                  </div>
                                   <div className="flex flex-wrap gap-2">
                                     <button
                                       type="button"
-                                      disabled={pending || uploadingField !== null}
+                                      disabled={pending || uploadingRecording}
                                       className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-60"
                                       onClick={() => {
                                         startTransition(async () => {
@@ -766,8 +797,6 @@ export function AdminLessonLogSection() {
                                               reviewed: editDraft.reviewed,
                                               notes: editDraft.notes,
                                               recordingUrl: editDraft.recordingUrl,
-                                              slidesUrl: editDraft.slidesUrl,
-                                              flashcardsUrl: editDraft.flashcardsUrl,
                                             }
                                           );
                                           if (result.error) {
@@ -844,9 +873,9 @@ export function AdminLessonLogSection() {
                                   Recording
                                 </a>
                               ) : null}
-                              {entry.slidesUrl ? (
+                              {entry.curriculumPdfUrl ? (
                                 <a
-                                  href={entry.slidesUrl}
+                                  href={entry.curriculumPdfUrl}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="font-medium text-violet-700 hover:text-violet-500"
@@ -854,15 +883,13 @@ export function AdminLessonLogSection() {
                                   Slides
                                 </a>
                               ) : null}
-                              {entry.flashcardsUrl ? (
-                                <a
-                                  href={entry.flashcardsUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
+                              {entry.curriculumFlashcardSetName ? (
+                                <Link
+                                  href="/admin/content?tab=flashcards"
                                   className="font-medium text-violet-700 hover:text-violet-500"
                                 >
                                   Flashcards
-                                </a>
+                                </Link>
                               ) : null}
                             </div>
                           </div>

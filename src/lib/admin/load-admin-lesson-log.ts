@@ -33,6 +33,16 @@ export type AdminLessonLogEntry = {
   source: "notion" | "app";
   dismissedAt: string | null;
   attentionReasons: LessonLogAttentionReason[];
+  /** Linked curriculum lesson (lessons.id), when cohort + non-cancelled. */
+  curriculumLessonId: string | null;
+  curriculumLessonNumber: number | null;
+  curriculumLessonTitle: string | null;
+  curriculumLessonLabel: string | null;
+  /** Slides PDF from lessons.pdf_url (admin content), not Notion slides_url. */
+  curriculumPdfUrl: string | null;
+  curriculumFlashcardSetId: string | null;
+  curriculumFlashcardSetName: string | null;
+  isUnlockedForCohort: boolean;
 };
 
 export type AdminLessonLogGroup = {
@@ -75,6 +85,7 @@ type EntryRow = {
   notion_page_id: string;
   cohort_id: string | null;
   package_instance_id: string | null;
+  lesson_id?: string | null;
   lesson_title: string | null;
   lesson_date: string;
   recording_url: string | null;
@@ -137,6 +148,11 @@ export async function loadAdminLessonLogSnapshot(
   );
   await backfillCancelledLessonLogDismissals(supabase);
 
+  const { syncAllCohortLessonLogLessonIds } = await import(
+    "@/lib/lessons/lesson-log-lesson-link"
+  );
+  await syncAllCohortLessonLogLessonIds(supabase);
+
   const empty: AdminLessonLogSnapshot = {
     groups: [],
     totals: {
@@ -156,7 +172,7 @@ export async function loadAdminLessonLogSnapshot(
   };
 
   const selectWithSources =
-    "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, status_source, reviewed_source, notes_source, notion_sync_status, notion_sync_error, notion_synced_at, source, dismissed_at";
+    "id, notion_page_id, cohort_id, package_instance_id, lesson_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, status_source, reviewed_source, notes_source, notion_sync_status, notion_sync_error, notion_synced_at, source, dismissed_at";
   const selectWithoutSources =
     "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, notion_sync_status, notion_sync_error, notion_synced_at, source";
 
@@ -172,7 +188,8 @@ export async function loadAdminLessonLogSnapshot(
       first.error?.message.includes("status_source") ||
       first.error?.message.includes("reviewed_source") ||
       first.error?.message.includes("notes_source") ||
-      first.error?.message.includes("dismissed_at")
+      first.error?.message.includes("dismissed_at") ||
+      first.error?.message.includes("lesson_id")
     ) {
       const second = await supabase
         .from("cohort_lesson_log_entries")
@@ -241,8 +258,15 @@ export async function loadAdminLessonLogSnapshot(
 
   const [{ data: cohorts }, { data: instances }, { data: tutorMap }] = await Promise.all([
     cohortIds.length
-      ? supabase.from("cohorts").select("id, name, tutor_id").in("id", cohortIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; name: string; tutor_id: string | null }> }),
+      ? supabase.from("cohorts").select("id, name, tutor_id, course_id").in("id", cohortIds)
+      : Promise.resolve({
+          data: [] as Array<{
+            id: string;
+            name: string;
+            tutor_id: string | null;
+            course_id: string;
+          }>,
+        }),
     instanceIds.length
       ? supabase
           .from("package_instances")
@@ -277,6 +301,53 @@ export async function loadAdminLessonLogSnapshot(
     (tutorMap ?? []).map((m) => [m.notion_user_id, m.tutor_id] as const)
   );
 
+  const lessonIds = [...new Set(rows.map((r) => r.lesson_id).filter(Boolean))] as string[];
+  const { data: lessonRows } = lessonIds.length
+    ? await supabase
+        .from("lessons")
+        .select("id, lesson_number, title, pdf_url, course_id")
+        .in("id", lessonIds)
+    : { data: [] as Array<{
+        id: string;
+        lesson_number: number;
+        title: string;
+        pdf_url: string | null;
+        course_id: string;
+      }> };
+
+  const lessonById = new Map((lessonRows ?? []).map((lesson) => [lesson.id, lesson] as const));
+
+  const { data: unlockRows } = cohortIds.length
+    ? await supabase
+        .from("cohort_lesson_unlocks")
+        .select("cohort_id, lesson_id")
+        .in("cohort_id", cohortIds)
+    : { data: [] as Array<{ cohort_id: string; lesson_id: string }> };
+
+  const unlockedLessonKeys = new Set(
+    (unlockRows ?? []).map((row) => `${row.cohort_id}:${row.lesson_id}`)
+  );
+
+  const { formatCurriculumLessonLabel, loadLessonContentRefs } = await import(
+    "@/lib/lessons/lesson-log-lesson-link"
+  );
+
+  const flashcardRefsByLessonId = new Map<
+    string,
+    { flashcardSetId: string | null; flashcardSetName: string | null }
+  >();
+  for (const lesson of lessonRows ?? []) {
+    const refs = await loadLessonContentRefs(
+      supabase,
+      lesson.course_id,
+      lesson.lesson_number
+    );
+    flashcardRefsByLessonId.set(lesson.id, {
+      flashcardSetId: refs.flashcardSetId,
+      flashcardSetName: refs.flashcardSetName,
+    });
+  }
+
   const groupsMap = new Map<string, AdminLessonLogGroup>();
   let unresolvedTutor = 0;
   let missingRecording = 0;
@@ -304,6 +375,22 @@ export async function loadAdminLessonLogSnapshot(
     }
     if (attentionReasons.length > 0) attention += 1;
 
+    const linkedLesson = row.lesson_id ? lessonById.get(row.lesson_id) : null;
+    const flashcardRefs = row.lesson_id
+      ? flashcardRefsByLessonId.get(row.lesson_id)
+      : null;
+    const curriculumLessonId = linkedLesson?.id ?? null;
+    const curriculumLessonNumber = linkedLesson?.lesson_number ?? null;
+    const curriculumLessonTitle = linkedLesson?.title ?? null;
+    const curriculumLessonLabel =
+      linkedLesson
+        ? formatCurriculumLessonLabel(linkedLesson.lesson_number, linkedLesson.title)
+        : null;
+    const isUnlockedForCohort =
+      row.cohort_id && curriculumLessonId
+        ? unlockedLessonKeys.has(`${row.cohort_id}:${curriculumLessonId}`)
+        : false;
+
     const entry: AdminLessonLogEntry = {
       id: row.id,
       notionPageId: row.notion_page_id,
@@ -327,6 +414,14 @@ export async function loadAdminLessonLogSnapshot(
       source: row.source === "app" ? "app" : "notion",
       dismissedAt: row.dismissed_at ?? null,
       attentionReasons,
+      curriculumLessonId,
+      curriculumLessonNumber,
+      curriculumLessonTitle,
+      curriculumLessonLabel,
+      curriculumPdfUrl: linkedLesson?.pdf_url ?? null,
+      curriculumFlashcardSetId: flashcardRefs?.flashcardSetId ?? null,
+      curriculumFlashcardSetName: flashcardRefs?.flashcardSetName ?? null,
+      isUnlockedForCohort,
     };
 
     let key: string;

@@ -317,6 +317,14 @@ export async function upsertLessonLogEntryFromNotion(
     const { error } = await supabase.from("cohort_lesson_log_entries").insert(patch);
     if (error) throw new Error(error.message);
   }
+
+  if (cohortId) {
+    const { syncCohortLessonLogLessonIds } = await import(
+      "@/lib/lessons/lesson-log-lesson-link"
+    );
+    await syncCohortLessonLogLessonIds(supabase, cohortId);
+  }
+
   return "upserted";
 }
 
@@ -538,6 +546,13 @@ export async function createLessonLogInNotionAndSupabase(
     };
   }
 
+  if (target.cohortId) {
+    const { syncCohortLessonLogLessonIds } = await import(
+      "@/lib/lessons/lesson-log-lesson-link"
+    );
+    await syncCohortLessonLogLessonIds(supabase, target.cohortId);
+  }
+
   return { ok: true, entryId: inserted.id, notionPageId };
 }
 
@@ -546,8 +561,6 @@ export type UpdateLessonLogManualFieldsInput = {
   reviewed?: boolean;
   notes?: string | null;
   recordingUrl?: string | null;
-  slidesUrl?: string | null;
-  flashcardsUrl?: string | null;
   /** When status becomes Cancelled, set dismissed_at/dismissed_by so it leaves the default list. */
   dismissedBy?: string | null;
 };
@@ -586,16 +599,16 @@ export async function updateLessonLogManualFields(
   if (fields.recordingUrl !== undefined) {
     patch.recording_url = fields.recordingUrl?.trim() || null;
   }
-  if (fields.slidesUrl !== undefined) {
-    patch.slides_url = fields.slidesUrl?.trim() || null;
-  }
-  if (fields.flashcardsUrl !== undefined) {
-    patch.flashcards_url = fields.flashcardsUrl?.trim() || null;
-  }
 
   if (Object.keys(patch).length === 0) {
     return { ok: false, error: "No fields to update." };
   }
+
+  const { data: entryRow } = await supabase
+    .from("cohort_lesson_log_entries")
+    .select("cohort_id")
+    .eq("id", entryId)
+    .maybeSingle();
 
   const { error } = await supabase
     .from("cohort_lesson_log_entries")
@@ -603,6 +616,14 @@ export async function updateLessonLogManualFields(
     .eq("id", entryId);
 
   if (error) return { ok: false, error: error.message };
+
+  if (entryRow?.cohort_id) {
+    const { syncCohortLessonLogLessonIds } = await import(
+      "@/lib/lessons/lesson-log-lesson-link"
+    );
+    await syncCohortLessonLogLessonIds(supabase, entryRow.cohort_id);
+  }
+
   return { ok: true };
 }
 

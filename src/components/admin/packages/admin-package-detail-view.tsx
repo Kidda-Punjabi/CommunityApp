@@ -13,6 +13,7 @@ import { searchAdminMembers, type AdminMemberOption } from "@/app/admin/content/
 import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
 import { OnboardingChecklistModal } from "@/components/admin/onboarding/onboarding-checklist-modal";
 import { PackageRunFormModal } from "@/components/admin/packages/package-run-form-modal";
+import { PackageSessionLogSection } from "@/components/admin/packages/package-session-log-section";
 import type { AdminPackageDetail, AdminPackageKind, PackagesRosterMember } from "@/lib/admin/packages/types";
 import {
   PACKAGE_INSTANCE_STATUSES,
@@ -522,9 +523,23 @@ export function AdminPackageDetailView({
       </div>
 
       {!isCommunity && (
+        <PackageSessionLogSection
+          kind={detail.kind}
+          runId={detail.id}
+          entries={detail.sessionLog}
+          onLogged={() => router.refresh()}
+        />
+      )}
+
+      {!isCommunity && (
       <section className={ui.card}>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Lesson log</h2>
-        <p className="mt-1 text-xs text-zinc-500">Lessons unlocked for this package run.</p>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+          Unlocked in Learn
+        </h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Curriculum lessons unlocked for students (cohort_lesson_unlocks). Unlock from the lesson
+          log edit panel per session.
+        </p>
         {detail.lessonLog.length === 0 ? (
           <p className="mt-4 text-sm text-zinc-500">No lessons logged yet.</p>
         ) : (
