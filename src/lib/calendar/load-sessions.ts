@@ -196,18 +196,6 @@ export async function loadStudentUpcomingSessions(
   }
   if (sessionCohortsError) throw sessionCohortsError;
 
-  const tutorIdsForAlternates = [
-    ...new Set((sessionCohorts ?? []).map((cohort) => cohort.tutor_id).filter(Boolean)),
-  ];
-  const { data: tutorCohorts } =
-    tutorIdsForAlternates.length > 0
-      ? await supabase
-          .from("cohorts")
-          .select("id, name, tutor_id, course_id")
-          .in("tutor_id", tutorIdsForAlternates)
-          .eq("active", true)
-      : { data: [] };
-
   const requestBySession = new Map(
     ((requests ?? []) as RescheduleRequestRow[]).map((request) => [request.session_id, request])
   );
@@ -222,22 +210,70 @@ export async function loadStudentUpcomingSessions(
   );
   const cohortMetaById = new Map((sessionCohorts ?? []).map((cohort) => [cohort.id, cohort]));
 
-  function getAlternateCohorts(session: ScheduledSessionRow) {
-    if (!session.cohort_id) return [];
-    const current = cohortMetaById.get(session.cohort_id);
-    if (!current) return [];
-
-    return (tutorCohorts ?? [])
-      .filter(
-        (cohort) =>
-          cohort.tutor_id === current.tutor_id &&
-          cohort.course_id === current.course_id &&
-          cohort.id !== session.cohort_id
-      )
-      .map((cohort) => ({ id: cohort.id, name: cohort.name }));
-  }
-
   const labelled = await attachLessonLabelsToSessions(supabase, visible);
+  const labelledById = new Map(labelled.map((session) => [session.id, session]));
+
+  const groupSessions = labelled.filter(
+    (session) => Boolean(session.cohort_id) && Boolean(session.course_id)
+  );
+  const alternateSessionBySourceId = new Map<string, Array<(typeof labelled)[number]>>();
+
+  if (groupSessions.length > 0) {
+    const tutorIdsForAlternates = [
+      ...new Set(groupSessions.map((session) => session.tutor_id).filter(Boolean)),
+    ];
+    const courseIdsForAlternates = [
+      ...new Set(groupSessions.map((session) => session.course_id).filter((id): id is string => Boolean(id))),
+    ];
+    const fromIso = new Date(
+      Math.min(...groupSessions.map((session) => new Date(session.starts_at).getTime()))
+    ).toISOString();
+    const toIso = new Date(
+      Math.max(...groupSessions.map((session) => new Date(session.starts_at).getTime())) +
+        10 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    const { data: alternateRows, error: alternateError } =
+      tutorIdsForAlternates.length > 0 && courseIdsForAlternates.length > 0
+        ? await supabase
+            .from("tutor_scheduled_sessions")
+            .select("*")
+            .in("tutor_id", tutorIdsForAlternates)
+            .in("course_id", courseIdsForAlternates)
+            .not("cohort_id", "is", null)
+            .eq("status", "scheduled")
+            .neq("match_method", "unmatched")
+            .neq("match_method", "title_name")
+            .gte("starts_at", fromIso)
+            .lte("starts_at", toIso)
+            .order("starts_at", { ascending: true })
+        : { data: [], error: null };
+
+    if (alternateError) throw alternateError;
+
+    const alternateLabelled = await attachLessonLabelsToSessions(
+      supabase,
+      ((alternateRows ?? []) as ScheduledSessionRow[]).filter(
+        (session) => !labelledById.has(session.id)
+      )
+    );
+
+    for (const source of groupSessions) {
+      const matches = alternateLabelled.filter((candidate) => {
+        if (!source.cohort_id || !candidate.cohort_id || !source.course_id || !source.lessonNumber) {
+          return false;
+        }
+        if (candidate.cohort_id === source.cohort_id) return false;
+        if (candidate.course_id !== source.course_id) return false;
+        if (candidate.tutor_id !== source.tutor_id) return false;
+        if (candidate.lessonNumber !== source.lessonNumber) return false;
+        const sourceMs = new Date(source.starts_at).getTime();
+        const candidateMs = new Date(candidate.starts_at).getTime();
+        return candidateMs >= sourceMs && candidateMs <= sourceMs + 10 * 24 * 60 * 60 * 1000;
+      });
+      alternateSessionBySourceId.set(source.id, matches);
+    }
+  }
 
   return {
     schemaReady: true,
@@ -245,7 +281,14 @@ export async function loadStudentUpcomingSessions(
       const rescheduleRequest = requestBySession.get(session.id) ?? null;
       const eligibility = getRescheduleEligibility(session, rescheduleRequest);
       const cohortSwitchRequest = cohortSwitchBySession.get(session.id) ?? null;
-      const alternateCohorts = getAlternateCohorts(session);
+      const alternateCohorts = (alternateSessionBySourceId.get(session.id) ?? []).map((candidate) => ({
+        id: candidate.id,
+        cohortId: candidate.cohort_id as string,
+        name: cohortMetaById.get(candidate.cohort_id as string)?.name ?? candidate.title ?? "Alternate cohort",
+        startsAt: candidate.starts_at,
+        endsAt: candidate.ends_at,
+        lessonLabel: candidate.lessonLabel,
+      }));
       const cohortSwitchEligibility = getCohortSwitchEligibility(
         session,
         cohortSwitchRequest,

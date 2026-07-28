@@ -2,6 +2,10 @@ import Link from "next/link";
 import { NavLink } from "@/components/ui/nav-link";
 import { LessonInlineAudioRow } from "@/components/lesson-inline-audio-row";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
+import {
+  CohortSwitchRequestForm,
+  RescheduleRequestForm,
+} from "@/components/schedule/upcoming-lessons-list";
 import { LessonPdfViewer } from "@/components/lesson-pdf-viewer";
 import { deckPracticeHref } from "@/lib/flashcards/utils";
 import {
@@ -16,7 +20,9 @@ import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions
 import type { LessonCompletionStatus } from "@/lib/progress/lesson-completion";
 import type { FlashcardProgressRow } from "@/lib/progress/flashcard-progress";
 import type { QuizProgressRow } from "@/lib/progress/quiz-progress";
+import type { StudentScheduledSession } from "@/lib/calendar/types";
 import type { FlashcardSetInfo } from "@/lib/learning/match-lesson-content";
+import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import { pressableClass } from "@/lib/ui/pressable";
 import { cn, ui } from "@/lib/ui/styles";
 
@@ -50,6 +56,7 @@ type LessonCardProps = {
   unitLabel?: string;
   hasCatchupSegments?: boolean;
   homeworkCatchupReturn?: string | null;
+  scheduleSession?: StudentScheduledSession | null;
 };
 
 export function LessonCard({
@@ -69,6 +76,7 @@ export function LessonCard({
   unitLabel = "Lesson",
   hasCatchupSegments = false,
   homeworkCatchupReturn = null,
+  scheduleSession = null,
 }: LessonCardProps) {
   const hasPresentation = Boolean(lesson.presentation_url);
   const hasPdf = SHOW_LESSON_PDF && Boolean(lesson.pdf_url);
@@ -112,7 +120,13 @@ export function LessonCard({
     >
       {!canBrowse ? (
         <>
-          <LessonCardHeader lesson={lesson} unitLabel={unitLabel} completion={completion} />
+          <LessonCardHeader
+            lesson={lesson}
+            unitLabel={unitLabel}
+            completion={completion}
+            scheduleSession={scheduleSession}
+          />
+          <LessonScheduleBlock scheduleSession={scheduleSession} />
           <div className="mt-3 space-y-2">
             <p className="text-sm text-zinc-500">
               Unlock with{" "}
@@ -127,13 +141,17 @@ export function LessonCard({
           </div>
         </>
       ) : isTutorLocked ? (
-        <LessonCardHeader
-          lesson={lesson}
-          unitLabel={unitLabel}
-          locked
-          muted
-          ariaLabel={`${unitLabel} ${lesson.lesson_number}: ${lesson.title}. Locked until your tutor unlocks it.`}
-        />
+        <>
+          <LessonCardHeader
+            lesson={lesson}
+            unitLabel={unitLabel}
+            locked
+            muted
+            ariaLabel={`${unitLabel} ${lesson.lesson_number}: ${lesson.title}. Locked until your tutor unlocks it.`}
+            scheduleSession={scheduleSession}
+          />
+          <LessonScheduleBlock scheduleSession={scheduleSession} />
+        </>
       ) : (
         <details name={accordionName} open={defaultExpanded} className="group">
           <summary className="flex w-full cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden">
@@ -142,10 +160,12 @@ export function LessonCard({
               unitLabel={unitLabel}
               completion={completion}
               chevron
+              scheduleSession={scheduleSession}
             />
           </summary>
 
           <div className="mt-4 border-t border-zinc-100 pt-2">
+            <LessonScheduleBlock scheduleSession={scheduleSession} />
             {contentUnlocked && hasPresentation ? (
               <div className="border-b border-zinc-100 py-3">
                 <LessonPresentationEmbed presentationUrl={lesson.presentation_url!} />
@@ -344,6 +364,7 @@ function LessonCardHeader({
   muted = false,
   chevron = false,
   ariaLabel,
+  scheduleSession,
 }: {
   lesson: LessonWithCourse;
   unitLabel: string;
@@ -352,6 +373,7 @@ function LessonCardHeader({
   muted?: boolean;
   chevron?: boolean;
   ariaLabel?: string;
+  scheduleSession?: StudentScheduledSession | null;
 }) {
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3" aria-label={ariaLabel}>
@@ -381,6 +403,9 @@ function LessonCardHeader({
                   {completion.partsDone} of {completion.partsTotal} complete
                 </span>
               ) : null}
+              {scheduleSession ? (
+                <span>Live lesson: {formatSessionWhen(scheduleSession.starts_at, scheduleSession.ends_at)}</span>
+              ) : null}
               {lesson.is_free ? (
                 <span className="rounded-full border border-zinc-200 px-2 py-0.5">Free</span>
               ) : null}
@@ -389,6 +414,66 @@ function LessonCardHeader({
         </div>
         {!locked && chevron ? <ChevronToggleIcon /> : null}
       </div>
+    </div>
+  );
+}
+
+function LessonScheduleBlock({
+  scheduleSession,
+}: {
+  scheduleSession?: StudentScheduledSession | null;
+}) {
+  if (!scheduleSession) return null;
+
+  const isGroup = Boolean(scheduleSession.cohort_id);
+
+  return (
+    <div className="mt-4 rounded-2xl bg-violet-50/70 px-4 py-3 text-sm">
+      <p className="font-medium text-zinc-900">
+        Upcoming live lesson: {formatSessionWhen(scheduleSession.starts_at, scheduleSession.ends_at)}
+      </p>
+      <p className="mt-1 text-zinc-600">
+        {isGroup
+          ? `${scheduleSession.cohortName ?? "Group session"} with ${scheduleSession.tutorName}`
+          : `1-to-1 with ${scheduleSession.tutorName}`}
+      </p>
+
+      {scheduleSession.rescheduleRequest?.status === "pending" ? (
+        <p className="mt-3 text-violet-900">Reschedule request pending.</p>
+      ) : null}
+
+      {scheduleSession.cohortSwitchRequest?.status === "pending" ? (
+        <p className="mt-3 text-violet-900">Alternate cohort request pending.</p>
+      ) : null}
+
+      {scheduleSession.canRequestReschedule ? (
+        <div className="mt-3">
+          <p className="text-xs text-zinc-500">
+            Need a different time? Ask now and your tutor can move this lesson to a free slot.
+          </p>
+          <RescheduleRequestForm sessionId={scheduleSession.id} />
+        </div>
+      ) : null}
+
+      {scheduleSession.canRequestCohortSwitch ? (
+        <div className="mt-3">
+          <p className="text-xs text-zinc-500">
+            Can&apos;t make this group? Request a matching alternate cohort session here.
+          </p>
+          <CohortSwitchRequestForm session={scheduleSession} />
+        </div>
+      ) : null}
+
+      {!scheduleSession.canRequestReschedule && scheduleSession.rescheduleLockedReason && !isGroup ? (
+        <p className="mt-3 text-xs text-zinc-500">{scheduleSession.rescheduleLockedReason}</p>
+      ) : null}
+
+      {!scheduleSession.canRequestCohortSwitch &&
+      scheduleSession.cohortSwitchLockedReason &&
+      isGroup &&
+      !scheduleSession.cohortSwitchRequest ? (
+        <p className="mt-3 text-xs text-zinc-500">{scheduleSession.cohortSwitchLockedReason}</p>
+      ) : null}
     </div>
   );
 }

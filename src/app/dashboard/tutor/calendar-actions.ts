@@ -173,10 +173,10 @@ export async function requestCohortSwitch(
   formData: FormData
 ): Promise<CalendarActionResult> {
   const sessionId = String(formData.get("session_id") ?? "").trim();
-  const toCohortId = String(formData.get("to_cohort_id") ?? "").trim();
+  const toSessionId = String(formData.get("to_session_id") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
 
-  if (!sessionId || !toCohortId) return { error: "Missing lesson or cohort." };
+  if (!sessionId || !toSessionId) return { error: "Missing lesson or alternate session." };
 
   const supabase = await createClient();
   const {
@@ -208,22 +208,14 @@ export async function requestCohortSwitch(
 
   if (currentCohortError || !currentCohort) return { error: "Cohort not found." };
 
-  const { data: targetCohort, error: targetCohortError } = await supabase
-    .from("cohorts")
-    .select("id, tutor_id, course_id, active")
-    .eq("id", toCohortId)
+  const { data: targetSession, error: targetSessionError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("*")
+    .eq("id", toSessionId)
     .maybeSingle();
 
-  if (targetCohortError || !targetCohort || !targetCohort.active) {
-    return { error: "Alternate cohort not found." };
-  }
-
-  if (
-    targetCohort.id === currentCohort.id ||
-    targetCohort.tutor_id !== currentCohort.tutor_id ||
-    targetCohort.course_id !== currentCohort.course_id
-  ) {
-    return { error: "Invalid alternate cohort." };
+  if (targetSessionError || !targetSession || !targetSession.cohort_id) {
+    return { error: "Alternate session not found." };
   }
 
   const { data: existing } = await supabase
@@ -233,18 +225,52 @@ export async function requestCohortSwitch(
     .eq("student_id", user.id)
     .maybeSingle();
 
-  const { data: alternateCohorts } = await supabase
-    .from("cohorts")
-    .select("id")
+  const { attachLessonLabelsToSessions } = await import("@/lib/calendar/session-lesson-labels");
+  const labelled = await attachLessonLabelsToSessions(supabase, [session, targetSession]);
+  const sourceLesson = labelled.find((row) => row.id === session.id);
+  const targetLesson = labelled.find((row) => row.id === targetSession.id);
+  const targetStartsMs = new Date(targetSession.starts_at).getTime();
+  const sourceStartsMs = new Date(session.starts_at).getTime();
+  const sameLessonNumber =
+    Boolean(sourceLesson?.lessonNumber) &&
+    sourceLesson?.lessonNumber === targetLesson?.lessonNumber;
+
+  if (
+    targetSession.cohort_id === currentCohort.id ||
+    targetSession.tutor_id !== currentCohort.tutor_id ||
+    targetSession.course_id !== currentCohort.course_id ||
+    targetSession.status !== "scheduled" ||
+    !sameLessonNumber ||
+    targetStartsMs < sourceStartsMs ||
+    targetStartsMs > sourceStartsMs + 10 * 24 * 60 * 60 * 1000
+  ) {
+    return { error: "Invalid alternate session for this lesson." };
+  }
+
+  const { data: alternateSessions } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("*")
     .eq("tutor_id", currentCohort.tutor_id)
     .eq("course_id", currentCohort.course_id)
-    .eq("active", true)
-    .neq("id", session.cohort_id);
+    .not("cohort_id", "is", null)
+    .eq("status", "scheduled")
+    .gte("starts_at", session.starts_at)
+    .lte("starts_at", new Date(sourceStartsMs + 10 * 24 * 60 * 60 * 1000).toISOString());
+  const alternateLabelled = await attachLessonLabelsToSessions(
+    supabase,
+    (alternateSessions ?? []).filter((row) => row.id !== session.id)
+  );
+  const alternateCount = alternateLabelled.filter(
+    (row) =>
+      row.cohort_id !== session.cohort_id &&
+      row.lessonNumber &&
+      row.lessonNumber === sourceLesson?.lessonNumber
+  ).length;
 
   const eligibility = getCohortSwitchEligibility(
     session,
     existing ?? null,
-    (alternateCohorts ?? []).length
+    alternateCount
   );
   if (!eligibility.canRequest) {
     return { error: eligibility.lockedReason ?? "Cannot request alternate cohort." };
@@ -254,7 +280,8 @@ export async function requestCohortSwitch(
     session_id: sessionId,
     student_id: user.id,
     from_cohort_id: session.cohort_id,
-    to_cohort_id: toCohortId,
+    to_cohort_id: targetSession.cohort_id,
+    to_session_id: targetSession.id,
     message: message || null,
   });
 

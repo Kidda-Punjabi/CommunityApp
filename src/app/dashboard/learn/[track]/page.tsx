@@ -37,6 +37,7 @@ import {
 } from "@/lib/tutoring/lesson-content-access";
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { fetchCatchupEnabledLessonIds } from "@/lib/catchup/load-catchup";
+import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import { fetchTopicMasteryMap, stageFillsForMastery } from "@/lib/free-lessons/mastery";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
@@ -174,7 +175,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
   const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
   const showHomework = track.id === "foundational" || track.id === "beginners";
   const lessonIds = lessons.map((lesson) => lesson.id);
-  const [completionMap, contentUnlockedMap, recordingMap, homeworkMap, catchupLessonIds] =
+  const [completionMap, contentUnlockedMap, recordingMap, homeworkMap, catchupLessonIds, upcomingLoad] =
     await Promise.all([
       fetchLessonCompletionMap(supabase, user!.id, lessons),
       fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
@@ -183,8 +184,18 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
         ? fetchHomeworkSubmissionsForUser(supabase, user!.id, lessonIds)
         : Promise.resolve(new Map()),
       fetchCatchupEnabledLessonIds(supabase, lessonIds),
+      loadStudentUpcomingSessions(supabase, user!.id, user!.email),
     ]);
   const courseProgress = summarizeCourseProgress(lessons, completionMap);
+  const scheduleSessionByLessonId = new Map<string, (typeof upcomingLoad.sessions)[number]>();
+  const lessonByNumber = new Map(lessons.map((lesson) => [lesson.lesson_number, lesson.id] as const));
+  for (const session of upcomingLoad.sessions) {
+    if (!session.course_id || !courseIds.includes(session.course_id)) continue;
+    if (!session.lessonNumber) continue;
+    const lessonId = lessonByNumber.get(session.lessonNumber);
+    if (!lessonId || scheduleSessionByLessonId.has(lessonId)) continue;
+    scheduleSessionByLessonId.set(lessonId, session);
+  }
 
   return (
     <LearnLessonList
@@ -221,6 +232,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       catchupLessonIds={catchupLessonIds}
       homeworkFocusLessonId={homeworkFocusLessonId ?? null}
       catchupReturn={catchupReturn ?? null}
+      scheduleSessionByLessonId={scheduleSessionByLessonId}
     />
   );
 }

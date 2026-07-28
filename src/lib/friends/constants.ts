@@ -10,7 +10,8 @@ export type NotificationType =
   | "student_discount_approved"
   | "student_discount_rejected"
   | "cohort_placement_pending"
-  | "cohort_new_student";
+  | "cohort_new_student"
+  | "tutor_cover_assigned";
 
 export type FriendRequestStatus = "pending" | "accepted" | "declined";
 

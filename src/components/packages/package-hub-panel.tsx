@@ -102,14 +102,6 @@ export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps)
         </p>
       ) : null}
 
-      {pkg.includesLiveSessions ? (
-        <Link
-          href="/dashboard/schedule"
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          View full schedule →
-        </Link>
-      ) : null}
     </>
   );
 

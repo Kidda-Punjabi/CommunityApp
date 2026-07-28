@@ -220,7 +220,7 @@ function CohortSwitchRequestCard({ request }: { request: TutorCohortSwitchReques
         {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
         {state.success ? <p className="text-sm text-emerald-700">{state.success}</p> : null}
         <p className="text-xs text-zinc-500">
-          If approved, add the student to the alternate cohort&apos;s calendar invite.
+          Approve this to confirm the student should attend the matching alternate session.
         </p>
         <div className="flex flex-wrap gap-2">
           <button

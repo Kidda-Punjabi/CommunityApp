@@ -296,20 +296,25 @@ export function CohortSwitchRequestForm({
       <input type="hidden" name="session_id" value={session.id} />
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-700">
-          Which cohort would you like to join instead?
+          Which matching session would you like to join instead?
         </label>
         <select
-          name="to_cohort_id"
+          name="to_session_id"
           required
           className="mt-1.5 block w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
           defaultValue=""
         >
           <option value="" disabled>
-            Select a cohort
+            Select a session
           </option>
           {session.alternateCohorts.map((cohort) => (
             <option key={cohort.id} value={cohort.id}>
-              {cohort.name}
+              {cohort.name} · {cohort.lessonLabel} ·{" "}
+              {new Date(cohort.startsAt).toLocaleDateString("en-GB", {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+              })}
             </option>
           ))}
         </select>

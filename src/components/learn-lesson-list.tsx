@@ -12,6 +12,7 @@ import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import type { QuizProgressRow } from "@/lib/progress/quiz-progress";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
+import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { ui } from "@/lib/ui/styles";
@@ -43,6 +44,7 @@ type LearnLessonListProps = {
   catchupReturn?: string | null;
   /** When false, hides the course-level “X of Y lessons complete” bar (Community). */
   showCourseProgress?: boolean;
+  scheduleSessionByLessonId?: Map<string, StudentScheduledSession>;
 };
 
 export function LearnLessonList({
@@ -67,6 +69,7 @@ export function LearnLessonList({
   homeworkFocusLessonId,
   catchupReturn,
   showCourseProgress = true,
+  scheduleSessionByLessonId,
 }: LearnLessonListProps) {
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
   const defaultExpandedLessonId =
@@ -187,6 +190,7 @@ export function LearnLessonList({
                 homeworkCatchupReturn={
                   homeworkFocusLessonId === lesson.id ? (catchupReturn ?? null) : null
                 }
+                scheduleSession={scheduleSessionByLessonId?.get(lesson.id) ?? null}
               />
             );
           })}

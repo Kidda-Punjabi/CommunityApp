@@ -50,6 +50,7 @@ export type CohortSwitchRequestRow = {
   student_id: string;
   from_cohort_id: string;
   to_cohort_id: string;
+  to_session_id?: string | null;
   message: string | null;
   status: CohortSwitchRequestStatus;
   tutor_response: string | null;
@@ -59,7 +60,11 @@ export type CohortSwitchRequestRow = {
 
 export type AlternateCohortOption = {
   id: string;
+  cohortId: string;
   name: string;
+  startsAt: string;
+  endsAt: string;
+  lessonLabel: string;
 };
 
 export type StudentScheduledSession = ScheduledSessionRow & {
