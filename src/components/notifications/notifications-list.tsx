@@ -51,6 +51,30 @@ function notificationHref(item: NotificationItem): string | null {
     return "/dashboard/learn";
   }
 
+  if (item.type === "announcement" && item.payload.homework_due === true) {
+    const lessonId = item.payload.lesson_id;
+    if (typeof lessonId === "string") {
+      return `/dashboard/learn/beginners#lesson-${lessonId}`;
+    }
+    return "/dashboard/learn/beginners";
+  }
+
+  if (item.type === "cohort_switch_resolved" || item.type === "lesson_reschedule_resolved") {
+    const sessionId = item.payload.session_id;
+    if (typeof sessionId === "string") {
+      return `/dashboard/schedule/${sessionId}`;
+    }
+    return "/dashboard/schedule";
+  }
+
+  if (item.type === "lesson_reschedule_requested") {
+    return "/dashboard/tutor/requests";
+  }
+
+  if (item.type === "tutor_cover_assigned") {
+    return "/dashboard/tutor/calendar";
+  }
+
   return null;
 }
 
@@ -248,6 +272,14 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
                         {item.payload.body}
                       </p>
                     )}
+                    {(item.type === "cohort_switch_resolved" ||
+                      item.type === "lesson_reschedule_resolved") &&
+                      typeof item.payload.tutor_response === "string" &&
+                      item.payload.tutor_response.trim() && (
+                        <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+                          {item.payload.tutor_response}
+                        </p>
+                      )}
                   </div>
                   {!read && (
                     <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-violet-600" />
@@ -336,6 +368,20 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
                     View result
                   </Link>
                 )}
+
+                {href &&
+                  (item.type === "cohort_switch_resolved" ||
+                    item.type === "lesson_reschedule_requested" ||
+                    item.type === "lesson_reschedule_resolved" ||
+                    (item.type === "announcement" && item.payload.homework_due === true)) && (
+                    <Link
+                      href={href}
+                      onClick={(event) => void handleLinkClick(event, item, href)}
+                      className="mt-3 block w-full rounded-lg bg-violet-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-violet-500"
+                    >
+                      {item.type === "announcement" ? "Open lesson" : "View schedule"}
+                    </Link>
+                  )}
               </li>
             );
           })}

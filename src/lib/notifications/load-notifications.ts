@@ -1,7 +1,15 @@
 import { getDisplayName } from "@/lib/profile/display-name";
-import type { FriendRequestStatus } from "@/lib/friends/constants";
+import type { FriendRequestStatus, NotificationType } from "@/lib/friends/constants";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { NotificationType } from "@/lib/friends/constants";
+
+/** Admin workflow alerts — use Admin Home / admin pages, not learner notifications. */
+export const ADMIN_ONLY_NOTIFICATION_TYPES = new Set<NotificationType>([
+  "cohort_switch_requested",
+]);
+
+export function isAdminOnlyNotificationType(type: NotificationType): boolean {
+  return ADMIN_ONLY_NOTIFICATION_TYPES.has(type);
+}
 
 export type NotificationItem = {
   id: string;
@@ -79,7 +87,9 @@ export async function loadNotifications(
     throw error;
   }
 
-  const rows = (data ?? []) as NotificationRow[];
+  const rows = ((data ?? []) as NotificationRow[]).filter(
+    (row) => !isAdminOnlyNotificationType(row.type)
+  );
   const levelUpIds = rows
     .filter((row) => row.type === "friend_level_up")
     .map((row) => row.id);
@@ -140,11 +150,17 @@ export async function loadUnreadNotificationCount(
   supabase: SupabaseClient,
   userId: string
 ): Promise<number> {
-  const { count, error } = await supabase
+  let query = supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .is("read_at", null);
+
+  for (const type of ADMIN_ONLY_NOTIFICATION_TYPES) {
+    query = query.neq("type", type);
+  }
+
+  const { count, error } = await query;
 
   if (error) {
     if (isMissingNotificationsSchema(error.message)) return 0;
@@ -183,6 +199,17 @@ export async function loadNotificationSettings(
   };
 }
 
+function formatNotificationWhen(iso: string | unknown): string | null {
+  if (typeof iso !== "string" || !iso.trim()) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
 export function notificationSummary(item: NotificationItem): string {
   const name = item.actorDisplayName ?? "Someone";
 
@@ -199,8 +226,13 @@ export function notificationSummary(item: NotificationItem): string {
       const level = item.payload.level;
       return `${name} sent you kudos${level ? ` for reaching Level ${level}` : ""}!`;
     }
-    case "announcement":
+    case "announcement": {
+      if (item.payload.homework_due === true) {
+        const lessonTitle = String(item.payload.lesson_title ?? "your lesson");
+        return `Homework reminder — ${lessonTitle}`;
+      }
       return String(item.payload.title ?? "New announcement from Kidda");
+    }
     case "friend_game_challenge": {
       const gameType = String(item.payload.game_type ?? "game").replace(/_/g, " ");
       const score = item.payload.challenger_score;
@@ -242,20 +274,58 @@ export function notificationSummary(item: NotificationItem): string {
     }
     case "tutor_cover_assigned": {
       const title = String(item.payload.session_title ?? "a lesson");
-      const deadline = item.payload.decision_deadline
-        ? new Date(String(item.payload.decision_deadline)).toLocaleString("en-GB", {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-            hour: "numeric",
-            minute: "2-digit",
-          })
-        : null;
+      const deadline = formatNotificationWhen(item.payload.decision_deadline);
       return deadline
         ? `Cover assigned for ${title} — decline by ${deadline} if you can’t make it`
         : `Cover assigned for ${title}`;
     }
-    default:
+    case "cohort_switch_requested": {
+      const studentName = String(item.payload.student_name ?? name);
+      const toCohort = String(item.payload.to_cohort_name ?? "another cohort");
+      const sessionTitle = String(item.payload.session_title ?? "a group lesson");
+      const when = formatNotificationWhen(item.payload.starts_at);
+      return when
+        ? `${studentName} requested ${toCohort} for ${sessionTitle} (${when})`
+        : `${studentName} requested ${toCohort} for ${sessionTitle}`;
+    }
+    case "cohort_switch_resolved": {
+      const sessionTitle = String(item.payload.session_title ?? "your group lesson");
+      const when = formatNotificationWhen(item.payload.starts_at);
+      if (item.payload.status === "approved") {
+        return when
+          ? `Alternate cohort approved for ${sessionTitle} (${when})`
+          : `Alternate cohort approved for ${sessionTitle}`;
+      }
+      return when
+        ? `Alternate cohort request declined for ${sessionTitle} (${when})`
+        : `Alternate cohort request declined for ${sessionTitle}`;
+    }
+    case "lesson_reschedule_requested": {
+      const studentName = String(item.payload.student_name ?? name);
+      const sessionTitle = String(item.payload.session_title ?? "a lesson");
+      const when = formatNotificationWhen(item.payload.starts_at);
+      return when
+        ? `${studentName} requested to reschedule ${sessionTitle} (${when})`
+        : `${studentName} requested to reschedule ${sessionTitle}`;
+    }
+    case "lesson_reschedule_resolved": {
+      const sessionTitle = String(item.payload.session_title ?? "your lesson");
+      const when = formatNotificationWhen(item.payload.starts_at);
+      if (item.payload.status === "approved") {
+        return when
+          ? `Reschedule approved for ${sessionTitle} (${when})`
+          : `Reschedule approved for ${sessionTitle}`;
+      }
+      return when
+        ? `Reschedule declined for ${sessionTitle} (${when})`
+        : `Reschedule declined for ${sessionTitle}`;
+    }
+    default: {
+      const title = item.payload.title;
+      if (typeof title === "string" && title.trim()) return title.trim();
+      const message = item.payload.message;
+      if (typeof message === "string" && message.trim()) return message.trim();
       return "New notification";
+    }
   }
 }
