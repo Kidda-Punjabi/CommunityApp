@@ -39,6 +39,7 @@ type LearnLessonListProps = {
   showHomework?: boolean;
   unitLabel?: string;
   catchupLessonIds?: Set<string>;
+  feedbackSubmittedLessonIds?: Set<string>;
   homeworkFocusLessonId?: string | null;
   catchupReturn?: string | null;
   /** When false, hides the course-level “X of Y lessons complete” bar (Community). */
@@ -65,6 +66,7 @@ export function LearnLessonList({
   showHomework = false,
   unitLabel,
   catchupLessonIds,
+  feedbackSubmittedLessonIds,
   homeworkFocusLessonId,
   catchupReturn,
   showCourseProgress = true,
@@ -101,8 +103,18 @@ export function LearnLessonList({
         return Boolean(scheduleSessionByLessonId?.get(lesson.id));
       })
       .sort((a, b) => {
-        const aStarts = scheduleSessionByLessonId!.get(a.id)!.starts_at;
-        const bStarts = scheduleSessionByLessonId!.get(b.id)!.starts_at;
+        const aSession = scheduleSessionByLessonId!.get(a.id)!;
+        const bSession = scheduleSessionByLessonId!.get(b.id)!;
+        const aStarts =
+          aSession.cohortSwitchRequest?.status === "approved" &&
+          aSession.cohortSwitchRequest.toSessionStartsAt
+            ? aSession.cohortSwitchRequest.toSessionStartsAt
+            : aSession.starts_at;
+        const bStarts =
+          bSession.cohortSwitchRequest?.status === "approved" &&
+          bSession.cohortSwitchRequest.toSessionStartsAt
+            ? bSession.cohortSwitchRequest.toSessionStartsAt
+            : bSession.starts_at;
         return new Date(aStarts).getTime() - new Date(bStarts).getTime();
       });
     if (scheduled[0]) return scheduled[0].id;
@@ -115,6 +127,13 @@ export function LearnLessonList({
   })();
 
   function visualStatusFor(lesson: LessonWithCourse): LessonVisualStatus {
+    const session = scheduleSessionByLessonId?.get(lesson.id);
+    if (
+      session?.cohortSwitchRequest?.status === "approved" ||
+      session?.rescheduleRequest?.status === "approved"
+    ) {
+      return "rescheduled";
+    }
     if (lesson.id === defaultExpandedLessonId) return "in_progress";
     if (lesson.id === nextUpLessonId) return "next_up";
     const { canBrowse, contentUnlocked } = lessonAccess(lesson);
@@ -202,6 +221,7 @@ export function LearnLessonList({
                 showHomework={showHomework}
                 unitLabel={unitLabel}
                 hasCatchupSegments={catchupLessonIds?.has(lesson.id) ?? false}
+                hasSubmittedFeedback={feedbackSubmittedLessonIds?.has(lesson.id) ?? false}
                 homeworkCatchupReturn={
                   homeworkFocusLessonId === lesson.id ? (catchupReturn ?? null) : null
                 }
@@ -233,6 +253,10 @@ function LessonStatusLegend() {
       <li className="inline-flex items-center gap-1.5">
         <LessonStatusDot status="next_up" />
         Next up
+      </li>
+      <li className="inline-flex items-center gap-1.5">
+        <LessonStatusDot status="rescheduled" />
+        Rescheduled
       </li>
       <li className="inline-flex items-center gap-1.5">
         <LessonStatusDot status="locked" />

@@ -40,3 +40,26 @@ export async function loadFeedbackHistoryForLesson(
     submittedAt: row.submitted_at,
   }));
 }
+
+/** Lesson IDs the user has already submitted feedback for. */
+export async function fetchFeedbackSubmittedLessonIds(
+  supabase: SupabaseClient,
+  userId: string,
+  lessonIds: string[]
+): Promise<Set<string>> {
+  if (lessonIds.length === 0) return new Set();
+
+  const { data, error } = await supabase
+    .from("feedback_submissions")
+    .select("lesson_id")
+    .eq("user_id", userId)
+    .in("lesson_id", lessonIds)
+    .not("lesson_id", "is", null);
+
+  if (error) throw error;
+  return new Set(
+    (data ?? [])
+      .map((row) => row.lesson_id as string | null)
+      .filter((id): id is string => Boolean(id))
+  );
+}

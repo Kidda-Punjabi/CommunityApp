@@ -13,7 +13,6 @@ import {
   SHOW_LESSON_PDF,
 } from "@/lib/learning/lesson-content-flags";
 import { HomeworkSubmissionSection } from "@/components/homework/homework-submission-section";
-import { LessonPresentationEmbed } from "@/components/lesson/lesson-presentation-embed";
 import { LessonRecordingPlayer } from "@/components/lesson/lesson-recording-player";
 import type { LessonRecordingView } from "@/lib/tutoring/lesson-content-access";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
@@ -31,7 +30,12 @@ export const lessonContentRowButtonClass = cn(
   "inline-flex shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
 );
 
-export type LessonVisualStatus = "in_progress" | "next_up" | "locked" | "available";
+export type LessonVisualStatus =
+  | "in_progress"
+  | "next_up"
+  | "locked"
+  | "rescheduled"
+  | "available";
 
 type LessonProgress = {
   audioCompleted: boolean;
@@ -58,6 +62,7 @@ type LessonCardProps = {
   /** e.g. "Week" for community course; defaults to "Lesson". */
   unitLabel?: string;
   hasCatchupSegments?: boolean;
+  hasSubmittedFeedback?: boolean;
   homeworkCatchupReturn?: string | null;
   scheduleSession?: StudentScheduledSession | null;
 };
@@ -79,6 +84,7 @@ export function LessonCard({
   showHomework = false,
   unitLabel = "Lesson",
   hasCatchupSegments = false,
+  hasSubmittedFeedback = false,
   homeworkCatchupReturn = null,
   scheduleSession = null,
 }: LessonCardProps) {
@@ -112,11 +118,15 @@ export function LessonCard({
     hasPresentation || hasPdf || hasApprovedGeneratedAudio || hasLegacyAudioSection || Boolean(recording);
 
   const isTutorLocked = canBrowse && !contentUnlocked;
-  const status: LessonVisualStatus = isTutorLocked
-    ? visualStatus === "next_up"
-      ? "next_up"
-      : "locked"
-    : visualStatus;
+  const scheduleDisplay = getScheduleDisplay(scheduleSession);
+  const status: LessonVisualStatus =
+    scheduleDisplay?.isRescheduled
+      ? "rescheduled"
+      : isTutorLocked
+        ? visualStatus === "next_up"
+          ? "next_up"
+          : "locked"
+        : visualStatus;
 
   if (!canBrowse) {
     return (
@@ -161,17 +171,23 @@ export function LessonCard({
               {unitLabel} {lesson.lesson_number} · {lesson.title}
             </p>
           </div>
-          {scheduleSession ? (
+          {scheduleDisplay ? (
             <span
               className={cn(
                 "shrink-0 text-xs font-medium max-sm:max-w-[5.5rem] max-sm:truncate",
-                isTutorLocked ? "text-zinc-500" : "text-violet-700"
+                scheduleDisplay.isRescheduled
+                  ? "text-teal-700"
+                  : isTutorLocked
+                    ? "text-zinc-500"
+                    : "text-violet-700"
               )}
             >
-              {formatCollapsedDate(scheduleSession.starts_at)}
+              {formatCollapsedDate(scheduleDisplay.startsAt)}
             </span>
           ) : null}
-          {isTutorLocked ? <LockIcon className="text-zinc-400" /> : null}
+          {isTutorLocked && !scheduleDisplay?.isRescheduled ? (
+            <LockIcon className="text-zinc-400" />
+          ) : null}
           <ChevronToggleIcon />
         </summary>
 
@@ -184,18 +200,14 @@ export function LessonCard({
             </p>
           ) : (
             <>
-              {contentUnlocked && hasPresentation ? (
-                <div className="border-b border-zinc-100 py-3">
-                  <LessonPresentationEmbed presentationUrl={lesson.presentation_url!} />
-                </div>
-              ) : (
-                <ContentRow
-                  label="Presentation"
-                  subtitle={hasPresentation ? "Slides for this lesson" : "Not available yet"}
-                  actionLabel="Open"
-                  disabled={!hasPresentation}
-                />
-              )}
+              <ContentRow
+                label="Presentation"
+                subtitle={hasPresentation ? "Slides for this lesson" : "Not available yet"}
+                actionLabel="Open"
+                href={hasPresentation ? lesson.presentation_url! : undefined}
+                disabled={!hasPresentation}
+                external={hasPresentation}
+              />
               {contentUnlocked && recording ? (
                 <div className="border-b border-zinc-100 py-3">
                   <LessonRecordingPlayer url={recording.url} title={recording.title} />
@@ -250,15 +262,12 @@ export function LessonCard({
               ) : null}
               <ContentRow
                 label="Feedback"
-                subtitle="Share how this lesson went for you"
-                actionLabel="Give feedback"
-                href={`/dashboard/feedback/${lesson.id}`}
-              />
-              <ContentRow
-                label="My feedback"
-                subtitle="View feedback you submitted for this lesson"
-                actionLabel="View"
-                href={`/dashboard/feedback/${lesson.id}/history`}
+                actionLabel={hasSubmittedFeedback ? "View Feedback" : "Give Feedback"}
+                href={
+                  hasSubmittedFeedback
+                    ? `/dashboard/feedback/${lesson.id}/history`
+                    : `/dashboard/feedback/${lesson.id}`
+                }
               />
 
               {contentUnlocked && !hasLessonContent ? (
@@ -310,6 +319,15 @@ export function LessonStatusDot({ status }: { status: LessonVisualStatus }) {
       />
     );
   }
+  if (status === "rescheduled") {
+    return (
+      <span
+        className="h-2.5 w-2.5 shrink-0 rounded-full border-2 border-zinc-400 bg-zinc-300"
+        aria-hidden="true"
+        title="Rescheduled"
+      />
+    );
+  }
   if (status === "locked") {
     return (
       <span
@@ -319,6 +337,58 @@ export function LessonStatusDot({ status }: { status: LessonVisualStatus }) {
     );
   }
   return <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-zinc-300" aria-hidden="true" />;
+}
+
+type ScheduleDisplay = {
+  isRescheduled: boolean;
+  startsAt: string;
+  endsAt: string;
+  cohortOrTutorLine: string;
+};
+
+function getScheduleDisplay(
+  scheduleSession?: StudentScheduledSession | null
+): ScheduleDisplay | null {
+  if (!scheduleSession) return null;
+
+  const isGroup = Boolean(scheduleSession.cohort_id);
+  const switchRequest = scheduleSession.cohortSwitchRequest;
+  const rescheduleRequest = scheduleSession.rescheduleRequest;
+
+  if (
+    switchRequest?.status === "approved" &&
+    switchRequest.toSessionStartsAt &&
+    switchRequest.toSessionEndsAt
+  ) {
+    return {
+      isRescheduled: true,
+      startsAt: switchRequest.toSessionStartsAt,
+      endsAt: switchRequest.toSessionEndsAt,
+      cohortOrTutorLine: switchRequest.toCohortName
+        ? `${switchRequest.toCohortName} (alternate cohort)`
+        : `Alternate session with ${scheduleSession.tutorName}`,
+    };
+  }
+
+  if (rescheduleRequest?.status === "approved") {
+    return {
+      isRescheduled: true,
+      startsAt: scheduleSession.starts_at,
+      endsAt: scheduleSession.ends_at,
+      cohortOrTutorLine: isGroup
+        ? `${scheduleSession.cohortName ?? "Group session"} with ${scheduleSession.tutorName}`
+        : `1-to-1 with ${scheduleSession.tutorName}`,
+    };
+  }
+
+  return {
+    isRescheduled: false,
+    startsAt: scheduleSession.starts_at,
+    endsAt: scheduleSession.ends_at,
+    cohortOrTutorLine: isGroup
+      ? `${scheduleSession.cohortName ?? "Group session"} with ${scheduleSession.tutorName}`
+      : `1-to-1 with ${scheduleSession.tutorName}`,
+  };
 }
 
 function formatCollapsedDate(startsAtIso: string): string {
@@ -413,20 +483,23 @@ function LessonScheduleBlock({
 }: {
   scheduleSession?: StudentScheduledSession | null;
 }) {
-  if (!scheduleSession) return null;
-
-  const isGroup = Boolean(scheduleSession.cohort_id);
+  const display = getScheduleDisplay(scheduleSession);
+  if (!scheduleSession || !display) return null;
 
   return (
-    <div className="mt-1 rounded-2xl bg-violet-50/70 px-4 py-3 text-sm">
+    <div
+      className={cn(
+        "mt-1 rounded-2xl px-4 py-3 text-sm",
+        display.isRescheduled ? "bg-teal-50/80" : "bg-violet-50/70"
+      )}
+    >
       <p className="font-medium text-zinc-900">
-        Upcoming live lesson: {formatSessionWhen(scheduleSession.starts_at, scheduleSession.ends_at)}
+        {display.isRescheduled ? "Rescheduled live lesson: " : "Upcoming live lesson: "}
+        <span className={display.isRescheduled ? "text-teal-800" : undefined}>
+          {formatSessionWhen(display.startsAt, display.endsAt)}
+        </span>
       </p>
-      <p className="mt-1 text-zinc-600">
-        {isGroup
-          ? `${scheduleSession.cohortName ?? "Group session"} with ${scheduleSession.tutorName}`
-          : `1-to-1 with ${scheduleSession.tutorName}`}
-      </p>
+      <p className="mt-1 text-zinc-600">{display.cohortOrTutorLine}</p>
 
       {scheduleSession.rescheduleRequest?.status === "pending" ? (
         <p className="mt-3 text-violet-900">Reschedule request pending.</p>
@@ -455,6 +528,11 @@ function LessonScheduleBlock({
           ) : null}
           .
         </p>
+      ) : null}
+
+      {scheduleSession.cohortSwitchRequest?.status === "approved" ||
+      scheduleSession.rescheduleRequest?.status === "approved" ? (
+        <p className="mt-3 text-teal-900">This lesson has been rescheduled.</p>
       ) : null}
     </div>
   );

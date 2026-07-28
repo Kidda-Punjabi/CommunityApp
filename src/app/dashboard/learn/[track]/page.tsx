@@ -37,6 +37,7 @@ import {
 } from "@/lib/tutoring/lesson-content-access";
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { fetchCatchupEnabledLessonIds } from "@/lib/catchup/load-catchup";
+import { fetchFeedbackSubmittedLessonIds } from "@/lib/feedback/load-feedback-history";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import { fetchTopicMasteryMap, stageFillsForMastery } from "@/lib/free-lessons/mastery";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
@@ -175,15 +176,39 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
   const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
   const showHomework = track.id === "foundational" || track.id === "beginners";
   const lessonIds = lessons.map((lesson) => lesson.id);
-  const [completionMap, contentUnlockedMap, recordingMap, homeworkMap, catchupLessonIds, upcomingLoad] =
-    await Promise.all([
+
+  // Catch-up is for late-cancel 1-to-1 only — never show on group cohort lessons.
+  const { data: enrollmentRows } = await supabase
+    .from("course_enrollments")
+    .select("course_id, delivery_mode")
+    .eq("user_id", user!.id)
+    .in("course_id", courseIds);
+  const groupCourseIds = new Set(
+    (enrollmentRows ?? [])
+      .filter((row) => row.delivery_mode === "group")
+      .map((row) => row.course_id as string)
+  );
+  const catchupEligibleLessonIds = lessons
+    .filter((lesson) => !groupCourseIds.has(lesson.course_id))
+    .map((lesson) => lesson.id);
+
+  const [
+    completionMap,
+    contentUnlockedMap,
+    recordingMap,
+    homeworkMap,
+    catchupLessonIds,
+    feedbackSubmittedLessonIds,
+    upcomingLoad,
+  ] = await Promise.all([
       fetchLessonCompletionMap(supabase, user!.id, lessons),
       fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
       fetchLessonRecordingsForUser(supabase, user!.id, lessonIds),
       showHomework
         ? fetchHomeworkSubmissionsForUser(supabase, user!.id, lessonIds)
         : Promise.resolve(new Map()),
-      fetchCatchupEnabledLessonIds(supabase, lessonIds),
+      fetchCatchupEnabledLessonIds(supabase, catchupEligibleLessonIds),
+      fetchFeedbackSubmittedLessonIds(supabase, user!.id, lessonIds),
       loadStudentUpcomingSessions(supabase, user!.id, user!.email),
     ]);
   const courseProgress = summarizeCourseProgress(lessons, completionMap);
@@ -230,6 +255,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       homeworkMap={homeworkMap}
       showHomework={showHomework}
       catchupLessonIds={catchupLessonIds}
+      feedbackSubmittedLessonIds={feedbackSubmittedLessonIds}
       homeworkFocusLessonId={homeworkFocusLessonId ?? null}
       catchupReturn={catchupReturn ?? null}
       scheduleSessionByLessonId={scheduleSessionByLessonId}
