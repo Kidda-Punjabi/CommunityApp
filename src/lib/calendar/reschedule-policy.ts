@@ -15,8 +15,13 @@ export function getRescheduleEligibility(
     "starts_at" | "rescheduling_allowed" | "status" | "cohort_id"
   >,
   existingRequest: Pick<RescheduleRequestRow, "status"> | null,
-  nowMs = Date.now()
+  options?: {
+    nowMs?: number;
+    rescheduleLimitLockedReason?: string | null;
+  }
 ): RescheduleEligibility {
+  const nowMs = options?.nowMs ?? Date.now();
+
   if (session.cohort_id) {
     return { canRequest: false, lockedReason: null };
   }
@@ -55,6 +60,13 @@ export function getRescheduleEligibility(
     return {
       canRequest: false,
       lockedReason: "Your tutor approved a reschedule — check your calendar for the updated time.",
+    };
+  }
+
+  if (options?.rescheduleLimitLockedReason) {
+    return {
+      canRequest: false,
+      lockedReason: options.rescheduleLimitLockedReason,
     };
   }
 

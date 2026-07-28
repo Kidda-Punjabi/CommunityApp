@@ -56,6 +56,10 @@ export type CohortSwitchRequestRow = {
   tutor_response: string | null;
   resolved_at: string | null;
   created_at: string;
+  /** Enriched for student UI when to_session_id is set. */
+  toSessionStartsAt?: string | null;
+  toSessionEndsAt?: string | null;
+  toCohortName?: string | null;
 };
 
 export type AlternateCohortOption = {

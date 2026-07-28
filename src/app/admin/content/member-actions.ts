@@ -7,6 +7,7 @@ import { findCoursesForTier } from "@/lib/membership/courses";
 import type { PaidCourseTier } from "@/lib/membership/access";
 import { loadAccessTiersByUserId } from "@/lib/admin/member-access-tiers";
 import { getDisplayName } from "@/lib/profile/display-name";
+import { loadBeginnersRescheduleLimitStatus } from "@/lib/calendar/reschedule-limit";
 import { revalidatePath } from "next/cache";
 import type { AdminMemberDetail, AdminMemberListItem } from "./types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -212,7 +213,7 @@ export async function loadAdminMemberDetail(
       supabase.from("course_access").select("course_id").eq("user_id", userId),
       supabase
         .from("course_enrollments")
-        .select("id, course_id, tutor_id, delivery_mode, cohort_id, courses(required_tier)")
+        .select("id, course_id, tutor_id, delivery_mode, cohort_id, extra_reschedule_allowance, courses(required_tier)")
         .eq("user_id", userId),
       supabase.from("courses").select("id, name, required_tier"),
       supabase
@@ -280,6 +281,8 @@ export async function loadAdminMemberDetail(
       };
     });
 
+    const beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, userId);
+
     return {
       detail: {
         userId,
@@ -317,6 +320,9 @@ export async function loadAdminMemberDetail(
                 | "group"
                 | null,
               cohortId: beginnersEnrollment.cohort_id,
+              extraRescheduleAllowance: beginnersRescheduleLimit.extraAllowance,
+              reschedulesUsed: beginnersRescheduleLimit.used,
+              rescheduleLimit: beginnersRescheduleLimit.totalAllowed,
             }
           : null,
         activeCohorts,
@@ -504,4 +510,60 @@ export async function saveMemberCommunityAccess(
   hasAccess: boolean
 ): Promise<ActionResult> {
   return saveMemberCourseAccess(userId, courseId, hasAccess);
+}
+
+export async function saveMemberExtraRescheduleAllowance(
+  userId: string,
+  courseId: string,
+  extraAllowance: number
+): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+    if (!userId || !courseId) return { error: "Member and course are required." };
+
+    const normalized = Number.isFinite(extraAllowance) ? Math.max(0, Math.floor(extraAllowance)) : 0;
+
+    const { data: enrollment, error: enrollmentError } = await supabase
+      .from("course_enrollments")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("course_id", courseId)
+      .maybeSingle();
+
+    if (enrollmentError) return { error: enrollmentError.message };
+    if (!enrollment) {
+      return { error: "Assign a Beginners tutor before granting extra reschedule allowance." };
+    }
+
+    const { error } = await supabase
+      .from("course_enrollments")
+      .update({
+        extra_reschedule_allowance: normalized,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId)
+      .eq("course_id", courseId);
+
+    if (error) {
+      if (error.message.includes("extra_reschedule_allowance")) {
+        return {
+          error:
+            "The extra reschedule allowance column is not applied in production yet. Apply supabase/beginners-reschedule-limit.sql first.",
+        };
+      }
+      return { error: error.message };
+    }
+
+    revalidateAdmin();
+    revalidatePath("/dashboard/schedule");
+    revalidatePath("/dashboard/learn");
+    return {
+      success:
+        normalized === 0
+          ? "Extra reschedule allowance cleared."
+          : `Granted ${normalized} extra reschedule allowance${normalized === 1 ? "" : "s"}.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to save reschedule allowance." };
+  }
 }

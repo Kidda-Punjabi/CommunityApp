@@ -72,6 +72,31 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
         </p>
       ) : null}
 
+      {session.cohortSwitchRequest?.status === "pending" ? (
+        <p className="mt-6 rounded-2xl bg-violet-50 px-4 py-3 text-sm text-violet-900">
+          Alternate cohort request pending
+          {session.cohortSwitchRequest.toSessionStartsAt &&
+          session.cohortSwitchRequest.toSessionEndsAt ? (
+            <>
+              {" "}
+              for{" "}
+              <span className="font-semibold">
+                {[
+                  session.cohortSwitchRequest.toCohortName,
+                  formatSessionWhen(
+                    session.cohortSwitchRequest.toSessionStartsAt,
+                    session.cohortSwitchRequest.toSessionEndsAt
+                  ),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </>
+          ) : null}
+          . Your tutor will respond soon.
+        </p>
+      ) : null}
+
       {session.canRequestReschedule ? (
         <section className="mt-8">
           <h2 className="text-lg font-semibold text-zinc-900">Request to reschedule</h2>

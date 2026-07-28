@@ -206,6 +206,9 @@ export type AdminMemberDetail = {
     tutorLabel: string | null;
     deliveryMode: "one_to_one" | "group" | null;
     cohortId: string | null;
+    extraRescheduleAllowance: number;
+    reschedulesUsed: number;
+    rescheduleLimit: number;
   } | null;
   activeCohorts: { cohortId: string; cohortName: string }[];
 };

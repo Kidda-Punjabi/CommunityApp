@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy";
 import { getRescheduleEligibility } from "@/lib/calendar/reschedule-policy";
+import {
+  appliesBeginnersRescheduleLimit,
+  loadBeginnersRescheduleLimitStatus,
+} from "@/lib/calendar/reschedule-limit";
 import type {
   CohortSwitchRequestRow,
   RescheduleRequestRow,
@@ -197,14 +201,64 @@ export async function loadStudentUpcomingSessions(
   }
   if (sessionCohortsError) throw sessionCohortsError;
 
+  const rawCohortSwitchRequests = (cohortSwitchRequests ?? []) as CohortSwitchRequestRow[];
+  const targetSessionIds = [
+    ...new Set(
+      rawCohortSwitchRequests
+        .map((request) => request.to_session_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const targetCohortIds = [
+    ...new Set(rawCohortSwitchRequests.map((request) => request.to_cohort_id).filter(Boolean)),
+  ];
+
+  const [{ data: targetSessions }, { data: targetCohorts }] = await Promise.all([
+    targetSessionIds.length > 0
+      ? supabase
+          .from("tutor_scheduled_sessions")
+          .select("id, starts_at, ends_at, cohort_id, title")
+          .in("id", targetSessionIds)
+      : Promise.resolve({ data: [] }),
+    targetCohortIds.length > 0
+      ? supabase.from("cohorts").select("id, name").in("id", targetCohortIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const targetSessionById = new Map(
+    (targetSessions ?? []).map((row) => [
+      row.id as string,
+      {
+        startsAt: row.starts_at as string,
+        endsAt: row.ends_at as string,
+        cohortId: (row.cohort_id as string | null) ?? null,
+        title: (row.title as string | null) ?? null,
+      },
+    ])
+  );
+  const targetCohortNameById = new Map(
+    (targetCohorts ?? []).map((cohort) => [cohort.id as string, cohort.name as string])
+  );
+
   const requestBySession = new Map(
     ((requests ?? []) as RescheduleRequestRow[]).map((request) => [request.session_id, request])
   );
   const cohortSwitchBySession = new Map(
-    ((cohortSwitchRequests ?? []) as CohortSwitchRequestRow[]).map((request) => [
-      request.session_id,
-      request,
-    ])
+    rawCohortSwitchRequests.map((request) => {
+      const target = request.to_session_id
+        ? targetSessionById.get(request.to_session_id)
+        : undefined;
+      const enriched: CohortSwitchRequestRow = {
+        ...request,
+        toSessionStartsAt: target?.startsAt ?? null,
+        toSessionEndsAt: target?.endsAt ?? null,
+        toCohortName:
+          targetCohortNameById.get(request.to_cohort_id) ??
+          target?.title ??
+          null,
+      };
+      return [request.session_id, enriched] as const;
+    })
   );
   const tutorNameById = new Map(
     (tutors ?? []).map((tutor) => [tutor.id, getDisplayName(tutor) ?? "Your tutor"])
@@ -213,6 +267,7 @@ export async function loadStudentUpcomingSessions(
 
   const labelled = await attachLessonLabelsToSessions(supabase, visible);
   const labelledById = new Map(labelled.map((session) => [session.id, session]));
+  const beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, studentId);
 
   const groupSessions = labelled.filter(
     (session) => Boolean(session.cohort_id) && Boolean(session.course_id)
@@ -276,7 +331,15 @@ export async function loadStudentUpcomingSessions(
     schemaReady: true,
     sessions: labelled.map((session) => {
       const rescheduleRequest = requestBySession.get(session.id) ?? null;
-      const eligibility = getRescheduleEligibility(session, rescheduleRequest);
+      const rescheduleLimitLockedReason = appliesBeginnersRescheduleLimit(
+        session.course_id,
+        beginnersRescheduleLimit
+      )
+        ? beginnersRescheduleLimit.lockedReason
+        : null;
+      const eligibility = getRescheduleEligibility(session, rescheduleRequest, {
+        rescheduleLimitLockedReason,
+      });
       const cohortSwitchRequest = cohortSwitchBySession.get(session.id) ?? null;
       const alternateCohorts = (alternateSessionBySourceId.get(session.id) ?? []).map((candidate) => ({
         id: candidate.id,
@@ -290,7 +353,8 @@ export async function loadStudentUpcomingSessions(
       const cohortSwitchEligibility = getCohortSwitchEligibility(
         session,
         cohortSwitchRequest,
-        alternateCohorts.length
+        alternateCohorts.length,
+        { rescheduleLimitLockedReason }
       );
 
       return {

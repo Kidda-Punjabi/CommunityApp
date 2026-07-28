@@ -139,6 +139,7 @@ export function LessonCard({
               View plans
             </Link>
           </div>
+          <LessonScheduleRequestSection scheduleSession={scheduleSession} />
         </>
       ) : isTutorLocked ? (
         <>
@@ -151,6 +152,7 @@ export function LessonCard({
             scheduleSession={scheduleSession}
           />
           <LessonScheduleBlock scheduleSession={scheduleSession} />
+          <LessonScheduleRequestSection scheduleSession={scheduleSession} />
         </>
       ) : (
         <details name={accordionName} open={defaultExpanded} className="group">
@@ -271,6 +273,8 @@ export function LessonCard({
               />
             </div>
           )}
+
+          <LessonScheduleRequestSection scheduleSession={scheduleSession} />
         </details>
       )}
     </div>
@@ -445,60 +449,101 @@ function LessonScheduleBlock({
       ) : null}
 
       {scheduleSession.cohortSwitchRequest?.status === "pending" ? (
-        <p className="mt-3 text-violet-900">Alternate cohort request pending.</p>
-      ) : null}
-
-      {scheduleSession.canRequestReschedule ? (
-        <div className="mt-3">
-          <p className="text-xs text-zinc-500">
-            Need a different time? Ask now and your tutor can move this lesson to a free slot.
-          </p>
-          <RescheduleRequestForm sessionId={scheduleSession.id} />
-        </div>
-      ) : !isGroup &&
-        scheduleSession.rescheduleLockedReason &&
-        !scheduleSession.rescheduleRequest ? (
-        <div className="mt-3">
-          <button
-            type="button"
-            disabled
-            className={cn(
-              lessonContentRowButtonClass,
-              "cursor-not-allowed opacity-60 hover:bg-white"
-            )}
-          >
-            Request to reschedule
-          </button>
-          <p className="mt-2 text-xs text-zinc-500">{scheduleSession.rescheduleLockedReason}</p>
-        </div>
-      ) : null}
-
-      {scheduleSession.canRequestCohortSwitch ? (
-        <div className="mt-3">
-          <p className="text-xs text-zinc-500">
-            Can&apos;t make this group? Request a matching alternate cohort session here.
-          </p>
-          <CohortSwitchRequestForm session={scheduleSession} />
-        </div>
-      ) : isGroup &&
-        scheduleSession.cohortSwitchLockedReason &&
-        !scheduleSession.cohortSwitchRequest ? (
-        <div className="mt-3">
-          <button
-            type="button"
-            disabled
-            className={cn(
-              lessonContentRowButtonClass,
-              "cursor-not-allowed opacity-60 hover:bg-white"
-            )}
-          >
-            Request alternate cohort
-          </button>
-          <p className="mt-2 text-xs text-zinc-500">{scheduleSession.cohortSwitchLockedReason}</p>
-        </div>
+        <p className="mt-3 text-violet-900">
+          Alternate cohort request pending
+          {scheduleSession.cohortSwitchRequest.toSessionStartsAt &&
+          scheduleSession.cohortSwitchRequest.toSessionEndsAt ? (
+            <>
+              {" "}
+              for{" "}
+              <span className="font-semibold">
+                {[
+                  scheduleSession.cohortSwitchRequest.toCohortName,
+                  formatSessionWhen(
+                    scheduleSession.cohortSwitchRequest.toSessionStartsAt,
+                    scheduleSession.cohortSwitchRequest.toSessionEndsAt
+                  ),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </>
+          ) : null}
+          .
+        </p>
       ) : null}
     </div>
   );
+}
+
+function LessonScheduleRequestSection({
+  scheduleSession,
+}: {
+  scheduleSession?: StudentScheduledSession | null;
+}) {
+  if (!scheduleSession) return null;
+
+  const isGroup = Boolean(scheduleSession.cohort_id);
+
+  if (scheduleSession.canRequestReschedule) {
+    return (
+      <div className="mt-4 border-t border-zinc-100 pt-4">
+        <p className="text-xs text-zinc-500">
+          Need a different time? Ask now and your tutor can move this lesson to a free slot.
+        </p>
+        <RescheduleRequestForm sessionId={scheduleSession.id} />
+      </div>
+    );
+  }
+
+  if (!isGroup && scheduleSession.rescheduleLockedReason && !scheduleSession.rescheduleRequest) {
+    return (
+      <div className="mt-4 border-t border-zinc-100 pt-4">
+        <button
+          type="button"
+          disabled
+          className={cn(
+            lessonContentRowButtonClass,
+            "cursor-not-allowed opacity-60 hover:bg-white"
+          )}
+        >
+          Request to reschedule
+        </button>
+        <p className="mt-2 text-xs text-zinc-500">{scheduleSession.rescheduleLockedReason}</p>
+      </div>
+    );
+  }
+
+  if (scheduleSession.canRequestCohortSwitch) {
+    return (
+      <div className="mt-4 border-t border-zinc-100 pt-4">
+        <p className="text-xs text-zinc-500">
+          Can&apos;t make this group? Request a matching alternate cohort session here.
+        </p>
+        <CohortSwitchRequestForm session={scheduleSession} />
+      </div>
+    );
+  }
+
+  if (isGroup && scheduleSession.cohortSwitchLockedReason && !scheduleSession.cohortSwitchRequest) {
+    return (
+      <div className="mt-4 border-t border-zinc-100 pt-4">
+        <button
+          type="button"
+          disabled
+          className={cn(
+            lessonContentRowButtonClass,
+            "cursor-not-allowed opacity-60 hover:bg-white"
+          )}
+        >
+          Request alternate cohort
+        </button>
+        <p className="mt-2 text-xs text-zinc-500">{scheduleSession.cohortSwitchLockedReason}</p>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function ContentRow({

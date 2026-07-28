@@ -10,8 +10,13 @@ export function getCohortSwitchEligibility(
   session: Pick<ScheduledSessionRow, "starts_at" | "status" | "cohort_id">,
   existingRequest: Pick<CohortSwitchRequestRow, "status"> | null,
   alternateCohortCount: number,
-  nowMs = Date.now()
+  options?: {
+    nowMs?: number;
+    rescheduleLimitLockedReason?: string | null;
+  }
 ): CohortSwitchEligibility {
+  const nowMs = options?.nowMs ?? Date.now();
+
   if (!session.cohort_id) {
     return { canRequest: false, lockedReason: null };
   }
@@ -47,6 +52,13 @@ export function getCohortSwitchEligibility(
     return {
       canRequest: false,
       lockedReason: "Your tutor approved joining another cohort — check with them for details.",
+    };
+  }
+
+  if (options?.rescheduleLimitLockedReason) {
+    return {
+      canRequest: false,
+      lockedReason: options.rescheduleLimitLockedReason,
     };
   }
 

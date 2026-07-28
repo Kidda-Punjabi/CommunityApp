@@ -6,6 +6,7 @@ import {
   loadAdminMemberDetail,
   saveMemberBeginnersSetup,
   saveMemberCommunityAccess,
+  saveMemberExtraRescheduleAllowance,
   saveMemberFoundationalSetup,
 } from "@/app/admin/content/member-actions";
 import { APP_ROLE_LABELS, type AppRole } from "@/lib/auth/admin-access";
@@ -40,6 +41,7 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
   const [beginnersDelivery, setBeginnersDelivery] = useState<"" | "one_to_one" | "group">("");
   const [beginnersCohortId, setBeginnersCohortId] = useState("");
   const [communityAccess, setCommunityAccess] = useState(false);
+  const [extraRescheduleAllowance, setExtraRescheduleAllowance] = useState(0);
 
   const assignableStaff = useMemo(
     () => data.staffMembers.filter((member) => member.appRoles.length > 0),
@@ -69,6 +71,7 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
     setBeginnersDelivery(detail.beginnersEnrollment?.deliveryMode ?? "");
     setBeginnersCohortId(detail.beginnersEnrollment?.cohortId ?? "");
     setCommunityAccess(detail.courseAccess.community);
+    setExtraRescheduleAllowance(detail.beginnersEnrollment?.extraRescheduleAllowance ?? 0);
     setMessage({});
   }, [detail]);
 
@@ -115,6 +118,19 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
         detail.userId,
         detail.courseIds.community!,
         communityAccess
+      );
+      setMessage(result);
+      if (!result.error) await refreshDetail();
+    });
+  }
+
+  function saveRescheduleAllowance() {
+    if (!detail?.courseIds.beginners) return;
+    startSaveTransition(async () => {
+      const result = await saveMemberExtraRescheduleAllowance(
+        detail.userId,
+        detail.courseIds.beginners!,
+        extraRescheduleAllowance
       );
       setMessage(result);
       if (!result.error) await refreshDetail();
@@ -284,6 +300,45 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
             </select>
           </div>
         </div>
+
+        {detail.beginnersEnrollment ? (
+          <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+            <p className="text-sm font-medium text-zinc-900">Reschedule allowance</p>
+            <p className="mt-1 text-xs text-zinc-600">
+              Used {detail.beginnersEnrollment.reschedulesUsed} of{" "}
+              {detail.beginnersEnrollment.rescheduleLimit} (default limit is 2 per Beginners
+              course). Pending and approved reschedule or alternate-cohort requests count toward
+              this total.
+            </p>
+            <div className="mt-3">
+              <label htmlFor="bc_extra_reschedules" className={labelClass}>
+                Extra reschedule allowance (admin override)
+              </label>
+              <input
+                id="bc_extra_reschedules"
+                type="number"
+                min={0}
+                step={1}
+                value={extraRescheduleAllowance}
+                onChange={(event) =>
+                  setExtraRescheduleAllowance(Math.max(0, Number(event.target.value) || 0))
+                }
+                className={inputClass}
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Add extra reschedules beyond the default 2 if you need to allow another change.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={savePending}
+              onClick={saveRescheduleAllowance}
+              className={`mt-3 ${buttonClass}`}
+            >
+              {savePending ? "Saving…" : "Save reschedule allowance"}
+            </button>
+          </div>
+        ) : null}
 
         <button
           type="button"

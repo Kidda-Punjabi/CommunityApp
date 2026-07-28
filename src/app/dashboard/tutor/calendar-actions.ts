@@ -5,6 +5,10 @@ import { COHORT_SWITCH_CUTOFF_MS } from "@/lib/calendar/constants";
 import { isValidCohortSwitchCandidateSession } from "@/lib/calendar/cohort-switch-candidates";
 import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy";
 import { getRescheduleEligibility, GROUP_LESSON_NO_RESCHEDULE_REASON } from "@/lib/calendar/reschedule-policy";
+import {
+  appliesBeginnersRescheduleLimit,
+  loadBeginnersRescheduleLimitStatus,
+} from "@/lib/calendar/reschedule-limit";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -54,7 +58,17 @@ export async function requestLessonReschedule(
     .eq("student_id", user.id)
     .maybeSingle();
 
-  const eligibility = getRescheduleEligibility(session, existing ?? null);
+  const beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, user.id);
+  const rescheduleLimitLockedReason = appliesBeginnersRescheduleLimit(
+    session.course_id,
+    beginnersRescheduleLimit
+  )
+    ? beginnersRescheduleLimit.lockedReason
+    : null;
+
+  const eligibility = getRescheduleEligibility(session, existing ?? null, {
+    rescheduleLimitLockedReason,
+  });
   if (!eligibility.canRequest) {
     return { error: eligibility.lockedReason ?? "Cannot request reschedule." };
   }
@@ -230,26 +244,7 @@ export async function requestCohortSwitch(
     .maybeSingle();
 
   const { attachLessonLabelsToSessions } = await import("@/lib/calendar/session-lesson-labels");
-  const labelled = await attachLessonLabelsToSessions(supabase, [session, targetSession]);
-  const sourceLesson = labelled.find((row) => row.id === session.id);
-  const targetLesson = labelled.find((row) => row.id === targetSession.id);
-  const targetStartsMs = new Date(targetSession.starts_at).getTime();
   const sourceStartsMs = new Date(session.starts_at).getTime();
-  const sameLessonNumber =
-    Boolean(sourceLesson?.lessonNumber) &&
-    sourceLesson?.lessonNumber === targetLesson?.lessonNumber;
-
-  if (
-    targetSession.cohort_id === currentCohort.id ||
-    targetSession.course_id !== currentCohort.course_id ||
-    targetSession.status !== "scheduled" ||
-    !sameLessonNumber ||
-    targetStartsMs < sourceStartsMs ||
-    targetStartsMs > sourceStartsMs + 10 * 24 * 60 * 60 * 1000
-  ) {
-    return { error: "Invalid alternate session for this lesson." };
-  }
-
   const { data: alternateSessions } = await supabase
     .from("tutor_scheduled_sessions")
     .select("*")
@@ -258,27 +253,61 @@ export async function requestCohortSwitch(
     .eq("status", "scheduled")
     .gte("starts_at", session.starts_at)
     .lte("starts_at", new Date(sourceStartsMs + 10 * 24 * 60 * 60 * 1000).toISOString());
-  const alternateLabelled = await attachLessonLabelsToSessions(
-    supabase,
-    (alternateSessions ?? []).filter((row) => row.id !== session.id)
-  );
-  const alternateCount = alternateLabelled.filter(
-    (row) =>
-      row.cohort_id !== session.cohort_id &&
-      row.lessonNumber &&
-      row.lessonNumber === sourceLesson?.lessonNumber
-  ).length;
+
+  const labelled = await attachLessonLabelsToSessions(supabase, [
+    session,
+    ...((alternateSessions ?? []).filter((row) => row.id !== session.id)),
+  ]);
+  const sourceLesson = labelled.find((row) => row.id === session.id);
+  const targetStartsMs = new Date(targetSession.starts_at).getTime();
+
+  const alternateCandidates = labelled.filter((row) => {
+    if (row.id === session.id) return false;
+    if (!isValidCohortSwitchCandidateSession(row)) return false;
+    if (!row.cohort_id || row.cohort_id === session.cohort_id) return false;
+    if (row.course_id !== currentCohort.course_id) return false;
+    if (!row.lessonNumber || row.lessonNumber !== sourceLesson?.lessonNumber) return false;
+    const candidateStartsMs = new Date(row.starts_at).getTime();
+    return (
+      candidateStartsMs >= sourceStartsMs &&
+      candidateStartsMs <= sourceStartsMs + 10 * 24 * 60 * 60 * 1000
+    );
+  });
+
+  if (
+    targetSession.cohort_id === currentCohort.id ||
+    targetSession.course_id !== currentCohort.course_id ||
+    targetSession.status !== "scheduled" ||
+    !alternateCandidates.some((row) => row.id === targetSession.id) ||
+    targetStartsMs < sourceStartsMs ||
+    targetStartsMs > sourceStartsMs + 10 * 24 * 60 * 60 * 1000
+  ) {
+    return { error: "Invalid alternate session for this lesson." };
+  }
+  const alternateCount = alternateCandidates.length;
+
+  const beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, user.id);
+  const rescheduleLimitLockedReason = appliesBeginnersRescheduleLimit(
+    session.course_id,
+    beginnersRescheduleLimit
+  )
+    ? beginnersRescheduleLimit.lockedReason
+    : null;
 
   const eligibility = getCohortSwitchEligibility(
     session,
     existing ?? null,
-    alternateCount
+    alternateCount,
+    { rescheduleLimitLockedReason }
   );
   if (!eligibility.canRequest) {
     return { error: eligibility.lockedReason ?? "Cannot request alternate cohort." };
   }
 
-  const { error } = await supabase.from("cohort_switch_requests").insert({
+  const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
+  if (!adminClient) return { error: adminError };
+
+  const { error } = await adminClient.from("cohort_switch_requests").insert({
     session_id: sessionId,
     student_id: user.id,
     from_cohort_id: session.cohort_id,
@@ -287,7 +316,15 @@ export async function requestCohortSwitch(
     message: message || null,
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.message.includes("to_session_id")) {
+      return {
+        error:
+          "The target-session database column is not applied in production yet. Apply supabase/cohort-switch-target-session.sql first.",
+      };
+    }
+    return { error: error.message };
+  }
 
   revalidatePath("/dashboard/schedule");
   return { success: "Alternate cohort request sent to your tutor." };

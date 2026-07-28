@@ -152,7 +152,7 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
       ) : null}
 
       {session.cohortSwitchRequest?.status === "pending" ? (
-        <PendingCohortSwitchBanner requestId={session.cohortSwitchRequest.id} />
+        <PendingCohortSwitchBanner request={session.cohortSwitchRequest} />
       ) : null}
 
       <div className="mt-3">
@@ -192,26 +192,47 @@ function PendingRequestBanner({ requestId }: { requestId: string }) {
   );
 }
 
-function PendingCohortSwitchBanner({ requestId }: { requestId: string }) {
+function PendingCohortSwitchBanner({
+  request,
+}: {
+  request: StudentScheduledSession["cohortSwitchRequest"];
+}) {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  if (!request) return null;
+
   const cancel = async () => {
     setPending(true);
-    const result = await cancelCohortSwitchRequest(requestId);
+    const result = await cancelCohortSwitchRequest(request.id);
     setMessage(result.success ?? result.error ?? null);
     setPending(false);
     if (result.success) window.location.reload();
   };
 
+  const requestedWhen =
+    request.toSessionStartsAt && request.toSessionEndsAt
+      ? formatSessionWhen(request.toSessionStartsAt, request.toSessionEndsAt)
+      : null;
+  const requestedLabel = [request.toCohortName, requestedWhen].filter(Boolean).join(" · ");
+
   return (
     <div className="mt-3 rounded-2xl bg-violet-50 px-3 py-2 text-sm text-violet-900">
-      Alternate cohort request pending — your tutor will respond soon.
+      <p>
+        Alternate cohort request pending
+        {requestedLabel ? (
+          <>
+            {" "}
+            for <span className="font-semibold">{requestedLabel}</span>
+          </>
+        ) : null}{" "}
+        — your tutor will respond soon.
+      </p>
       <button
         type="button"
         disabled={pending}
         onClick={() => void cancel()}
-        className="ml-2 font-semibold underline"
+        className="mt-1 font-semibold underline"
       >
         Cancel request
       </button>
@@ -228,9 +249,20 @@ export function RescheduleRequestForm({
   onDone?: () => void;
 }) {
   const [state, action, pending] = useActionState(requestLessonReschedule, initial);
+  const [open, setOpen] = useState(false);
 
   if (state.success) {
     return <p className="mt-3 text-sm text-emerald-700">{state.success}</p>;
+  }
+
+  if (!open) {
+    return (
+      <div className="mt-3">
+        <button type="button" onClick={() => setOpen(true)} className={ui.btnPrimary}>
+          I need to reschedule
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -260,19 +292,24 @@ export function RescheduleRequestForm({
         />
       </div>
       <p className="text-xs text-zinc-500">
-        Requests must be made at least 24 hours before the lesson. Your tutor may not be able to
-        accommodate every request.
+        Requests must be made at least 24 hours before the lesson. Beginners students get up to 2
+        reschedules for the course — please only ask if you genuinely need to change your class.
       </p>
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className={ui.btnPrimary}>
           {pending ? "Sending…" : "Send request"}
         </button>
-        {onDone ? (
-          <button type="button" onClick={onDone} className={ui.btnGhost}>
-            Cancel
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            onDone?.();
+          }}
+          className={ui.btnGhost}
+        >
+          Cancel
+        </button>
       </div>
     </form>
   );
@@ -286,45 +323,77 @@ export function CohortSwitchRequestForm({
   onDone?: () => void;
 }) {
   const [state, action, pending] = useActionState(requestCohortSwitch, initial);
+  const [open, setOpen] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState("");
 
   if (state.success) {
     return <p className="mt-3 text-sm text-emerald-700">{state.success}</p>;
   }
 
+  if (!open) {
+    return (
+      <div className="mt-3">
+        <button type="button" onClick={() => setOpen(true)} className={ui.btnPrimary}>
+          I need to reschedule
+        </button>
+      </div>
+    );
+  }
+
   return (
     <form action={action} className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
       <input type="hidden" name="session_id" value={session.id} />
+      <input type="hidden" name="to_session_id" value={selectedSessionId} />
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-700">
           Which matching session would you like to join instead?
         </label>
-        <select
-          name="to_session_id"
-          required
-          className="mt-1.5 block w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-          defaultValue=""
-        >
-          <option value="" disabled>
-            Select a session
-          </option>
-          {session.alternateCohorts.map((cohort) => (
-            <option key={cohort.id} value={cohort.id}>
-              {cohort.name} · {cohort.tutorName} · {cohort.lessonLabel} ·{" "}
-              {new Date(cohort.startsAt).toLocaleDateString("en-GB", {
-                weekday: "short",
-                day: "numeric",
-                month: "short",
-              })}
-            </option>
-          ))}
-        </select>
+        <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
+          {session.alternateCohorts.map((cohort) => {
+            const selected = selectedSessionId === cohort.id;
+            return (
+              <button
+                key={cohort.id}
+                type="button"
+                onClick={() => setSelectedSessionId(cohort.id)}
+                className={
+                  selected
+                    ? "rounded-2xl border-2 border-violet-500 bg-violet-50 px-4 py-3 text-left"
+                    : "rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-left hover:border-violet-300"
+                }
+                aria-pressed={selected}
+              >
+                <p className="font-semibold text-zinc-900">{cohort.name}</p>
+                <p className="mt-1 text-sm text-zinc-600">{cohort.tutorName}</p>
+                <p className="mt-2 text-sm font-medium text-violet-700">
+                  {new Date(cohort.startsAt).toLocaleDateString("en-GB", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                  })}{" "}
+                  ·{" "}
+                  {new Date(cohort.startsAt).toLocaleTimeString("en-GB", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}{" "}
+                  -{" "}
+                  {new Date(cohort.endsAt).toLocaleTimeString("en-GB", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-700">
-          Why do you need a different group? (optional)
+          Why do you need a different group?
         </label>
         <textarea
           name="message"
+          required
           rows={3}
           className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm"
           placeholder="Brief explanation for your tutor"
@@ -332,18 +401,26 @@ export function CohortSwitchRequestForm({
       </div>
       <p className="rounded-2xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{COHORT_SWITCH_WARNING}</p>
       <p className="text-xs text-zinc-500">
-        You need to let us know at least 3 days before the lesson.
+        You need to let us know at least 3 days before the lesson. Beginners students get up to 2
+        reschedules for the course — please only request a different class if it is genuinely
+        necessary.
       </p>
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
       <div className="flex gap-2">
-        <button type="submit" disabled={pending} className={ui.btnPrimary}>
+        <button type="submit" disabled={pending || !selectedSessionId} className={ui.btnPrimary}>
           {pending ? "Sending…" : "Send request"}
         </button>
-        {onDone ? (
-          <button type="button" onClick={onDone} className={ui.btnGhost}>
-            Cancel
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setSelectedSessionId("");
+            onDone?.();
+          }}
+          className={ui.btnGhost}
+        >
+          Cancel
+        </button>
       </div>
     </form>
   );
