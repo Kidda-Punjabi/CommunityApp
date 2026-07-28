@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import {
-  cancelCohortSwitchRequest,
   cancelRescheduleRequest,
   requestCohortSwitch,
   requestLessonReschedule,
   type CalendarActionResult,
 } from "@/app/dashboard/tutor/calendar-actions";
+import { CancelCohortSwitchRequestControl } from "@/components/schedule/cancel-cohort-switch-request-control";
 import { LessonsViewToggle, type LessonsViewMode } from "@/components/schedule/lessons-view-toggle";
 import { MonthLessonsCalendar } from "@/components/schedule/month-lessons-calendar";
 import { COHORT_SWITCH_CUTOFF_MS, RESCHEDULE_CUTOFF_MS } from "@/lib/calendar/constants";
@@ -152,7 +152,10 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
       ) : null}
 
       {session.cohortSwitchRequest?.status === "pending" ? (
-        <PendingCohortSwitchBanner request={session.cohortSwitchRequest} />
+        <CancelCohortSwitchRequestControl
+          request={session.cohortSwitchRequest}
+          className="mt-3"
+        />
       ) : null}
 
       <div className="mt-3">
@@ -184,55 +187,6 @@ function PendingRequestBanner({ requestId }: { requestId: string }) {
         disabled={pending}
         onClick={() => void cancel()}
         className="ml-2 font-semibold underline"
-      >
-        Cancel request
-      </button>
-      {message ? <span className="mt-1 block text-xs">{message}</span> : null}
-    </div>
-  );
-}
-
-function PendingCohortSwitchBanner({
-  request,
-}: {
-  request: StudentScheduledSession["cohortSwitchRequest"];
-}) {
-  const [message, setMessage] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  if (!request) return null;
-
-  const cancel = async () => {
-    setPending(true);
-    const result = await cancelCohortSwitchRequest(request.id);
-    setMessage(result.success ?? result.error ?? null);
-    setPending(false);
-    if (result.success) window.location.reload();
-  };
-
-  const requestedWhen =
-    request.toSessionStartsAt && request.toSessionEndsAt
-      ? formatSessionWhen(request.toSessionStartsAt, request.toSessionEndsAt)
-      : null;
-  const requestedLabel = [request.toCohortName, requestedWhen].filter(Boolean).join(" · ");
-
-  return (
-    <div className="mt-3 rounded-2xl bg-violet-50 px-3 py-2 text-sm text-violet-900">
-      <p>
-        Alternate cohort request pending
-        {requestedLabel ? (
-          <>
-            {" "}
-            for <span className="font-semibold">{requestedLabel}</span>
-          </>
-        ) : null}{" "}
-        — the Kidda team will respond soon.
-      </p>
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() => void cancel()}
-        className="mt-1 font-semibold underline"
       >
         Cancel request
       </button>

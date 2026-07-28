@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { UserAvatar } from "@/components/profile/user-avatar";
+import { CourseCohortStats } from "@/components/learn/course-cohort-stats";
 import type { StudentPackage } from "@/lib/packages/load-student-packages";
+import type { StudentCohortCourseStats } from "@/lib/lessons/load-student-cohort-course-stats";
 import { ui } from "@/lib/ui/styles";
 
 type PackageHubPanelProps = {
   pkg: StudentPackage;
   variant?: "full" | "embedded";
+  cohortStats?: StudentCohortCourseStats | null;
 };
 
 function statusLabel(status: StudentPackage["status"]): string {
@@ -52,7 +55,11 @@ export function BuyExtraOneToOneCard({ pkg }: { pkg: StudentPackage }) {
   );
 }
 
-export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps) {
+export function PackageHubPanel({
+  pkg,
+  variant = "full",
+  cohortStats = null,
+}: PackageHubPanelProps) {
   const contactName = pkg.tutorName ?? pkg.communityLeadName;
   const contactAvatar = pkg.tutorAvatarUrl ?? pkg.communityLeadAvatarUrl;
   const contactLabel = pkg.tutorName
@@ -89,12 +96,13 @@ export function PackageHubPanel({ pkg, variant = "full" }: PackageHubPanelProps)
             }}
             size="sm"
           />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-zinc-900">{contactName}</p>
             {contactLabel ? (
               <p className="truncate text-xs text-zinc-500">{contactLabel}</p>
             ) : null}
           </div>
+          {cohortStats ? <CourseCohortStats stats={cohortStats} /> : null}
         </div>
       ) : pkg.includesLiveSessions ? (
         <p className="text-xs text-zinc-500">

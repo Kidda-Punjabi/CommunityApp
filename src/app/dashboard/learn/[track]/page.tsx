@@ -39,6 +39,8 @@ import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submiss
 import { fetchCatchupEnabledLessonIds } from "@/lib/catchup/load-catchup";
 import { fetchFeedbackSubmittedLessonIds } from "@/lib/feedback/load-feedback-history";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
+import { loadStudentCohortCourseStats } from "@/lib/lessons/load-student-cohort-course-stats";
+import { loadStudentCohortHomeworkCompletedMap } from "@/lib/lessons/load-student-cohort-homework-completed";
 import { fetchTopicMasteryMap, stageFillsForMastery } from "@/lib/free-lessons/mastery";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
@@ -144,23 +146,22 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
   const contentGate = await resolveGroupCohortContentGate(supabase, user!.id, courseIds);
 
   const studentPackage = findStudentPackageForTrack(studentPackages, track.id);
-  let staffSection = null;
+  const communityLeads =
+    track.id === "community" ? await loadCommunityLeads(supabase) : null;
 
+  let staffSection = null;
   if (studentPackage) {
-    if (track.id === "community") {
-      const leads = await loadCommunityLeads(supabase);
-      staffSection = (
+    staffSection =
+      track.id === "community" && communityLeads ? (
         <>
           <PackageHubPanel pkg={studentPackage} />
-          <CommunityLeadSection leads={leads} />
+          <CommunityLeadSection leads={communityLeads} />
         </>
+      ) : (
+        <PackageHubPanel pkg={studentPackage} />
       );
-    } else {
-      staffSection = <PackageHubPanel pkg={studentPackage} />;
-    }
-  } else if (track.id === "community") {
-    const leads = await loadCommunityLeads(supabase);
-    staffSection = <CommunityLeadSection leads={leads} />;
+  } else if (communityLeads) {
+    staffSection = <CommunityLeadSection leads={communityLeads} />;
   }
 
   if (contentGate?.gated) {
@@ -200,6 +201,8 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
     catchupLessonIds,
     feedbackSubmittedLessonIds,
     upcomingLoad,
+    cohortCourseStats,
+    cohortHomeworkCompletedMap,
   ] = await Promise.all([
       fetchLessonCompletionMap(supabase, user!.id, lessons),
       fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
@@ -210,7 +213,28 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       fetchCatchupEnabledLessonIds(supabase, catchupEligibleLessonIds),
       fetchFeedbackSubmittedLessonIds(supabase, user!.id, lessonIds),
       loadStudentUpcomingSessions(supabase, user!.id, user!.email),
+      loadStudentCohortCourseStats(supabase, user!.id, courseIds),
+      showHomework
+        ? loadStudentCohortHomeworkCompletedMap(
+            supabase,
+            user!.id,
+            courseIds,
+            lessonIds
+          )
+        : Promise.resolve(new Map<string, boolean>()),
     ]);
+
+  if (studentPackage) {
+    staffSection =
+      track.id === "community" && communityLeads ? (
+        <>
+          <PackageHubPanel pkg={studentPackage} cohortStats={cohortCourseStats} />
+          <CommunityLeadSection leads={communityLeads} />
+        </>
+      ) : (
+        <PackageHubPanel pkg={studentPackage} cohortStats={cohortCourseStats} />
+      );
+  }
   const courseProgress = summarizeCourseProgress(lessons, completionMap);
   const scheduleSessionByLessonId = new Map<string, (typeof upcomingLoad.sessions)[number]>();
   const lessonByNumber = new Map(lessons.map((lesson) => [lesson.lesson_number, lesson.id] as const));
@@ -228,7 +252,9 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       subtitle={
         track.id === "community"
           ? `${lessons.length} week${lessons.length === 1 ? "" : "s"} of community lessons.`
-          : `${lessons.length} lesson${lessons.length === 1 ? "" : "s"} in this course.`
+          : track.id === "beginners"
+            ? ""
+            : `${lessons.length} lesson${lessons.length === 1 ? "" : "s"} in this course.`
       }
       unitLabel={track.id === "community" ? "Week" : undefined}
       lessons={lessons}
@@ -253,6 +279,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       contentUnlockedMap={contentUnlockedMap}
       recordingMap={recordingMap}
       homeworkMap={homeworkMap}
+      cohortHomeworkCompletedMap={cohortHomeworkCompletedMap}
       showHomework={showHomework}
       catchupLessonIds={catchupLessonIds}
       feedbackSubmittedLessonIds={feedbackSubmittedLessonIds}

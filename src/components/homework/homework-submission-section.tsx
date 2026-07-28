@@ -19,7 +19,7 @@ import { cn, ui } from "@/lib/ui/styles";
 type HomeworkSubmissionSectionProps = {
   lessonId: string;
   submission: HomeworkSubmissionView | null;
-  variant?: "standalone" | "integrated";
+  variant?: "standalone" | "integrated" | "embedded";
   catchupReturn?: string | null;
 };
 
@@ -74,7 +74,7 @@ function HomeworkRecorderBody({
 }: {
   lessonId: string;
   localSubmission: HomeworkSubmissionView | null;
-  variant: "standalone" | "integrated";
+  variant: "standalone" | "integrated" | "embedded";
 }) {
   const router = useRouter();
   const recorder = useAudioRecorder();
@@ -116,7 +116,7 @@ function HomeworkRecorderBody({
 
   if (localSubmission?.status === "reviewed") {
     return (
-      <div className={variant === "integrated" ? "pt-2" : "mt-3"}>
+      <div className={variant === "standalone" ? "mt-3" : "pt-2"}>
         <div
           className={`rounded-2xl px-4 py-3 ${
             localSubmission.approved ? "bg-green-50" : "bg-amber-50"
@@ -155,7 +155,7 @@ function HomeworkRecorderBody({
 
   if (localSubmission?.status === "pending_review") {
     return (
-      <div className={variant === "integrated" ? "pt-2" : "mt-3"}>
+      <div className={variant === "standalone" ? "mt-3" : "pt-2"}>
         <div className="rounded-2xl bg-violet-50 px-4 py-3">
           <p className="text-sm font-semibold text-violet-800">In review</p>
           <p className="mt-1 text-sm text-violet-700">
@@ -181,7 +181,7 @@ function HomeworkRecorderBody({
   }
 
   return (
-    <div className={variant === "integrated" ? "pt-2" : "mt-3"}>
+    <div className={variant === "standalone" ? "mt-3" : "pt-2"}>
       {variant === "standalone" ? (
         <p className="text-sm text-zinc-600">
           Record a short voice note for your tutor to review after your session.
@@ -192,7 +192,7 @@ function HomeworkRecorderBody({
         <button
           type="button"
           onClick={() => void recorder.startRecording()}
-          className={variant === "integrated" ? ui.btnSecondary : `mt-3 ${ui.btnSecondary}`}
+          className={variant === "standalone" ? `mt-3 ${ui.btnSecondary}` : ui.btnSecondary}
         >
           Record homework
         </button>
@@ -288,6 +288,18 @@ export function HomeworkSubmissionSection({
           </div>
         ) : null}
       </>
+    );
+  }
+
+  if (variant === "embedded") {
+    return (
+      <div className="space-y-3">
+        <HomeworkRecorderBody
+          lessonId={lessonId}
+          localSubmission={localSubmission}
+          variant="embedded"
+        />
+      </div>
     );
   }
 

@@ -51,9 +51,11 @@ export function getCohortSwitchEligibility(
   if (existingRequest?.status === "approved") {
     return {
       canRequest: false,
-      lockedReason: "Your tutor approved joining another cohort — check with them for details.",
+      lockedReason: "Your alternate cohort request was approved — check your schedule for details.",
     };
   }
+
+  // cancelled / denied do not block a new request and do not count toward the reschedule limit.
 
   if (options?.rescheduleLimitLockedReason) {
     return {

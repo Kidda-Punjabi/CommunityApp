@@ -36,6 +36,8 @@ type LearnLessonListProps = {
   contentUnlockedMap?: Map<string, boolean>;
   recordingMap?: Map<string, LessonRecordingView>;
   homeworkMap?: Map<string, HomeworkSubmissionView>;
+  /** lesson_id → cohort_lesson_homework.completed */
+  cohortHomeworkCompletedMap?: Map<string, boolean>;
   showHomework?: boolean;
   unitLabel?: string;
   catchupLessonIds?: Set<string>;
@@ -63,6 +65,7 @@ export function LearnLessonList({
   contentUnlockedMap,
   recordingMap,
   homeworkMap,
+  cohortHomeworkCompletedMap,
   showHomework = false,
   unitLabel,
   catchupLessonIds,
@@ -164,7 +167,9 @@ export function LearnLessonList({
 
       <div className="mb-8 mt-4">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
-        <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
+        {subtitle.trim() ? (
+          <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
+        ) : null}
         {showCourseProgress && accessibleLessons.length > 0 && (
           <CourseProgressBar
             className="mt-4"
@@ -218,6 +223,7 @@ export function LearnLessonList({
                 quizProgressMap={quizProgressMap}
                 recording={recordingMap?.get(lesson.id) ?? null}
                 homework={homeworkMap?.get(lesson.id) ?? null}
+                homeworkCompleted={cohortHomeworkCompletedMap?.get(lesson.id) === true}
                 showHomework={showHomework}
                 unitLabel={unitLabel}
                 hasCatchupSegments={catchupLessonIds?.has(lesson.id) ?? false}

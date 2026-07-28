@@ -57,9 +57,9 @@ export function learnTrackPath(id: LearnTrackId) {
   return `/dashboard/learn/${id}`;
 }
 
-/** Community lessons have no quiz/deck completion — hide misleading course progress UI. */
+/** Hide course-level progress for tracks where lesson completion UI is misleading or unwanted. */
 export function shouldShowLearnCourseProgress(trackId: LearnTrackId): boolean {
-  return trackId !== "community";
+  return trackId !== "community" && trackId !== "beginners";
 }
 
 /** Learn list URL after finishing catch-up for a course tier (or free lessons). */

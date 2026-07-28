@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const BEGINNERS_RESCHEDULE_LIMIT = 2;
 
+/** Pending and approved count toward the allowance; cancelled/denied do not. */
 const COUNTABLE_STATUSES = ["pending", "approved"] as const;
 
 export type BeginnersRescheduleLimitStatus = {

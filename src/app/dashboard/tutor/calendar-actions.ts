@@ -307,14 +307,27 @@ export async function requestCohortSwitch(
   const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
   if (!adminClient) return { error: adminError };
 
-  const { error } = await adminClient.from("cohort_switch_requests").insert({
+  const payload = {
     session_id: sessionId,
     student_id: user.id,
     from_cohort_id: session.cohort_id,
     to_cohort_id: targetSession.cohort_id,
     to_session_id: targetSession.id,
     message: message || null,
-  });
+    status: "pending" as const,
+    tutor_response: null,
+    resolved_at: null,
+    resolved_by: null,
+  };
+
+  // One row per session/student — reactivate cancelled/denied instead of inserting again.
+  const { error } =
+    existing && (existing.status === "cancelled" || existing.status === "denied")
+      ? await adminClient
+          .from("cohort_switch_requests")
+          .update(payload)
+          .eq("id", existing.id)
+      : await adminClient.from("cohort_switch_requests").insert(payload);
 
   if (error) {
     if (error.message.includes("to_session_id")) {
@@ -327,6 +340,7 @@ export async function requestCohortSwitch(
   }
 
   revalidatePath("/dashboard/schedule");
+  revalidatePath("/dashboard/learn");
   revalidatePath("/admin/content");
   revalidatePath("/admin/cohort-switch-requests");
   return { success: "Alternate cohort request sent to the Kidda team." };
@@ -334,16 +348,33 @@ export async function requestCohortSwitch(
 
 export async function cancelCohortSwitchRequest(requestId: string): Promise<CalendarActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: updated, error } = await supabase
     .from("cohort_switch_requests")
     .update({ status: "cancelled", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
-    .eq("status", "pending");
+    .eq("student_id", user.id)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
 
   if (error) return { error: error.message };
+  if (!updated) {
+    return { error: "This request is no longer pending (it may already have been reviewed)." };
+  }
 
   revalidatePath("/dashboard/schedule");
-  return { success: "Request cancelled." };
+  revalidatePath("/dashboard/learn");
+  revalidatePath("/admin/cohort-switch-requests");
+  revalidatePath("/admin/content");
+  return {
+    success:
+      "Request cancelled. It doesn’t count toward your reschedule allowance, so you can request again if you still need to.",
+  };
 }
 
 export async function resolveCohortSwitchRequest(

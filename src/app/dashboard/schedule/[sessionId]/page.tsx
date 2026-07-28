@@ -4,6 +4,7 @@ import {
   CohortSwitchRequestForm,
   RescheduleRequestForm,
 } from "@/components/schedule/upcoming-lessons-list";
+import { CancelCohortSwitchRequestControl } from "@/components/schedule/cancel-cohort-switch-request-control";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import { createClient } from "@/lib/supabase/server";
@@ -73,28 +74,10 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
       ) : null}
 
       {session.cohortSwitchRequest?.status === "pending" ? (
-        <p className="mt-6 rounded-2xl bg-violet-50 px-4 py-3 text-sm text-violet-900">
-          Alternate cohort request pending
-          {session.cohortSwitchRequest.toSessionStartsAt &&
-          session.cohortSwitchRequest.toSessionEndsAt ? (
-            <>
-              {" "}
-              for{" "}
-              <span className="font-semibold">
-                {[
-                  session.cohortSwitchRequest.toCohortName,
-                  formatSessionWhen(
-                    session.cohortSwitchRequest.toSessionStartsAt,
-                    session.cohortSwitchRequest.toSessionEndsAt
-                  ),
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            </>
-          ) : null}
-          . Your request is with the Kidda team.
-        </p>
+        <CancelCohortSwitchRequestControl
+          request={session.cohortSwitchRequest}
+          className="mt-6"
+        />
       ) : null}
 
       {session.canRequestReschedule ? (
