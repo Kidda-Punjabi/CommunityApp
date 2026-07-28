@@ -147,12 +147,14 @@ export async function updateAdminLessonLogFields(
     const result = await updateLessonLogManualFields(supabase, entryId, {
       ...fields,
       dismissedBy: user?.id ?? null,
+      uploadedBy: user?.id ?? null,
     });
     if (!result.ok) return { error: result.error };
     revalidateLessonLog();
+    revalidatePath("/dashboard/learn");
     return {
       success:
-        "Saved as manual override — Notion pull will not overwrite status/reviewed/notes until reset. Recording URL is stored in the app (Notion pull may refresh it from Notion).",
+        "Saved. Recording is available to students in Learn when this entry is linked to a lesson.",
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update lesson log." };

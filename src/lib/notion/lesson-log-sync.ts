@@ -552,6 +552,24 @@ export async function createLessonLogInNotionAndSupabase(
     );
     await syncCohortLessonLogLessonIds(supabase, target.cohortId);
 
+    const { data: linked } = await supabase
+      .from("cohort_lesson_log_entries")
+      .select("lesson_id, recording_url")
+      .eq("id", inserted.id)
+      .maybeSingle();
+
+    if (linked?.lesson_id && linked.recording_url) {
+      const { syncCohortLessonRecordingFromLog } = await import(
+        "@/lib/tutoring/sync-cohort-recording-from-log"
+      );
+      await syncCohortLessonRecordingFromLog(supabase, {
+        cohortId: target.cohortId,
+        lessonId: linked.lesson_id,
+        recordingUrl: linked.recording_url,
+        uploadedBy: input.loggedBy?.trim() || null,
+      });
+    }
+
     const { maybeAutoUnlockAfterLessonLog } = await import(
       "@/lib/lessons/cohort-lesson-unlock"
     );
@@ -572,6 +590,8 @@ export type UpdateLessonLogManualFieldsInput = {
   recordingUrl?: string | null;
   /** When status becomes Cancelled, set dismissed_at/dismissed_by so it leaves the default list. */
   dismissedBy?: string | null;
+  /** Actor for student-facing lesson_recordings.uploaded_by when syncing a recording. */
+  uploadedBy?: string | null;
 };
 
 /**
@@ -615,7 +635,7 @@ export async function updateLessonLogManualFields(
 
   const { data: entryRow } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("cohort_id")
+    .select("cohort_id, lesson_id")
     .eq("id", entryId)
     .maybeSingle();
 
@@ -631,6 +651,26 @@ export async function updateLessonLogManualFields(
       "@/lib/lessons/lesson-log-lesson-link"
     );
     await syncCohortLessonLogLessonIds(supabase, entryRow.cohort_id);
+
+    if (fields.recordingUrl !== undefined) {
+      const { data: linked } = await supabase
+        .from("cohort_lesson_log_entries")
+        .select("cohort_id, lesson_id, recording_url")
+        .eq("id", entryId)
+        .maybeSingle();
+
+      if (linked?.cohort_id && linked.lesson_id) {
+        const { syncCohortLessonRecordingFromLog } = await import(
+          "@/lib/tutoring/sync-cohort-recording-from-log"
+        );
+        await syncCohortLessonRecordingFromLog(supabase, {
+          cohortId: linked.cohort_id,
+          lessonId: linked.lesson_id,
+          recordingUrl: linked.recording_url,
+          uploadedBy: fields.uploadedBy ?? fields.dismissedBy ?? null,
+        });
+      }
+    }
   }
 
   return { ok: true };

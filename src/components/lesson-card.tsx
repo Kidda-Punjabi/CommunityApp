@@ -119,14 +119,14 @@ export function LessonCard({
 
   const isTutorLocked = canBrowse && !contentUnlocked;
   const scheduleDisplay = getScheduleDisplay(scheduleSession);
-  const status: LessonVisualStatus =
-    scheduleDisplay?.isRescheduled
+  // Locked wins over rescheduled for the status dot — reschedule is shown via date colour.
+  const status: LessonVisualStatus = isTutorLocked
+    ? visualStatus === "next_up"
+      ? "next_up"
+      : "locked"
+    : scheduleDisplay?.isRescheduled
       ? "rescheduled"
-      : isTutorLocked
-        ? visualStatus === "next_up"
-          ? "next_up"
-          : "locked"
-        : visualStatus;
+      : visualStatus;
 
   if (!canBrowse) {
     return (
@@ -185,7 +185,7 @@ export function LessonCard({
               {formatCollapsedDate(scheduleDisplay.startsAt)}
             </span>
           ) : null}
-          {isTutorLocked && !scheduleDisplay?.isRescheduled ? (
+          {isTutorLocked ? (
             <LockIcon className="text-zinc-400" />
           ) : null}
           <ChevronToggleIcon />

@@ -810,7 +810,7 @@ export function AdminLessonLogSection() {
                                         });
                                       }}
                                     >
-                                      Save manual override
+                                      Save
                                     </button>
                                     {(entry.statusSource === "manual" ||
                                       entry.reviewedSource === "manual" ||

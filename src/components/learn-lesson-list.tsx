@@ -127,6 +127,10 @@ export function LearnLessonList({
   })();
 
   function visualStatusFor(lesson: LessonWithCourse): LessonVisualStatus {
+    if (lesson.id === defaultExpandedLessonId) return "in_progress";
+    if (lesson.id === nextUpLessonId) return "next_up";
+    const { canBrowse, contentUnlocked } = lessonAccess(lesson);
+    if (canBrowse && !contentUnlocked) return "locked";
     const session = scheduleSessionByLessonId?.get(lesson.id);
     if (
       session?.cohortSwitchRequest?.status === "approved" ||
@@ -134,10 +138,6 @@ export function LearnLessonList({
     ) {
       return "rescheduled";
     }
-    if (lesson.id === defaultExpandedLessonId) return "in_progress";
-    if (lesson.id === nextUpLessonId) return "next_up";
-    const { canBrowse, contentUnlocked } = lessonAccess(lesson);
-    if (canBrowse && !contentUnlocked) return "locked";
     return "available";
   }
 

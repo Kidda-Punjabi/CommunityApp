@@ -179,13 +179,13 @@ async function fetchAlternateCohortByLessonId(
   ]);
 
   const ordinalBySessionId = new Map<string, number>();
-  const sessionsByCohort = new Map<string, typeof cohortSessions>();
+  const sessionsByCohort = new Map<string, { id: string; cohort_id: string; starts_at: string }[]>();
   for (const row of cohortSessions ?? []) {
     const list = sessionsByCohort.get(row.cohort_id) ?? [];
     list.push(row);
     sessionsByCohort.set(row.cohort_id, list);
   }
-  for (const [, list] of sessionsByCohort) {
+  for (const list of sessionsByCohort.values()) {
     list.forEach((row, index) => {
       ordinalBySessionId.set(row.id, index + 1);
     });
