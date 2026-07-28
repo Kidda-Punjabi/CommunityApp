@@ -8,6 +8,7 @@ import {
   fetchAdminLessonLog,
   refreshLessonLogFromNotion,
   resetAdminLessonLogFieldsToNotion,
+  saveAdminLessonLogRecordingForLearn,
   updateAdminLessonLogFields,
   unlockAdminLessonLogEntry,
 } from "@/app/admin/lesson-log/actions";
@@ -192,7 +193,7 @@ export function AdminLessonLogSection() {
     try {
       const url = await uploadToStorageAsAdmin(LESSON_LOG_MEDIA_BUCKET, file);
       setEditDraft({ ...editDraft, recordingUrl: url });
-      setMessage("Uploaded — save to persist the recording link.");
+      setMessage("Uploaded — click “Save recording for Learn” to publish to students.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
@@ -750,7 +751,7 @@ export function AdminLessonLogSection() {
                                   />
                                   <div className="space-y-1">
                                     <label className="block text-[11px] font-medium text-zinc-600">
-                                      Recording
+                                      Recording (for students in Learn)
                                     </label>
                                     <div className="flex flex-wrap gap-2">
                                       <input
@@ -761,7 +762,7 @@ export function AdminLessonLogSection() {
                                             recordingUrl: e.target.value,
                                           })
                                         }
-                                        placeholder="Recording URL"
+                                        placeholder="Paste Fathom / recording URL"
                                         className="min-w-[12rem] flex-1 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs"
                                       />
                                       <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
@@ -780,13 +781,39 @@ export function AdminLessonLogSection() {
                                           }}
                                         />
                                       </label>
+                                      <button
+                                        type="button"
+                                        disabled={pending || uploadingRecording || !editDraft.recordingUrl.trim()}
+                                        className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+                                        onClick={() => {
+                                          startTransition(async () => {
+                                            setError(null);
+                                            setMessage(null);
+                                            const result = await saveAdminLessonLogRecordingForLearn(
+                                              entry.id,
+                                              editDraft.recordingUrl
+                                            );
+                                            if (result.error) {
+                                              setError(result.error);
+                                              return;
+                                            }
+                                            setMessage(result.success ?? "Recording saved.");
+                                            reload();
+                                          });
+                                        }}
+                                      >
+                                        Save recording for Learn
+                                      </button>
                                     </div>
+                                    <p className="text-[11px] text-zinc-500">
+                                      Saves for students only — does not need Notion.
+                                    </p>
                                   </div>
                                   <div className="flex flex-wrap gap-2">
                                     <button
                                       type="button"
                                       disabled={pending || uploadingRecording}
-                                      className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+                                      className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 disabled:opacity-60"
                                       onClick={() => {
                                         startTransition(async () => {
                                           setError(null);
@@ -797,7 +824,6 @@ export function AdminLessonLogSection() {
                                               status: editDraft.status || null,
                                               reviewed: editDraft.reviewed,
                                               notes: editDraft.notes,
-                                              recordingUrl: editDraft.recordingUrl,
                                             }
                                           );
                                           if (result.error) {
@@ -810,7 +836,7 @@ export function AdminLessonLogSection() {
                                         });
                                       }}
                                     >
-                                      Save
+                                      Save status & notes
                                     </button>
                                     {(entry.statusSource === "manual" ||
                                       entry.reviewedSource === "manual" ||

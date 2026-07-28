@@ -328,6 +328,22 @@ export async function loadAdminLessonLogSnapshot(
     (unlockRows ?? []).map((row) => `${row.cohort_id}:${row.lesson_id}`)
   );
 
+  const { data: learnRecordingRows } =
+    cohortIds.length > 0 && lessonIds.length > 0
+      ? await supabase
+          .from("lesson_recordings")
+          .select("cohort_id, lesson_id, storage_path")
+          .in("cohort_id", cohortIds)
+          .in("lesson_id", lessonIds)
+      : { data: [] as Array<{ cohort_id: string; lesson_id: string; storage_path: string }> };
+
+  const learnRecordingByCohortLesson = new Map<string, string>();
+  for (const row of learnRecordingRows ?? []) {
+    const path = row.storage_path?.trim();
+    if (!path) continue;
+    learnRecordingByCohortLesson.set(`${row.cohort_id}:${row.lesson_id}`, path);
+  }
+
   const { formatCurriculumLessonLabel, loadLessonContentRefs } = await import(
     "@/lib/lessons/lesson-log-lesson-link"
   );
@@ -364,7 +380,15 @@ export async function loadAdminLessonLogSnapshot(
       attentionReasons.push("unresolved_tutor");
       unresolvedTutor += 1;
     }
-    if (isActionableMissingRecording(row)) {
+    if (isActionableMissingRecording({
+      status: row.status,
+      lesson_date: row.lesson_date,
+      recording_url:
+        row.recording_url ||
+        (row.cohort_id && row.lesson_id
+          ? learnRecordingByCohortLesson.get(`${row.cohort_id}:${row.lesson_id}`) ?? null
+          : null),
+    })) {
       attentionReasons.push("missing_recording");
       missingRecording += 1;
     }
@@ -401,7 +425,11 @@ export async function loadAdminLessonLogSnapshot(
       statusSource: asFieldSource(row.status_source),
       reviewedSource: asFieldSource(row.reviewed_source),
       notesSource: asFieldSource(row.notes_source),
-      recordingUrl: row.recording_url,
+      recordingUrl:
+        row.recording_url?.trim() ||
+        (row.cohort_id && row.lesson_id
+          ? learnRecordingByCohortLesson.get(`${row.cohort_id}:${row.lesson_id}`) ?? null
+          : null),
       slidesUrl: row.slides_url,
       flashcardsUrl: row.flashcards_url,
       notes: row.notes,

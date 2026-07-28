@@ -257,7 +257,9 @@ export async function upsertLessonLogEntryFromNotion(
 
   const { data: existing } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, source, status_source, reviewed_source, notes_source, status, dismissed_at")
+    .select(
+      "id, source, status_source, reviewed_source, notes_source, status, dismissed_at, recording_url"
+    )
     .eq("notion_page_id", page.pageId)
     .maybeSingle();
 
@@ -287,6 +289,14 @@ export async function upsertLessonLogEntryFromNotion(
     },
     existing
   );
+
+  // Never wipe a local recording with an empty Notion Recording Link.
+  const existingRecording =
+    typeof existing?.recording_url === "string" ? existing.recording_url.trim() : "";
+  const notionRecording = page.recordingUrl?.trim() || "";
+  if (!notionRecording && existingRecording) {
+    delete patch.recording_url;
+  }
 
   // Effective status after manual locks — auto-dismiss Cancelled so it leaves the default list.
   const effectiveStatus =

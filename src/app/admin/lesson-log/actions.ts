@@ -153,11 +153,94 @@ export async function updateAdminLessonLogFields(
     revalidateLessonLog();
     revalidatePath("/dashboard/learn");
     return {
-      success:
-        "Saved. Recording is available to students in Learn when this entry is linked to a lesson.",
+      success: fields.recordingUrl !== undefined
+        ? "Saved. Recording is available to students in Learn when this entry is linked to a lesson."
+        : "Saved status, reviewed, and notes.",
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update lesson log." };
+  }
+}
+
+/**
+ * Dedicated student-facing recording save — writes the log URL and lesson_recordings.
+ * Does not push to Notion.
+ */
+export async function saveAdminLessonLogRecordingForLearn(
+  entryId: string,
+  recordingUrl: string
+): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const { createClient } = await import("@/lib/supabase/server");
+    const authClient = await createClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const url = recordingUrl.trim();
+    if (!url) return { error: "Paste a recording URL first." };
+    if (!/^https?:\/\//i.test(url)) {
+      return { error: "Recording URL must start with http:// or https://" };
+    }
+
+    const supabase = createServiceRoleClient();
+    const { data: entry, error: loadError } = await supabase
+      .from("cohort_lesson_log_entries")
+      .select("id, cohort_id, lesson_id")
+      .eq("id", entryId)
+      .maybeSingle();
+
+    if (loadError) return { error: loadError.message };
+    if (!entry) return { error: "Lesson log entry not found." };
+    if (!entry.cohort_id) {
+      return { error: "This entry isn’t linked to a cohort, so it can’t show in Learn." };
+    }
+
+    const { error: logError } = await supabase
+      .from("cohort_lesson_log_entries")
+      .update({ recording_url: url })
+      .eq("id", entryId);
+    if (logError) return { error: logError.message };
+
+    // Ensure curriculum lesson_id is linked before syncing student-facing recordings.
+    const { syncCohortLessonLogLessonIds } = await import(
+      "@/lib/lessons/lesson-log-lesson-link"
+    );
+    await syncCohortLessonLogLessonIds(supabase, entry.cohort_id);
+
+    const { data: linked } = await supabase
+      .from("cohort_lesson_log_entries")
+      .select("lesson_id")
+      .eq("id", entryId)
+      .maybeSingle();
+
+    const lessonId = (linked?.lesson_id as string | null) ?? (entry.lesson_id as string | null);
+    if (!lessonId) {
+      return {
+        error:
+          "Saved on the log, but this entry isn’t linked to a curriculum lesson yet — open Unlock / link the lesson, then save again.",
+      };
+    }
+
+    const { syncCohortLessonRecordingFromLog } = await import(
+      "@/lib/tutoring/sync-cohort-recording-from-log"
+    );
+    await syncCohortLessonRecordingFromLog(supabase, {
+      cohortId: entry.cohort_id,
+      lessonId,
+      recordingUrl: url,
+      uploadedBy: user.id,
+    });
+
+    revalidateLessonLog();
+    revalidatePath("/dashboard/learn");
+    return { success: "Recording saved for students in Learn." };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Failed to save recording for Learn.",
+    };
   }
 }
 
