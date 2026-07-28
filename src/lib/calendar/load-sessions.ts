@@ -11,6 +11,7 @@ import type {
 } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isCalendarSchemaMissingError } from "@/lib/calendar/schema";
+import { isValidCohortSwitchCandidateSession } from "@/lib/calendar/cohort-switch-candidates";
 import { isStoredSessionExcluded, type CalendarExclusionRow } from "@/lib/calendar/exclusions";
 import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
 import { isSessionVisibleToStudent, type StudentEnrollmentContext } from "@/lib/calendar/session-visibility";
@@ -219,9 +220,6 @@ export async function loadStudentUpcomingSessions(
   const alternateSessionBySourceId = new Map<string, Array<(typeof labelled)[number]>>();
 
   if (groupSessions.length > 0) {
-    const tutorIdsForAlternates = [
-      ...new Set(groupSessions.map((session) => session.tutor_id).filter(Boolean)),
-    ];
     const courseIdsForAlternates = [
       ...new Set(groupSessions.map((session) => session.course_id).filter((id): id is string => Boolean(id))),
     ];
@@ -234,11 +232,10 @@ export async function loadStudentUpcomingSessions(
     ).toISOString();
 
     const { data: alternateRows, error: alternateError } =
-      tutorIdsForAlternates.length > 0 && courseIdsForAlternates.length > 0
+      courseIdsForAlternates.length > 0
         ? await supabase
             .from("tutor_scheduled_sessions")
             .select("*")
-            .in("tutor_id", tutorIdsForAlternates)
             .in("course_id", courseIdsForAlternates)
             .not("cohort_id", "is", null)
             .eq("status", "scheduled")
@@ -253,9 +250,10 @@ export async function loadStudentUpcomingSessions(
 
     const alternateLabelled = await attachLessonLabelsToSessions(
       supabase,
-      ((alternateRows ?? []) as ScheduledSessionRow[]).filter(
-        (session) => !labelledById.has(session.id)
-      )
+      ((alternateRows ?? []) as ScheduledSessionRow[]).filter((session) => {
+        if (labelledById.has(session.id)) return false;
+        return isValidCohortSwitchCandidateSession(session);
+      })
     );
 
     for (const source of groupSessions) {
@@ -265,7 +263,6 @@ export async function loadStudentUpcomingSessions(
         }
         if (candidate.cohort_id === source.cohort_id) return false;
         if (candidate.course_id !== source.course_id) return false;
-        if (candidate.tutor_id !== source.tutor_id) return false;
         if (candidate.lessonNumber !== source.lessonNumber) return false;
         const sourceMs = new Date(source.starts_at).getTime();
         const candidateMs = new Date(candidate.starts_at).getTime();
@@ -285,6 +282,7 @@ export async function loadStudentUpcomingSessions(
         id: candidate.id,
         cohortId: candidate.cohort_id as string,
         name: cohortMetaById.get(candidate.cohort_id as string)?.name ?? candidate.title ?? "Alternate cohort",
+        tutorName: tutorNameById.get(candidate.tutor_id) ?? "Tutor",
         startsAt: candidate.starts_at,
         endsAt: candidate.ends_at,
         lessonLabel: candidate.lessonLabel,

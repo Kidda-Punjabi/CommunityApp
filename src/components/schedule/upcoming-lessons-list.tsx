@@ -309,7 +309,7 @@ export function CohortSwitchRequestForm({
           </option>
           {session.alternateCohorts.map((cohort) => (
             <option key={cohort.id} value={cohort.id}>
-              {cohort.name} · {cohort.lessonLabel} ·{" "}
+              {cohort.name} · {cohort.tutorName} · {cohort.lessonLabel} ·{" "}
               {new Date(cohort.startsAt).toLocaleDateString("en-GB", {
                 weekday: "short",
                 day: "numeric",

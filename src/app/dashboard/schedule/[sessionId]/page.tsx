@@ -81,10 +81,14 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
           </p>
           <RescheduleRequestForm sessionId={session.id} />
         </section>
-      ) : null}
-
-      {!session.canRequestReschedule && session.rescheduleLockedReason && !isGroup ? (
-        <p className="mt-6 text-sm text-zinc-500">{session.rescheduleLockedReason}</p>
+      ) : !isGroup && session.rescheduleLockedReason && !session.rescheduleRequest ? (
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold text-zinc-900">Request to reschedule</h2>
+          <button type="button" disabled className={`${ui.btnGhost} mt-3 cursor-not-allowed opacity-60`}>
+            Request to reschedule
+          </button>
+          <p className="mt-3 text-sm text-zinc-500">{session.rescheduleLockedReason}</p>
+        </section>
       ) : null}
 
       {session.canRequestCohortSwitch ? (
@@ -96,13 +100,14 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
           </p>
           <CohortSwitchRequestForm session={session} />
         </section>
-      ) : null}
-
-      {!session.canRequestCohortSwitch &&
-      isGroup &&
-      session.cohortSwitchLockedReason &&
-      !session.cohortSwitchRequest ? (
-        <p className="mt-6 text-sm text-zinc-500">{session.cohortSwitchLockedReason}</p>
+      ) : isGroup && session.cohortSwitchLockedReason && !session.cohortSwitchRequest ? (
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold text-zinc-900">Request alternate cohort</h2>
+          <button type="button" disabled className={`${ui.btnGhost} mt-3 cursor-not-allowed opacity-60`}>
+            Request alternate cohort
+          </button>
+          <p className="mt-3 text-sm text-zinc-500">{session.cohortSwitchLockedReason}</p>
+        </section>
       ) : null}
     </div>
   );

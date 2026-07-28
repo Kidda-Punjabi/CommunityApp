@@ -62,6 +62,7 @@ export type AlternateCohortOption = {
   id: string;
   cohortId: string;
   name: string;
+  tutorName: string;
   startsAt: string;
   endsAt: string;
   lessonLabel: string;

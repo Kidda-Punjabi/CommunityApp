@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { COHORT_SWITCH_CUTOFF_MS } from "@/lib/calendar/constants";
+import { isValidCohortSwitchCandidateSession } from "@/lib/calendar/cohort-switch-candidates";
 import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy";
 import { getRescheduleEligibility, GROUP_LESSON_NO_RESCHEDULE_REASON } from "@/lib/calendar/reschedule-policy";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -217,6 +218,9 @@ export async function requestCohortSwitch(
   if (targetSessionError || !targetSession || !targetSession.cohort_id) {
     return { error: "Alternate session not found." };
   }
+  if (!isValidCohortSwitchCandidateSession(targetSession)) {
+    return { error: "This alternate session is not a valid student lesson." };
+  }
 
   const { data: existing } = await supabase
     .from("cohort_switch_requests")
@@ -237,7 +241,6 @@ export async function requestCohortSwitch(
 
   if (
     targetSession.cohort_id === currentCohort.id ||
-    targetSession.tutor_id !== currentCohort.tutor_id ||
     targetSession.course_id !== currentCohort.course_id ||
     targetSession.status !== "scheduled" ||
     !sameLessonNumber ||
@@ -250,7 +253,6 @@ export async function requestCohortSwitch(
   const { data: alternateSessions } = await supabase
     .from("tutor_scheduled_sessions")
     .select("*")
-    .eq("tutor_id", currentCohort.tutor_id)
     .eq("course_id", currentCohort.course_id)
     .not("cohort_id", "is", null)
     .eq("status", "scheduled")

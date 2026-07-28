@@ -396,15 +396,17 @@ function LessonCardHeader({
           >
             {lesson.title}
           </h3>
+          {scheduleSession ? (
+            <p className="mt-2 text-sm font-medium text-violet-700">
+              Upcoming live lesson: {formatSessionWhen(scheduleSession.starts_at, scheduleSession.ends_at)}
+            </p>
+          ) : null}
           {!locked ? (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               {completion ? (
                 <span>
                   {completion.partsDone} of {completion.partsTotal} complete
                 </span>
-              ) : null}
-              {scheduleSession ? (
-                <span>Live lesson: {formatSessionWhen(scheduleSession.starts_at, scheduleSession.ends_at)}</span>
               ) : null}
               {lesson.is_free ? (
                 <span className="rounded-full border border-zinc-200 px-2 py-0.5">Free</span>
@@ -453,6 +455,22 @@ function LessonScheduleBlock({
           </p>
           <RescheduleRequestForm sessionId={scheduleSession.id} />
         </div>
+      ) : !isGroup &&
+        scheduleSession.rescheduleLockedReason &&
+        !scheduleSession.rescheduleRequest ? (
+        <div className="mt-3">
+          <button
+            type="button"
+            disabled
+            className={cn(
+              lessonContentRowButtonClass,
+              "cursor-not-allowed opacity-60 hover:bg-white"
+            )}
+          >
+            Request to reschedule
+          </button>
+          <p className="mt-2 text-xs text-zinc-500">{scheduleSession.rescheduleLockedReason}</p>
+        </div>
       ) : null}
 
       {scheduleSession.canRequestCohortSwitch ? (
@@ -462,17 +480,22 @@ function LessonScheduleBlock({
           </p>
           <CohortSwitchRequestForm session={scheduleSession} />
         </div>
-      ) : null}
-
-      {!scheduleSession.canRequestReschedule && scheduleSession.rescheduleLockedReason && !isGroup ? (
-        <p className="mt-3 text-xs text-zinc-500">{scheduleSession.rescheduleLockedReason}</p>
-      ) : null}
-
-      {!scheduleSession.canRequestCohortSwitch &&
-      scheduleSession.cohortSwitchLockedReason &&
-      isGroup &&
-      !scheduleSession.cohortSwitchRequest ? (
-        <p className="mt-3 text-xs text-zinc-500">{scheduleSession.cohortSwitchLockedReason}</p>
+      ) : isGroup &&
+        scheduleSession.cohortSwitchLockedReason &&
+        !scheduleSession.cohortSwitchRequest ? (
+        <div className="mt-3">
+          <button
+            type="button"
+            disabled
+            className={cn(
+              lessonContentRowButtonClass,
+              "cursor-not-allowed opacity-60 hover:bg-white"
+            )}
+          >
+            Request alternate cohort
+          </button>
+          <p className="mt-2 text-xs text-zinc-500">{scheduleSession.cohortSwitchLockedReason}</p>
+        </div>
       ) : null}
     </div>
   );
