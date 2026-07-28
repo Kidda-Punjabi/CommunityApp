@@ -4,6 +4,8 @@ import { fetchAdminOnboardingQueue } from "@/app/admin/onboarding/actions";
 import { fetchAdminTutorOverview } from "@/app/admin/content/tutor-overview-actions";
 import { fetchMonthlyRewardsAttention } from "@/app/admin/monthly-rewards/actions";
 import { loadGroupPurchaseAttention } from "@/lib/group-purchase/load-group-purchase-attention";
+import { countPendingCohortSwitchRequests } from "@/lib/admin/load-admin-cohort-switch-requests";
+import { requireAdminFromActions } from "@/app/admin/content/actions";
 import type { AdminOnboardingRow } from "@/lib/admin/onboarding/types";
 
 export type AdminAttentionItem = {
@@ -16,7 +18,8 @@ export type AdminAttentionItem = {
     | "group_cohort_setup"
     | "group_cohort_placement_pending"
     | "notion_cohort_writeback"
-    | "notion_lead_link";
+    | "notion_lead_link"
+    | "cohort_switch_pending";
   title: string;
   detail: string;
   href: string;
@@ -50,20 +53,40 @@ export async function fetchAdminHomeAttention(): Promise<{
   items: AdminAttentionItem[];
   error?: string;
 }> {
-  const [onboarding, tutorOverview, monthlyRewards, groupPurchase] = await Promise.all([
-    fetchAdminOnboardingQueue(),
-    fetchAdminTutorOverview(),
-    fetchMonthlyRewardsAttention(),
-    loadGroupPurchaseAttention(),
-  ]);
+  const [onboarding, tutorOverview, monthlyRewards, groupPurchase, supabase] =
+    await Promise.all([
+      fetchAdminOnboardingQueue(),
+      fetchAdminTutorOverview(),
+      fetchMonthlyRewardsAttention(),
+      loadGroupPurchaseAttention(),
+      requireAdminFromActions(),
+    ]);
+
+  const cohortSwitchPending = await countPendingCohortSwitchRequests(supabase);
 
   const errors = [
     onboarding.error,
     tutorOverview.error,
     monthlyRewards.error,
     groupPurchase.error,
+    cohortSwitchPending.error,
   ].filter(Boolean);
   const items: AdminAttentionItem[] = [];
+
+  if (cohortSwitchPending.count > 0) {
+    const label =
+      cohortSwitchPending.count === 1
+        ? "1 cohort change request waiting for review"
+        : `${cohortSwitchPending.count} cohort change requests waiting for review`;
+    items.push({
+      id: "cohort-switch-pending",
+      kind: "cohort_switch_pending",
+      title: label,
+      detail: "Approve or decline alternate group session requests",
+      href: "/admin/cohort-switch-requests",
+      urgent: true,
+    });
+  }
 
   for (const row of groupPurchase.items) {
     items.push({

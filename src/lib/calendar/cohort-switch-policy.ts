@@ -66,7 +66,7 @@ export function getCohortSwitchEligibility(
 }
 
 export const COHORT_SWITCH_WARNING =
-  "Group lessons can't be rescheduled — this is the only way to change your session if you can't make your usual group. Your tutor may not be able to approve the request. Please only ask if you genuinely cannot attend.";
+  "Group lessons can't be rescheduled — this is the only way to change your session if you can't make your usual group. The Kidda team reviews these requests. Please only ask if you genuinely cannot attend.";
 
 export const GROUP_LESSON_POLICY_NOTE =
   "Group sessions can't be rescheduled. If you can't attend, request a different cohort at least 3 days before the lesson.";

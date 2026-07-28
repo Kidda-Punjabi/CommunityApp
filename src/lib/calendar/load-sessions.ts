@@ -752,17 +752,12 @@ export async function loadTutorPendingRequestCounts(
   supabase: SupabaseClient,
   tutorId: string
 ): Promise<{ rescheduleCount: number; cohortSwitchCount: number; total: number }> {
-  const [rescheduleLoad, cohortSwitchLoad] = await Promise.all([
-    loadTutorPendingRescheduleRequests(supabase, tutorId),
-    loadTutorPendingCohortSwitchRequests(supabase, tutorId),
-  ]);
-
+  const rescheduleLoad = await loadTutorPendingRescheduleRequests(supabase, tutorId);
   const rescheduleCount = rescheduleLoad.requests.length;
-  const cohortSwitchCount = cohortSwitchLoad.requests.length;
 
   return {
     rescheduleCount,
-    cohortSwitchCount,
-    total: rescheduleCount + cohortSwitchCount,
+    cohortSwitchCount: 0,
+    total: rescheduleCount,
   };
 }

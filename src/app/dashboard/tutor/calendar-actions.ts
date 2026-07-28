@@ -327,7 +327,9 @@ export async function requestCohortSwitch(
   }
 
   revalidatePath("/dashboard/schedule");
-  return { success: "Alternate cohort request sent to your tutor." };
+  revalidatePath("/admin/content");
+  revalidatePath("/admin/cohort-switch-requests");
+  return { success: "Alternate cohort request sent to the Kidda team." };
 }
 
 export async function cancelCohortSwitchRequest(requestId: string): Promise<CalendarActionResult> {
@@ -346,42 +348,11 @@ export async function cancelCohortSwitchRequest(requestId: string): Promise<Cale
 
 export async function resolveCohortSwitchRequest(
   _prev: CalendarActionResult,
-  formData: FormData
+  _formData: FormData
 ): Promise<CalendarActionResult> {
-  const requestId = String(formData.get("request_id") ?? "").trim();
-  const decision = String(formData.get("decision") ?? "").trim();
-  const tutorResponse = String(formData.get("tutor_response") ?? "").trim();
-
-  if (!requestId || !["approved", "denied"].includes(decision)) {
-    return { error: "Invalid request." };
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
-
-  const { error } = await supabase
-    .from("cohort_switch_requests")
-    .update({
-      status: decision,
-      tutor_response: tutorResponse || null,
-      resolved_at: new Date().toISOString(),
-      resolved_by: user.id,
-    })
-    .eq("id", requestId)
-    .eq("status", "pending");
-
-  if (error) return { error: error.message };
-
-  revalidatePath("/dashboard/tutor/requests");
-  revalidatePath("/dashboard/tutor/calendar");
   return {
-    success:
-      decision === "approved"
-        ? "Request approved. Add the student to the alternate cohort's calendar invite if you can accommodate it."
-        : "Request declined.",
+    error:
+      "Alternate cohort requests are reviewed by Kidda admins, not tutors. Ask an admin to resolve this in Admin → Cohort change requests.",
   };
 }
 

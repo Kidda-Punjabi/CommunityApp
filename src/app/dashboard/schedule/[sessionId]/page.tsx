@@ -93,7 +93,7 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
               </span>
             </>
           ) : null}
-          . Your tutor will respond soon.
+          . Your request is with the Kidda team.
         </p>
       ) : null}
 

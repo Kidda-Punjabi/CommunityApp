@@ -32,16 +32,33 @@ export async function fetchLessonContentUnlockMap(
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user && (await canAccessAdminPanel(user, supabase))) {
-    for (const lesson of lessons) {
-      map.set(lesson.id, isLessonContentUnlockedForUser(access, lesson, true));
+  const isAdmin = Boolean(user && (await canAccessAdminPanel(user, supabase)));
+
+  /** Courses where this user is enrolled as a student — use real unlocks, not admin preview. */
+  const enrolledCourseIds = new Set<string>();
+  if (isAdmin) {
+    const courseIds = [...new Set(lessons.map((lesson) => lesson.course_id))];
+    const { data: enrollments } = await supabase
+      .from("course_enrollments")
+      .select("course_id")
+      .eq("user_id", userId)
+      .in("course_id", courseIds);
+    for (const row of enrollments ?? []) {
+      if (row.course_id) enrolledCourseIds.add(row.course_id as string);
     }
-    return map;
   }
 
   const rpcLessonIds: string[] = [];
 
   for (const lesson of lessons) {
+    const adminPreview =
+      isAdmin && !enrolledCourseIds.has(lesson.course_id);
+
+    if (adminPreview) {
+      map.set(lesson.id, isLessonContentUnlockedForUser(access, lesson, true));
+      continue;
+    }
+
     if (isCommunityCourseLesson(access, lesson.course_id)) {
       map.set(
         lesson.id,

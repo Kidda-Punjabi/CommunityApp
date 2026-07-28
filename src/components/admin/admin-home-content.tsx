@@ -96,6 +96,11 @@ export function AdminHomeContent() {
         </h2>
         <HubCard className="divide-y divide-zinc-100 px-6 py-0">
           <AdminNavListRow
+            href="/admin/cohort-switch-requests"
+            title="Cohort change requests"
+            description="Approve or decline student requests to join an alternate group session"
+          />
+          <AdminNavListRow
             href="/admin/sales-calls"
             title="Sales calls"
             description="Create and edit sales call log entries synced with Notion"

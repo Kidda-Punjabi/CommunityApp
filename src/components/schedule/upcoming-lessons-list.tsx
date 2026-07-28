@@ -226,7 +226,7 @@ function PendingCohortSwitchBanner({
             for <span className="font-semibold">{requestedLabel}</span>
           </>
         ) : null}{" "}
-        — your tutor will respond soon.
+        — the Kidda team will respond soon.
       </p>
       <button
         type="button"

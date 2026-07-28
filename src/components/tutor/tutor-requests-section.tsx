@@ -2,7 +2,6 @@
 
 import { useActionState, useEffect, useState } from "react";
 import {
-  resolveCohortSwitchRequest,
   resolveRescheduleRequest,
   type CalendarActionResult,
 } from "@/app/dashboard/tutor/calendar-actions";
@@ -24,36 +23,18 @@ export type TutorRescheduleRequestItem = {
   sessionEndsAt: string | null;
 };
 
-export type TutorCohortSwitchRequestItem = {
-  id: string;
-  session_id: string;
-  message: string | null;
-  studentName: string;
-  sessionTitle: string;
-  sessionStartsAt: string | null;
-  sessionEndsAt: string | null;
-  fromCohortName: string;
-  toCohortName: string;
-};
-
 type TutorRequestsInboxProps = {
   rescheduleRequests: TutorRescheduleRequestItem[];
-  cohortSwitchRequests: TutorCohortSwitchRequestItem[];
 };
 
-export function TutorRequestsInbox({
-  rescheduleRequests,
-  cohortSwitchRequests,
-}: TutorRequestsInboxProps) {
-  const total = rescheduleRequests.length + cohortSwitchRequests.length;
-
-  if (total === 0) {
+export function TutorRequestsInbox({ rescheduleRequests }: TutorRequestsInboxProps) {
+  if (rescheduleRequests.length === 0) {
     return (
       <div className={ui.emptyState}>
         <p className="font-semibold text-zinc-900">No pending requests</p>
         <p className="mt-2 text-sm text-zinc-500">
-          When students ask to reschedule or join another group cohort, their requests will appear
-          here.
+          When students ask to reschedule a 1-to-1 lesson, their requests will appear here.
+          Alternate cohort requests are reviewed by Kidda admins.
         </p>
       </div>
     );
@@ -61,27 +42,14 @@ export function TutorRequestsInbox({
 
   return (
     <div className="space-y-8">
-      {rescheduleRequests.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className={ui.sectionTitle}>
-            Reschedule requests ({rescheduleRequests.length})
-          </h2>
-          {rescheduleRequests.map((request) => (
-            <RescheduleRequestCard key={request.id} request={request} />
-          ))}
-        </section>
-      ) : null}
-
-      {cohortSwitchRequests.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className={ui.sectionTitle}>
-            Alternate cohort requests ({cohortSwitchRequests.length})
-          </h2>
-          {cohortSwitchRequests.map((request) => (
-            <CohortSwitchRequestCard key={request.id} request={request} />
-          ))}
-        </section>
-      ) : null}
+      <section className="space-y-3">
+        <h2 className={ui.sectionTitle}>
+          Reschedule requests ({rescheduleRequests.length})
+        </h2>
+        {rescheduleRequests.map((request) => (
+          <RescheduleRequestCard key={request.id} request={request} />
+        ))}
+      </section>
     </div>
   );
 }
@@ -174,63 +142,6 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
             className={ui.btnPrimary}
           >
             Approve + update calendar
-          </button>
-          <button
-            type="submit"
-            name="decision"
-            value="denied"
-            disabled={pending}
-            className={ui.btnSecondary}
-          >
-            Decline
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function CohortSwitchRequestCard({ request }: { request: TutorCohortSwitchRequestItem }) {
-  const [state, action, pending] = useActionState(resolveCohortSwitchRequest, initial);
-
-  return (
-    <div className={`${ui.cardBordered} space-y-3`}>
-      <RequestHeader
-        studentName={request.studentName}
-        sessionTitle={request.sessionTitle}
-        sessionStartsAt={request.sessionStartsAt}
-        sessionEndsAt={request.sessionEndsAt}
-        badge="Alternate cohort"
-      />
-      <p className="text-sm text-zinc-700">
-        <span className="font-medium">From:</span> {request.fromCohortName}
-        <br />
-        <span className="font-medium">Wants to join:</span> {request.toCohortName}
-      </p>
-      {request.message ? <p className="text-sm text-zinc-600">{request.message}</p> : null}
-
-      <form action={action} className="space-y-3 border-t border-zinc-100 pt-3">
-        <input type="hidden" name="request_id" value={request.id} />
-        <textarea
-          name="tutor_response"
-          rows={2}
-          placeholder="Optional note to the student"
-          className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm"
-        />
-        {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
-        {state.success ? <p className="text-sm text-emerald-700">{state.success}</p> : null}
-        <p className="text-xs text-zinc-500">
-          Approve this to confirm the student should attend the matching alternate session.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="submit"
-            name="decision"
-            value="approved"
-            disabled={pending}
-            className={ui.btnPrimary}
-          >
-            Approve
           </button>
           <button
             type="submit"
