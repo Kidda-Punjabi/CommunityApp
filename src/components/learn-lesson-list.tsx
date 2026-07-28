@@ -1,4 +1,4 @@
-import { LessonCard } from "@/components/lesson-card";
+import { LessonCard, LessonStatusDot, type LessonVisualStatus } from "@/components/lesson-card";
 import { CourseProgressBar } from "@/components/course-progress-bar";
 import {
   canAccessLessonInContext,
@@ -14,7 +14,6 @@ import type { QuizProgressRow } from "@/lib/progress/quiz-progress";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { BackLink } from "@/components/navigation/back-link";
-import Link from "next/link";
 import { ui } from "@/lib/ui/styles";
 import type { ReactNode } from "react";
 
@@ -72,45 +71,64 @@ export function LearnLessonList({
   scheduleSessionByLessonId,
 }: LearnLessonListProps) {
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
+
+  function lessonAccess(lesson: LessonWithCourse) {
+    const canBrowse = canAccessLessonInContext(access, lesson);
+    const contentUnlocked = isLessonContentUnlockedForUser(
+      access,
+      lesson,
+      unlockedMap.get(lesson.id)
+    );
+    return { canBrowse, contentUnlocked };
+  }
+
   const defaultExpandedLessonId =
     homeworkFocusLessonId ??
     lessons.find((lesson) => {
-      const canBrowse = canAccessLessonInContext(access, lesson);
-      const contentUnlocked = isLessonContentUnlockedForUser(
-        access,
-        lesson,
-        unlockedMap.get(lesson.id)
-      );
+      const { canBrowse, contentUnlocked } = lessonAccess(lesson);
       const completion = completionMap.get(lesson.id);
       return canBrowse && contentUnlocked && completion && !completion.fullyComplete;
     })?.id ??
     lessons.find((lesson) => {
-      const canBrowse = canAccessLessonInContext(access, lesson);
-      const contentUnlocked = isLessonContentUnlockedForUser(
-        access,
-        lesson,
-        unlockedMap.get(lesson.id)
-      );
+      const { canBrowse, contentUnlocked } = lessonAccess(lesson);
       return canBrowse && contentUnlocked;
     })?.id;
 
+  const nextUpLessonId = (() => {
+    const scheduled = lessons
+      .filter((lesson) => {
+        if (lesson.id === defaultExpandedLessonId) return false;
+        return Boolean(scheduleSessionByLessonId?.get(lesson.id));
+      })
+      .sort((a, b) => {
+        const aStarts = scheduleSessionByLessonId!.get(a.id)!.starts_at;
+        const bStarts = scheduleSessionByLessonId!.get(b.id)!.starts_at;
+        return new Date(aStarts).getTime() - new Date(bStarts).getTime();
+      });
+    if (scheduled[0]) return scheduled[0].id;
+
+    return lessons.find((lesson) => {
+      if (lesson.id === defaultExpandedLessonId) return false;
+      const { canBrowse, contentUnlocked } = lessonAccess(lesson);
+      return canBrowse && !contentUnlocked;
+    })?.id;
+  })();
+
+  function visualStatusFor(lesson: LessonWithCourse): LessonVisualStatus {
+    if (lesson.id === defaultExpandedLessonId) return "in_progress";
+    if (lesson.id === nextUpLessonId) return "next_up";
+    const { canBrowse, contentUnlocked } = lessonAccess(lesson);
+    if (canBrowse && !contentUnlocked) return "locked";
+    return "available";
+  }
+
   const accessibleLessons = lessons.filter((lesson) => {
-    const canBrowse = canAccessLessonInContext(access, lesson);
-    const contentUnlocked = isLessonContentUnlockedForUser(
-      access,
-      lesson,
-      unlockedMap.get(lesson.id)
-    );
+    const { canBrowse, contentUnlocked } = lessonAccess(lesson);
     return canBrowse && contentUnlocked;
   });
 
   const hasTutorLockedLessons = lessons.some((lesson) => {
-    const canBrowse = canAccessLessonInContext(access, lesson);
-    const contentUnlocked = isLessonContentUnlockedForUser(
-      access,
-      lesson,
-      unlockedMap.get(lesson.id)
-    );
+    const { canBrowse, contentUnlocked } = lessonAccess(lesson);
     return canBrowse && !contentUnlocked;
   });
 
@@ -151,14 +169,10 @@ export function LearnLessonList({
         </div>
       ) : (
         <div className={ui.stack}>
+          <LessonStatusLegend />
           {lessons.map((lesson) => {
             const row = progressMap.get(lesson.id);
-            const canBrowse = canAccessLessonInContext(access, lesson);
-            const contentUnlocked = isLessonContentUnlockedForUser(
-              access,
-              lesson,
-              unlockedMap.get(lesson.id)
-            );
+            const { canBrowse, contentUnlocked } = lessonAccess(lesson);
 
             return (
               <LessonCard
@@ -168,6 +182,7 @@ export function LearnLessonList({
                 defaultExpanded={lesson.id === defaultExpandedLessonId}
                 canBrowse={canBrowse}
                 contentUnlocked={contentUnlocked}
+                visualStatus={visualStatusFor(lesson)}
                 requiredCourseLabel={tierLabelForCourse(access.courses, lesson.course_id)}
                 progress={
                   row
@@ -205,5 +220,24 @@ export function LearnLessonList({
 
       {footerSection ? <div className="mt-8">{footerSection}</div> : null}
     </div>
+  );
+}
+
+function LessonStatusLegend() {
+  return (
+    <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500">
+      <li className="inline-flex items-center gap-1.5">
+        <LessonStatusDot status="in_progress" />
+        In progress
+      </li>
+      <li className="inline-flex items-center gap-1.5">
+        <LessonStatusDot status="next_up" />
+        Next up
+      </li>
+      <li className="inline-flex items-center gap-1.5">
+        <LessonStatusDot status="locked" />
+        Locked
+      </li>
+    </ul>
   );
 }
