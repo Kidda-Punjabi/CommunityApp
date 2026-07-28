@@ -213,7 +213,7 @@ export async function loadAdminMemberDetail(
       supabase.from("course_access").select("course_id").eq("user_id", userId),
       supabase
         .from("course_enrollments")
-        .select("id, course_id, tutor_id, delivery_mode, cohort_id, extra_reschedule_allowance, courses(required_tier)")
+        .select("id, course_id, tutor_id, delivery_mode, cohort_id, courses(required_tier)")
         .eq("user_id", userId),
       supabase.from("courses").select("id, name, required_tier"),
       supabase

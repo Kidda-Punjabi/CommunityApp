@@ -3,6 +3,7 @@ import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy"
 import { getRescheduleEligibility } from "@/lib/calendar/reschedule-policy";
 import {
   appliesBeginnersRescheduleLimit,
+  buildBeginnersRescheduleLimitStatus,
   loadBeginnersRescheduleLimitStatus,
 } from "@/lib/calendar/reschedule-limit";
 import type {
@@ -267,7 +268,13 @@ export async function loadStudentUpcomingSessions(
 
   const labelled = await attachLessonLabelsToSessions(supabase, visible);
   const labelledById = new Map(labelled.map((session) => [session.id, session]));
-  const beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, studentId);
+  let beginnersRescheduleLimit;
+  try {
+    beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, studentId);
+  } catch (error) {
+    console.error("loadBeginnersRescheduleLimitStatus failed:", error);
+    beginnersRescheduleLimit = buildBeginnersRescheduleLimitStatus(null, 0, 0);
+  }
 
   const groupSessions = labelled.filter(
     (session) => Boolean(session.cohort_id) && Boolean(session.course_id)

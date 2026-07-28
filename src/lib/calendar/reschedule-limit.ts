@@ -16,6 +16,16 @@ export type BeginnersRescheduleLimitStatus = {
   lockedReason: string | null;
 };
 
+function isMissingColumnError(message: string | undefined): boolean {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("extra_reschedule_allowance") ||
+    lower.includes("schema cache") ||
+    lower.includes("does not exist")
+  );
+}
+
 export function getBeginnersRescheduleLockedReason(
   used: number,
   totalAllowed: number
@@ -57,15 +67,18 @@ async function countRescheduleRequestsForCourse(
   studentId: string,
   courseId: string
 ): Promise<number> {
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("lesson_reschedule_requests")
-    .select("id, tutor_scheduled_sessions!inner(course_id)", { count: "exact", head: true })
+    .select("id, tutor_scheduled_sessions!inner(course_id)")
     .eq("student_id", studentId)
     .in("status", [...COUNTABLE_STATUSES])
     .eq("tutor_scheduled_sessions.course_id", courseId);
 
-  if (error) throw error;
-  return count ?? 0;
+  if (error) {
+    console.error("countRescheduleRequestsForCourse:", error.message || error);
+    return 0;
+  }
+  return data?.length ?? 0;
 }
 
 async function countCohortSwitchRequestsForCourse(
@@ -73,15 +86,19 @@ async function countCohortSwitchRequestsForCourse(
   studentId: string,
   courseId: string
 ): Promise<number> {
-  const { count, error } = await supabase
+  // Disambiguate: cohort_switch_requests has both session_id and to_session_id FKs.
+  const { data, error } = await supabase
     .from("cohort_switch_requests")
-    .select("id, tutor_scheduled_sessions!inner(course_id)", { count: "exact", head: true })
+    .select("id, tutor_scheduled_sessions!session_id!inner(course_id)")
     .eq("student_id", studentId)
     .in("status", [...COUNTABLE_STATUSES])
     .eq("tutor_scheduled_sessions.course_id", courseId);
 
-  if (error) throw error;
-  return count ?? 0;
+  if (error) {
+    console.error("countCohortSwitchRequestsForCourse:", error.message || error);
+    return 0;
+  }
+  return data?.length ?? 0;
 }
 
 export async function loadBeginnersRescheduleLimitStatus(
@@ -99,22 +116,30 @@ export async function loadBeginnersRescheduleLimitStatus(
     return buildBeginnersRescheduleLimitStatus(null, 0, 0);
   }
 
-  const [{ data: enrollment, error: enrollmentError }, rescheduleCount, cohortSwitchCount] =
-    await Promise.all([
-      supabase
-        .from("course_enrollments")
-        .select("extra_reschedule_allowance")
-        .eq("user_id", studentId)
-        .eq("course_id", beginnersCourse.id)
-        .maybeSingle(),
-      countRescheduleRequestsForCourse(supabase, studentId, beginnersCourse.id),
-      countCohortSwitchRequestsForCourse(supabase, studentId, beginnersCourse.id),
-    ]);
+  const [enrollmentResult, rescheduleCount, cohortSwitchCount] = await Promise.all([
+    supabase
+      .from("course_enrollments")
+      .select("extra_reschedule_allowance")
+      .eq("user_id", studentId)
+      .eq("course_id", beginnersCourse.id)
+      .maybeSingle(),
+    countRescheduleRequestsForCourse(supabase, studentId, beginnersCourse.id),
+    countCohortSwitchRequestsForCourse(supabase, studentId, beginnersCourse.id),
+  ]);
 
-  if (enrollmentError) throw enrollmentError;
+  let extraAllowance = 0;
+  if (enrollmentResult.error) {
+    if (!isMissingColumnError(enrollmentResult.error.message)) {
+      // Column missing or enrollment unreadable — fall back to default limit only.
+      console.error(
+        "loadBeginnersRescheduleLimitStatus enrollment:",
+        enrollmentResult.error.message || enrollmentResult.error
+      );
+    }
+  } else {
+    extraAllowance = enrollmentResult.data?.extra_reschedule_allowance ?? 0;
+  }
 
-  const extraAllowance = enrollment?.extra_reschedule_allowance ?? 0;
   const used = rescheduleCount + cohortSwitchCount;
-
   return buildBeginnersRescheduleLimitStatus(beginnersCourse.id, used, extraAllowance);
 }
