@@ -23,6 +23,7 @@ export type CohortCalendarLinkState =
   | "linked"
   | "no_tutor"
   | "no_connection"
+  | "no_student"
   | "unlinked"
   | "n_a";
 

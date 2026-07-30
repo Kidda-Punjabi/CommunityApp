@@ -43,9 +43,9 @@ export function packageColumnHeaderClass(columnId: PackageTableColumnId): string
     case "startDay":
       return "hidden px-4 py-3 md:table-cell lg:w-[7%]";
     case "tutor":
-      return "px-4 py-3 lg:w-[10%]";
+      return "px-4 py-3 lg:w-[11%]";
     case "calendar":
-      return "px-4 py-3 lg:w-[12%]";
+      return "px-4 py-3 lg:w-[14%]";
     case "startDate":
       return "whitespace-nowrap px-4 py-3 lg:w-[7%]";
     case "endDate":
@@ -76,9 +76,9 @@ export function packageColumnCellClass(columnId: PackageTableColumnId): string {
     case "progress":
       return "hidden px-4 py-3 text-center align-middle text-zinc-600 sm:table-cell";
     case "tutor":
-      return "px-4 py-3 align-top text-zinc-600";
+      return "max-w-0 px-4 py-3 align-top text-zinc-600";
     case "calendar":
-      return "px-4 py-3 align-top text-zinc-600";
+      return "max-w-0 px-4 py-3 align-top text-zinc-600";
     case "status":
       return "px-4 py-3 align-middle";
     default:

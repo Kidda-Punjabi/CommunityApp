@@ -325,6 +325,137 @@ export async function resetPackageTutorToNotion(
   }
 }
 
+export async function searchPackageInstanceCalendarMatches(packageInstanceId: string): Promise<{
+  candidates: Array<{
+    googleEventId: string;
+    recurringEventId: string;
+    title: string;
+    nextStartsAt: string;
+    nextEndsAt: string;
+    weekday: string;
+    timeLabel: string;
+    score: number;
+    reasons: string[];
+  }>;
+  state?: "ok" | "no_tutor" | "no_connection" | "no_student";
+  error?: string;
+}> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { searchPackageInstanceCalendarCandidates } = await import(
+      "@/lib/admin/packages/package-instance-calendar-link"
+    );
+    const result = await searchPackageInstanceCalendarCandidates(supabase, packageInstanceId);
+    if (!result.ok) return { candidates: [], error: result.error };
+    return { candidates: result.candidates, state: result.state };
+  } catch (e) {
+    return {
+      candidates: [],
+      error: e instanceof Error ? e.message : "Calendar search failed.",
+    };
+  }
+}
+
+export async function linkPackageInstanceCalendarMatch(input: {
+  packageInstanceId: string;
+  googleEventId: string;
+  recurringEventId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+}): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { linkPackageInstanceRecurringCalendarEvent } = await import(
+      "@/lib/admin/packages/package-instance-calendar-link"
+    );
+    const result = await linkPackageInstanceRecurringCalendarEvent(supabase, {
+      packageInstanceId: input.packageInstanceId,
+      googleEventId: input.googleEventId,
+      recurringEventId: input.recurringEventId,
+      title: input.title,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+    });
+    if (!result.ok) return { error: result.error ?? "Failed to link calendar event." };
+    revalidatePackages(input.packageInstanceId);
+    const n = result.linkedCount ?? 1;
+    return {
+      success:
+        n > 1
+          ? `Calendar series linked (${n} sessions).`
+          : "Calendar event linked.",
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to link calendar event." };
+  }
+}
+
+export async function unlinkPackageInstanceCalendarMatch(
+  packageInstanceId: string
+): Promise<ActionResult & { unlinkedCount?: number }> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { unlinkPackageInstanceRecurringCalendarEvent } = await import(
+      "@/lib/admin/packages/package-instance-calendar-link"
+    );
+    const result = await unlinkPackageInstanceRecurringCalendarEvent(supabase, {
+      packageInstanceId,
+    });
+    if (!result.ok) return { error: result.error ?? "Failed to unlink calendar event." };
+    revalidatePackages(packageInstanceId);
+    return {
+      success:
+        (result.unlinkedCount ?? 0) > 0
+          ? "Calendar event unlinked. Google Calendar was not changed."
+          : "Calendar event unlinked. Google Calendar was not changed.",
+      unlinkedCount: result.unlinkedCount,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to unlink calendar event." };
+  }
+}
+
+export async function relinkPackageInstanceCalendarMatch(input: {
+  packageInstanceId: string;
+  googleEventId: string;
+  recurringEventId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+}): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { relinkPackageInstanceRecurringCalendarEvent } = await import(
+      "@/lib/admin/packages/package-instance-calendar-link"
+    );
+    const result = await relinkPackageInstanceRecurringCalendarEvent(supabase, {
+      packageInstanceId: input.packageInstanceId,
+      googleEventId: input.googleEventId,
+      recurringEventId: input.recurringEventId,
+      title: input.title,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+    });
+    if (!result.ok) return { error: result.error ?? "Failed to re-link calendar event." };
+    revalidatePackages(input.packageInstanceId);
+    const linked = result.linkedCount ?? 1;
+    const unlinked = result.unlinkedCount ?? 0;
+    return {
+      success:
+        linked > 1
+          ? `Re-linked calendar series (${unlinked} unlinked → ${linked} linked). Google Calendar was not changed.`
+          : `Calendar event re-linked (${unlinked} session${unlinked === 1 ? "" : "s"} cleared first). Google Calendar was not changed.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to re-link calendar event." };
+  }
+}
+
 export async function searchCohortCalendarMatches(cohortId: string): Promise<{
   candidates: Array<{
     googleEventId: string;

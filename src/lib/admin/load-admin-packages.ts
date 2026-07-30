@@ -38,12 +38,14 @@ function resolveTutorIdSource(value: string | null | undefined): TutorIdSource {
   return value === "manual" ? "manual" : "notion";
 }
 
-function resolveCohortCalendarState(params: {
+function resolvePackageCalendarState(params: {
   tutorId: string | null;
   hasConnection: boolean;
   hasRecurringEvent: boolean;
+  hasConfirmedStudent: boolean;
 }): CohortCalendarLinkState {
   if (!params.tutorId) return "no_tutor";
+  if (!params.hasConfirmedStudent) return "no_student";
   if (params.hasRecurringEvent) return "linked";
   if (!params.hasConnection) return "no_connection";
   return "unlinked";
@@ -54,7 +56,12 @@ function calendarNeedsAttention(
   state: CohortCalendarLinkState
 ): boolean {
   if (!CALENDAR_ATTENTION_STATUSES.includes(status)) return false;
-  return state === "unlinked" || state === "no_tutor" || state === "no_connection";
+  return (
+    state === "unlinked" ||
+    state === "no_tutor" ||
+    state === "no_connection" ||
+    state === "no_student"
+  );
 }
 
 function labelForProfile(profile: ProfileRow | undefined, email: string | null): string {
@@ -294,7 +301,10 @@ export async function loadAdminPackagesList(
   const instanceIds = (instanceRows ?? []).map((i) => i.id);
   const cohortTutorIds = [
     ...new Set(
-      (cohortRows ?? []).map((c) => c.tutor_id).filter((id): id is string => Boolean(id))
+      [
+        ...(cohortRows ?? []).map((c) => c.tutor_id),
+        ...(instanceRows ?? []).map((i) => i.tutor_id),
+      ].filter((id): id is string => Boolean(id))
     ),
   ];
   const notionLinkedInstanceIds = (instanceRows ?? [])
@@ -756,10 +766,11 @@ export async function loadAdminPackagesList(
       (p) => p.course_id === cohort.course_id && p.delivery_mode === "group"
     );
 
-    const calendarLinkState = resolveCohortCalendarState({
+    const calendarLinkState = resolvePackageCalendarState({
       tutorId: cohort.tutor_id,
       hasConnection: cohort.tutor_id ? connectionByTutorId.has(cohort.tutor_id) : false,
       hasRecurringEvent: linkedEventByCohortId.has(cohort.id),
+      hasConfirmedStudent: true,
     });
     const status = cohort.status as PackageInstanceStatus;
     const calendarLinkedEvent = linkedEventByCohortId.get(cohort.id) ?? null;
@@ -803,6 +814,93 @@ export async function loadAdminPackagesList(
       tutorCalendarLastSyncedAt: cohort.tutor_id
         ? (connectionByTutorId.get(cohort.tutor_id) ?? null)
         : null,
+    });
+  }
+
+  const confirmedStudentIdsByInstanceId = new Map<string, string[]>();
+  for (const instance of instanceRows ?? []) {
+    const rosterPackages = packagesByInstanceId.get(instance.id) ?? [];
+    const studentIds = [
+      ...new Set(
+        rosterPackages
+          .filter((row) => row.status === "confirmed")
+          .map((row) => row.user_id)
+          .filter(Boolean)
+      ),
+    ];
+    if (studentIds.length > 0) {
+      confirmedStudentIdsByInstanceId.set(instance.id, studentIds);
+    }
+  }
+
+  const allInstanceStudentIds = [
+    ...new Set([...confirmedStudentIdsByInstanceId.values()].flat()),
+  ];
+
+  const { data: instanceRecurringSessions } =
+    allInstanceStudentIds.length > 0
+      ? await supabase
+          .from("tutor_scheduled_sessions")
+          .select(
+            "student_id, course_id, google_recurring_event_id, title, starts_at, ends_at"
+          )
+          .in("student_id", allInstanceStudentIds)
+          .not("google_recurring_event_id", "is", null)
+          .is("cohort_id", null)
+          .order("starts_at", { ascending: true })
+      : { data: [] };
+
+  const linkedEventByInstanceId = new Map<
+    string,
+    {
+      title: string;
+      startsAt: string;
+      endsAt: string;
+      recurringEventId: string;
+      linkedSessionCount: number;
+    }
+  >();
+
+  for (const instance of instanceRows ?? []) {
+    const studentIds = confirmedStudentIdsByInstanceId.get(instance.id) ?? [];
+    if (studentIds.length === 0) continue;
+
+    const matchingSessions = (instanceRecurringSessions ?? []).filter(
+      (row) =>
+        row.student_id &&
+        studentIds.includes(row.student_id) &&
+        row.course_id === instance.course_id &&
+        row.google_recurring_event_id
+    );
+
+    if (matchingSessions.length === 0) continue;
+
+    const bySeries = new Map<string, (typeof matchingSessions)[number]>();
+    for (const row of matchingSessions) {
+      const seriesId = row.google_recurring_event_id as string;
+      const existing = bySeries.get(seriesId);
+      if (!existing || row.starts_at < existing.starts_at) {
+        bySeries.set(seriesId, row);
+      }
+    }
+
+    const preferred = [...bySeries.values()].sort((a, b) => {
+      const aFuture = a.starts_at >= nowIso;
+      const bFuture = b.starts_at >= nowIso;
+      if (aFuture !== bFuture) return aFuture ? -1 : 1;
+      return a.starts_at.localeCompare(b.starts_at);
+    })[0];
+
+    if (!preferred?.google_recurring_event_id) continue;
+
+    linkedEventByInstanceId.set(instance.id, {
+      title: preferred.title,
+      startsAt: preferred.starts_at,
+      endsAt: preferred.ends_at,
+      recurringEventId: preferred.google_recurring_event_id,
+      linkedSessionCount: matchingSessions.filter(
+        (row) => row.google_recurring_event_id === preferred.google_recurring_event_id
+      ).length,
     });
   }
 
@@ -859,10 +957,25 @@ export async function loadAdminPackagesList(
       lessonLogEntries: [],
       weeklySessionStart: null,
       weeklySessionEnd: null,
-      calendarLinkState: "n_a",
-      calendarNeedsAttention: false,
-      calendarLinkedEvent: null,
-      tutorCalendarLastSyncedAt: null,
+      calendarLinkState: resolvePackageCalendarState({
+        tutorId: instance.tutor_id,
+        hasConnection: instance.tutor_id ? connectionByTutorId.has(instance.tutor_id) : false,
+        hasRecurringEvent: linkedEventByInstanceId.has(instance.id),
+        hasConfirmedStudent: (confirmedStudentIdsByInstanceId.get(instance.id) ?? []).length > 0,
+      }),
+      calendarNeedsAttention: calendarNeedsAttention(
+        instance.status as PackageInstanceStatus,
+        resolvePackageCalendarState({
+          tutorId: instance.tutor_id,
+          hasConnection: instance.tutor_id ? connectionByTutorId.has(instance.tutor_id) : false,
+          hasRecurringEvent: linkedEventByInstanceId.has(instance.id),
+          hasConfirmedStudent: (confirmedStudentIdsByInstanceId.get(instance.id) ?? []).length > 0,
+        })
+      ),
+      calendarLinkedEvent: linkedEventByInstanceId.get(instance.id) ?? null,
+      tutorCalendarLastSyncedAt: instance.tutor_id
+        ? (connectionByTutorId.get(instance.tutor_id) ?? null)
+        : null,
     });
   }
 

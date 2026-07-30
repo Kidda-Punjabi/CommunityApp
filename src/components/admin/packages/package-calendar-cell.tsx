@@ -3,9 +3,13 @@
 import { useState, useTransition } from "react";
 import {
   linkCohortCalendarMatch,
+  linkPackageInstanceCalendarMatch,
   relinkCohortCalendarMatch,
+  relinkPackageInstanceCalendarMatch,
   searchCohortCalendarMatches,
+  searchPackageInstanceCalendarMatches,
   unlinkCohortCalendarMatch,
+  unlinkPackageInstanceCalendarMatch,
 } from "@/app/admin/packages/actions";
 import type { AdminPackageListRow } from "@/lib/admin/packages/types";
 import { formatSessionWhenUk } from "@/lib/calendar/uk-display-time";
@@ -36,9 +40,11 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
   const [confirmUnlink, setConfirmUnlink] = useState(false);
   const [relinkMode, setRelinkMode] = useState(false);
 
-  if (row.kind !== "cohort") {
+  if (row.kind === "community") {
     return null;
   }
+
+  const isCohort = row.kind === "cohort";
 
   const linkState = row.calendarLinkState ?? "unlinked";
   const linked = row.calendarLinkedEvent;
@@ -57,17 +63,25 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
     setMessage(null);
     setSearchedEmpty(false);
     startTransition(async () => {
-      const result = await searchCohortCalendarMatches(row.id);
+      const result = isCohort
+        ? await searchCohortCalendarMatches(row.id)
+        : await searchPackageInstanceCalendarMatches(row.id);
       if (result.error) {
         setError(result.error);
         setCandidates(null);
         return;
       }
-      if (result.state === "no_tutor" || result.state === "no_connection") {
+      if (
+        result.state === "no_tutor" ||
+        result.state === "no_connection" ||
+        result.state === "no_student"
+      ) {
         setError(
           result.state === "no_tutor"
             ? "Assign a tutor before searching."
-            : "Tutor has no Google Calendar connection."
+            : result.state === "no_student"
+              ? "Add a confirmed student before searching."
+              : "Tutor has no Google Calendar connection."
         );
         setCandidates(null);
         return;
@@ -81,23 +95,26 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
     setError(null);
     setMessage(null);
     startTransition(async () => {
+      const linkInput = {
+        googleEventId: candidate.googleEventId,
+        recurringEventId: candidate.recurringEventId,
+        title: candidate.title,
+        startsAt: candidate.nextStartsAt,
+        endsAt: candidate.nextEndsAt,
+      };
       const result = relinkMode
-        ? await relinkCohortCalendarMatch({
-            cohortId: row.id,
-            googleEventId: candidate.googleEventId,
-            recurringEventId: candidate.recurringEventId,
-            title: candidate.title,
-            startsAt: candidate.nextStartsAt,
-            endsAt: candidate.nextEndsAt,
-          })
-        : await linkCohortCalendarMatch({
-            cohortId: row.id,
-            googleEventId: candidate.googleEventId,
-            recurringEventId: candidate.recurringEventId,
-            title: candidate.title,
-            startsAt: candidate.nextStartsAt,
-            endsAt: candidate.nextEndsAt,
-          });
+        ? isCohort
+          ? await relinkCohortCalendarMatch({ cohortId: row.id, ...linkInput })
+          : await relinkPackageInstanceCalendarMatch({
+              packageInstanceId: row.id,
+              ...linkInput,
+            })
+        : isCohort
+          ? await linkCohortCalendarMatch({ cohortId: row.id, ...linkInput })
+          : await linkPackageInstanceCalendarMatch({
+              packageInstanceId: row.id,
+              ...linkInput,
+            });
       if (result.error) {
         setError(result.error);
         return;
@@ -115,7 +132,9 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
     setError(null);
     setMessage(null);
     startTransition(async () => {
-      const result = await unlinkCohortCalendarMatch(row.id);
+      const result = isCohort
+        ? await unlinkCohortCalendarMatch(row.id)
+        : await unlinkPackageInstanceCalendarMatch(row.id);
       if (result.error) {
         setError(result.error);
         return;
@@ -133,7 +152,7 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
     // DB unlink only runs when a replacement is confirmed — cancel leaves the link intact.
     if (relinkMode) {
       return (
-        <div className="min-w-[11rem] space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <div className="space-y-0.5 rounded-lg border border-dashed border-amber-200 bg-amber-50/70 p-2">
             <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
               Choosing replacement
@@ -209,7 +228,7 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
     }
 
     return (
-      <div className="min-w-[11rem] space-y-1.5">
+      <div className="min-w-0 space-y-1.5">
         <div className="space-y-0.5">
           <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
             Event synced
@@ -292,6 +311,17 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
     );
   }
 
+  if (linkState === "no_student") {
+    return (
+      <div className="space-y-1">
+        <span className="text-[11px] font-medium text-zinc-500">Add a confirmed student first</span>
+        {row.calendarNeedsAttention ? (
+          <p className="text-[10px] font-semibold text-amber-700">Needs attention</p>
+        ) : null}
+      </div>
+    );
+  }
+
   if (linkState === "no_tutor") {
     return (
       <div className="space-y-1">
@@ -320,7 +350,7 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
   }
 
   return (
-    <div className="min-w-[11rem] space-y-1.5">
+    <div className="min-w-0 space-y-1.5">
       <div className="space-y-0.5">
         <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-900">
           Calendar synced
@@ -337,7 +367,9 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
         <p className="text-[11px] font-medium text-amber-800">
           {searchedEmpty
             ? "No matching event found — try again or link manually"
-            : "Event not linked for this cohort"}
+            : isCohort
+              ? "Event not linked for this cohort"
+              : "Event not linked for this 1-to-1 run"}
         </p>
       </div>
 

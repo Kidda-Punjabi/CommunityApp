@@ -561,13 +561,13 @@ export function AdminPackagesSection() {
                         ) : null}
                         {isPackageColumnVisible(config, "calendar") ? (
                           <td className={packageColumnCellClass("calendar")}>
-                            {row.kind === "cohort" ? (
+                            {row.kind === "community" ? (
+                              <span className="text-zinc-400">—</span>
+                            ) : (
                               <PackageCalendarCell
                                 row={row}
                                 onLinked={() => void reloadList()}
                               />
-                            ) : (
-                              <span className="text-zinc-400">—</span>
                             )}
                           </td>
                         ) : null}

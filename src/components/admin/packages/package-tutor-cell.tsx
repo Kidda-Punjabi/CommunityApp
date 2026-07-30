@@ -70,12 +70,12 @@ export function PackageTutorCell({ row, tutors, onUpdated }: PackageTutorCellPro
   }
 
   return (
-    <div className="min-w-[9rem] space-y-1">
+    <div className="w-full min-w-0 space-y-1">
       <select
         value={row.tutorId ?? ""}
         disabled={pending}
         onChange={(event) => assign(event.target.value)}
-        className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 disabled:opacity-60"
+        className="w-full min-w-0 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 disabled:opacity-60"
       >
         <option value="">Unassigned</option>
         {options.map((tutor) => (
@@ -84,7 +84,7 @@ export function PackageTutorCell({ row, tutors, onUpdated }: PackageTutorCellPro
           </option>
         ))}
       </select>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         {row.tutorIdSource === "manual" ? (
           <>
             <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
