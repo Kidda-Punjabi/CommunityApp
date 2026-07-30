@@ -24,7 +24,8 @@ type LessonActivityTilesProps = {
   quiz: { href: string; statusLabel: string; tone: StatusTone } | null;
   flashcards: { href: string; statusLabel: string; tone: StatusTone } | null;
   hasSubmittedFeedback: boolean;
-  catchupHref?: string | null;
+  /** When set, replaces the Recording hero tile (1-to-1 late-cancel catch-up). */
+  sessionCatchupHref?: string | null;
 };
 
 const toneClass: Record<StatusTone, string> = {
@@ -62,7 +63,7 @@ export function LessonActivityTiles({
   quiz,
   flashcards,
   hasSubmittedFeedback,
-  catchupHref = null,
+  sessionCatchupHref = null,
 }: LessonActivityTilesProps) {
   const [homeworkOpen, setHomeworkOpen] = useState(Boolean(homeworkCatchupReturn));
 
@@ -85,15 +86,25 @@ export function LessonActivityTiles({
           disabled={!presentationUrl}
           tint="violet"
         />
-        <HeroTile
-          label="Recording"
-          icon={<RecordingIcon />}
-          href={recordingUrl}
-          external
-          disabled={!recordingUrl}
-          tint="sky"
-          title={recordingTitle ?? undefined}
-        />
+        {sessionCatchupHref ? (
+          <HeroTile
+            label="Session catch-up"
+            icon={<CatchupIcon />}
+            href={sessionCatchupHref}
+            tint="sky"
+            title="Catch up on this session"
+          />
+        ) : (
+          <HeroTile
+            label="Recording"
+            icon={<RecordingIcon />}
+            href={recordingUrl}
+            external
+            disabled={!recordingUrl}
+            tint="sky"
+            title={recordingTitle ?? undefined}
+          />
+        )}
       </div>
 
       <div
@@ -155,15 +166,6 @@ export function LessonActivityTiles({
           />
           <CatchupReturnButton returnUrl={homeworkCatchupReturn} />
         </div>
-      ) : null}
-
-      {catchupHref ? (
-        <NavLink
-          href={catchupHref}
-          className="inline-flex text-sm font-medium text-violet-700 hover:text-violet-600"
-        >
-          Start catch-up lesson →
-        </NavLink>
       ) : null}
     </div>
   );
@@ -312,6 +314,15 @@ function RecordingIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
       <path d="M2 6.75A2.75 2.75 0 0 1 4.75 4h10.5A2.75 2.75 0 0 1 18 6.75v6.5A2.75 2.75 0 0 1 15.25 16H4.75A2.75 2.75 0 0 1 2 13.25v-6.5ZM8.5 7.5v5l4.25-2.5L8.5 7.5Z" />
+    </svg>
+  );
+}
+
+function CatchupIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path d="M10 2a8 8 0 1 0 8 8h-1.5A6.5 6.5 0 1 1 10 3.5V2Z" />
+      <path d="M10.75 5.75a.75.75 0 0 0-1.5 0v4.19l-2.22 2.22a.75.75 0 1 0 1.06 1.06l2.47-2.47a.75.75 0 0 0 .19-.53V5.75Z" />
     </svg>
   );
 }

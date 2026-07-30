@@ -109,38 +109,45 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
         <input type="hidden" name="new_starts_at" value={approveStartsAt ?? ""} />
         <input type="hidden" name="new_ends_at" value={approveEndsAt ?? ""} />
 
-        {showAlternatePicker ? (
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">
-              Pick a different available time
-            </label>
-            {slotsLoading ? (
-              <p className="text-sm text-zinc-500">Loading your free slots…</p>
-            ) : slotsError ? (
-              <p className="text-sm text-amber-700">{slotsError}</p>
-            ) : (
-              <select
-                value={selected}
-                onChange={(e) => setSelected(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
-              >
-                <option value="">Select a time…</option>
-                {slots.map((slot) => (
-                  <option key={slot.startsAt} value={slot.startsAt}>
-                    {slot.label}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+        {hasStudentPick ? (
+          showAlternatePicker ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">
+                Pick a different available time
+              </label>
+              {slotsLoading ? (
+                <p className="text-sm text-zinc-500">Loading your free slots…</p>
+              ) : slotsError ? (
+                <p className="text-sm text-amber-700">{slotsError}</p>
+              ) : (
+                <select
+                  value={selected}
+                  onChange={(e) => setSelected(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+                >
+                  <option value="">Select a time…</option>
+                  {slots.map((slot) => (
+                    <option key={slot.startsAt} value={slot.startsAt}>
+                      {slot.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAlternatePicker(true)}
+              className={ui.btnGhost}
+            >
+              Offer a different time instead
+            </button>
+          )
         ) : (
-          <button
-            type="button"
-            onClick={() => setShowAlternatePicker(true)}
-            className={ui.btnGhost}
-          >
-            Offer a different time instead
-          </button>
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Late cancel (within 24 hours). Confirming unlocks this lesson with Session catch-up
+            instead of a recording.
+          </p>
         )}
 
         <textarea
@@ -152,29 +159,31 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
         {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
         {state.success ? <p className="text-sm text-emerald-700">{state.success}</p> : null}
         <p className="text-xs text-zinc-500">
-          Approving updates the lesson time in the app and sends an updated Google Calendar invite.
+          {hasStudentPick
+            ? "Approving updates the lesson time in the app and sends an updated Google Calendar invite."
+            : "Confirming records the missed lesson and unlocks Session catch-up for the student."}
         </p>
         <div className="flex flex-wrap gap-2">
           <button
             type="submit"
             name="decision"
-            value="approved"
-            disabled={pending || !approveStartsAt || !approveEndsAt}
-            className={ui.btnPrimary}
-          >
-            {hasStudentPick && !showAlternatePicker
-              ? "Approve requested time"
-              : "Approve + update calendar"}
-          </button>
-          <button
-            type="submit"
-            name="decision"
             value="denied"
             disabled={pending}
-            className={ui.btnSecondary}
+            className={hasStudentPick ? ui.btnSecondary : ui.btnPrimary}
           >
-            Decline
+            {hasStudentPick ? "Decline" : "Confirm late cancel → unlock catch-up"}
           </button>
+          {hasStudentPick ? (
+            <button
+              type="submit"
+              name="decision"
+              value="approved"
+              disabled={pending || !approveStartsAt || !approveEndsAt}
+              className={ui.btnPrimary}
+            >
+              {showAlternatePicker ? "Approve + update calendar" : "Approve requested time"}
+            </button>
+          ) : null}
         </div>
       </form>
     </div>

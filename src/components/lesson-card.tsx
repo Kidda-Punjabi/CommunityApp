@@ -251,7 +251,7 @@ export function LessonCard({
                 }
                 flashcards={flashcardsTile}
                 hasSubmittedFeedback={hasSubmittedFeedback}
-                catchupHref={hasCatchupSegments ? `/catchup/${lesson.id}` : null}
+                sessionCatchupHref={hasCatchupSegments ? `/catchup/${lesson.id}` : null}
               />
 
               {contentUnlocked && hasApprovedGeneratedAudio && lesson.audio_url ? (
@@ -565,7 +565,10 @@ function LessonScheduleRequestSection({
         <p className="text-xs text-zinc-500">
           Need a different time? Ask now and your tutor can move this lesson to a free slot.
         </p>
-        <RescheduleRequestForm sessionId={scheduleSession.id} />
+        <RescheduleRequestForm
+          sessionId={scheduleSession.id}
+          isLateCancel={scheduleSession.isLateCancelReschedule}
+        />
       </div>
     );
   }

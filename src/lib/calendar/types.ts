@@ -84,6 +84,8 @@ export type StudentScheduledSession = ScheduledSessionRow & {
   rescheduleRequest: RescheduleRequestRow | null;
   canRequestReschedule: boolean;
   rescheduleLockedReason: string | null;
+  /** Within 24h — late-cancel notice only (no new time slot). */
+  isLateCancelReschedule: boolean;
   cohortSwitchRequest: CohortSwitchRequestRow | null;
   canRequestCohortSwitch: boolean;
   cohortSwitchLockedReason: string | null;

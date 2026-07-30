@@ -59,7 +59,7 @@ export async function resolveAdminRescheduleRequest(input: {
 
     const { data: request, error: requestError } = await supabase
       .from("lesson_reschedule_requests")
-      .select("id, session_id, status, requested_starts_at, requested_ends_at")
+      .select("id, session_id, student_id, status, requested_starts_at, requested_ends_at")
       .eq("id", input.requestId)
       .maybeSingle();
 
@@ -107,14 +107,26 @@ export async function resolveAdminRescheduleRequest(input: {
 
     if (error) return { error: error.message };
 
+    if (input.decision === "denied") {
+      const { unlockLessonForStudentAfterLateDeniedReschedule } = await import(
+        "@/lib/catchup/session-catchup-eligibility"
+      );
+      await unlockLessonForStudentAfterLateDeniedReschedule(supabase, {
+        studentId: request.student_id,
+        sessionId: request.session_id,
+        unlockedBy: adminUser.id,
+      });
+    }
+
     revalidatePath(PATH);
     revalidatePath("/dashboard/schedule");
+    revalidatePath("/dashboard/learn");
     revalidatePath("/dashboard/tutor/requests");
     return {
       success:
         input.decision === "approved"
           ? "Approved — booking and calendar updated."
-          : "Request declined.",
+          : "Request declined. If this was a late cancel, the lesson is unlocked with Session catch-up.",
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to resolve request." };

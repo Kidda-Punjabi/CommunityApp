@@ -31,12 +31,10 @@ export async function requestLessonReschedule(
   const message = String(formData.get("message") ?? "").trim();
   const requestedStartsAt = String(formData.get("requested_starts_at") ?? "").trim();
   const requestedEndsAt = String(formData.get("requested_ends_at") ?? "").trim();
+  const lateCancel = String(formData.get("late_cancel") ?? "").trim() === "1";
 
   if (!sessionId) return { error: "Missing lesson." };
-  if (!message) return { error: "Please explain why you need to reschedule." };
-  if (!requestedStartsAt || !requestedEndsAt) {
-    return { error: "Choose a new time from your tutor's availability." };
-  }
+  if (!message) return { error: "Please explain why you need to cancel." };
 
   const supabase = await createClient();
   const {
@@ -55,16 +53,6 @@ export async function requestLessonReschedule(
   if (session.cohort_id) {
     return { error: GROUP_LESSON_NO_RESCHEDULE_REASON };
   }
-
-  const { assertValidRescheduleSlot } = await import("@/lib/calendar/reschedule-slots");
-  const slotCheck = await assertValidRescheduleSlot(
-    supabase,
-    session,
-    user.id,
-    requestedStartsAt,
-    requestedEndsAt
-  );
-  if (!slotCheck.ok) return { error: slotCheck.error };
 
   const { data: existing } = await supabase
     .from("lesson_reschedule_requests")
@@ -88,14 +76,37 @@ export async function requestLessonReschedule(
     return { error: eligibility.lockedReason ?? "Cannot request reschedule." };
   }
 
-  const preferredTimes = formatSessionWhen(requestedStartsAt, requestedEndsAt);
+  const isLateCancel = Boolean(eligibility.isLateCancel) || lateCancel;
+
+  if (!isLateCancel) {
+    if (!requestedStartsAt || !requestedEndsAt) {
+      return { error: "Choose a new time from your tutor's availability." };
+    }
+    const { assertValidRescheduleSlot } = await import("@/lib/calendar/reschedule-slots");
+    const slotCheck = await assertValidRescheduleSlot(
+      supabase,
+      session,
+      user.id,
+      requestedStartsAt,
+      requestedEndsAt
+    );
+    if (!slotCheck.ok) return { error: slotCheck.error };
+  }
+
+  const preferredTimes =
+    !isLateCancel && requestedStartsAt && requestedEndsAt
+      ? formatSessionWhen(requestedStartsAt, requestedEndsAt)
+      : isLateCancel
+        ? "Late cancel (within 24 hours)"
+        : null;
+
   const payload = {
     session_id: sessionId,
     student_id: user.id,
     message,
     preferred_times: preferredTimes,
-    requested_starts_at: requestedStartsAt,
-    requested_ends_at: requestedEndsAt,
+    requested_starts_at: isLateCancel ? null : requestedStartsAt || null,
+    requested_ends_at: isLateCancel ? null : requestedEndsAt || null,
     status: "pending" as const,
     tutor_response: null,
     resolved_at: null,
@@ -120,7 +131,11 @@ export async function requestLessonReschedule(
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/tutor/requests");
-  return { success: "Reschedule request sent to your tutor." };
+  return {
+    success: isLateCancel
+      ? "Late cancel notice sent to your tutor."
+      : "Reschedule request sent to your tutor.",
+  };
 }
 
 export async function cancelRescheduleRequest(requestId: string): Promise<CalendarActionResult> {
@@ -159,7 +174,7 @@ export async function resolveRescheduleRequest(
 
   const { data: request, error: requestError } = await supabase
     .from("lesson_reschedule_requests")
-    .select("id, session_id, status, requested_starts_at, requested_ends_at")
+    .select("id, session_id, student_id, status, requested_starts_at, requested_ends_at")
     .eq("id", requestId)
     .maybeSingle();
 
@@ -207,6 +222,20 @@ export async function resolveRescheduleRequest(
 
   if (error) return { error: error.message };
 
+  if (decision === "denied") {
+    const { unlockLessonForStudentAfterLateDeniedReschedule } = await import(
+      "@/lib/catchup/session-catchup-eligibility"
+    );
+    const { client: adminClient } = tryCreateServiceRoleClient();
+    if (adminClient) {
+      await unlockLessonForStudentAfterLateDeniedReschedule(adminClient, {
+        studentId: request.student_id,
+        sessionId: request.session_id,
+        unlockedBy: user.id,
+      });
+    }
+  }
+
   revalidatePath("/dashboard/tutor/calendar");
   revalidatePath("/dashboard/tutor/requests");
   revalidatePath("/dashboard/schedule");
@@ -216,7 +245,7 @@ export async function resolveRescheduleRequest(
     success:
       decision === "approved"
         ? "Request approved — calendar invite updated to the new time."
-        : "Request declined.",
+        : "Request declined. If this was a late cancel, the lesson is unlocked with Session catch-up.",
   };
 }
 

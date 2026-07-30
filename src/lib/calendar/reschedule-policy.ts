@@ -4,6 +4,8 @@ import type { RescheduleRequestRow, ScheduledSessionRow } from "@/lib/calendar/t
 export type RescheduleEligibility = {
   canRequest: boolean;
   lockedReason: string | null;
+  /** Within 24h of start — student can only send a late-cancel notice (no new slot). */
+  isLateCancel?: boolean;
 };
 
 export const GROUP_LESSON_NO_RESCHEDULE_REASON =
@@ -41,13 +43,14 @@ export function getRescheduleEligibility(
   const startsAtMs = new Date(session.starts_at).getTime();
   const msUntilStart = startsAtMs - nowMs;
 
-  if (msUntilStart < RESCHEDULE_CUTOFF_MS) {
+  if (msUntilStart < 0) {
     return {
       canRequest: false,
-      lockedReason:
-        "Lessons within 24 hours are locked in. Please contact your tutor directly if you need help.",
+      lockedReason: "This lesson has already started or passed.",
     };
   }
+
+  const isLateCancel = msUntilStart < RESCHEDULE_CUTOFF_MS;
 
   if (existingRequest?.status === "pending") {
     return {
@@ -63,6 +66,14 @@ export function getRescheduleEligibility(
     };
   }
 
+  if (existingRequest?.status === "denied") {
+    return {
+      canRequest: false,
+      lockedReason:
+        "Your late cancel was recorded. If Session catch-up is available, it will show on this lesson once unlocked.",
+    };
+  }
+
   if (options?.rescheduleLimitLockedReason) {
     return {
       canRequest: false,
@@ -70,7 +81,7 @@ export function getRescheduleEligibility(
     };
   }
 
-  return { canRequest: true, lockedReason: null };
+  return { canRequest: true, lockedReason: null, isLateCancel };
 }
 
 export function formatSessionWhen(startsAtIso: string, endsAtIso: string): string {

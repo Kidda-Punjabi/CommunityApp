@@ -416,6 +416,7 @@ export async function loadStudentUpcomingSessions(
         rescheduleRequest,
         canRequestReschedule: eligibility.canRequest,
         rescheduleLockedReason: eligibility.lockedReason,
+        isLateCancelReschedule: Boolean(eligibility.isLateCancel),
         cohortSwitchRequest,
         canRequestCohortSwitch: cohortSwitchEligibility.canRequest,
         cohortSwitchLockedReason: cohortSwitchEligibility.lockedReason,

@@ -87,7 +87,10 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
             Tell your tutor why you need a different time. They&apos;ll pick an available slot and
             update your calendar invite.
           </p>
-          <RescheduleRequestForm sessionId={session.id} />
+          <RescheduleRequestForm
+            sessionId={session.id}
+            isLateCancel={session.isLateCancelReschedule}
+          />
         </section>
       ) : !isGroup && session.rescheduleLockedReason && !session.rescheduleRequest ? (
         <section className="mt-8">
