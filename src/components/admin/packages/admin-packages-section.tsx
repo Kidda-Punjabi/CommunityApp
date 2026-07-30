@@ -382,7 +382,7 @@ export function AdminPackagesSection() {
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
       {viewsError && <p className="mb-4 text-sm text-amber-700">{viewsError}</p>}
 
-      <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white">
+      <div className="rounded-2xl border border-zinc-200/80 bg-white">
         <AdminPackagesBoardHeader
           savedViews={savedViews}
           activeViewId={activeViewId}
@@ -420,11 +420,11 @@ export function AdminPackagesSection() {
                     {group.label} ({group.rows.length})
                   </h2>
                 )}
-                <div className="overflow-x-auto lg:overflow-x-visible">
-                <table className="min-w-full text-left text-sm lg:table-fixed lg:w-full">
+                <div className="overflow-x-auto">
+                <table className="w-max min-w-full text-left text-sm">
                   <thead className="border-b border-zinc-100 bg-zinc-50/80 text-xs font-semibold uppercase tracking-wider text-zinc-500">
                     <tr>
-                      <th className="px-4 py-3 lg:w-[14%]">Package</th>
+                      <th className="min-w-[10rem] px-4 py-3">Package</th>
                       {isPackageColumnVisible(config, "format") ? (
                         <th className={packageColumnHeaderClass("format")}>Format</th>
                       ) : null}

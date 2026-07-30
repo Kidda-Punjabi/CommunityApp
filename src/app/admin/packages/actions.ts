@@ -456,6 +456,68 @@ export async function relinkPackageInstanceCalendarMatch(input: {
   }
 }
 
+export async function refreshPackageInstanceCalendarMatch(
+  packageInstanceId: string
+): Promise<ActionResult & { linkedCount?: number }> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { loadInstanceContext } = await import(
+      "@/lib/admin/packages/package-instance-calendar-link"
+    );
+    const { refreshLinkedRecurringSeries } = await import(
+      "@/lib/admin/packages/expand-recurring-calendar-link"
+    );
+
+    const context = await loadInstanceContext(supabase, packageInstanceId);
+    if (!context.ok) return { error: context.error ?? "Package run not found." };
+    if ("state" in context) {
+      return { error: "Package run is missing tutor or confirmed student." };
+    }
+
+    const { instance, studentIds } = context;
+    const primaryStudentId = studentIds[0];
+    if (!instance.tutor_id || !primaryStudentId) {
+      return { error: "Missing tutor or confirmed student." };
+    }
+
+    const { data: linked } = await supabase
+      .from("tutor_scheduled_sessions")
+      .select("google_recurring_event_id")
+      .eq("tutor_id", instance.tutor_id)
+      .in("student_id", studentIds)
+      .eq("course_id", instance.course_id)
+      .is("cohort_id", null)
+      .not("google_recurring_event_id", "is", null)
+      .limit(1)
+      .maybeSingle();
+
+    const seriesId = linked?.google_recurring_event_id?.trim();
+    if (!seriesId) {
+      return { error: "No linked recurring calendar series found." };
+    }
+
+    const result = await refreshLinkedRecurringSeries(supabase, {
+      tutorId: instance.tutor_id,
+      courseId: instance.course_id,
+      seriesId,
+      cohortId: null,
+      studentId: primaryStudentId,
+      reschedulingAllowed: true,
+    });
+
+    if (!result.ok) return { error: result.error ?? "Failed to refresh calendar sessions." };
+    revalidatePackages(packageInstanceId);
+    const n = result.linkedCount ?? 0;
+    return {
+      success: `Refreshed ${n} linked session${n === 1 ? "" : "s"} from Google Calendar.`,
+      linkedCount: n,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to refresh calendar sessions." };
+  }
+}
+
 export async function searchCohortCalendarMatches(cohortId: string): Promise<{
   candidates: Array<{
     googleEventId: string;

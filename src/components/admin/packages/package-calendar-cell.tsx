@@ -10,6 +10,7 @@ import {
   searchPackageInstanceCalendarMatches,
   unlinkCohortCalendarMatch,
   unlinkPackageInstanceCalendarMatch,
+  refreshPackageInstanceCalendarMatch,
 } from "@/app/admin/packages/actions";
 import type { AdminPackageListRow } from "@/lib/admin/packages/types";
 import { formatSessionWhenUk } from "@/lib/calendar/uk-display-time";
@@ -124,6 +125,21 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
       setRelinkMode(false);
       setConfirmUnlink(false);
       setMessage(result.success ?? "Done.");
+      onLinked();
+    });
+  }
+
+  function refreshSessions() {
+    if (isCohort) return;
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      const result = await refreshPackageInstanceCalendarMatch(row.id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setMessage(result.success ?? "Sessions refreshed.");
       onLinked();
     });
   }
@@ -290,6 +306,16 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
             >
               {pending ? "Searching…" : "Change event"}
             </button>
+            {!isCohort ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={refreshSessions}
+                className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+              >
+                {pending ? "Refreshing…" : "Refresh sessions"}
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={pending}

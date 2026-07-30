@@ -33,29 +33,29 @@ export function isPackageColumnVisible(
 export function packageColumnHeaderClass(columnId: PackageTableColumnId): string {
   switch (columnId) {
     case "format":
-      return "hidden px-4 py-3 sm:table-cell lg:w-[7%]";
+      return "hidden min-w-[5.5rem] px-4 py-3 sm:table-cell";
     case "interested":
-      return "px-4 py-3 lg:w-[11%]";
+      return "min-w-[8.5rem] px-4 py-3";
     case "waitingForPayment":
-      return "px-4 py-3 lg:w-[11%]";
+      return "min-w-[8.5rem] px-4 py-3";
     case "confirmed":
-      return "px-4 py-3 lg:w-[11%]";
+      return "min-w-[8.5rem] px-4 py-3";
     case "startDay":
-      return "hidden px-4 py-3 md:table-cell lg:w-[7%]";
+      return "hidden min-w-[6rem] px-4 py-3 md:table-cell";
     case "tutor":
-      return "px-4 py-3 lg:w-[11%]";
+      return "min-w-[9rem] px-4 py-3";
     case "calendar":
-      return "px-4 py-3 lg:w-[14%]";
+      return "min-w-[11rem] px-4 py-3";
     case "startDate":
-      return "whitespace-nowrap px-4 py-3 lg:w-[7%]";
+      return "min-w-[6.5rem] whitespace-nowrap px-4 py-3";
     case "endDate":
-      return "hidden whitespace-nowrap px-4 py-3 sm:table-cell lg:w-[7%]";
+      return "hidden min-w-[6.5rem] whitespace-nowrap px-4 py-3 sm:table-cell";
     case "status":
-      return "px-4 py-3 lg:w-[9%]";
+      return "min-w-[7rem] px-4 py-3";
     case "progress":
-      return "hidden px-4 py-3 text-center sm:table-cell lg:w-[10%]";
+      return "hidden min-w-[10rem] px-4 py-3 text-center sm:table-cell";
     case "unlocks":
-      return "hidden px-4 py-3 text-center sm:table-cell lg:w-[5%]";
+      return "hidden min-w-[4.5rem] px-4 py-3 text-center sm:table-cell";
     default:
       return "px-4 py-3";
   }
@@ -70,15 +70,15 @@ export function packageColumnCellClass(columnId: PackageTableColumnId): string {
     case "startDate":
       return "whitespace-nowrap px-4 py-3 text-zinc-600";
     case "endDate":
-      return "hidden min-w-[5.5rem] whitespace-nowrap px-4 py-3 text-zinc-600 sm:table-cell";
+      return "hidden whitespace-nowrap px-4 py-3 text-zinc-600 sm:table-cell";
     case "unlocks":
       return "hidden px-4 py-3 text-center text-zinc-600 sm:table-cell";
     case "progress":
       return "hidden px-4 py-3 text-center align-middle text-zinc-600 sm:table-cell";
     case "tutor":
-      return "max-w-0 px-4 py-3 align-top text-zinc-600";
+      return "px-4 py-3 align-top text-zinc-600";
     case "calendar":
-      return "max-w-0 px-4 py-3 align-top text-zinc-600";
+      return "px-4 py-3 align-top text-zinc-600";
     case "status":
       return "px-4 py-3 align-middle";
     default:

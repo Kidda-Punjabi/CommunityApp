@@ -83,7 +83,7 @@ function scoreEvent(params: {
   return { score, reasons };
 }
 
-async function loadInstanceContext(
+export async function loadInstanceContext(
   supabase: SupabaseClient,
   packageInstanceId: string
 ): Promise<
@@ -275,98 +275,50 @@ export async function linkPackageInstanceRecurringCalendarEvent(
     return { ok: false, error: "Missing tutor or confirmed student." };
   }
 
-  const now = new Date().toISOString();
   const seriesId = params.recurringEventId.trim();
-  const eventId = params.googleEventId.trim();
 
   if (seriesId) {
     const { data: seriesRows, error: seriesLookupError } = await supabase
       .from("tutor_scheduled_sessions")
-      .select("id, student_id, google_event_id")
+      .select("id, student_id")
       .eq("tutor_id", instance.tutor_id)
       .eq("google_recurring_event_id", seriesId);
 
     if (seriesLookupError) return { ok: false, error: seriesLookupError.message };
 
-    const updatable = (seriesRows ?? []).filter(
-      (row) => !row.student_id || studentIds.includes(row.student_id)
+    const conflict = (seriesRows ?? []).find(
+      (row) => row.student_id && !studentIds.includes(row.student_id)
     );
-
-    if (updatable.length > 0) {
-      const { error: updateError } = await supabase
-        .from("tutor_scheduled_sessions")
-        .update({
-          student_id: primaryStudentId,
-          cohort_id: null,
-          course_id: instance.course_id,
-          match_method: "manual",
-          rescheduling_allowed: true,
-          updated_at: now,
-        })
-        .in(
-          "id",
-          updatable.map((row) => row.id)
-        );
-
-      if (updateError) return { ok: false, error: updateError.message };
-      return { ok: true, linkedCount: updatable.length };
-    }
-  }
-
-  const { data: byEvent, error: byEventError } = await supabase
-    .from("tutor_scheduled_sessions")
-    .select("id, student_id")
-    .eq("tutor_id", instance.tutor_id)
-    .eq("google_event_id", eventId)
-    .maybeSingle();
-
-  if (byEventError) return { ok: false, error: byEventError.message };
-
-  if (byEvent) {
-    if (byEvent.student_id && !studentIds.includes(byEvent.student_id)) {
+    if (conflict) {
       return {
         ok: false,
-        error: "This calendar event is already linked to a different student.",
+        error: "This calendar series is already linked to a different student.",
       };
     }
-
-    const { error: updateError } = await supabase
-      .from("tutor_scheduled_sessions")
-      .update({
-        student_id: primaryStudentId,
-        cohort_id: null,
-        course_id: instance.course_id,
-        google_recurring_event_id: seriesId || null,
-        match_method: "manual",
-        rescheduling_allowed: true,
-        title: params.title,
-        starts_at: params.startsAt,
-        ends_at: params.endsAt,
-        updated_at: now,
-      })
-      .eq("id", byEvent.id);
-
-    if (updateError) return { ok: false, error: updateError.message };
-    return { ok: true, linkedCount: 1 };
   }
 
-  const { error: insertError } = await supabase.from("tutor_scheduled_sessions").insert({
-    tutor_id: instance.tutor_id,
-    student_id: primaryStudentId,
-    cohort_id: null,
-    course_id: instance.course_id,
-    google_event_id: eventId,
-    google_recurring_event_id: seriesId || null,
+  const { linkRecurringSeriesSessionsFromGoogle } = await import(
+    "@/lib/admin/packages/expand-recurring-calendar-link"
+  );
+
+  const result = await linkRecurringSeriesSessionsFromGoogle(supabase, {
+    tutorId: instance.tutor_id,
+    courseId: instance.course_id,
+    seriesId,
+    googleEventId: params.googleEventId,
     title: params.title,
-    starts_at: params.startsAt,
-    ends_at: params.endsAt,
-    match_method: "manual",
-    status: "scheduled",
-    rescheduling_allowed: true,
+    startsAt: params.startsAt,
+    endsAt: params.endsAt,
+    cohortId: null,
+    studentId: primaryStudentId,
+    reschedulingAllowed: true,
   });
 
-  if (insertError) return { ok: false, error: insertError.message };
-  return { ok: true, linkedCount: 1 };
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "Failed to link calendar series." };
+  }
+
+  return { ok: true, linkedCount: result.linkedCount };
 }
 
 export async function unlinkPackageInstanceRecurringCalendarEvent(

@@ -224,99 +224,50 @@ export async function linkCohortRecurringCalendarEvent(
   if (cohortError) return { ok: false, error: cohortError.message };
   if (!cohort?.tutor_id) return { ok: false, error: "Cohort has no tutor assigned." };
 
-  const now = new Date().toISOString();
   const seriesId = params.recurringEventId.trim();
-  const eventId = params.googleEventId.trim();
 
-  // Prefer updating already-synced unmatched rows (unique on tutor_id, google_event_id).
-  // "Link this event" links the whole recurring series — one admin click covers all instances.
   if (seriesId) {
     const { data: seriesRows, error: seriesLookupError } = await supabase
       .from("tutor_scheduled_sessions")
-      .select("id, cohort_id, google_event_id")
+      .select("id, cohort_id")
       .eq("tutor_id", cohort.tutor_id)
       .eq("google_recurring_event_id", seriesId);
 
     if (seriesLookupError) return { ok: false, error: seriesLookupError.message };
 
-    const updatable = (seriesRows ?? []).filter(
-      (row) => !row.cohort_id || row.cohort_id === params.cohortId
+    const conflict = (seriesRows ?? []).find(
+      (row) => row.cohort_id && row.cohort_id !== params.cohortId
     );
-
-    if (updatable.length > 0) {
-      const { error: updateError } = await supabase
-        .from("tutor_scheduled_sessions")
-        .update({
-          cohort_id: params.cohortId,
-          course_id: cohort.course_id,
-          match_method: "manual",
-          rescheduling_allowed: false,
-          updated_at: now,
-        })
-        .in(
-          "id",
-          updatable.map((row) => row.id)
-        );
-
-      if (updateError) return { ok: false, error: updateError.message };
-      return { ok: true, linkedCount: updatable.length };
-    }
-  }
-
-  // Single-instance fallback: existing row for this google_event_id.
-  const { data: byEvent, error: byEventError } = await supabase
-    .from("tutor_scheduled_sessions")
-    .select("id, cohort_id")
-    .eq("tutor_id", cohort.tutor_id)
-    .eq("google_event_id", eventId)
-    .maybeSingle();
-
-  if (byEventError) return { ok: false, error: byEventError.message };
-
-  if (byEvent) {
-    if (byEvent.cohort_id && byEvent.cohort_id !== params.cohortId) {
+    if (conflict) {
       return {
         ok: false,
-        error: "This calendar event is already linked to a different cohort.",
+        error: "This calendar series is already linked to a different cohort.",
       };
     }
-
-    const { error: updateError } = await supabase
-      .from("tutor_scheduled_sessions")
-      .update({
-        cohort_id: params.cohortId,
-        course_id: cohort.course_id,
-        google_recurring_event_id: seriesId || null,
-        match_method: "manual",
-        rescheduling_allowed: false,
-        title: params.title,
-        starts_at: params.startsAt,
-        ends_at: params.endsAt,
-        updated_at: now,
-      })
-      .eq("id", byEvent.id);
-
-    if (updateError) return { ok: false, error: updateError.message };
-    return { ok: true, linkedCount: 1 };
   }
 
-  // No synced row yet — insert the visible instance (sync will fill later occurrences).
-  const { error: insertError } = await supabase.from("tutor_scheduled_sessions").insert({
-    tutor_id: cohort.tutor_id,
-    cohort_id: params.cohortId,
-    course_id: cohort.course_id,
-    google_event_id: eventId,
-    google_recurring_event_id: seriesId || null,
+  const { linkRecurringSeriesSessionsFromGoogle } = await import(
+    "@/lib/admin/packages/expand-recurring-calendar-link"
+  );
+
+  const result = await linkRecurringSeriesSessionsFromGoogle(supabase, {
+    tutorId: cohort.tutor_id,
+    courseId: cohort.course_id,
+    seriesId,
+    googleEventId: params.googleEventId,
     title: params.title,
-    starts_at: params.startsAt,
-    ends_at: params.endsAt,
-    match_method: "manual",
-    status: "scheduled",
-    rescheduling_allowed: false,
+    startsAt: params.startsAt,
+    endsAt: params.endsAt,
+    cohortId: params.cohortId,
+    studentId: null,
+    reschedulingAllowed: false,
   });
 
-  if (insertError) return { ok: false, error: insertError.message };
-  return { ok: true, linkedCount: 1 };
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "Failed to link calendar series." };
+  }
+
+  return { ok: true, linkedCount: result.linkedCount };
 }
 
 /**
