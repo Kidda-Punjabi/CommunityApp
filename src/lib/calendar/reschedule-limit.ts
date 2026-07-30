@@ -1,3 +1,4 @@
+import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const BEGINNERS_RESCHEDULE_LIMIT = 2;
@@ -5,9 +6,7 @@ export const BEGINNERS_RESCHEDULE_LIMIT = 2;
 /** Pending and approved count toward the allowance; cancelled/denied do not. */
 const COUNTABLE_STATUSES = ["pending", "approved"] as const;
 
-export type BeginnersRescheduleLimitStatus = {
-  /** Beginners course id when the student is enrolled; null if not applicable. */
-  beginnersCourseId: string | null;
+export type BeginnersReschedulePoolStatus = {
   used: number;
   defaultLimit: number;
   extraAllowance: number;
@@ -15,6 +14,13 @@ export type BeginnersRescheduleLimitStatus = {
   remaining: number;
   atLimit: boolean;
   lockedReason: string | null;
+};
+
+export type BeginnersRescheduleLimitStatus = {
+  /** Beginners course id when the student is enrolled; null if not applicable. */
+  beginnersCourseId: string | null;
+  oneToOne: BeginnersReschedulePoolStatus;
+  group: BeginnersReschedulePoolStatus;
 };
 
 function isMissingColumnError(message: string | undefined): boolean {
@@ -27,40 +33,65 @@ function isMissingColumnError(message: string | undefined): boolean {
   );
 }
 
-export function getBeginnersRescheduleLockedReason(
+function buildPoolStatus(
   used: number,
-  totalAllowed: number
-): string {
-  return `You've used all ${totalAllowed} reschedule allowance${totalAllowed === 1 ? "" : "s"} for the Beginners course. Please contact Kidda if you need another change.`;
-}
-
-export function buildBeginnersRescheduleLimitStatus(
-  beginnersCourseId: string | null,
-  used: number,
-  extraAllowance: number
-): BeginnersRescheduleLimitStatus {
+  extraAllowance: number,
+  pool: "one_to_one" | "group",
+  beginnersCourseId: string | null
+): BeginnersReschedulePoolStatus {
   const totalAllowed = BEGINNERS_RESCHEDULE_LIMIT + Math.max(0, extraAllowance);
   const remaining = Math.max(0, totalAllowed - used);
   const atLimit = beginnersCourseId !== null && used >= totalAllowed;
 
   return {
-    beginnersCourseId,
     used,
     defaultLimit: BEGINNERS_RESCHEDULE_LIMIT,
     extraAllowance: Math.max(0, extraAllowance),
     totalAllowed,
     remaining,
     atLimit,
-    lockedReason: atLimit ? getBeginnersRescheduleLockedReason(used, totalAllowed) : null,
+    lockedReason: atLimit
+      ? pool === "one_to_one"
+        ? `You've used all ${totalAllowed} 1-to-1 reschedule allowance${totalAllowed === 1 ? "" : "s"} for the Beginners course. Please contact Kidda if you need another change.`
+        : `You've used all ${totalAllowed} alternate cohort request${totalAllowed === 1 ? "" : "s"} for the Beginners course. Please contact Kidda if you need another change.`
+      : null,
+  };
+}
+
+export function buildBeginnersRescheduleLimitStatus(
+  beginnersCourseId: string | null,
+  oneToOneUsed: number,
+  groupUsed: number,
+  extraOneToOneAllowance: number,
+  extraGroupAllowance: number
+): BeginnersRescheduleLimitStatus {
+  return {
+    beginnersCourseId,
+    oneToOne: buildPoolStatus(
+      oneToOneUsed,
+      extraOneToOneAllowance,
+      "one_to_one",
+      beginnersCourseId
+    ),
+    group: buildPoolStatus(groupUsed, extraGroupAllowance, "group", beginnersCourseId),
   };
 }
 
 export function appliesBeginnersRescheduleLimit(
-  sessionCourseId: string | null | undefined,
-  limitStatus: Pick<BeginnersRescheduleLimitStatus, "beginnersCourseId" | "atLimit">
+  session: Pick<ScheduledSessionRow, "course_id" | "cohort_id">,
+  limitStatus: BeginnersRescheduleLimitStatus
 ): boolean {
-  if (!limitStatus.beginnersCourseId || !sessionCourseId) return false;
-  return sessionCourseId === limitStatus.beginnersCourseId && limitStatus.atLimit;
+  if (!limitStatus.beginnersCourseId || !session.course_id) return false;
+  if (session.course_id !== limitStatus.beginnersCourseId) return false;
+  return session.cohort_id ? limitStatus.group.atLimit : limitStatus.oneToOne.atLimit;
+}
+
+export function getBeginnersRescheduleLockedReason(
+  session: Pick<ScheduledSessionRow, "cohort_id">,
+  limitStatus: BeginnersRescheduleLimitStatus
+): string | null {
+  const pool = session.cohort_id ? limitStatus.group : limitStatus.oneToOne;
+  return pool.lockedReason;
 }
 
 async function countRescheduleRequestsForCourse(
@@ -114,13 +145,13 @@ export async function loadBeginnersRescheduleLimitStatus(
 
   if (courseError) throw courseError;
   if (!beginnersCourse?.id) {
-    return buildBeginnersRescheduleLimitStatus(null, 0, 0);
+    return buildBeginnersRescheduleLimitStatus(null, 0, 0, 0, 0);
   }
 
   const [enrollmentResult, rescheduleCount, cohortSwitchCount] = await Promise.all([
     supabase
       .from("course_enrollments")
-      .select("extra_reschedule_allowance")
+      .select("extra_reschedule_allowance, delivery_mode")
       .eq("user_id", studentId)
       .eq("course_id", beginnersCourse.id)
       .maybeSingle(),
@@ -129,9 +160,9 @@ export async function loadBeginnersRescheduleLimitStatus(
   ]);
 
   let extraAllowance = 0;
+  let deliveryMode: "one_to_one" | "group" | null = null;
   if (enrollmentResult.error) {
     if (!isMissingColumnError(enrollmentResult.error.message)) {
-      // Column missing or enrollment unreadable — fall back to default limit only.
       console.error(
         "loadBeginnersRescheduleLimitStatus enrollment:",
         enrollmentResult.error.message || enrollmentResult.error
@@ -139,8 +170,21 @@ export async function loadBeginnersRescheduleLimitStatus(
     }
   } else {
     extraAllowance = enrollmentResult.data?.extra_reschedule_allowance ?? 0;
+    deliveryMode =
+      enrollmentResult.data?.delivery_mode === "one_to_one" ||
+      enrollmentResult.data?.delivery_mode === "group"
+        ? enrollmentResult.data.delivery_mode
+        : null;
   }
 
-  const used = rescheduleCount + cohortSwitchCount;
-  return buildBeginnersRescheduleLimitStatus(beginnersCourse.id, used, extraAllowance);
+  const extraOneToOne = deliveryMode === "one_to_one" ? extraAllowance : 0;
+  const extraGroup = deliveryMode === "group" ? extraAllowance : 0;
+
+  return buildBeginnersRescheduleLimitStatus(
+    beginnersCourse.id,
+    rescheduleCount,
+    cohortSwitchCount,
+    extraOneToOne,
+    extraGroup
+  );
 }

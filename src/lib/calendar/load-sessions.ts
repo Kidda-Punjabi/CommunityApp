@@ -4,6 +4,7 @@ import { getRescheduleEligibility } from "@/lib/calendar/reschedule-policy";
 import {
   appliesBeginnersRescheduleLimit,
   buildBeginnersRescheduleLimitStatus,
+  getBeginnersRescheduleLockedReason,
   loadBeginnersRescheduleLimitStatus,
 } from "@/lib/calendar/reschedule-limit";
 import type {
@@ -19,6 +20,8 @@ import { isCalendarSchemaMissingError } from "@/lib/calendar/schema";
 import { isValidCohortSwitchCandidateSession } from "@/lib/calendar/cohort-switch-candidates";
 import { isStoredSessionExcluded, type CalendarExclusionRow } from "@/lib/calendar/exclusions";
 import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
+import { filterStudentScheduleSessions } from "@/lib/calendar/filter-student-schedule-sessions";
+import { resolvePrimaryOneToOneSeriesByCourse } from "@/lib/calendar/resolve-student-one-to-one-series";
 import { isSessionVisibleToStudent, type StudentEnrollmentContext } from "@/lib/calendar/session-visibility";
 
 const IN_FILTER_CHUNK_SIZE = 80;
@@ -115,7 +118,7 @@ export async function loadStudentUpcomingSessions(
 
   const { data: enrollments, error: enrollmentsError } = await supabase
     .from("course_enrollments")
-    .select("tutor_id, cohort_id, delivery_mode")
+    .select("tutor_id, cohort_id, delivery_mode, course_id")
     .eq("user_id", studentId);
 
   if (enrollmentsError) {
@@ -164,25 +167,47 @@ export async function loadStudentUpcomingSessions(
     exclusionsByTutor
   );
 
-  const enrollmentContext = (enrollments ?? []).map((enrollment) => ({
+  const enrollmentContext: StudentEnrollmentContext[] = (enrollments ?? []).map((enrollment) => ({
     tutorId: enrollment.tutor_id,
     cohortId: enrollment.cohort_id,
     deliveryMode: enrollment.delivery_mode as StudentEnrollmentContext["deliveryMode"],
+    courseId: enrollment.course_id as string,
   }));
 
   const normalizedEmail = studentEmail?.trim().toLowerCase() ?? "";
   const visible = withoutExcluded.filter((session) =>
     isSessionVisibleToStudent(session, studentId, normalizedEmail, enrollmentContext)
   );
-  if (visible.length === 0) {
+
+  const oneToOneCourseIds = [
+    ...new Set(
+      enrollmentContext
+        .filter((entry) => entry.deliveryMode === "one_to_one")
+        .map((entry) => entry.courseId)
+    ),
+  ];
+  const scopedCourseIds =
+    options?.courseIds && options.courseIds.length > 0 ? options.courseIds : oneToOneCourseIds;
+  const primarySeriesByCourseId = await resolvePrimaryOneToOneSeriesByCourse(
+    supabase,
+    studentId,
+    scopedCourseIds
+  );
+  const scheduleSessions = filterStudentScheduleSessions(
+    visible,
+    enrollmentContext,
+    primarySeriesByCourseId
+  );
+
+  if (scheduleSessions.length === 0) {
     return { sessions: [], schemaReady: true };
   }
 
-  const sessionIds = visible.map((session) => session.id);
-  const sessionTutorIds = [...new Set(visible.map((session) => session.tutor_id))];
+  const sessionIds = scheduleSessions.map((session) => session.id);
+  const sessionTutorIds = [...new Set(scheduleSessions.map((session) => session.tutor_id))];
   const groupCohortIds = [
     ...new Set(
-      visible.map((session) => session.cohort_id).filter((id): id is string => Boolean(id))
+      scheduleSessions.map((session) => session.cohort_id).filter((id): id is string => Boolean(id))
     ),
   ];
 
@@ -282,14 +307,14 @@ export async function loadStudentUpcomingSessions(
   );
   const cohortMetaById = new Map((sessionCohorts ?? []).map((cohort) => [cohort.id, cohort]));
 
-  const labelled = await attachLessonLabelsToSessions(supabase, visible);
+  const labelled = await attachLessonLabelsToSessions(supabase, scheduleSessions);
   const labelledById = new Map(labelled.map((session) => [session.id, session]));
   let beginnersRescheduleLimit;
   try {
     beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, studentId);
   } catch (error) {
     console.error("loadBeginnersRescheduleLimitStatus failed:", error);
-    beginnersRescheduleLimit = buildBeginnersRescheduleLimitStatus(null, 0, 0);
+    beginnersRescheduleLimit = buildBeginnersRescheduleLimitStatus(null, 0, 0, 0, 0);
   }
 
   const groupSessions = labelled.filter(
@@ -355,10 +380,10 @@ export async function loadStudentUpcomingSessions(
     sessions: labelled.map((session) => {
       const rescheduleRequest = requestBySession.get(session.id) ?? null;
       const rescheduleLimitLockedReason = appliesBeginnersRescheduleLimit(
-        session.course_id,
+        session,
         beginnersRescheduleLimit
       )
-        ? beginnersRescheduleLimit.lockedReason
+        ? getBeginnersRescheduleLockedReason(session, beginnersRescheduleLimit)
         : null;
       const eligibility = getRescheduleEligibility(session, rescheduleRequest, {
         rescheduleLimitLockedReason,

@@ -58,7 +58,8 @@ export function CancelCohortSwitchRequestControl({
         {compact ? "." : " — the Kidda team will respond soon."}
       </p>
       <p className={cn("text-xs text-violet-800/80", compact ? "mt-1" : "mt-1.5")}>
-        Cancel before it&apos;s approved and it won&apos;t count toward your reschedule allowance.
+        Cancel before it&apos;s approved and it won&apos;t count toward your alternate cohort
+        allowance.
       </p>
       <button
         type="button"

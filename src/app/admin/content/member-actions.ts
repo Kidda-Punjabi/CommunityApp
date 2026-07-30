@@ -320,9 +320,20 @@ export async function loadAdminMemberDetail(
                 | "group"
                 | null,
               cohortId: beginnersEnrollment.cohort_id,
-              extraRescheduleAllowance: beginnersRescheduleLimit.extraAllowance,
-              reschedulesUsed: beginnersRescheduleLimit.used,
-              rescheduleLimit: beginnersRescheduleLimit.totalAllowed,
+              extraRescheduleAllowance:
+                beginnersEnrollment.delivery_mode === "group"
+                  ? beginnersRescheduleLimit.group.extraAllowance
+                  : beginnersRescheduleLimit.oneToOne.extraAllowance,
+              reschedulesUsed:
+                beginnersEnrollment.delivery_mode === "group"
+                  ? beginnersRescheduleLimit.group.used
+                  : beginnersRescheduleLimit.oneToOne.used,
+              rescheduleLimit:
+                beginnersEnrollment.delivery_mode === "group"
+                  ? beginnersRescheduleLimit.group.totalAllowed
+                  : beginnersRescheduleLimit.oneToOne.totalAllowed,
+              oneToOneReschedule: beginnersRescheduleLimit.oneToOne,
+              groupReschedule: beginnersRescheduleLimit.group,
             }
           : null,
         activeCohorts,

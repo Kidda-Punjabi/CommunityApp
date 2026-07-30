@@ -418,7 +418,7 @@ export async function loadAdminTutorCalendars(
     enrollmentUserIds.length > 0
       ? await supabase
           .from("course_enrollments")
-          .select("user_id, tutor_id, cohort_id, delivery_mode")
+          .select("user_id, tutor_id, cohort_id, delivery_mode, course_id")
           .in("user_id", enrollmentUserIds)
       : { data: [] };
 
@@ -429,6 +429,7 @@ export async function loadAdminTutorCalendars(
       tutorId: row.tutor_id,
       cohortId: row.cohort_id,
       deliveryMode: row.delivery_mode as StudentEnrollmentContext["deliveryMode"],
+      courseId: row.course_id as string,
     });
     enrollmentsByUserId.set(row.user_id, list);
   }

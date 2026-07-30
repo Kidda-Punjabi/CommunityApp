@@ -7,6 +7,7 @@ import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy"
 import { getRescheduleEligibility, GROUP_LESSON_NO_RESCHEDULE_REASON } from "@/lib/calendar/reschedule-policy";
 import {
   appliesBeginnersRescheduleLimit,
+  getBeginnersRescheduleLockedReason,
   loadBeginnersRescheduleLimitStatus,
 } from "@/lib/calendar/reschedule-limit";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -60,10 +61,10 @@ export async function requestLessonReschedule(
 
   const beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, user.id);
   const rescheduleLimitLockedReason = appliesBeginnersRescheduleLimit(
-    session.course_id,
+    session,
     beginnersRescheduleLimit
   )
-    ? beginnersRescheduleLimit.lockedReason
+    ? getBeginnersRescheduleLockedReason(session, beginnersRescheduleLimit)
     : null;
 
   const eligibility = getRescheduleEligibility(session, existing ?? null, {
@@ -288,10 +289,10 @@ export async function requestCohortSwitch(
 
   const beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, user.id);
   const rescheduleLimitLockedReason = appliesBeginnersRescheduleLimit(
-    session.course_id,
+    session,
     beginnersRescheduleLimit
   )
-    ? beginnersRescheduleLimit.lockedReason
+    ? getBeginnersRescheduleLockedReason(session, beginnersRescheduleLimit)
     : null;
 
   const eligibility = getCohortSwitchEligibility(
@@ -373,7 +374,7 @@ export async function cancelCohortSwitchRequest(requestId: string): Promise<Cale
   revalidatePath("/admin/content");
   return {
     success:
-      "Request cancelled. It doesn’t count toward your reschedule allowance, so you can request again if you still need to.",
+      "Request cancelled. It doesn’t count toward your alternate cohort allowance, so you can request again if you still need to.",
   };
 }
 

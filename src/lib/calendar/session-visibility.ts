@@ -4,6 +4,7 @@ export type StudentEnrollmentContext = {
   tutorId: string;
   cohortId: string | null;
   deliveryMode: "one_to_one" | "group" | null;
+  courseId: string;
 };
 
 export function isSessionVisibleToStudent(

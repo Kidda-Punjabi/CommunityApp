@@ -305,10 +305,20 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
           <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
             <p className="text-sm font-medium text-zinc-900">Reschedule allowance</p>
             <p className="mt-1 text-xs text-zinc-600">
-              Used {detail.beginnersEnrollment.reschedulesUsed} of{" "}
-              {detail.beginnersEnrollment.rescheduleLimit} (default limit is 2 per Beginners
-              course). Pending and approved reschedule or alternate-cohort requests count toward
-              this total.
+              {detail.beginnersEnrollment.deliveryMode === "group" ? (
+                <>
+                  Group alternate-cohort requests: used{" "}
+                  {detail.beginnersEnrollment.groupReschedule.used} of{" "}
+                  {detail.beginnersEnrollment.groupReschedule.totalAllowed} (default limit is 2).
+                  Pending and approved requests count toward this total.
+                </>
+              ) : (
+                <>
+                  1-to-1 reschedules: used {detail.beginnersEnrollment.oneToOneReschedule.used} of{" "}
+                  {detail.beginnersEnrollment.oneToOneReschedule.totalAllowed} (default limit is 2).
+                  Pending and approved requests count toward this total.
+                </>
+              )}
             </p>
             <div className="mt-3">
               <label htmlFor="bc_extra_reschedules" className={labelClass}>
@@ -326,7 +336,11 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
                 className={inputClass}
               />
               <p className="mt-1 text-xs text-zinc-500">
-                Add extra reschedules beyond the default 2 if you need to allow another change.
+                Add extra{" "}
+                {detail.beginnersEnrollment.deliveryMode === "group"
+                  ? "alternate cohort requests"
+                  : "1-to-1 reschedules"}{" "}
+                beyond the default 2 if you need to allow another change.
               </p>
             </div>
             <button

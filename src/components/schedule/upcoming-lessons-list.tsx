@@ -246,8 +246,9 @@ export function RescheduleRequestForm({
         />
       </div>
       <p className="text-xs text-zinc-500">
-        Requests must be made at least 24 hours before the lesson. Beginners students get up to 2
-        reschedules for the course — please only ask if you genuinely need to change your class.
+        Requests must be made at least 24 hours before the lesson. Beginners 1-to-1 students get up
+        to 2 reschedules for the course — please only ask if you genuinely need to change your
+        class.
       </p>
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
       <div className="flex gap-2">
@@ -355,9 +356,9 @@ export function CohortSwitchRequestForm({
       </div>
       <p className="rounded-2xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{COHORT_SWITCH_WARNING}</p>
       <p className="text-xs text-zinc-500">
-        You need to let us know at least 3 days before the lesson. Beginners students get up to 2
-        reschedules for the course — please only request a different class if it is genuinely
-        necessary.
+        You need to let us know at least 3 days before the lesson. Beginners group students get up
+        to 2 alternate cohort requests for the course — please only request a different class if it
+        is genuinely necessary.
       </p>
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
       <div className="flex gap-2">

@@ -6,6 +6,6 @@ ALTER TABLE public.course_enrollments
   CHECK (extra_reschedule_allowance >= 0);
 
 COMMENT ON COLUMN public.course_enrollments.extra_reschedule_allowance IS
-  'Admin override: additional reschedule/cohort-switch requests beyond the default Beginners limit (2).';
+  'Admin override: additional requests beyond the default Beginners limit (2), applied to the enrollment delivery mode only — group alternate-cohort or 1-to-1 reschedule.';
 
 NOTIFY pgrst, 'reload schema';
