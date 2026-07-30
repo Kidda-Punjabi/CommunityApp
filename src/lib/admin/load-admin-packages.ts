@@ -961,7 +961,7 @@ export async function loadAdminPackagesList(
         tutorId: instance.tutor_id,
         hasConnection: instance.tutor_id ? connectionByTutorId.has(instance.tutor_id) : false,
         hasRecurringEvent: linkedEventByInstanceId.has(instance.id),
-        hasConfirmedStudent: (confirmedStudentIdsByInstanceId.get(instance.id) ?? []).length > 0,
+        hasConfirmedStudent: roster.confirmed.some((member) => Boolean(member.userId)),
       }),
       calendarNeedsAttention: calendarNeedsAttention(
         instance.status as PackageInstanceStatus,
@@ -969,7 +969,7 @@ export async function loadAdminPackagesList(
           tutorId: instance.tutor_id,
           hasConnection: instance.tutor_id ? connectionByTutorId.has(instance.tutor_id) : false,
           hasRecurringEvent: linkedEventByInstanceId.has(instance.id),
-          hasConfirmedStudent: (confirmedStudentIdsByInstanceId.get(instance.id) ?? []).length > 0,
+          hasConfirmedStudent: roster.confirmed.some((member) => Boolean(member.userId)),
         })
       ),
       calendarLinkedEvent: linkedEventByInstanceId.get(instance.id) ?? null,

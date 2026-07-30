@@ -81,6 +81,13 @@ export type StudentSessionsLoadResult = {
   schemaReady: boolean;
 };
 
+export type StudentSessionsLoadOptions = {
+  /** Include past scheduled sessions (for learn lesson date labels). */
+  includePast?: boolean;
+  /** Limit to these course IDs when set. */
+  courseIds?: string[];
+};
+
 export async function loadTutorCalendarStatus(
   supabase: SupabaseClient
 ): Promise<TutorCalendarConnectionStatus & { schemaReady: boolean }> {
@@ -101,7 +108,8 @@ export async function loadTutorCalendarStatus(
 export async function loadStudentUpcomingSessions(
   supabase: SupabaseClient,
   studentId: string,
-  studentEmail: string | null | undefined
+  studentEmail: string | null | undefined,
+  options?: StudentSessionsLoadOptions
 ): Promise<StudentSessionsLoadResult> {
   const nowIso = new Date().toISOString();
 
@@ -125,15 +133,23 @@ export async function loadStudentUpcomingSessions(
     return { sessions: [], schemaReady: true };
   }
 
-  const { data: sessions, error } = await supabase
+  let sessionsQuery = supabase
     .from("tutor_scheduled_sessions")
     .select("*")
     .in("tutor_id", tutorIds)
     .eq("status", "scheduled")
     .neq("match_method", "unmatched")
-    .neq("match_method", "title_name")
-    .gte("starts_at", nowIso)
-    .order("starts_at", { ascending: true });
+    .neq("match_method", "title_name");
+
+  if (!options?.includePast) {
+    sessionsQuery = sessionsQuery.gte("starts_at", nowIso);
+  }
+
+  if (options?.courseIds && options.courseIds.length > 0) {
+    sessionsQuery = sessionsQuery.in("course_id", options.courseIds);
+  }
+
+  const { data: sessions, error } = await sessionsQuery.order("starts_at", { ascending: true });
 
   if (error) {
     if (isCalendarSchemaMissingError(error)) {

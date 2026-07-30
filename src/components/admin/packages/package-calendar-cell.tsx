@@ -14,6 +14,10 @@ import {
 } from "@/app/admin/packages/actions";
 import type { AdminPackageListRow } from "@/lib/admin/packages/types";
 import { formatSessionWhenUk } from "@/lib/calendar/uk-display-time";
+import {
+  packageCalendarNeedsAttention,
+  resolvePackageCalendarLinkState,
+} from "@/lib/admin/packages/calendar-link-state";
 
 type Candidate = {
   googleEventId: string;
@@ -47,7 +51,8 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
 
   const isCohort = row.kind === "cohort";
 
-  const linkState = row.calendarLinkState ?? "unlinked";
+  const linkState = resolvePackageCalendarLinkState(row);
+  const needsAttention = packageCalendarNeedsAttention(row);
   const linked = row.calendarLinkedEvent;
   const linkedSessionCount = linked?.linkedSessionCount ?? 0;
 
@@ -341,7 +346,7 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
     return (
       <div className="space-y-1">
         <span className="text-[11px] font-medium text-zinc-500">Add a confirmed student first</span>
-        {row.calendarNeedsAttention ? (
+        {needsAttention ? (
           <p className="text-[10px] font-semibold text-amber-700">Needs attention</p>
         ) : null}
       </div>
@@ -352,7 +357,7 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
     return (
       <div className="space-y-1">
         <span className="text-[11px] font-medium text-zinc-500">Assign a tutor first</span>
-        {row.calendarNeedsAttention ? (
+        {needsAttention ? (
           <p className="text-[10px] font-semibold text-amber-700">Needs attention</p>
         ) : null}
       </div>
@@ -368,7 +373,7 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
         <p className="text-[10px] text-zinc-500">
           Tutor hasn’t connected Google Calendar yet.
         </p>
-        {row.calendarNeedsAttention ? (
+        {needsAttention ? (
           <p className="text-[10px] font-semibold text-amber-700">Needs attention</p>
         ) : null}
       </div>
@@ -408,7 +413,7 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
         {pending ? "Searching…" : searchedEmpty ? "Search again" : "Search for event"}
       </button>
 
-      {row.calendarNeedsAttention ? (
+      {needsAttention ? (
         <p className="text-[10px] font-semibold text-amber-700">Needs attention</p>
       ) : null}
 

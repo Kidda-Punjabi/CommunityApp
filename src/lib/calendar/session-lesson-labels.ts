@@ -27,6 +27,72 @@ export function formatUpcomingLessonLabel(
   return `Lesson ${lessonNumber} — ${shortDate}`;
 }
 
+function oneToOneStreamKey(session: ScheduledSessionRow): string | null {
+  if (!session.student_id) return null;
+  if (session.google_recurring_event_id) {
+    return `series:${session.tutor_id}:${session.student_id}:${session.google_recurring_event_id}`;
+  }
+  if (session.course_id) {
+    return `course:${session.tutor_id}:${session.student_id}:${session.course_id}`;
+  }
+  return `session:${session.id}`;
+}
+
+function applyStudentVisibleSessionFilters<
+  T extends { neq: (column: string, value: string) => T },
+>(query: T): T {
+  return query.neq("match_method", "unmatched").neq("match_method", "title_name");
+}
+
+async function loadOneToOneLessonNumbersBySessionId(
+  supabase: SupabaseClient,
+  sessions: ScheduledSessionRow[]
+): Promise<Map<string, number>> {
+  const lessonNumberBySessionId = new Map<string, number>();
+  const uniqueStreams = [
+    ...new Map(
+      sessions
+        .filter((session) => !session.cohort_id && session.student_id)
+        .map((session) => {
+          const key = oneToOneStreamKey(session);
+          return key ? ([key, session] as const) : null;
+        })
+        .filter((entry): entry is readonly [string, ScheduledSessionRow] => entry != null)
+    ).values(),
+  ];
+
+  await Promise.all(
+    uniqueStreams.map(async (sample) => {
+      let query = applyStudentVisibleSessionFilters(
+        supabase
+          .from("tutor_scheduled_sessions")
+          .select("id, starts_at")
+          .eq("tutor_id", sample.tutor_id)
+          .eq("student_id", sample.student_id as string)
+          .neq("status", "cancelled")
+          .order("starts_at", { ascending: true })
+      );
+
+      if (sample.google_recurring_event_id) {
+        query = query.eq("google_recurring_event_id", sample.google_recurring_event_id);
+      } else if (sample.course_id) {
+        query = query.eq("course_id", sample.course_id).is("google_recurring_event_id", null);
+      } else {
+        return;
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      for (const [index, row] of (data ?? []).entries()) {
+        lessonNumberBySessionId.set(row.id, index + 1);
+      }
+    })
+  );
+
+  return lessonNumberBySessionId;
+}
+
 /**
  * Derive curriculum lesson numbers for upcoming calendar sessions using the same
  * sequential model as cohort_lesson_log_entries → lessons.lesson_number:
@@ -62,34 +128,11 @@ export async function attachLessonLabelsToSessions<T extends ScheduledSessionRow
     }
   }
 
-  // 1-1: past sessions for the same student/tutor count as completed weeks
-  const oneToOneKeys = sessions
-    .filter((s) => !s.cohort_id && s.student_id)
-    .map((s) => ({ tutorId: s.tutor_id, studentId: s.student_id as string }));
-
-  const completedByOneToOne = new Map<string, number>();
-  const uniquePairs = [
-    ...new Map(
-      oneToOneKeys.map((p) => [`${p.tutorId}:${p.studentId}`, p] as const)
-    ).values(),
-  ];
-
-  const nowIso = new Date().toISOString();
-  await Promise.all(
-    uniquePairs.map(async ({ tutorId, studentId }) => {
-      const { count, error } = await supabase
-        .from("tutor_scheduled_sessions")
-        .select("id", { count: "exact", head: true })
-        .eq("tutor_id", tutorId)
-        .eq("student_id", studentId)
-        .neq("status", "cancelled")
-        .lt("starts_at", nowIso);
-      if (error) throw error;
-      completedByOneToOne.set(`${tutorId}:${studentId}`, count ?? 0);
-    })
+  const oneToOneLessonNumberBySessionId = await loadOneToOneLessonNumbersBySessionId(
+    supabase,
+    sessions
   );
 
-  // Assign sequential numbers within each cohort / 1-1 stream
   const nextIndexByKey = new Map<string, number>();
   const sorted = [...sessions].sort(
     (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
@@ -106,11 +149,7 @@ export async function attachLessonLabelsToSessions<T extends ScheduledSessionRow
       lessonNumber = base + offset + 1;
       nextIndexByKey.set(key, offset + 1);
     } else if (session.student_id) {
-      const key = `1to1:${session.tutor_id}:${session.student_id}`;
-      const base = completedByOneToOne.get(`${session.tutor_id}:${session.student_id}`) ?? 0;
-      const offset = nextIndexByKey.get(key) ?? 0;
-      lessonNumber = base + offset + 1;
-      nextIndexByKey.set(key, offset + 1);
+      lessonNumber = oneToOneLessonNumberBySessionId.get(session.id) ?? null;
     }
 
     labelById.set(session.id, {

@@ -38,6 +38,7 @@ import {
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { fetchCatchupEnabledLessonIds } from "@/lib/catchup/load-catchup";
 import { fetchFeedbackSubmittedLessonIds } from "@/lib/feedback/load-feedback-history";
+import { buildScheduleSessionByLessonId } from "@/lib/calendar/lesson-schedule-map";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import { loadStudentCohortCourseStats } from "@/lib/lessons/load-student-cohort-course-stats";
 import { loadStudentCohortHomeworkCompletedMap } from "@/lib/lessons/load-student-cohort-homework-completed";
@@ -212,7 +213,10 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
         : Promise.resolve(new Map()),
       fetchCatchupEnabledLessonIds(supabase, catchupEligibleLessonIds),
       fetchFeedbackSubmittedLessonIds(supabase, user!.id, lessonIds),
-      loadStudentUpcomingSessions(supabase, user!.id, user!.email),
+      loadStudentUpcomingSessions(supabase, user!.id, user!.email, {
+        includePast: true,
+        courseIds,
+      }),
       loadStudentCohortCourseStats(supabase, user!.id, courseIds),
       showHomework
         ? loadStudentCohortHomeworkCompletedMap(
@@ -236,15 +240,11 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       );
   }
   const courseProgress = summarizeCourseProgress(lessons, completionMap);
-  const scheduleSessionByLessonId = new Map<string, (typeof upcomingLoad.sessions)[number]>();
-  const lessonByNumber = new Map(lessons.map((lesson) => [lesson.lesson_number, lesson.id] as const));
-  for (const session of upcomingLoad.sessions) {
-    if (!session.course_id || !courseIds.includes(session.course_id)) continue;
-    if (!session.lessonNumber) continue;
-    const lessonId = lessonByNumber.get(session.lessonNumber);
-    if (!lessonId || scheduleSessionByLessonId.has(lessonId)) continue;
-    scheduleSessionByLessonId.set(lessonId, session);
-  }
+  const scheduleSessionByLessonId = buildScheduleSessionByLessonId(
+    upcomingLoad.sessions,
+    lessons,
+    courseIds
+  );
 
   return (
     <LearnLessonList
