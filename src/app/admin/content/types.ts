@@ -209,6 +209,18 @@ export type AdminMemberDetail = {
     extraRescheduleAllowance: number;
     reschedulesUsed: number;
     rescheduleLimit: number;
+    oneToOneReschedule: {
+      used: number;
+      totalAllowed: number;
+      remaining: number;
+      atLimit: boolean;
+    };
+    groupReschedule: {
+      used: number;
+      totalAllowed: number;
+      remaining: number;
+      atLimit: boolean;
+    };
   } | null;
   activeCohorts: { cohortId: string; cohortName: string }[];
 };
