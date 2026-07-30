@@ -108,7 +108,6 @@ function fallbackEventFromParams(params: {
     attendeeEmails: [],
     recurringEventId: seriesId || null,
     status: "confirmed",
-    updated: null,
   };
 }
 

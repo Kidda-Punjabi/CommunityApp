@@ -38,12 +38,6 @@ function oneToOneStreamKey(session: ScheduledSessionRow): string | null {
   return `session:${session.id}`;
 }
 
-function applyStudentVisibleSessionFilters<
-  T extends { neq: (column: string, value: string) => T },
->(query: T): T {
-  return query.neq("match_method", "unmatched").neq("match_method", "title_name");
-}
-
 async function loadOneToOneLessonNumbersBySessionId(
   supabase: SupabaseClient,
   sessions: ScheduledSessionRow[]
@@ -63,25 +57,37 @@ async function loadOneToOneLessonNumbersBySessionId(
 
   await Promise.all(
     uniqueStreams.map(async (sample) => {
-      let query = applyStudentVisibleSessionFilters(
-        supabase
+      const studentId = sample.student_id as string;
+      let data: Array<{ id: string }> | null = null;
+      let error: { message: string } | null = null;
+
+      if (sample.google_recurring_event_id) {
+        ({ data, error } = await supabase
           .from("tutor_scheduled_sessions")
           .select("id, starts_at")
           .eq("tutor_id", sample.tutor_id)
-          .eq("student_id", sample.student_id as string)
+          .eq("student_id", studentId)
+          .eq("google_recurring_event_id", sample.google_recurring_event_id)
           .neq("status", "cancelled")
-          .order("starts_at", { ascending: true })
-      );
-
-      if (sample.google_recurring_event_id) {
-        query = query.eq("google_recurring_event_id", sample.google_recurring_event_id);
+          .neq("match_method", "unmatched")
+          .neq("match_method", "title_name")
+          .order("starts_at", { ascending: true }));
       } else if (sample.course_id) {
-        query = query.eq("course_id", sample.course_id).is("google_recurring_event_id", null);
+        ({ data, error } = await supabase
+          .from("tutor_scheduled_sessions")
+          .select("id, starts_at")
+          .eq("tutor_id", sample.tutor_id)
+          .eq("student_id", studentId)
+          .eq("course_id", sample.course_id)
+          .is("google_recurring_event_id", null)
+          .neq("status", "cancelled")
+          .neq("match_method", "unmatched")
+          .neq("match_method", "title_name")
+          .order("starts_at", { ascending: true }));
       } else {
         return;
       }
 
-      const { data, error } = await query;
       if (error) throw error;
 
       for (const [index, row] of (data ?? []).entries()) {
