@@ -5,10 +5,10 @@ import { useActionState, useState } from "react";
 import {
   cancelRescheduleRequest,
   requestCohortSwitch,
-  requestLessonReschedule,
   type CalendarActionResult,
 } from "@/app/dashboard/tutor/calendar-actions";
 import { CancelCohortSwitchRequestControl } from "@/components/schedule/cancel-cohort-switch-request-control";
+import { RescheduleRequestForm } from "@/components/schedule/reschedule-request-form";
 import { LessonsViewToggle, type LessonsViewMode } from "@/components/schedule/lessons-view-toggle";
 import { MonthLessonsCalendar } from "@/components/schedule/month-lessons-calendar";
 import { COHORT_SWITCH_CUTOFF_MS, RESCHEDULE_CUTOFF_MS } from "@/lib/calendar/constants";
@@ -195,80 +195,7 @@ function PendingRequestBanner({ requestId }: { requestId: string }) {
   );
 }
 
-export function RescheduleRequestForm({
-  sessionId,
-  onDone,
-}: {
-  sessionId: string;
-  onDone?: () => void;
-}) {
-  const [state, action, pending] = useActionState(requestLessonReschedule, initial);
-  const [open, setOpen] = useState(false);
-
-  if (state.success) {
-    return <p className="mt-3 text-sm text-emerald-700">{state.success}</p>;
-  }
-
-  if (!open) {
-    return (
-      <div className="mt-3">
-        <button type="button" onClick={() => setOpen(true)} className={ui.btnPrimary}>
-          I need to reschedule
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <form action={action} className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
-      <input type="hidden" name="session_id" value={sessionId} />
-      <div>
-        <label className="mb-1 block text-sm font-medium text-zinc-700">
-          Why do you need to reschedule?
-        </label>
-        <textarea
-          name="message"
-          required
-          rows={3}
-          className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm"
-          placeholder="Brief explanation for your tutor"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-zinc-700">
-          Preferred alternative times (optional)
-        </label>
-        <input
-          name="preferred_times"
-          type="text"
-          className={ui.input}
-          placeholder="e.g. Thu after 5pm, Sat morning"
-        />
-      </div>
-      <p className="text-xs text-zinc-500">
-        Requests must be made at least 24 hours before the lesson. Beginners 1-to-1 students get up
-        to 2 reschedules for the course — please only ask if you genuinely need to change your
-        class.
-      </p>
-      {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
-      <div className="flex gap-2">
-        <button type="submit" disabled={pending} className={ui.btnPrimary}>
-          {pending ? "Sending…" : "Send request"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setOpen(false);
-            onDone?.();
-          }}
-          className={ui.btnGhost}
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
-}
+export { RescheduleRequestForm } from "@/components/schedule/reschedule-request-form";
 
 export function CohortSwitchRequestForm({
   session,

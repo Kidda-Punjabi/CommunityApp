@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { COHORT_SWITCH_CUTOFF_MS } from "@/lib/calendar/constants";
 import { isValidCohortSwitchCandidateSession } from "@/lib/calendar/cohort-switch-candidates";
 import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy";
-import { getRescheduleEligibility, GROUP_LESSON_NO_RESCHEDULE_REASON } from "@/lib/calendar/reschedule-policy";
+import { getRescheduleEligibility, GROUP_LESSON_NO_RESCHEDULE_REASON, formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import {
   appliesBeginnersRescheduleLimit,
   getBeginnersRescheduleLockedReason,
@@ -29,10 +29,14 @@ export async function requestLessonReschedule(
 ): Promise<CalendarActionResult> {
   const sessionId = String(formData.get("session_id") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
-  const preferredTimes = String(formData.get("preferred_times") ?? "").trim();
+  const requestedStartsAt = String(formData.get("requested_starts_at") ?? "").trim();
+  const requestedEndsAt = String(formData.get("requested_ends_at") ?? "").trim();
 
   if (!sessionId) return { error: "Missing lesson." };
   if (!message) return { error: "Please explain why you need to reschedule." };
+  if (!requestedStartsAt || !requestedEndsAt) {
+    return { error: "Choose a new time from your tutor's availability." };
+  }
 
   const supabase = await createClient();
   const {
@@ -51,6 +55,16 @@ export async function requestLessonReschedule(
   if (session.cohort_id) {
     return { error: GROUP_LESSON_NO_RESCHEDULE_REASON };
   }
+
+  const { assertValidRescheduleSlot } = await import("@/lib/calendar/reschedule-slots");
+  const slotCheck = await assertValidRescheduleSlot(
+    supabase,
+    session,
+    user.id,
+    requestedStartsAt,
+    requestedEndsAt
+  );
+  if (!slotCheck.ok) return { error: slotCheck.error };
 
   const { data: existing } = await supabase
     .from("lesson_reschedule_requests")
@@ -74,16 +88,38 @@ export async function requestLessonReschedule(
     return { error: eligibility.lockedReason ?? "Cannot request reschedule." };
   }
 
-  const { error } = await supabase.from("lesson_reschedule_requests").insert({
+  const preferredTimes = formatSessionWhen(requestedStartsAt, requestedEndsAt);
+  const payload = {
     session_id: sessionId,
     student_id: user.id,
     message,
-    preferred_times: preferredTimes || null,
-  });
+    preferred_times: preferredTimes,
+    requested_starts_at: requestedStartsAt,
+    requested_ends_at: requestedEndsAt,
+    status: "pending" as const,
+    tutor_response: null,
+    resolved_at: null,
+    resolved_by: null,
+  };
 
-  if (error) return { error: error.message };
+  const { error } =
+    existing && (existing.status === "cancelled" || existing.status === "denied")
+      ? await supabase.from("lesson_reschedule_requests").update(payload).eq("id", existing.id)
+      : await supabase.from("lesson_reschedule_requests").insert(payload);
+
+  if (error) {
+    if (error.message.includes("requested_starts_at") || error.message.includes("requested_ends_at")) {
+      return {
+        error:
+          "Reschedule slot storage is not applied in production yet. Apply supabase/lesson-reschedule-requested-slot.sql first.",
+      };
+    }
+    return { error: error.message };
+  }
 
   revalidatePath("/dashboard/schedule");
+  revalidatePath("/dashboard/learn");
+  revalidatePath("/dashboard/tutor/requests");
   return { success: "Reschedule request sent to your tutor." };
 }
 
@@ -115,10 +151,6 @@ export async function resolveRescheduleRequest(
     return { error: "Invalid request." };
   }
 
-  if (decision === "approved" && (!newStartsAt || !newEndsAt)) {
-    return { error: "Pick an available alternative time to approve this reschedule." };
-  }
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -127,12 +159,21 @@ export async function resolveRescheduleRequest(
 
   const { data: request, error: requestError } = await supabase
     .from("lesson_reschedule_requests")
-    .select("id, session_id, status")
+    .select("id, session_id, status, requested_starts_at, requested_ends_at")
     .eq("id", requestId)
     .maybeSingle();
 
   if (requestError || !request) return { error: "Request not found." };
   if (request.status !== "pending") return { error: "This request was already resolved." };
+
+  const approvedStartsAt =
+    decision === "approved" ? newStartsAt || (request.requested_starts_at as string | null) : null;
+  const approvedEndsAt =
+    decision === "approved" ? newEndsAt || (request.requested_ends_at as string | null) : null;
+
+  if (decision === "approved" && (!approvedStartsAt || !approvedEndsAt)) {
+    return { error: "Pick an available alternative time to approve this reschedule." };
+  }
 
   if (decision === "approved") {
     const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
@@ -141,8 +182,8 @@ export async function resolveRescheduleRequest(
     const { applyRescheduleSlotToSession } = await import("@/lib/calendar/tutor-cover");
     const applied = await applyRescheduleSlotToSession(adminClient, {
       sessionId: request.session_id,
-      startsAt: newStartsAt,
-      endsAt: newEndsAt,
+      startsAt: approvedStartsAt!,
+      endsAt: approvedEndsAt!,
     });
     if (!applied.ok) return { error: applied.error };
   }
@@ -150,13 +191,7 @@ export async function resolveRescheduleRequest(
   const responseNote =
     decision === "approved"
       ? tutorResponse ||
-        `Rescheduled to ${new Date(newStartsAt).toLocaleString("en-GB", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-          hour: "numeric",
-          minute: "2-digit",
-        })}`
+        `Rescheduled to ${formatSessionWhen(approvedStartsAt!, approvedEndsAt!)}`
       : tutorResponse || null;
 
   const { error } = await supabase
@@ -175,6 +210,7 @@ export async function resolveRescheduleRequest(
   revalidatePath("/dashboard/tutor/calendar");
   revalidatePath("/dashboard/tutor/requests");
   revalidatePath("/dashboard/schedule");
+  revalidatePath("/dashboard/learn");
   revalidatePath("/admin/reschedule-requests");
   return {
     success:

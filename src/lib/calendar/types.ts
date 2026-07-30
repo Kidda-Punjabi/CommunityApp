@@ -36,6 +36,8 @@ export type RescheduleRequestRow = {
   student_id: string;
   message: string;
   preferred_times: string | null;
+  requested_starts_at?: string | null;
+  requested_ends_at?: string | null;
   status: RescheduleRequestStatus;
   tutor_response: string | null;
   resolved_at: string | null;

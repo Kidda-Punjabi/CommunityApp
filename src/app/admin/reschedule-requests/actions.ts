@@ -6,6 +6,7 @@ import {
   loadAlternativeSlotsForTutor,
 } from "@/lib/admin/load-admin-reschedule-requests";
 import { applyRescheduleSlotToSession } from "@/lib/calendar/tutor-cover";
+import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import { revalidatePath } from "next/cache";
 
 const PATH = "/admin/reschedule-requests";
@@ -58,21 +59,31 @@ export async function resolveAdminRescheduleRequest(input: {
 
     const { data: request, error: requestError } = await supabase
       .from("lesson_reschedule_requests")
-      .select("id, session_id, status")
+      .select("id, session_id, status, requested_starts_at, requested_ends_at")
       .eq("id", input.requestId)
       .maybeSingle();
 
     if (requestError || !request) return { error: "Request not found." };
     if (request.status !== "pending") return { error: "Already resolved." };
 
+    const approvedStartsAt =
+      input.decision === "approved"
+        ? input.newStartsAt?.trim() || (request.requested_starts_at as string | null)
+        : null;
+    const approvedEndsAt =
+      input.decision === "approved"
+        ? input.newEndsAt?.trim() || (request.requested_ends_at as string | null)
+        : null;
+
+    if (input.decision === "approved" && (!approvedStartsAt || !approvedEndsAt)) {
+      return { error: "Select an alternative time to approve." };
+    }
+
     if (input.decision === "approved") {
-      if (!input.newStartsAt || !input.newEndsAt) {
-        return { error: "Select an alternative time to approve." };
-      }
       const applied = await applyRescheduleSlotToSession(supabase, {
         sessionId: request.session_id,
-        startsAt: input.newStartsAt,
-        endsAt: input.newEndsAt,
+        startsAt: approvedStartsAt!,
+        endsAt: approvedEndsAt!,
       });
       if (!applied.ok) return { error: applied.error };
     }
@@ -80,13 +91,7 @@ export async function resolveAdminRescheduleRequest(input: {
     const responseNote =
       input.decision === "approved"
         ? input.tutorResponse?.trim() ||
-          `Rescheduled to ${new Date(input.newStartsAt!).toLocaleString("en-GB", {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-            hour: "numeric",
-            minute: "2-digit",
-          })}`
+          `Rescheduled to ${formatSessionWhen(approvedStartsAt!, approvedEndsAt!)}`
         : input.tutorResponse?.trim() || null;
 
     const { error } = await supabase

@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { LessonInlineAudioRow } from "@/components/lesson-inline-audio-row";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
-import {
-  CohortSwitchRequestForm,
-  RescheduleRequestForm,
-} from "@/components/schedule/upcoming-lessons-list";
+import { RescheduleRequestForm } from "@/components/schedule/reschedule-request-form";
+import { CohortSwitchRequestForm } from "@/components/schedule/upcoming-lessons-list";
 import { CancelCohortSwitchRequestControl } from "@/components/schedule/cancel-cohort-switch-request-control";
 import { LessonPdfViewer } from "@/components/lesson-pdf-viewer";
 import { deckPracticeHref } from "@/lib/flashcards/utils";
@@ -527,7 +525,13 @@ function LessonScheduleBlock({
       <p className="mt-1 text-zinc-600">{display.cohortOrTutorLine}</p>
 
       {scheduleSession.rescheduleRequest?.status === "pending" ? (
-        <p className="mt-3 text-violet-900">Reschedule request pending.</p>
+        <p className="mt-3 text-violet-900">
+          Reschedule request pending
+          {scheduleSession.rescheduleRequest.preferred_times
+            ? ` — requested ${scheduleSession.rescheduleRequest.preferred_times}`
+            : ""}
+          .
+        </p>
       ) : null}
 
       {scheduleSession.cohortSwitchRequest?.status === "pending" ? (

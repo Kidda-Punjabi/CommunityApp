@@ -18,6 +18,8 @@ export type AdminRescheduleRequestRow = {
   status: RescheduleRequestStatus;
   message: string;
   preferredTimes: string | null;
+  requestedStartsAt: string | null;
+  requestedEndsAt: string | null;
   createdAt: string;
   tutorResponse: string | null;
   resolvedAt: string | null;
@@ -42,7 +44,7 @@ export async function loadAdminRescheduleRequests(
     const { data, error } = await supabase
       .from("lesson_reschedule_requests")
       .select(
-        "id, status, message, preferred_times, created_at, tutor_response, resolved_at, student_id, session_id, tutor_scheduled_sessions(id, title, starts_at, ends_at, tutor_id, cohort_id, student_id)"
+        "id, status, message, preferred_times, requested_starts_at, requested_ends_at, created_at, tutor_response, resolved_at, student_id, session_id, tutor_scheduled_sessions(id, title, starts_at, ends_at, tutor_id, cohort_id, student_id)"
       )
       .order("created_at", { ascending: false })
       .limit(200);
@@ -110,6 +112,8 @@ export async function loadAdminRescheduleRequests(
         status: row.status as RescheduleRequestStatus,
         message: row.message,
         preferredTimes: row.preferred_times,
+        requestedStartsAt: (row.requested_starts_at as string | null) ?? null,
+        requestedEndsAt: (row.requested_ends_at as string | null) ?? null,
         createdAt: row.created_at,
         tutorResponse: row.tutor_response,
         resolvedAt: row.resolved_at,
