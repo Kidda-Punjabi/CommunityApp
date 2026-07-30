@@ -88,11 +88,11 @@ export function LessonActivityTiles({
         />
         {sessionCatchupHref ? (
           <HeroTile
-            label="Session catch-up"
+            label="Catch up"
             icon={<CatchupIcon />}
             href={sessionCatchupHref}
             tint="sky"
-            title="Catch up on this session"
+            title="Catch up on this missed session"
           />
         ) : (
           <HeroTile
