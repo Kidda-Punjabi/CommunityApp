@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LaneRunnerFlashcard } from "./types";
+import { loadScopedFlashcardPoolRows } from "@/lib/games/load-scoped-flashcards";
 
 type FlashcardRow = {
   id: string;
@@ -7,6 +8,7 @@ type FlashcardRow = {
   back_text: string | null;
   romanised: string | null;
   category: string | null;
+  lesson_id?: string | null;
 };
 
 export type LaneRunnerFlashcardsLoadResult = {
@@ -32,17 +34,27 @@ function normalizeCard(row: FlashcardRow): LaneRunnerFlashcard | null {
 export async function loadLaneRunnerFlashcards(
   supabase: SupabaseClient
 ): Promise<LaneRunnerFlashcardsLoadResult> {
-  const { data, error } = await supabase
-    .from("flashcards")
-    .select("id, front_text, back_text, romanised, category")
-    .order("created_at", { ascending: true });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (error) {
-    return { cards: [], loadError: error.message };
+  if (!user) {
+    return { cards: [], loadError: "Not signed in." };
   }
 
-  const cards = (data ?? [])
-    .map((row) => normalizeCard(row as FlashcardRow))
+  const { rows, error } = await loadScopedFlashcardPoolRows<FlashcardRow>(
+    supabase,
+    user.id,
+    "id, front_text, back_text, romanised, category, lesson_id",
+    { orderBy: { column: "created_at", ascending: true } }
+  );
+
+  if (error) {
+    return { cards: [], loadError: error };
+  }
+
+  const cards = rows
+    .map((row) => normalizeCard(row))
     .filter((card): card is LaneRunnerFlashcard => card !== null);
 
   return { cards, loadError: null };

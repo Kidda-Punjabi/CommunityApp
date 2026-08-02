@@ -8,6 +8,7 @@ import {
 } from "@/lib/group-games/content-filters";
 import { buildMcqPayload, normalizeFlashcardRow } from "@/lib/group-games/build-mcq-question";
 import type { GameRoomSettings } from "@/lib/game-rooms/types";
+import { loadScopedFlashcardPoolRows } from "@/lib/games/load-scoped-flashcards";
 
 export type BuzzInRoundInsert = {
   round_number: number;
@@ -21,6 +22,7 @@ type FlashcardPoolRow = {
   category: string | null;
   difficulty: number | null;
   topic_tags: string[] | null;
+  lesson_id?: string | null;
 };
 
 export async function buildBuzzInRounds(
@@ -29,13 +31,20 @@ export async function buildBuzzInRounds(
   settings?: GameRoomSettings | null
 ): Promise<BuzzInRoundInsert[]> {
   const filters = topicFiltersFromSettings(settings);
-  const { data, error } = await supabase
-    .from("flashcards")
-    .select("id, front_text, back_text, romanised, category, difficulty, topic_tags");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
 
-  if (error) throw error;
+  const { rows, error } = await loadScopedFlashcardPoolRows<FlashcardPoolRow>(
+    supabase,
+    user.id,
+    "id, front_text, back_text, romanised, category, difficulty, topic_tags, lesson_id"
+  );
 
-  const cards = ((data ?? []) as FlashcardPoolRow[])
+  if (error) throw new Error(error);
+
+  const cards = rows
     .map((row) => {
       const normalized = normalizeFlashcardRow(row);
       if (!normalized) return null;

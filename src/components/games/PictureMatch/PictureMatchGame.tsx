@@ -57,6 +57,8 @@ type AnswerFeedback = {
 
 type PictureMatchGameProps = {
   initialBestScore?: number;
+  initialCards?: PictureMatchCard[];
+  initialLoadError?: string | null;
 };
 
 function filterPoolByDifficulty(
@@ -136,7 +138,11 @@ function PunjabiOptionLabel({
   );
 }
 
-export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps) {
+export function PictureMatchGame({
+  initialBestScore = 0,
+  initialCards,
+  initialLoadError = null,
+}: PictureMatchGameProps) {
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [allCards, setAllCards] = useState<PictureMatchCard[]>([]);
   const [difficulty, setDifficulty] = useState<Difficulty>("easy");
@@ -193,6 +199,16 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
   }, []);
 
   useEffect(() => {
+    if (initialLoadError) {
+      setLoadState("error");
+      return;
+    }
+    if (initialCards) {
+      setAllCards(initialCards);
+      setLoadState("ready");
+      return;
+    }
+
     let cancelled = false;
 
     const loadCards = async () => {
@@ -239,7 +255,7 @@ export function PictureMatchGame({ initialBestScore = 0 }: PictureMatchGameProps
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialCards, initialLoadError]);
 
   useEffect(() => {
     if (phase !== "finished" || savedRef.current) return;

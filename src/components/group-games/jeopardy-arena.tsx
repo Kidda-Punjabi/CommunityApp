@@ -20,7 +20,7 @@ import {
   JEOPARDY_CATEGORIES,
   JEOPARDY_CATEGORY_LABELS,
   JEOPARDY_POINT_VALUES,
-} from "@/lib/jeopardy/build-board";
+} from "@/lib/jeopardy/constants";
 import type { JeopardyGameState, JeopardyTileRow, JeopardyViewMode } from "@/lib/jeopardy/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { GameRoomRow } from "@/lib/game-rooms/types";

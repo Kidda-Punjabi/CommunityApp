@@ -12,17 +12,25 @@ import {
 } from "@/lib/group-games/build-mcq-question";
 import type { McqQuestionPayload } from "@/lib/group-games/buzz-race-types";
 import type { GameRoomSettings } from "@/lib/game-rooms/types";
+import { loadScopedFlashcardPoolRows } from "@/lib/games/load-scoped-flashcards";
+import { resolveGamesContentScope } from "@/lib/games/content-scope";
 
 type FlashcardPoolCard = FlashcardForMcq & {
   difficulty: number | null;
   topic_tags: string[];
 };
 
-function filtersCacheKey(filters: GroupGameContentFilters): string {
+function filtersCacheKey(
+  filters: GroupGameContentFilters,
+  scopeMode: string,
+  courseIds: string[]
+): string {
   return JSON.stringify({
     topicTags: filters.topicTags,
     difficultyMin: filters.difficultyMin,
     difficultyMax: filters.difficultyMax,
+    scopeMode,
+    courseIds,
   });
 }
 
@@ -33,13 +41,31 @@ export async function loadFlashcardPool(
   settings?: GameRoomSettings | null
 ): Promise<FlashcardPoolCard[]> {
   const filters = topicFiltersFromSettings(settings);
-  const { data, error } = await supabase
-    .from("flashcards")
-    .select("id, front_text, back_text, romanised, category, difficulty, topic_tags");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
 
-  if (error) throw error;
+  const scope = await resolveGamesContentScope(supabase, user.id);
+  const { rows, error } = await loadScopedFlashcardPoolRows<{
+    id: string;
+    front_text: string | null;
+    back_text: string | null;
+    romanised: string | null;
+    category: string | null;
+    difficulty: number | null;
+    topic_tags: string[] | null;
+    lesson_id: string | null;
+  }>(
+    supabase,
+    user.id,
+    "id, front_text, back_text, romanised, category, difficulty, topic_tags, lesson_id",
+    { scope }
+  );
 
-  const cards = (data ?? [])
+  if (error) throw new Error(error);
+
+  const cards = rows
     .map((row) => {
       const normalized = normalizeFlashcardRow(row);
       if (!normalized) return null;
@@ -77,7 +103,17 @@ export async function getFlashcardPool(
   settings?: GameRoomSettings | null
 ): Promise<FlashcardPoolCard[]> {
   const filters = topicFiltersFromSettings(settings);
-  const key = filtersCacheKey(filters);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+
+  const scope = await resolveGamesContentScope(supabase, user.id);
+  const key = filtersCacheKey(
+    filters,
+    scope.mode,
+    scope.mode === "english" ? scope.courseIds : []
+  );
   const cached = poolCache.get(key);
   if (cached && cached.length >= 4) return cached;
 

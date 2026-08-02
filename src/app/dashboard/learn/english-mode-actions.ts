@@ -29,6 +29,7 @@ export async function enableLearnEnglishMode() {
   const cookieStore = await cookies();
   cookieStore.set(LEARN_ENGLISH_MODE_COOKIE, "1", learnEnglishModeCookieOptions());
   revalidatePath("/dashboard/learn");
+  revalidatePath("/dashboard/games");
   redirect("/dashboard/learn/english");
 }
 
@@ -36,5 +37,6 @@ export async function disableLearnEnglishMode() {
   const cookieStore = await cookies();
   cookieStore.delete(LEARN_ENGLISH_MODE_COOKIE);
   revalidatePath("/dashboard/learn");
+  revalidatePath("/dashboard/games");
   redirect("/dashboard/learn");
 }

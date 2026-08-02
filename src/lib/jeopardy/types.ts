@@ -1,5 +1,5 @@
 import type { McqQuestionPayload } from "@/lib/group-games/buzz-race-types";
-import type { JeopardyCategory } from "@/lib/jeopardy/build-board";
+import type { JeopardyCategory } from "@/lib/jeopardy/constants";
 
 export type JeopardyTileStatus = "unopened" | "active" | "resolved";
 

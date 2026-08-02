@@ -16,7 +16,7 @@ import {
   type LifelineId,
 } from "@/lib/games/chado-pauri/config";
 import { buildTutorHint } from "@/lib/games/chado-pauri/hints";
-import { countCardsByDifficulty } from "@/lib/games/chado-pauri/load-flashcards";
+import { countCardsByDifficulty } from "@/lib/games/chado-pauri/difficulty-counts";
 import {
   applyHalfAndHalf,
   buildChadoPauriQuestion,

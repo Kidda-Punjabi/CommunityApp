@@ -5,6 +5,7 @@ import {
   type SpeakingPracticeFlashcardRow,
   buildSpeakingPracticePool,
 } from "@/lib/games/speaking-practice";
+import { loadScopedFlashcardPoolRows } from "@/lib/games/load-scoped-flashcards";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type SpeakingPracticeLoadResult = {
@@ -21,10 +22,12 @@ export async function loadSpeakingPracticeContent(
   const monthKey = currentMonthKeyUtc();
 
   const [cardsResult, attemptsResult] = await Promise.all([
-    supabase
-      .from("flashcards")
-      .select("id, front_text, back_text, romanised, icon_name, difficulty")
-      .eq("category", "vocab"),
+    loadScopedFlashcardPoolRows<SpeakingPracticeFlashcardRow & { lesson_id?: string | null }>(
+      supabase,
+      userId,
+      "id, front_text, back_text, romanised, icon_name, difficulty, lesson_id",
+      { eq: { category: "vocab" } }
+    ),
     supabase
       .from("speaking_practice_attempts")
       .select("attempt_count")
@@ -34,7 +37,7 @@ export async function loadSpeakingPracticeContent(
   ]);
 
   if (cardsResult.error) {
-    const message = cardsResult.error.message ?? "Failed to load vocabulary.";
+    const message = cardsResult.error ?? "Failed to load vocabulary.";
     const missingTable = message.includes("flashcards");
     return {
       cards: [],
@@ -44,8 +47,7 @@ export async function loadSpeakingPracticeContent(
     };
   }
 
-  const rows = (cardsResult.data ?? []) as SpeakingPracticeFlashcardRow[];
-  const cards = buildSpeakingPracticePool(rows);
+  const cards = buildSpeakingPracticePool(cardsResult.rows);
 
   const attemptCount = attemptsResult.error ? 0 : (attemptsResult.data?.attempt_count ?? 0);
 

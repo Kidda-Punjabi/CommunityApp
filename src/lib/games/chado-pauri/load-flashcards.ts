@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChadoPauriFlashcard } from "./types";
+import { loadScopedFlashcardPoolRows } from "@/lib/games/load-scoped-flashcards";
 
 type FlashcardRow = {
   id: string;
@@ -9,6 +10,7 @@ type FlashcardRow = {
   category: string | null;
   difficulty: number | null;
   topic_tags: string[] | null;
+  lesson_id?: string | null;
 };
 
 export type ChadoPauriFlashcardsLoadResult = {
@@ -36,27 +38,30 @@ function normalizeCard(row: FlashcardRow): ChadoPauriFlashcard | null {
 export async function loadChadoPauriFlashcards(
   supabase: SupabaseClient
 ): Promise<ChadoPauriFlashcardsLoadResult> {
-  const { data, error } = await supabase
-    .from("flashcards")
-    .select("id, front_text, back_text, romanised, category, difficulty, topic_tags")
-    .order("created_at", { ascending: true });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (error) {
-    return { cards: [], loadError: error.message };
+  if (!user) {
+    return { cards: [], loadError: "Not signed in." };
   }
 
-  const cards = (data ?? [])
-    .map((row) => normalizeCard(row as FlashcardRow))
+  const { rows, error } = await loadScopedFlashcardPoolRows<FlashcardRow>(
+    supabase,
+    user.id,
+    "id, front_text, back_text, romanised, category, difficulty, topic_tags, lesson_id",
+    { orderBy: { column: "created_at", ascending: true } }
+  );
+
+  if (error) {
+    return { cards: [], loadError: error };
+  }
+
+  const cards = rows
+    .map((row) => normalizeCard(row))
     .filter((card): card is ChadoPauriFlashcard => card !== null);
 
   return { cards, loadError: null };
 }
 
-export function countCardsByDifficulty(cards: ChadoPauriFlashcard[]): Record<number, number> {
-  const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  for (const card of cards) {
-    const tier = Math.min(5, Math.max(1, card.difficulty));
-    counts[tier] = (counts[tier] ?? 0) + 1;
-  }
-  return counts;
-}
+export { countCardsByDifficulty } from "./difficulty-counts";

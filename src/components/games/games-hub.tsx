@@ -11,6 +11,7 @@ type GamesHubProps = {
   grammarGames: GameCatalogEntry[];
   personalBests: Record<string, number>;
   isPremium?: boolean;
+  hideGrammar?: boolean;
 };
 
 export function GamesHub({
@@ -18,6 +19,7 @@ export function GamesHub({
   grammarGames,
   personalBests,
   isPremium = false,
+  hideGrammar = false,
 }: GamesHubProps) {
   return (
     <div className="space-y-6">
@@ -32,12 +34,14 @@ export function GamesHub({
         isPremium={isPremium}
       />
 
-      <GamesCategoryGrid
-        title="Grammar games"
-        games={grammarGames}
-        personalBests={personalBests}
-        isPremium={isPremium}
-      />
+      {!hideGrammar && grammarGames.length > 0 ? (
+        <GamesCategoryGrid
+          title="Grammar games"
+          games={grammarGames}
+          personalBests={personalBests}
+          isPremium={isPremium}
+        />
+      ) : null}
 
       <GamesHorizontalRow title="Group games">
         {GROUP_GAME_HUB_ENTRIES.map((entry) => (

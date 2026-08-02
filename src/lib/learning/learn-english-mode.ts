@@ -1,3 +1,5 @@
+import "server-only";
+
 import { cookies } from "next/headers";
 
 /** Session cookie: Learn English mode on for this browser session only. */

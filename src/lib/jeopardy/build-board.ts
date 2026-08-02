@@ -10,17 +10,19 @@ import {
 } from "@/lib/group-games/build-mcq-question";
 import type { McqQuestionPayload } from "@/lib/group-games/buzz-race-types";
 import type { GameRoomSettings } from "@/lib/game-rooms/types";
+import { loadScopedFlashcardPoolRows } from "@/lib/games/load-scoped-flashcards";
+import {
+  JEOPARDY_CATEGORIES,
+  JEOPARDY_POINT_VALUES,
+  type JeopardyCategory,
+} from "@/lib/jeopardy/constants";
 
-export const JEOPARDY_CATEGORIES = ["alphabet", "vocab", "sentences"] as const;
-export type JeopardyCategory = (typeof JEOPARDY_CATEGORIES)[number];
-
-export const JEOPARDY_POINT_VALUES = [100, 200, 300, 400, 500] as const;
-
-export const JEOPARDY_CATEGORY_LABELS: Record<JeopardyCategory, string> = {
-  alphabet: "Alphabet",
-  vocab: "Vocab",
-  sentences: "Sentences",
-};
+export {
+  JEOPARDY_CATEGORIES,
+  JEOPARDY_CATEGORY_LABELS,
+  JEOPARDY_POINT_VALUES,
+  type JeopardyCategory,
+} from "@/lib/jeopardy/constants";
 
 export type SkippedJeopardyTile = {
   category: JeopardyCategory;
@@ -78,13 +80,29 @@ export async function buildJeopardyBoard(
   settings?: GameRoomSettings | null
 ): Promise<JeopardyBoardBuildResult> {
   const filters = contentFiltersFromSettings(settings);
-  const { data, error } = await supabase
-    .from("flashcards")
-    .select("id, front_text, back_text, romanised, category, difficulty, topic_tags");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
 
-  if (error) throw error;
+  const { rows, error } = await loadScopedFlashcardPoolRows<{
+    id: string;
+    front_text: string | null;
+    back_text: string | null;
+    romanised: string | null;
+    category: string | null;
+    difficulty: number | null;
+    topic_tags: string[] | null;
+    lesson_id: string | null;
+  }>(
+    supabase,
+    user.id,
+    "id, front_text, back_text, romanised, category, difficulty, topic_tags, lesson_id"
+  );
 
-  const allCards = (data ?? [])
+  if (error) throw new Error(error);
+
+  const allCards = rows
     .map((row) => {
       const normalized = normalizeFlashcardRow(row);
       if (!normalized) return null;
