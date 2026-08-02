@@ -1,4 +1,5 @@
 import { RESCHEDULE_CUTOFF_MS } from "@/lib/calendar/constants";
+import { UK_DISPLAY_TIMEZONE } from "@/lib/calendar/uk-display-time";
 import type { RescheduleRequestRow, ScheduledSessionRow } from "@/lib/calendar/types";
 
 export type RescheduleEligibility = {
@@ -87,18 +88,22 @@ export function getRescheduleEligibility(
 export function formatSessionWhen(startsAtIso: string, endsAtIso: string): string {
   const start = new Date(startsAtIso);
   const end = new Date(endsAtIso);
+  const tz = UK_DISPLAY_TIMEZONE;
   const date = start.toLocaleDateString("en-GB", {
     weekday: "short",
     day: "numeric",
     month: "short",
+    timeZone: tz,
   });
   const startTime = start.toLocaleTimeString("en-GB", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: tz,
   });
   const endTime = end.toLocaleTimeString("en-GB", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: tz,
   });
   return `${date} · ${startTime} – ${endTime}`;
 }

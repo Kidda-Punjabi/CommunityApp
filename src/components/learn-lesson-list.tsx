@@ -92,6 +92,22 @@ export function LearnLessonList({
     lessons.find((lesson) => {
       const { canBrowse, contentUnlocked } = lessonAccess(lesson);
       const completion = completionMap.get(lesson.id);
+      if (!(canBrowse && contentUnlocked && completion && !completion.fullyComplete)) {
+        return false;
+      }
+      const session = scheduleSessionByLessonId?.get(lesson.id);
+      // Prefer an incomplete lesson that is still upcoming (or has no calendar session).
+      if (!session) return true;
+      return new Date(session.ends_at).getTime() >= Date.now();
+    })?.id ??
+    lessons.find((lesson) => {
+      const session = scheduleSessionByLessonId?.get(lesson.id);
+      if (!session) return false;
+      return new Date(session.ends_at).getTime() >= Date.now();
+    })?.id ??
+    lessons.find((lesson) => {
+      const { canBrowse, contentUnlocked } = lessonAccess(lesson);
+      const completion = completionMap.get(lesson.id);
       return canBrowse && contentUnlocked && completion && !completion.fullyComplete;
     })?.id ??
     lessons.find((lesson) => {
@@ -100,10 +116,13 @@ export function LearnLessonList({
     })?.id;
 
   const nextUpLessonId = (() => {
+    const now = Date.now();
     const scheduled = lessons
       .filter((lesson) => {
         if (lesson.id === defaultExpandedLessonId) return false;
-        return Boolean(scheduleSessionByLessonId?.get(lesson.id));
+        const session = scheduleSessionByLessonId?.get(lesson.id);
+        if (!session) return false;
+        return new Date(session.ends_at).getTime() >= now;
       })
       .sort((a, b) => {
         const aSession = scheduleSessionByLessonId!.get(a.id)!;
@@ -130,11 +149,14 @@ export function LearnLessonList({
   })();
 
   function visualStatusFor(lesson: LessonWithCourse): LessonVisualStatus {
-    if (lesson.id === defaultExpandedLessonId) return "in_progress";
+    const session = scheduleSessionByLessonId?.get(lesson.id);
+    const sessionPast = session ? new Date(session.ends_at).getTime() < Date.now() : false;
+
+    // Past live sessions shouldn't stay "In progress" — they're done on the calendar.
+    if (lesson.id === defaultExpandedLessonId && !sessionPast) return "in_progress";
     if (lesson.id === nextUpLessonId) return "next_up";
     const { canBrowse, contentUnlocked } = lessonAccess(lesson);
     if (canBrowse && !contentUnlocked) return "locked";
-    const session = scheduleSessionByLessonId?.get(lesson.id);
     if (
       session?.cohortSwitchRequest?.status === "approved" ||
       session?.rescheduleRequest?.status === "approved"

@@ -389,6 +389,7 @@ function formatCollapsedDate(startsAtIso: string): string {
     weekday: "short",
     day: "numeric",
     month: "short",
+    timeZone: "Europe/London",
   });
 }
 
@@ -509,6 +510,13 @@ function LessonScheduleBlock({
   const display = getScheduleDisplay(scheduleSession);
   if (!scheduleSession || !display) return null;
 
+  const isPast = new Date(display.endsAt).getTime() < Date.now();
+  const heading = display.isRescheduled
+    ? "Rescheduled live lesson: "
+    : isPast
+      ? "Live lesson: "
+      : "Upcoming live lesson: ";
+
   return (
     <div
       className={cn(
@@ -517,7 +525,7 @@ function LessonScheduleBlock({
       )}
     >
       <p className="font-medium text-zinc-900">
-        {display.isRescheduled ? "Rescheduled live lesson: " : "Upcoming live lesson: "}
+        {heading}
         <span className={display.isRescheduled ? "text-teal-800" : undefined}>
           {formatSessionWhen(display.startsAt, display.endsAt)}
         </span>
