@@ -138,7 +138,13 @@ export function LessonCard({
     : null;
 
   const hasLessonContent =
-    hasPresentation || hasPdf || hasApprovedGeneratedAudio || hasLegacyAudioSection || Boolean(recording);
+    hasPresentation ||
+    hasPdf ||
+    hasApprovedGeneratedAudio ||
+    hasLegacyAudioSection ||
+    Boolean(recording) ||
+    hasFlashcards ||
+    Boolean(quizId);
 
   const isTutorLocked = canBrowse && !contentUnlocked;
   const scheduleDisplay = getScheduleDisplay(scheduleSession);

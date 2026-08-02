@@ -23,7 +23,7 @@ async function assertHasPrivateCourseAccess(): Promise<boolean> {
 
 export async function enableLearnEnglishMode() {
   if (!(await assertHasPrivateCourseAccess())) {
-    return { error: "No access" };
+    redirect("/dashboard/learn");
   }
 
   const cookieStore = await cookies();

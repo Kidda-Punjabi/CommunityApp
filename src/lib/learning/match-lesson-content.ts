@@ -34,6 +34,9 @@ export type SetCourseLinkRow = {
   course_id: string | null;
 };
 
+/** Synthetic deck id for flashcards linked only via lesson_id (deck_id null). */
+export const LESSON_SCOPED_DECK_ID = "lesson";
+
 export function getLessonFlashcardSets(
   lessonId: string,
   flashcards: FlashcardRow[],
@@ -81,6 +84,19 @@ export function getLessonFlashcardSets(
       name,
       cardCount: cardIds.length,
       cardIds,
+    });
+  }
+
+  // Lesson-scoped cards with no deck_id (e.g. private English Foundations).
+  const lessonOnlyCards = flashcards.filter(
+    (card) => card.lesson_id === lessonId && !card.deck_id
+  );
+  if (lessonOnlyCards.length > 0) {
+    sets.push({
+      deckId: LESSON_SCOPED_DECK_ID,
+      name: lessonOnlyCards[0]?.deck_name?.trim() || "Flashcards",
+      cardCount: lessonOnlyCards.length,
+      cardIds: lessonOnlyCards.map((card) => card.id),
     });
   }
 

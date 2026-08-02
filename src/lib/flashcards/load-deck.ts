@@ -5,6 +5,7 @@ import {
   type FlashcardProgressRow,
 } from "@/lib/progress/flashcard-progress";
 import { fetchMatchScore } from "@/lib/progress/match-scores";
+import { LESSON_SCOPED_DECK_ID } from "@/lib/learning/match-lesson-content";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FlashcardDeckCard, FlashcardDeckContext } from "./types";
 import { resolveDeckName } from "./utils";
@@ -77,13 +78,20 @@ async function getLinkedDeckIds(
     .select("deck_id")
     .eq("lesson_id", lessonId);
 
-  return [
+  const deckIds = [
     ...new Set(
       (legacyCards ?? [])
         .map((card) => card.deck_id)
         .filter((deckId): deckId is string => Boolean(deckId))
     ),
   ];
+
+  const hasLessonScoped = (legacyCards ?? []).some((card) => !card.deck_id);
+  if (hasLessonScoped) {
+    deckIds.push(LESSON_SCOPED_DECK_ID);
+  }
+
+  return deckIds;
 }
 
 async function loadCardsForDeck(
@@ -92,6 +100,16 @@ async function loadCardsForDeck(
   deckId: string,
   linkedDeckIds: string[]
 ): Promise<CardRow[]> {
+  if (deckId === LESSON_SCOPED_DECK_ID) {
+    const { data } = await supabase
+      .from("flashcards")
+      .select(CARD_SELECT)
+      .eq("lesson_id", lessonId)
+      .is("deck_id", null)
+      .order("created_at");
+    return (data as CardRow[] | null) ?? [];
+  }
+
   const deckLinked = linkedDeckIds.includes(deckId);
 
   if (deckLinked) {
