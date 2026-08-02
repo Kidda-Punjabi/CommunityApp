@@ -21,6 +21,10 @@ import { getLearnTrack, shouldShowLearnCourseProgress } from "@/lib/learning/lea
 import { findCoursesForTier } from "@/lib/membership/courses";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import {
+  filterLessonsForPrivateCourse,
+  fetchAccessiblePrivateCourses,
+} from "@/lib/learning/private-courses";
+import {
   fetchLessonCompletionMap,
   summarizeCourseProgress,
 } from "@/lib/progress/lesson-completion";
@@ -132,6 +136,57 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
           </p>
         )}
       </div>
+    );
+  }
+
+  if (track.privateAccess) {
+    const privateCourses = await fetchAccessiblePrivateCourses(supabase, user!.id);
+    const privateCourse = privateCourses[0];
+    if (!privateCourse) {
+      redirect("/dashboard/learn");
+    }
+
+    if (!access.unlockedCourseIds.has(privateCourse.id)) {
+      redirect("/dashboard/learn");
+    }
+
+    const lessons = filterLessonsForPrivateCourse(allLessons, privateCourse.id);
+    const lessonIds = lessons.map((lesson) => lesson.id);
+
+    const [
+      completionMap,
+      contentUnlockedMap,
+      recordingMap,
+      sessionCatchupLessonIds,
+      feedbackSubmittedLessonIds,
+    ] = await Promise.all([
+      fetchLessonCompletionMap(supabase, user!.id, lessons),
+      fetchLessonContentUnlockMap(supabase, user!.id, lessons, access),
+      fetchLessonRecordingsForUser(supabase, user!.id, lessonIds),
+      fetchSessionCatchupLessonIdsForUser(supabase, user!.id, lessons),
+      fetchFeedbackSubmittedLessonIds(supabase, user!.id, lessonIds),
+    ]);
+
+    return (
+      <LearnLessonList
+        title={privateCourse.name}
+        subtitle={`${lessons.length} lesson${lessons.length === 1 ? "" : "s"} in this course.`}
+        unitLabel="Week"
+        lessons={lessons}
+        access={access}
+        progressMap={lessonProgressMap}
+        flashcardProgressMap={flashcardProgressMap}
+        quizProgressMap={quizProgressMap}
+        completionMap={completionMap}
+        showCourseProgress={false}
+        contentUnlockedMap={contentUnlockedMap}
+        recordingMap={recordingMap}
+        showHomework={false}
+        catchupLessonIds={sessionCatchupLessonIds}
+        feedbackSubmittedLessonIds={feedbackSubmittedLessonIds}
+        homeworkFocusLessonId={homeworkFocusLessonId ?? null}
+        catchupReturn={catchupReturn ?? null}
+      />
     );
   }
 

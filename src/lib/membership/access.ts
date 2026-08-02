@@ -1,5 +1,6 @@
 import {
   inferCourseTier,
+  isPrivateCourseTier,
   normalizeTier,
   type MembershipTier,
 } from "./tiers";
@@ -10,11 +11,18 @@ export type CourseTierSource = {
   id: string;
   name: string;
   required_tier?: string | null;
+  is_public?: boolean | null;
 };
 
 export type PaidCourseTier = Exclude<MembershipTier, "free">;
 
 export function getCourseRequiredTier(course: CourseTierSource): PaidCourseTier {
+  // Private courses are not membership-tier products. Callers that map
+  // unlocked courses → PaidCourseTier must skip these (see tiersFromUnlockedCourses).
+  if (isPrivateCourseTier(course.required_tier) || course.is_public === false) {
+    return "foundational";
+  }
+
   const tier = course.required_tier
     ? normalizeTier(course.required_tier)
     : inferCourseTier(course.name);

@@ -1,6 +1,11 @@
 import type { PaidCourseTier } from "@/lib/membership/access";
 
-export type LearnTrackId = "free" | "foundational" | "beginners" | "community";
+export type LearnTrackId =
+  | "free"
+  | "foundational"
+  | "beginners"
+  | "community"
+  | "english";
 
 export type LearnTrack = {
   id: LearnTrackId;
@@ -8,6 +13,8 @@ export type LearnTrack = {
   description: string;
   tier: PaidCourseTier | null;
   alwaysUnlocked: boolean;
+  /** Access via course_access on a private course — not a paid Learn tier. */
+  privateAccess?: boolean;
   unlockUrl?: string;
   lockProductName?: string;
 };
@@ -47,6 +54,14 @@ export const LEARN_TRACKS: LearnTrack[] = [
     unlockUrl: "/courses/community",
     lockProductName: "Kidda Community",
   },
+  {
+    id: "english",
+    title: "Learn English",
+    description: "English foundations taught through Punjabi.",
+    tier: null,
+    alwaysUnlocked: false,
+    privateAccess: true,
+  },
 ];
 
 export function getLearnTrack(id: string): LearnTrack | undefined {
@@ -59,7 +74,9 @@ export function learnTrackPath(id: LearnTrackId) {
 
 /** Hide course-level progress for tracks where lesson completion UI is misleading or unwanted. */
 export function shouldShowLearnCourseProgress(trackId: LearnTrackId): boolean {
-  return trackId !== "community" && trackId !== "beginners";
+  return (
+    trackId !== "community" && trackId !== "beginners" && trackId !== "english"
+  );
 }
 
 /** Learn list URL after finishing catch-up for a course tier (or free lessons). */

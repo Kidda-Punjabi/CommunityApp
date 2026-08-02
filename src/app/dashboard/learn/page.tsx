@@ -1,4 +1,5 @@
 import { LearnCourseTiles, type LearnHubTile } from "@/components/learn/learn-course-tiles";
+import { LearnEnglishModeSwitch } from "@/components/learn/learn-english-mode-switch";
 import { fetchLearnContent } from "@/lib/learning/load-learn-content";
 import {
   canAccessLessonInContext,
@@ -7,6 +8,8 @@ import {
 } from "@/lib/learning/learn-access";
 import { resolveGroupCohortContentGate } from "@/lib/learning/group-cohort-content-gate";
 import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
+import { isLearnEnglishModeEnabled } from "@/lib/learning/learn-english-mode";
+import { fetchAccessiblePrivateCourses } from "@/lib/learning/private-courses";
 import { findCoursesForTier } from "@/lib/membership/courses";
 import {
   getCachedAuthSession,
@@ -44,13 +47,19 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap] = await Promise.all([
-    getCachedCourseAccess(supabase, user),
-    lessonsPromise,
-    lessonsPromise.then((lessons) =>
-      fetchLessonCompletionMap(supabase, user.id, lessons)
-    ),
-  ]);
+  const [access, allLessons, completionMap, privateCourses, englishModeOn] =
+    await Promise.all([
+      getCachedCourseAccess(supabase, user),
+      lessonsPromise,
+      lessonsPromise.then((lessons) =>
+        fetchLessonCompletionMap(supabase, user.id, lessons)
+      ),
+      fetchAccessiblePrivateCourses(supabase, user.id),
+      isLearnEnglishModeEnabled(),
+    ]);
+
+  const privateCourse = privateCourses[0] ?? null;
+  const showEnglishSwitch = Boolean(privateCourse);
 
   const foundational = getLearnTrack("foundational")!;
   const beginners = getLearnTrack("beginners")!;
@@ -124,13 +133,22 @@ export default async function LearnPage() {
       status: beginnersStatus,
       tone: "amber",
     },
-    {
-      id: "more",
-      kind: "static",
-      title: "More courses",
-      status: "Coming soon",
-      tone: "muted",
-    },
+    englishModeOn && privateCourse
+      ? {
+          id: "english",
+          kind: "link",
+          href: learnTrackPath("english"),
+          title: "Learn English",
+          status: privateCourse.name,
+          tone: "emerald",
+        }
+      : {
+          id: "more",
+          kind: "static",
+          title: "More courses",
+          status: "Coming soon",
+          tone: "muted",
+        },
     {
       id: "resources",
       kind: "link",
@@ -149,6 +167,13 @@ export default async function LearnPage() {
           Courses and tools in one place.
         </p>
       </div>
+
+      {showEnglishSwitch && privateCourse ? (
+        <LearnEnglishModeSwitch
+          enabled={englishModeOn}
+          courseLabel={privateCourse.name}
+        />
+      ) : null}
 
       <LearnCourseTiles tiles={tiles} />
     </div>

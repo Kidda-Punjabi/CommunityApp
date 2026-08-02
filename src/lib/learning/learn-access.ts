@@ -3,6 +3,7 @@ import type { CourseRecord } from "@/lib/membership/courses";
 import { findCoursesForTier } from "@/lib/membership/courses";
 import type { CourseAccessContext } from "@/lib/membership/unlocked";
 import type { LearnTrack } from "@/lib/learning/learn-catalog";
+import { isPrivateAccessCourse } from "@/lib/learning/private-courses";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 
 export { findCourseForTier } from "@/lib/membership/courses";
@@ -83,7 +84,10 @@ export function isCommunityCourseLesson(
   return getCourseRequiredTier(course) === "community";
 }
 
-/** Community: course access unlocks every lesson. Foundational/Beginners use tutor unlock RPC. */
+/**
+ * Community + private (access-gated) courses: course_access unlocks every lesson.
+ * Foundational/Beginners use tutor unlock RPC.
+ */
 export function isLessonContentUnlockedForUser(
   access: CourseAccessContext,
   lesson: { course_id: string; is_free: boolean },
@@ -91,7 +95,10 @@ export function isLessonContentUnlockedForUser(
 ): boolean {
   if (lesson.is_free) return true;
 
-  if (isCommunityCourseLesson(access, lesson.course_id)) {
+  if (
+    isCommunityCourseLesson(access, lesson.course_id) ||
+    isPrivateAccessCourse(access, lesson.course_id)
+  ) {
     return canAccessLessonInContext(access, lesson);
   }
 

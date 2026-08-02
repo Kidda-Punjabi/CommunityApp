@@ -2,6 +2,7 @@ import {
   isCommunityCourseLesson,
   isLessonContentUnlockedForUser,
 } from "@/lib/learning/learn-access";
+import { isPrivateAccessCourse } from "@/lib/learning/private-courses";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import type { CourseAccessContext } from "@/lib/membership/unlocked";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -59,7 +60,10 @@ export async function fetchLessonContentUnlockMap(
       continue;
     }
 
-    if (isCommunityCourseLesson(access, lesson.course_id)) {
+    if (
+      isCommunityCourseLesson(access, lesson.course_id) ||
+      isPrivateAccessCourse(access, lesson.course_id)
+    ) {
       map.set(
         lesson.id,
         isLessonContentUnlockedForUser(access, lesson, undefined)

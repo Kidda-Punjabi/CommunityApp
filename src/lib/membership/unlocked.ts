@@ -97,9 +97,12 @@ export function tiersFromUnlockedCourses(
   const tiers = new Set<PaidCourseTier>();
 
   for (const course of courses) {
-    if (unlockedCourseIds.has(course.id)) {
-      tiers.add(getCourseRequiredTier(course));
+    if (!unlockedCourseIds.has(course.id)) continue;
+    // Private / unlisted grants must not imply Foundational/Beginners/Community.
+    if (course.is_public === false || course.required_tier?.toLowerCase() === "private") {
+      continue;
     }
+    tiers.add(getCourseRequiredTier(course));
   }
 
   return [...tiers];
@@ -164,6 +167,13 @@ export function tierLabelForCourse(
 ): string {
   const course = courses.find((item) => item.id === courseId);
   if (!course) return TIER_LABELS.foundational;
+
+  if (
+    course.is_public === false ||
+    course.required_tier?.toLowerCase() === "private"
+  ) {
+    return course.name;
+  }
 
   const tier = course.required_tier
     ? normalizeTier(course.required_tier)

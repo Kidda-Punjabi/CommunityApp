@@ -148,6 +148,9 @@ function trackIdForLesson(
 
   const course = access.courses.find((item) => item.id === lesson.course_id);
   if (!course) return "free";
+  if (course.is_public === false || course.required_tier?.toLowerCase() === "private") {
+    return "english";
+  }
 
   return getCourseRequiredTier(course);
 }
@@ -168,6 +171,8 @@ function lessonsInCurriculumOrder(
       continue;
     }
 
+    if (trackId === "english") continue;
+
     const courseIds = new Set(
       findCoursesForTier(access.courses, trackId).map((course) => course.id)
     );
@@ -183,7 +188,7 @@ function lessonsInCurriculumOrder(
 }
 
 function lessonUnitLabel(trackId: LearnTrackId) {
-  return trackId === "community" ? "Week" : "Lesson";
+  return trackId === "community" || trackId === "english" ? "Week" : "Lesson";
 }
 
 function findNextLesson(

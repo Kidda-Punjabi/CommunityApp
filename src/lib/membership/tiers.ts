@@ -21,8 +21,21 @@ export const TIER_LABELS: Record<MembershipTier, string> = {
   community: "Kidda Community",
 };
 
+/**
+ * Private / unlisted courses use required_tier = "private".
+ * They are never Foundational / Beginners / Community products — access is
+ * via course_access only, not membership_tier mapping.
+ */
+export function isPrivateCourseTier(value: string | null | undefined): boolean {
+  return (value ?? "").toLowerCase() === "private";
+}
+
 export function normalizeTier(value: string | null | undefined): MembershipTier {
   const tier = (value ?? "free").toLowerCase();
+  if (isPrivateCourseTier(tier)) {
+    // Do not fall through to "community" (legacy paid catch-all).
+    return "free";
+  }
   if (tier === "foundational" || tier === "beginners" || tier === "community") {
     return tier;
   }
