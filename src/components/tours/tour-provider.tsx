@@ -278,9 +278,10 @@ export function TourProvider({
     if (!stored?.targets.length) return;
     if (runningRef.current) return;
 
-    writeStoredCourseQueue(null);
     bootstrappedRef.current = true;
     const timer = window.setTimeout(() => {
+      // Clear only when we actually start — avoids Strict Mode wiping the queue.
+      writeStoredCourseQueue(null);
       void runSequencedTours({
         appTour: false,
         persistAppTour: false,
