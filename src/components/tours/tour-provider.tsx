@@ -16,6 +16,7 @@ import {
   loadPreviewCourseResourceTours,
 } from "@/app/dashboard/tours/actions";
 import {
+  destroyActiveTour,
   runAppTour,
   runCourseResourceTour,
 } from "@/lib/tours/driver-tours";
@@ -25,6 +26,8 @@ import {
 } from "@/lib/tours/course-tile";
 
 export const ONBOARDING_COMPLETE_EVENT = "kidda:onboarding-complete";
+
+const APP_TOUR_SESSION_KEY = "kidda:app-tour-completed";
 
 type TourContextValue = {
   previewAppTour: () => void;
@@ -66,6 +69,30 @@ async function waitForSelector(
   return null;
 }
 
+function sessionAppTourDone(): boolean {
+  try {
+    return sessionStorage.getItem(APP_TOUR_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setSessionAppTourDone() {
+  try {
+    sessionStorage.setItem(APP_TOUR_SESSION_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
+
+function clearSessionAppTourDone() {
+  try {
+    sessionStorage.removeItem(APP_TOUR_SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function TourProvider({
   hasSeenOnboarding,
   hasSeenAppTour,
@@ -77,17 +104,21 @@ export function TourProvider({
   const pathname = usePathname();
   const runningRef = useRef(false);
   const bootstrappedRef = useRef(false);
+  const pendingCoursesRef = useRef(pendingCourseTours);
+  pendingCoursesRef.current = pendingCourseTours;
   const [previewNotice, setPreviewNotice] = useState<string | null>(null);
 
   const ensureLearnHub = useCallback(async () => {
-    if (pathname === "/dashboard/learn") {
-      await wait(50);
+    if (window.location.pathname === "/dashboard/learn") {
+      await wait(80);
       return;
     }
     router.push("/dashboard/learn");
-    await waitForSelector('[data-tour="learn-tile-foundational"], [data-tour="learn-tile-beginners"]');
-    await wait(150);
-  }, [pathname, router]);
+    await waitForSelector(
+      '[data-tour="learn-tile-foundational"], [data-tour="learn-tile-beginners"], [data-tour="learn-tile-community"]'
+    );
+    await wait(200);
+  }, [router]);
 
   const runCourseQueue = useCallback(
     async (targets: CourseTourTarget[], persist: boolean) => {
@@ -108,13 +139,16 @@ export function TourProvider({
             courseName: target.courseName,
             onComplete: async () => {
               if (persist) {
-                await markCourseResourceTourSeen(target.courseId);
+                const result = await markCourseResourceTourSeen(target.courseId);
+                if (result.error) {
+                  console.error("markCourseResourceTourSeen", result.error);
+                }
               }
               resolve();
             },
           });
         });
-        await wait(200);
+        await wait(250);
       }
     },
     [ensureLearnHub]
@@ -128,7 +162,11 @@ export function TourProvider({
       persistCourseTours: boolean;
     }) => {
       if (runningRef.current || kidsShellActive) return;
-      if (pathname.startsWith("/dashboard/tutor") || pathname.startsWith("/dashboard/kids")) {
+      if (
+        pathname.startsWith("/dashboard/tutor") ||
+        pathname.startsWith("/dashboard/kids") ||
+        pathname.startsWith("/dashboard/placement")
+      ) {
         return;
       }
       if (!options.appTour && options.courseTargets.length === 0) return;
@@ -140,17 +178,21 @@ export function TourProvider({
           if (homeNav) {
             await new Promise<void>((resolve) => {
               runAppTour({
-                persist: options.persistAppTour,
                 onComplete: async () => {
                   if (options.persistAppTour) {
-                    await markAppTourSeen();
+                    setSessionAppTourDone();
+                    const result = await markAppTourSeen();
+                    if (result.error) {
+                      console.error("markAppTourSeen", result.error);
+                    }
                   }
                   resolve();
                 },
               });
             });
-            await wait(250);
+            await wait(300);
           } else if (options.persistAppTour) {
+            setSessionAppTourDone();
             await markAppTourSeen();
           }
         }
@@ -166,14 +208,14 @@ export function TourProvider({
   );
 
   // Real triggers on load: Part 1 (if due) then Part 2.
-  // Skip while learner-info onboarding is still open, or during placement (right after onboarding).
   useEffect(() => {
     if (bootstrappedRef.current || kidsShellActive) return;
     if (!hasSeenOnboarding) return;
     if (pathname.startsWith("/dashboard/placement")) return;
 
-    const appDue = !hasSeenAppTour;
-    const coursesDue = pendingCourseTours;
+    const appAlreadyDone = hasSeenAppTour || sessionAppTourDone();
+    const appDue = !appAlreadyDone;
+    const coursesDue = pendingCoursesRef.current;
     if (!appDue && coursesDue.length === 0) {
       bootstrappedRef.current = true;
       return;
@@ -187,13 +229,12 @@ export function TourProvider({
         courseTargets: coursesDue,
         persistCourseTours: true,
       });
-    }, 400);
+    }, 500);
 
     return () => window.clearTimeout(timer);
   }, [
     hasSeenOnboarding,
     hasSeenAppTour,
-    pendingCourseTours,
     kidsShellActive,
     pathname,
     runSequencedTours,
@@ -203,22 +244,11 @@ export function TourProvider({
   useEffect(() => {
     function onOnboardingComplete() {
       bootstrappedRef.current = true;
-      if (kidsShellActive || hasSeenAppTour) {
-        // App tour already done — still may need course tours.
-        if (pendingCourseTours.length > 0) {
-          void runSequencedTours({
-            appTour: false,
-            persistAppTour: false,
-            courseTargets: pendingCourseTours,
-            persistCourseTours: true,
-          });
-        }
-        return;
-      }
+      const appAlreadyDone = hasSeenAppTour || sessionAppTourDone();
       void runSequencedTours({
-        appTour: true,
+        appTour: !appAlreadyDone,
         persistAppTour: true,
-        courseTargets: pendingCourseTours,
+        courseTargets: pendingCoursesRef.current,
         persistCourseTours: true,
       });
     }
@@ -226,15 +256,16 @@ export function TourProvider({
     window.addEventListener(ONBOARDING_COMPLETE_EVENT, onOnboardingComplete);
     return () =>
       window.removeEventListener(ONBOARDING_COMPLETE_EVENT, onOnboardingComplete);
-  }, [
-    kidsShellActive,
-    hasSeenAppTour,
-    pendingCourseTours,
-    runSequencedTours,
-  ]);
+  }, [hasSeenAppTour, runSequencedTours]);
+
+  // Sync session flag once server confirms.
+  useEffect(() => {
+    if (hasSeenAppTour) setSessionAppTourDone();
+  }, [hasSeenAppTour]);
 
   const previewAppTour = useCallback(() => {
     setPreviewNotice(null);
+    destroyActiveTour();
     void runSequencedTours({
       appTour: true,
       persistAppTour: false,
@@ -244,6 +275,7 @@ export function TourProvider({
   }, [runSequencedTours]);
 
   const previewCourseResourceTour = useCallback(async () => {
+    destroyActiveTour();
     const result = await loadPreviewCourseResourceTours();
     if (result.targets.length === 0) {
       const message = result.emptyReason ?? "No courses to preview.";
@@ -286,3 +318,5 @@ export function TourProvider({
     </TourContext.Provider>
   );
 }
+
+export { clearSessionAppTourDone };

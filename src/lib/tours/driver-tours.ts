@@ -1,9 +1,29 @@
-import { driver, type DriveStep } from "driver.js";
+import { driver, type Config, type Driver, type DriveStep } from "driver.js";
 import "driver.js/dist/driver.css";
 
 const POPOVER_CLASS = "kidda-tour-popover";
 
-const baseConfig = {
+let activeDriver: Driver | null = null;
+
+export function destroyActiveTour(): void {
+  if (!activeDriver) return;
+  const current = activeDriver;
+  activeDriver = null;
+  try {
+    current.destroy();
+  } catch {
+    // already torn down
+  }
+  document.body.classList.remove("driver-active", "driver-fade");
+  document
+    .querySelectorAll(".driver-active-element, .driver-active-element-parent")
+    .forEach((el) => {
+      el.classList.remove("driver-active-element", "driver-active-element-parent");
+    });
+  document.querySelectorAll(".driver-overlay, .driver-popover").forEach((el) => el.remove());
+}
+
+const baseConfig: Config = {
   animate: true,
   allowClose: true,
   overlayColor: "#18181b",
@@ -15,9 +35,9 @@ const baseConfig = {
   progressText: "{{current}} of {{total}}",
   nextBtnText: "Next",
   doneBtnText: "Done",
-  showButtons: ["next", "close"] as Array<"next" | "previous" | "close">,
-  onPopoverRender: (popover: { closeButton: HTMLButtonElement }) => {
-    // Treat the default close control as Skip (preview + real tours).
+  prevBtnText: "Back",
+  showButtons: ["next", "close"],
+  onPopoverRender: (popover) => {
     if (popover.closeButton) {
       popover.closeButton.setAttribute("aria-label", "Skip");
       popover.closeButton.title = "Skip";
@@ -76,21 +96,22 @@ export const APP_TOUR_STEPS: DriveStep[] = [
   },
 ];
 
-export function runAppTour(options: {
-  persist: boolean;
-  onComplete: () => void | Promise<void>;
-}): void {
-  let finished = false;
+function runTour(config: Config, onComplete: () => void | Promise<void>): void {
+  destroyActiveTour();
 
+  let finished = false;
   const finish = () => {
     if (finished) return;
     finished = true;
-    void Promise.resolve(options.onComplete());
+    activeDriver = null;
+    void Promise.resolve(onComplete()).catch(() => {
+      // Persist errors should not block the queue.
+    });
   };
 
   const d = driver({
     ...baseConfig,
-    steps: APP_TOUR_STEPS,
+    ...config,
     onDestroyed: () => {
       finish();
     },
@@ -99,9 +120,14 @@ export function runAppTour(options: {
     },
   });
 
-  // persist flag reserved for callers — they decide whether to write onComplete
-  void options.persist;
+  activeDriver = d;
   d.drive();
+}
+
+export function runAppTour(options: {
+  onComplete: () => void | Promise<void>;
+}): void {
+  runTour({ steps: APP_TOUR_STEPS }, options.onComplete);
 }
 
 export function runCourseResourceTour(options: {
@@ -109,42 +135,23 @@ export function runCourseResourceTour(options: {
   courseName: string;
   onComplete: () => void | Promise<void>;
 }): void {
-  let finished = false;
-
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    void Promise.resolve(options.onComplete());
-  };
-
-  const d = driver({
-    ...baseConfig,
-    showProgress: false,
-    steps: [
-      {
-        element: options.selector,
-        popover: {
-          title: "Your course resources",
-          description: `We can see you've got ${options.courseName} — here's where your resources will be.`,
-          side: "bottom",
-          align: "start",
-          doneBtnText: "Got it",
+  runTour(
+    {
+      showProgress: false,
+      waitForElement: 8000,
+      steps: [
+        {
+          element: options.selector,
+          popover: {
+            title: "Your course resources",
+            description: `We can see you've got ${options.courseName} — here's where your resources will be.`,
+            side: "bottom",
+            align: "start",
+            doneBtnText: "Got it",
+          },
         },
-      },
-    ],
-    waitForElement: 8000,
-    skipMissingElement: false,
-    onDestroyed: () => {
-      finish();
+      ],
     },
-    onCloseClick: (_el, _step, { driver: drv }) => {
-      drv.destroy();
-    },
-  });
-
-  d.drive();
-}
-
-export function courseResourceTourDescription(courseName: string): string {
-  return `We can see you've got ${courseName} — here's where your resources will be.`;
+    options.onComplete
+  );
 }

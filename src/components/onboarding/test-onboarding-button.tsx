@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useOnboarding } from "@/components/first-run/first-run-provider";
-import { useAppTours } from "@/components/tours/tour-provider";
+import { useAppTours, clearSessionAppTourDone } from "@/components/tours/tour-provider";
 import { resetTourFlags } from "@/app/dashboard/tours/actions";
 
 const buttonClass =
@@ -36,6 +36,7 @@ export function TestOnboardingButton() {
         setStatus(result.error);
         return;
       }
+      clearSessionAppTourDone();
       setStatus("Tour flags reset. Reload to test real triggers.");
     });
   }

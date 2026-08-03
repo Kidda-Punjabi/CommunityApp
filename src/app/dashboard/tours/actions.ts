@@ -138,7 +138,13 @@ export async function markAppTourSeen(): Promise<{ error?: string }> {
     .eq("id", user.id);
 
   if (error) return { error: error.message };
-  revalidatePath("/dashboard", "layout");
+
+  // Soft revalidate — don't block the client tour queue on layout refresh.
+  try {
+    revalidatePath("/dashboard", "layout");
+  } catch {
+    // ignore
+  }
   return {};
 }
 
