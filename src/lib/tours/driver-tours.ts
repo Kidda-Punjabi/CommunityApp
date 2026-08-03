@@ -130,28 +130,43 @@ export function runAppTour(options: {
   runTour({ steps: APP_TOUR_STEPS }, options.onComplete);
 }
 
+export function runCourseResourceTourQueue(options: {
+  steps: Array<{ selector: string; courseName: string }>;
+  onComplete: () => void | Promise<void>;
+}): void {
+  if (options.steps.length === 0) {
+    void Promise.resolve(options.onComplete());
+    return;
+  }
+
+  runTour(
+    {
+      showProgress: options.steps.length > 1,
+      progressText: "{{current}} of {{total}}",
+      waitForElement: 8000,
+      steps: options.steps.map((step) => ({
+        element: step.selector,
+        popover: {
+          title: "Your course resources",
+          description: `We can see you've got ${step.courseName} — here's where your resources will be.`,
+          side: "bottom" as const,
+          align: "start" as const,
+          doneBtnText: "Got it",
+          nextBtnText: "Next",
+        },
+      })),
+    },
+    options.onComplete
+  );
+}
+
 export function runCourseResourceTour(options: {
   selector: string;
   courseName: string;
   onComplete: () => void | Promise<void>;
 }): void {
-  runTour(
-    {
-      showProgress: false,
-      waitForElement: 8000,
-      steps: [
-        {
-          element: options.selector,
-          popover: {
-            title: "Your course resources",
-            description: `We can see you've got ${options.courseName} — here's where your resources will be.`,
-            side: "bottom",
-            align: "start",
-            doneBtnText: "Got it",
-          },
-        },
-      ],
-    },
-    options.onComplete
-  );
+  runCourseResourceTourQueue({
+    steps: [{ selector: options.selector, courseName: options.courseName }],
+    onComplete: options.onComplete,
+  });
 }

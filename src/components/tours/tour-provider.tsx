@@ -18,7 +18,7 @@ import {
 import {
   destroyActiveTour,
   runAppTour,
-  runCourseResourceTour,
+  runCourseResourceTourQueue,
 } from "@/lib/tours/driver-tours";
 import {
   learnTileTourSelector,
@@ -167,24 +167,13 @@ export function TourProvider({
 
       const onLearn = await ensureLearnHub();
       if (!onLearn) {
-        // Hard navigate and resume after reload.
         writeStoredCourseQueue({ targets, persist });
         window.location.assign("/dashboard/learn");
         return;
       }
 
-      for (let index = 0; index < targets.length; index++) {
-        const target = targets[index]!;
-        // Re-confirm hub between steps (soft nav may have drifted).
-        if (window.location.pathname !== "/dashboard/learn") {
-          writeStoredCourseQueue({
-            targets: targets.slice(index),
-            persist,
-          });
-          window.location.assign("/dashboard/learn");
-          return;
-        }
-
+      const steps: Array<{ selector: string; courseName: string }> = [];
+      for (const target of targets) {
         const selector = learnTileTourSelector(target.tileId);
         const el = await waitForSelector(selector, 8000);
         if (!el) {
@@ -193,25 +182,32 @@ export function TourProvider({
           }
           continue;
         }
+        steps.push({ selector, courseName: target.courseName });
+      }
 
-        await new Promise<void>((resolve) => {
-          runCourseResourceTour({
-            selector,
-            courseName: target.courseName,
-            onComplete: async () => {
-              if (persist) {
+      if (steps.length === 0) {
+        writeStoredCourseQueue(null);
+        return;
+      }
+
+      await new Promise<void>((resolve) => {
+        runCourseResourceTourQueue({
+          steps,
+          onComplete: async () => {
+            if (persist) {
+              for (const target of targets) {
                 const result = await markCourseResourceTourSeen(target.courseId);
                 if (result.error) {
                   console.error("markCourseResourceTourSeen", result.error);
                 }
               }
-              resolve();
-            },
-          });
+            }
+            resolve();
+          },
         });
-        await wait(250);
-      }
+      });
 
+      destroyActiveTour();
       writeStoredCourseQueue(null);
     },
     [ensureLearnHub]
