@@ -313,6 +313,9 @@ export function TourProvider({
     // Let the resume effect own Learn when a stored queue exists.
     if (pathname === "/dashboard/learn" && readStoredCourseQueue()) return;
 
+    // Server is source of truth after Reset — drop a stale session guard.
+    if (!hasSeenAppTour) clearSessionAppTourDone();
+
     const appAlreadyDone = hasSeenAppTour || sessionAppTourDone();
     const appDue = !appAlreadyDone;
     const coursesDue = pendingCoursesRef.current;
