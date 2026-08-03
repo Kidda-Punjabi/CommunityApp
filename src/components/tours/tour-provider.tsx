@@ -172,7 +172,11 @@ export function TourProvider({
         return;
       }
 
-      const steps: Array<{ selector: string; courseName: string }> = [];
+      const steps: Array<{
+        selector: string;
+        courseName: string;
+        courseId: string;
+      }> = [];
       for (const target of targets) {
         const selector = learnTileTourSelector(target.tileId);
         const el = await waitForSelector(selector, 8000);
@@ -182,7 +186,11 @@ export function TourProvider({
           }
           continue;
         }
-        steps.push({ selector, courseName: target.courseName });
+        steps.push({
+          selector,
+          courseName: target.courseName,
+          courseId: target.courseId,
+        });
       }
 
       if (steps.length === 0) {
@@ -193,10 +201,19 @@ export function TourProvider({
       await new Promise<void>((resolve) => {
         runCourseResourceTourQueue({
           steps,
+          onStepShown: async (stepIndex) => {
+            if (!persist) return;
+            const step = steps[stepIndex];
+            if (!step) return;
+            const result = await markCourseResourceTourSeen(step.courseId);
+            if (result.error) {
+              console.error("markCourseResourceTourSeen", result.error);
+            }
+          },
           onComplete: async () => {
             if (persist) {
-              for (const target of targets) {
-                const result = await markCourseResourceTourSeen(target.courseId);
+              for (const step of steps) {
+                const result = await markCourseResourceTourSeen(step.courseId);
                 if (result.error) {
                   console.error("markCourseResourceTourSeen", result.error);
                 }
@@ -342,6 +359,7 @@ export function TourProvider({
 
   useEffect(() => {
     if (hasSeenAppTour) setSessionAppTourDone();
+    else clearSessionAppTourDone();
   }, [hasSeenAppTour]);
 
   const previewAppTour = useCallback(() => {

@@ -150,16 +150,16 @@ export async function markCourseResourceTourSeen(
   if (!user) return { error: "Not signed in." };
   if (!courseId) return { error: "Missing course." };
 
-  const { error } = await supabase.from("course_resource_tours_seen").upsert(
-    {
-      user_id: user.id,
-      course_id: courseId,
-      shown_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,course_id" }
-  );
+  const { error } = await supabase.from("course_resource_tours_seen").insert({
+    user_id: user.id,
+    course_id: courseId,
+    shown_at: new Date().toISOString(),
+  });
 
-  if (error) return { error: error.message };
+  // Ignore duplicate PK (already marked).
+  if (error && !error.message.toLowerCase().includes("duplicate")) {
+    return { error: error.message };
+  }
   return {};
 }
 

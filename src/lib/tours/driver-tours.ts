@@ -128,7 +128,8 @@ export function runAppTour(options: {
 }
 
 export function runCourseResourceTourQueue(options: {
-  steps: Array<{ selector: string; courseName: string }>;
+  steps: Array<{ selector: string; courseName: string; courseId?: string }>;
+  onStepShown?: (stepIndex: number) => void | Promise<void>;
   onComplete: () => void | Promise<void>;
 }): void {
   if (options.steps.length === 0) {
@@ -141,7 +142,7 @@ export function runCourseResourceTourQueue(options: {
       showProgress: options.steps.length > 1,
       progressText: "{{current}} of {{total}}",
       waitForElement: 8000,
-      steps: options.steps.map((step) => ({
+      steps: options.steps.map((step, index) => ({
         element: step.selector,
         popover: {
           title: "Your course resources",
@@ -150,6 +151,9 @@ export function runCourseResourceTourQueue(options: {
           align: "start" as const,
           doneBtnText: "Got it",
           nextBtnText: "Next",
+        },
+        onHighlighted: () => {
+          void Promise.resolve(options.onStepShown?.(index));
         },
       })),
     },
