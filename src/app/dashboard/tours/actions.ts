@@ -138,13 +138,8 @@ export async function markAppTourSeen(): Promise<{ error?: string }> {
     .eq("id", user.id);
 
   if (error) return { error: error.message };
-
-  // Soft revalidate — don't block the client tour queue on layout refresh.
-  try {
-    revalidatePath("/dashboard", "layout");
-  } catch {
-    // ignore
-  }
+  // Do not revalidate here — a layout refresh mid Part-1→Part-2 sequence
+  // remounts TourProvider and can drop course-tour persistence.
   return {};
 }
 
