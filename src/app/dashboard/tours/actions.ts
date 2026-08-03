@@ -173,18 +173,27 @@ export async function resetTourFlags(): Promise<{ error?: string }> {
   if (!user) return { error: "Not signed in." };
   if (!isAdmin(user)) return { error: "Admin only." };
 
-  const [{ error: profileError }, { error: deleteError }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .update({ has_seen_app_tour: false })
-      .eq("id", user.id),
-    supabase
-      .from("course_resource_tours_seen")
-      .delete()
-      .eq("user_id", user.id),
-  ]);
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ has_seen_app_tour: false })
+    .eq("id", user.id);
 
   if (profileError) return { error: profileError.message };
+
+  // course_resource_tours_seen RLS is select/insert only — delete via service role.
+  const { tryCreateServiceRoleClient } = await import(
+    "@/lib/supabase/admin-server"
+  );
+  const admin = tryCreateServiceRoleClient();
+  if (admin.error || !admin.client) {
+    return { error: admin.error ?? "Service role unavailable for tour reset." };
+  }
+
+  const { error: deleteError } = await admin.client
+    .from("course_resource_tours_seen")
+    .delete()
+    .eq("user_id", user.id);
+
   if (deleteError) return { error: deleteError.message };
 
   revalidatePath("/dashboard", "layout");
