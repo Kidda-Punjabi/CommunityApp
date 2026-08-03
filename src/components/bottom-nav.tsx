@@ -113,12 +113,12 @@ function ProfileIcon({ active }: { active: boolean }) {
   );
 }
 
-const navItems: NavItem[] = [
-  { href: "/dashboard/home", label: "Home" },
-  { href: "/dashboard/learn", label: "Learn" },
-  { href: "/dashboard/community", label: "Community" },
-  { href: "/dashboard/games", label: "Games" },
-  { href: "/dashboard/profile", label: "Profile" },
+const navItems: (NavItem & { tourId: string })[] = [
+  { href: "/dashboard/home", label: "Home", tourId: "nav-home" },
+  { href: "/dashboard/learn", label: "Learn", tourId: "nav-learn" },
+  { href: "/dashboard/community", label: "Community", tourId: "nav-community" },
+  { href: "/dashboard/games", label: "Games", tourId: "nav-games" },
+  { href: "/dashboard/profile", label: "Profile", tourId: "nav-profile" },
 ];
 
 function NavIcon({ href, active }: { href: string; active: boolean }) {
@@ -161,6 +161,7 @@ export function BottomNav() {
             <NavLink
               key={item.href}
               href={item.href}
+              data-tour={item.tourId}
               onClick={() => setActiveTab(tabId)}
               className={`group flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 transition-colors ${
                 active ? "text-violet-600" : "text-zinc-500"

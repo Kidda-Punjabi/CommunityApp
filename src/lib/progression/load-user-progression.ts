@@ -33,6 +33,7 @@ export type UserProgression = {
 export type OnboardingProfile = {
   hasSeenIntroPitch: boolean;
   hasSeenOnboarding: boolean;
+  hasSeenAppTour: boolean;
   selfAssessedStartingTier: number | null;
   statedGoalMotivation: string | null;
   targetTier: number | null;
@@ -60,14 +61,14 @@ export async function loadOnboardingProfile(
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "has_seen_intro_pitch, has_seen_onboarding, self_assessed_starting_tier, stated_goal_motivation, target_tier, placement_completed_at, learner_level"
+      "has_seen_intro_pitch, has_seen_onboarding, has_seen_app_tour, self_assessed_starting_tier, stated_goal_motivation, target_tier, placement_completed_at, learner_level"
     )
     .eq("id", userId)
     .single();
 
   if (error) {
     const message = error.message.toLowerCase();
-    if (message.includes("has_seen_intro_pitch")) {
+    if (message.includes("has_seen_intro_pitch") || message.includes("has_seen_app_tour")) {
       const fallback = await supabase
         .from("profiles")
         .select(
@@ -79,6 +80,7 @@ export async function loadOnboardingProfile(
       return {
         hasSeenIntroPitch: false,
         hasSeenOnboarding: fallback.data?.has_seen_onboarding ?? false,
+        hasSeenAppTour: false,
         selfAssessedStartingTier: fallback.data?.self_assessed_starting_tier ?? null,
         statedGoalMotivation: fallback.data?.stated_goal_motivation ?? null,
         targetTier: fallback.data?.target_tier ?? null,
@@ -91,6 +93,7 @@ export async function loadOnboardingProfile(
   return {
     hasSeenIntroPitch: data?.has_seen_intro_pitch ?? false,
     hasSeenOnboarding: data?.has_seen_onboarding ?? false,
+    hasSeenAppTour: data?.has_seen_app_tour ?? false,
     selfAssessedStartingTier: data?.self_assessed_starting_tier ?? null,
     statedGoalMotivation: data?.stated_goal_motivation ?? null,
     targetTier: data?.target_tier ?? null,

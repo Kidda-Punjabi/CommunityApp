@@ -1,7 +1,7 @@
 import { NavLink } from "@/components/ui/nav-link";
 import { pressableClass } from "@/lib/ui/pressable";
 import { cn } from "@/lib/ui/styles";
-import { BookOpen, CalendarDays, Languages, Sparkles, Wrench } from "lucide-react";
+import { BookOpen, CalendarDays, Languages, Sparkles, Users, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 
 export type LearnHubTile =
@@ -21,6 +21,14 @@ export type LearnHubTile =
       title: string;
       status: string;
       tone: "amber";
+    }
+  | {
+      id: "community";
+      kind: "link";
+      href: string;
+      title: string;
+      status: string;
+      tone: "rose";
     }
   | {
       id: "english";
@@ -50,6 +58,7 @@ export type LearnHubTile =
  * Colour roles:
  * - accent (violet soft wash): Foundational — Learn course brand accent
  * - amber: Beginners — warm wash, not Premium violet
+ * - rose: Community package track
  * - emerald: Learn English (private access)
  * - muted (zinc + faded): More courses — greyed-out placeholder
  * - sky: Resources
@@ -57,6 +66,7 @@ export type LearnHubTile =
 const TONE_CLASS: Record<LearnHubTile["tone"], string> = {
   accent: "bg-violet-100 text-violet-950",
   amber: "bg-amber-100 text-amber-950",
+  rose: "bg-rose-100 text-rose-950",
   emerald: "bg-emerald-100 text-emerald-950",
   muted: "bg-zinc-100 text-zinc-500 opacity-70",
   sky: "bg-sky-100 text-sky-950",
@@ -65,6 +75,7 @@ const TONE_CLASS: Record<LearnHubTile["tone"], string> = {
 const ICON_WRAP: Record<LearnHubTile["tone"], string> = {
   accent: "bg-violet-600/15 text-violet-700",
   amber: "bg-amber-600/15 text-amber-700",
+  rose: "bg-rose-600/15 text-rose-700",
   emerald: "bg-emerald-600/15 text-emerald-700",
   muted: "bg-zinc-900/8 text-zinc-400",
   sky: "bg-sky-600/15 text-sky-700",
@@ -77,6 +88,8 @@ function TileIcon({ id }: { id: LearnHubTile["id"] }) {
       return <BookOpen className={className} aria-hidden />;
     case "beginners":
       return <CalendarDays className={className} aria-hidden />;
+    case "community":
+      return <Users className={className} aria-hidden />;
     case "english":
       return <Languages className={className} aria-hidden />;
     case "more":
@@ -127,6 +140,7 @@ export function LearnCourseTiles({ tiles }: { tiles: LearnHubTile[] }) {
           return (
             <div
               key={tile.id}
+              data-tour={`learn-tile-${tile.id}`}
               className={cn(tileShell, tone)}
               aria-disabled="true"
             >
@@ -139,6 +153,7 @@ export function LearnCourseTiles({ tiles }: { tiles: LearnHubTile[] }) {
           <NavLink
             key={tile.id}
             href={tile.href}
+            data-tour={`learn-tile-${tile.id}`}
             className={cn(pressableClass, tileShell, tone, "transition-opacity hover:opacity-95")}
           >
             <TileBody tile={tile}>

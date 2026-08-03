@@ -63,9 +63,11 @@ export default async function LearnPage() {
 
   const foundational = getLearnTrack("foundational")!;
   const beginners = getLearnTrack("beginners")!;
+  const community = getLearnTrack("community")!;
 
   const foundationalLocked = !isLearnTrackUnlocked(foundational, access);
   const beginnersLocked = !isLearnTrackUnlocked(beginners, access);
+  const communityLocked = !isLearnTrackUnlocked(community, access);
 
   const foundationalLessons = filterLessonsForTrack(
     allLessons,
@@ -111,6 +113,8 @@ export default async function LearnPage() {
       ? shortStartsStatus(beginnersGate.startDate)
       : "Lessons ready";
 
+  const communityStatus = communityLocked ? "Unlock to start" : "Lessons ready";
+
   const tiles: LearnHubTile[] = [
     {
       id: "foundational",
@@ -133,22 +137,28 @@ export default async function LearnPage() {
       status: beginnersStatus,
       tone: "amber",
     },
-    englishModeOn && privateCourse
-      ? {
-          id: "english",
-          kind: "link",
-          href: learnTrackPath("english"),
-          title: "Learn English",
-          status: privateCourse.name,
-          tone: "emerald",
-        }
-      : {
-          id: "more",
-          kind: "static",
-          title: "More courses",
-          status: "Coming soon",
-          tone: "muted",
-        },
+    {
+      id: "community",
+      kind: "link",
+      href: communityLocked
+        ? community.unlockUrl ?? "/courses/community"
+        : learnTrackPath("community"),
+      title: "Community",
+      status: communityStatus,
+      tone: "rose",
+    },
+    ...(englishModeOn && privateCourse
+      ? ([
+          {
+            id: "english",
+            kind: "link",
+            href: learnTrackPath("english"),
+            title: "Learn English",
+            status: privateCourse.name,
+            tone: "emerald",
+          },
+        ] as LearnHubTile[])
+      : []),
     {
       id: "resources",
       kind: "link",

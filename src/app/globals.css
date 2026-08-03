@@ -320,3 +320,60 @@ h6 {
 }
 
 
+
+/* driver.js — Kidda tour theme */
+.driver-popover.kidda-tour-popover {
+  background: #fff;
+  color: #18181b;
+  border-radius: 1rem;
+  box-shadow: 0 12px 40px -12px rgba(24, 24, 27, 0.28);
+  max-width: 18rem;
+  padding: 1rem 1rem 0.85rem;
+}
+
+.driver-popover.kidda-tour-popover .driver-popover-title {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #18181b;
+}
+
+.driver-popover.kidda-tour-popover .driver-popover-description {
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #52525b;
+}
+
+.driver-popover.kidda-tour-popover .driver-popover-progress-text {
+  font-size: 0.75rem;
+  color: #a1a1aa;
+}
+
+.driver-popover.kidda-tour-popover .driver-popover-next-btn,
+.driver-popover.kidda-tour-popover .driver-popover-done-btn {
+  background: #7c3aed;
+  color: #fff;
+  border: 0;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  text-shadow: none;
+}
+
+.driver-popover.kidda-tour-popover .driver-popover-next-btn:hover,
+.driver-popover.kidda-tour-popover .driver-popover-done-btn:hover {
+  background: #6d28d9;
+}
+
+.driver-popover.kidda-tour-popover .driver-popover-close-btn {
+  color: #a1a1aa;
+}
+
+.driver-popover.kidda-tour-popover .driver-popover-footer button {
+  text-shadow: none;
+}
+
+.driver-popover.kidda-tour-popover .driver-popover-navigation-btns {
+  gap: 0.35rem;
+}

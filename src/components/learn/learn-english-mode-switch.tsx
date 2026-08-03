@@ -45,6 +45,7 @@ export function LearnEnglishModeSwitch({
   return (
     <form
       action={enabled ? disableLearnEnglishMode : enableLearnEnglishMode}
+      data-tour="learn-tile-english"
       className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3"
     >
       <div className="min-w-0">

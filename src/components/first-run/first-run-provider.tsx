@@ -76,8 +76,13 @@ export function FirstRunProvider({
   }
 
   function handleOnboardingClose() {
+    const wasTest = testOnboarding;
     setTestOnboarding(false);
     setPhase("none");
+    // Real completion only — test mode must not kick off persisted app tours.
+    if (!wasTest) {
+      window.dispatchEvent(new CustomEvent("kidda:onboarding-complete"));
+    }
   }
 
   const showIntro = phase === "intro" || testIntro;
