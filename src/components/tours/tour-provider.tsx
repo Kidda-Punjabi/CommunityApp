@@ -28,6 +28,12 @@ import {
 export const ONBOARDING_COMPLETE_EVENT = "kidda:onboarding-complete";
 
 const APP_TOUR_SESSION_KEY = "kidda:app-tour-completed";
+const COURSE_QUEUE_KEY = "kidda:course-tour-queue";
+
+type StoredCourseQueue = {
+  targets: CourseTourTarget[];
+  persist: boolean;
+};
 
 type TourContextValue = {
   previewAppTour: () => void;
@@ -85,9 +91,31 @@ function setSessionAppTourDone() {
   }
 }
 
-function clearSessionAppTourDone() {
+export function clearSessionAppTourDone() {
   try {
     sessionStorage.removeItem(APP_TOUR_SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function readStoredCourseQueue(): StoredCourseQueue | null {
+  try {
+    const raw = sessionStorage.getItem(COURSE_QUEUE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as StoredCourseQueue;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredCourseQueue(queue: StoredCourseQueue | null) {
+  try {
+    if (!queue || queue.targets.length === 0) {
+      sessionStorage.removeItem(COURSE_QUEUE_KEY);
+      return;
+    }
+    sessionStorage.setItem(COURSE_QUEUE_KEY, JSON.stringify(queue));
   } catch {
     // ignore
   }
@@ -108,22 +136,55 @@ export function TourProvider({
   pendingCoursesRef.current = pendingCourseTours;
   const [previewNotice, setPreviewNotice] = useState<string | null>(null);
 
-  const ensureLearnHub = useCallback(async () => {
+  const ensureLearnHub = useCallback(async (): Promise<boolean> => {
     if (window.location.pathname === "/dashboard/learn") {
-      await wait(80);
-      return;
+      const ready = await waitForSelector(
+        '[data-tour="learn-tile-foundational"], [data-tour="learn-tile-beginners"], [data-tour="learn-tile-community"]',
+        5000
+      );
+      return Boolean(ready);
     }
+
+    // Soft navigate first.
     router.push("/dashboard/learn");
-    await waitForSelector(
-      '[data-tour="learn-tile-foundational"], [data-tour="learn-tile-beginners"], [data-tour="learn-tile-community"]'
-    );
-    await wait(200);
+    const start = Date.now();
+    while (Date.now() - start < 2500) {
+      if (window.location.pathname === "/dashboard/learn") {
+        const ready = await waitForSelector(
+          '[data-tour="learn-tile-foundational"], [data-tour="learn-tile-beginners"], [data-tour="learn-tile-community"]',
+          5000
+        );
+        return Boolean(ready);
+      }
+      await wait(100);
+    }
+    return false;
   }, [router]);
 
   const runCourseQueue = useCallback(
     async (targets: CourseTourTarget[], persist: boolean) => {
-      for (const target of targets) {
-        await ensureLearnHub();
+      if (targets.length === 0) return;
+
+      const onLearn = await ensureLearnHub();
+      if (!onLearn) {
+        // Hard navigate and resume after reload.
+        writeStoredCourseQueue({ targets, persist });
+        window.location.assign("/dashboard/learn");
+        return;
+      }
+
+      for (let index = 0; index < targets.length; index++) {
+        const target = targets[index]!;
+        // Re-confirm hub between steps (soft nav may have drifted).
+        if (window.location.pathname !== "/dashboard/learn") {
+          writeStoredCourseQueue({
+            targets: targets.slice(index),
+            persist,
+          });
+          window.location.assign("/dashboard/learn");
+          return;
+        }
+
         const selector = learnTileTourSelector(target.tileId);
         const el = await waitForSelector(selector, 8000);
         if (!el) {
@@ -150,6 +211,8 @@ export function TourProvider({
         });
         await wait(250);
       }
+
+      writeStoredCourseQueue(null);
     },
     [ensureLearnHub]
   );
@@ -207,11 +270,34 @@ export function TourProvider({
     [kidsShellActive, pathname, runCourseQueue]
   );
 
+  // Resume hard-nav course queue on Learn.
+  useEffect(() => {
+    if (kidsShellActive) return;
+    if (pathname !== "/dashboard/learn") return;
+    const stored = readStoredCourseQueue();
+    if (!stored?.targets.length) return;
+    if (runningRef.current) return;
+
+    writeStoredCourseQueue(null);
+    bootstrappedRef.current = true;
+    const timer = window.setTimeout(() => {
+      void runSequencedTours({
+        appTour: false,
+        persistAppTour: false,
+        courseTargets: stored.targets,
+        persistCourseTours: stored.persist,
+      });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [kidsShellActive, pathname, runSequencedTours]);
+
   // Real triggers on load: Part 1 (if due) then Part 2.
   useEffect(() => {
     if (bootstrappedRef.current || kidsShellActive) return;
     if (!hasSeenOnboarding) return;
     if (pathname.startsWith("/dashboard/placement")) return;
+    // Let the resume effect own Learn when a stored queue exists.
+    if (pathname === "/dashboard/learn" && readStoredCourseQueue()) return;
 
     const appAlreadyDone = hasSeenAppTour || sessionAppTourDone();
     const appDue = !appAlreadyDone;
@@ -240,7 +326,6 @@ export function TourProvider({
     runSequencedTours,
   ]);
 
-  // After learner-info onboarding completes (non-test), kick off Part 1 then Part 2.
   useEffect(() => {
     function onOnboardingComplete() {
       bootstrappedRef.current = true;
@@ -258,7 +343,6 @@ export function TourProvider({
       window.removeEventListener(ONBOARDING_COMPLETE_EVENT, onOnboardingComplete);
   }, [hasSeenAppTour, runSequencedTours]);
 
-  // Sync session flag once server confirms.
   useEffect(() => {
     if (hasSeenAppTour) setSessionAppTourDone();
   }, [hasSeenAppTour]);
@@ -266,6 +350,7 @@ export function TourProvider({
   const previewAppTour = useCallback(() => {
     setPreviewNotice(null);
     destroyActiveTour();
+    runningRef.current = false;
     void runSequencedTours({
       appTour: true,
       persistAppTour: false,
@@ -276,6 +361,7 @@ export function TourProvider({
 
   const previewCourseResourceTour = useCallback(async () => {
     destroyActiveTour();
+    runningRef.current = false;
     const result = await loadPreviewCourseResourceTours();
     if (result.targets.length === 0) {
       const message = result.emptyReason ?? "No courses to preview.";
@@ -283,6 +369,12 @@ export function TourProvider({
       return message;
     }
     setPreviewNotice(null);
+    // Prefer immediate hard nav + resume so preview works from Profile.
+    writeStoredCourseQueue({ targets: result.targets, persist: false });
+    if (window.location.pathname !== "/dashboard/learn") {
+      window.location.assign("/dashboard/learn");
+      return null;
+    }
     await runSequencedTours({
       appTour: false,
       persistAppTour: false,
@@ -318,5 +410,3 @@ export function TourProvider({
     </TourContext.Provider>
   );
 }
-
-export { clearSessionAppTourDone };

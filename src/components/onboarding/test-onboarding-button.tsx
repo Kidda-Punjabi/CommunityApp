@@ -16,10 +16,11 @@ export function TestOnboardingButton() {
   const [status, setStatus] = useState<string | null>(null);
 
   function handlePreviewCourse() {
-    startTransition(async () => {
-      const message = await previewCourseResourceTour();
-      if (message) setStatus(message);
-      else setStatus(null);
+    setStatus(null);
+    startTransition(() => {
+      void previewCourseResourceTour().then((message) => {
+        if (message) setStatus(message);
+      });
     });
   }
 
