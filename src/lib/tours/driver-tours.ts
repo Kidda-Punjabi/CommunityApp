@@ -115,9 +115,6 @@ function runTour(config: Config, onComplete: () => void | Promise<void>): void {
     onDestroyed: () => {
       finish();
     },
-    onCloseClick: (_el, _step, { driver: drv }) => {
-      drv.destroy();
-    },
   });
 
   activeDriver = d;
