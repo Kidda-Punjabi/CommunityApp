@@ -104,14 +104,19 @@ function runTour(config: Config, onComplete: () => void | Promise<void>): void {
     if (finished) return;
     finished = true;
     activeDriver = null;
-    void Promise.resolve(onComplete()).catch(() => {
-      // Persist errors should not block the queue.
+    void Promise.resolve(onComplete()).catch((err) => {
+      console.error("tour onComplete", err);
     });
   };
 
   const d = driver({
     ...baseConfig,
     ...config,
+    onDestroyStarted: (_el, _step, { driver: drv }) => {
+      // Ensure completion runs even if destroy is interrupted mid-animation.
+      finish();
+      drv.destroy();
+    },
     onDestroyed: () => {
       finish();
     },

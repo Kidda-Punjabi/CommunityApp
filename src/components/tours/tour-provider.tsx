@@ -362,7 +362,6 @@ export function TourProvider({
 
   useEffect(() => {
     if (hasSeenAppTour) setSessionAppTourDone();
-    else clearSessionAppTourDone();
   }, [hasSeenAppTour]);
 
   const previewAppTour = useCallback(() => {
