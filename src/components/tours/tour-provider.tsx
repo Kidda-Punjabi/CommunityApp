@@ -370,12 +370,26 @@ export function TourProvider({
       return message;
     }
     setPreviewNotice(null);
-    // Prefer immediate hard nav + resume so preview works from Profile.
-    writeStoredCourseQueue({ targets: result.targets, persist: false });
-    if (window.location.pathname !== "/dashboard/learn") {
+
+    // Soft-nav first (same path as real Part 2). Fall back to hard nav + resume.
+    const onLearn =
+      window.location.pathname === "/dashboard/learn" ||
+      (await (async () => {
+        router.push("/dashboard/learn");
+        const start = Date.now();
+        while (Date.now() - start < 3000) {
+          if (window.location.pathname === "/dashboard/learn") return true;
+          await wait(100);
+        }
+        return false;
+      })());
+
+    if (!onLearn) {
+      writeStoredCourseQueue({ targets: result.targets, persist: false });
       window.location.assign("/dashboard/learn");
       return null;
     }
+
     await runSequencedTours({
       appTour: false,
       persistAppTour: false,
@@ -383,7 +397,7 @@ export function TourProvider({
       persistCourseTours: false,
     });
     return null;
-  }, [runSequencedTours]);
+  }, [router, runSequencedTours]);
 
   const value = useMemo(
     () => ({ previewAppTour, previewCourseResourceTour }),
