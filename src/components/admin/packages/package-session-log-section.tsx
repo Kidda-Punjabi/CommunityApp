@@ -36,6 +36,7 @@ export function PackageSessionLogSection({
 }: PackageSessionLogSectionProps) {
   const [pending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(false);
   const [lessonDate, setLessonDate] = useState(todayDateInput());
   const [recordingUrl, setRecordingUrl] = useState("");
   const [notes, setNotes] = useState("");
@@ -43,6 +44,11 @@ export function PackageSessionLogSection({
   const [message, setMessage] = useState<string | null>(null);
 
   const logKind = kind === "cohort" ? "cohort" : "package_instance";
+  
+  // Hide cancelled logs by default (consistent with admin lesson log view)
+  const visibleEntries = showCancelled 
+    ? entries 
+    : entries.filter(entry => entry.status !== "Cancelled");
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-4">
@@ -53,13 +59,21 @@ export function PackageSessionLogSection({
           </h2>
           <p className="mt-1 text-xs text-zinc-500">
             Session log for this package (date-ordered, like Notion Lessons Log). Cancelled entries
-            are hidden from default progress counts.
+            are hidden by default for clarity.
             {kind === "cohort"
               ? " With auto-unlock on, logging a session releases that lesson in Learn."
               : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+            onClick={() => setShowCancelled((v) => !v)}
+            title="Cancelled lessons are hidden by default and do not count toward progress"
+          >
+            {showCancelled ? "Hide cancelled" : "Show cancelled"}
+          </button>
           {kind === "cohort" && autoUnlockOnLog !== undefined ? (
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
               <input
@@ -164,14 +178,27 @@ export function PackageSessionLogSection({
         </div>
       ) : null}
 
-      {entries.length === 0 ? (
-        <p className="mt-4 text-sm text-zinc-500">No sessions logged yet.</p>
+      {visibleEntries.length === 0 ? (
+        <p className="mt-4 text-sm text-zinc-500">
+          {showCancelled 
+            ? "No sessions logged yet." 
+            : entries.length > 0 
+              ? "No non-cancelled sessions. Click 'Show cancelled' to see cancelled sessions."
+              : "No sessions logged yet."}
+        </p>
       ) : (
         <ul className="mt-4 divide-y divide-zinc-100">
-          {entries.map((entry) => (
-            <li key={entry.id} className="flex flex-wrap items-start justify-between gap-2 py-3">
+          {visibleEntries.map((entry) => {
+            const isCancelled = entry.status === "Cancelled";
+            return (
+            <li 
+              key={entry.id} 
+              className={`flex flex-wrap items-start justify-between gap-2 py-3 ${
+                isCancelled ? "opacity-60" : ""
+              }`}
+            >
               <div className="min-w-0">
-                <p className="text-sm font-medium text-zinc-900">
+                <p className={`text-sm font-medium ${isCancelled ? "text-zinc-500 line-through" : "text-zinc-900"}`}>
                   {formatDate(entry.lessonDate)}
                   {entry.status ? ` · ${entry.status}` : ""}
                 </p>
@@ -203,7 +230,8 @@ export function PackageSessionLogSection({
                 </Link>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </section>
