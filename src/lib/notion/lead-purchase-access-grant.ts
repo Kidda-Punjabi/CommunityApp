@@ -245,6 +245,9 @@ export async function grantAccessFromLinkedLeadPackages(
   profileId: string,
   leadPageId: string
 ): Promise<LeadPurchaseGrantResult> {
+  const startTime = Date.now();
+  const requestId = `${profileId.slice(0, 8)}-${startTime}`;
+  
   const result: LeadPurchaseGrantResult = {
     attempted: true,
     granted: 0,
@@ -254,17 +257,26 @@ export async function grantAccessFromLinkedLeadPackages(
     details: [],
   };
 
+  console.info(
+    `[lead purchase grant] begin requestId=${requestId} profile=${profileId} lead=${leadPageId}`
+  );
+
   let leadProperties: Record<string, unknown>;
   try {
     const page = await notionJson<{ properties: Record<string, unknown> }>(
       `/pages/${leadPageId}`
     );
     leadProperties = page.properties ?? {};
+    console.info(
+      `[lead purchase grant] notion fetched requestId=${requestId} elapsed=${Date.now() - startTime}ms`
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Notion lead fetch failed.";
+    const stack = error instanceof Error ? error.stack : undefined;
     console.error(
-      `[lead purchase grant] Notion fetch failed profile=${profileId} lead=${leadPageId}:`,
-      message
+      `[lead purchase grant] Notion fetch failed requestId=${requestId} profile=${profileId} lead=${leadPageId} elapsed=${Date.now() - startTime}ms:`,
+      message,
+      stack?.slice(0, 300)
     );
     result.errors.push(message);
     const queued = await enqueueLeadPurchaseGrant(supabase, {
@@ -273,12 +285,23 @@ export async function grantAccessFromLinkedLeadPackages(
       leadEmail: null,
       leadName: null,
       reason: "notion_fetch_failed",
-      rawPackageData: { error: message },
+      rawPackageData: { 
+        error: message, 
+        stack: stack?.slice(0, 500),
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
     });
     if (queued.queued) result.queued = 1;
-    if (queued.error) result.errors.push(queued.error);
+    if (queued.error) {
+      result.errors.push(queued.error);
+      console.error(
+        `[lead purchase grant] CRITICAL queue insert failed requestId=${requestId}:`,
+        queued.error
+      );
+    }
     console.error(
-      `[lead purchase grant] outcome profile=${profileId} lead=${leadPageId}`,
+      `[lead purchase grant] outcome requestId=${requestId} profile=${profileId} lead=${leadPageId}`,
       result
     );
     return result;
@@ -290,11 +313,15 @@ export async function grantAccessFromLinkedLeadPackages(
     leadProperties.Packages as { relation?: Array<{ id?: string }> } | undefined
   );
 
+  console.info(
+    `[lead purchase grant] parsed requestId=${requestId} packages=${packagePageIds.length} email=${leadEmail ?? "null"}`
+  );
+
   if (packagePageIds.length === 0) {
     result.skipped = 1;
     result.details.push("No Packages relation — nothing to grant.");
     console.info(
-      `[lead purchase grant] no-packages profile=${profileId} lead=${leadPageId} email=${leadEmail ?? "?"}`
+      `[lead purchase grant] no-packages requestId=${requestId} profile=${profileId} lead=${leadPageId} email=${leadEmail ?? "?"} elapsed=${Date.now() - startTime}ms`
     );
     return result;
   }
@@ -306,8 +333,14 @@ export async function grantAccessFromLinkedLeadPackages(
     const match = await resolveNotionPackagePage(supabase, packagePageId);
     if ("kind" in match) {
       resolved.push(match);
+      console.info(
+        `[lead purchase grant] resolved requestId=${requestId} package=${packagePageId} kind=${match.kind} run=${match.runId}`
+      );
     } else {
       unresolved.push({ notionPageId: match.notionPageId, error: match.error });
+      console.warn(
+        `[lead purchase grant] unresolved requestId=${requestId} package=${packagePageId} error=${match.error}`
+      );
     }
   }
 
@@ -321,6 +354,8 @@ export async function grantAccessFromLinkedLeadPackages(
       notionPageId: r.notionPageId,
     })),
     unresolved,
+    requestId,
+    timestamp: new Date().toISOString(),
   };
 
   const isCleanSingle =
@@ -334,6 +369,10 @@ export async function grantAccessFromLinkedLeadPackages(
           ? "unresolvable_package"
           : "ambiguous_package_match";
 
+    console.warn(
+      `[lead purchase grant] ${reason} requestId=${requestId} profile=${profileId} resolved=${resolved.length} unresolved=${unresolved.length} elapsed=${Date.now() - startTime}ms`
+    );
+
     const queued = await enqueueLeadPurchaseGrant(supabase, {
       profileId,
       notionLeadPageId: leadPageId,
@@ -342,7 +381,13 @@ export async function grantAccessFromLinkedLeadPackages(
       reason,
       rawPackageData,
     });
-    if (queued.error) result.errors.push(queued.error);
+    if (queued.error) {
+      result.errors.push(queued.error);
+      console.error(
+        `[lead purchase grant] CRITICAL queue insert failed requestId=${requestId} reason=${reason}:`,
+        queued.error
+      );
+    }
     if (queued.queued) {
       result.queued = 1;
       result.details.push(`Queued (${reason}).`);
@@ -350,7 +395,7 @@ export async function grantAccessFromLinkedLeadPackages(
       result.details.push(`Could not queue (${reason}).`);
     }
     console.warn(
-      `[lead purchase grant] ${reason} profile=${profileId} lead=${leadPageId}`,
+      `[lead purchase grant] ${reason} requestId=${requestId} profile=${profileId} lead=${leadPageId}`,
       rawPackageData,
       result
     );
@@ -358,29 +403,46 @@ export async function grantAccessFromLinkedLeadPackages(
   }
 
   const target = resolved[0]!;
+  console.info(
+    `[lead purchase grant] granting requestId=${requestId} target=${target.kind}:${target.runId} (${target.label})`
+  );
+  
   const grant = await grantResolvedTarget(supabase, profileId, target);
   if (grant.error) {
     result.errors.push(grant.error);
+    console.error(
+      `[lead purchase grant] grant_failed requestId=${requestId} profile=${profileId} target=${target.label} elapsed=${Date.now() - startTime}ms:`,
+      grant.error
+    );
+    
     const queued = await enqueueLeadPurchaseGrant(supabase, {
       profileId,
       notionLeadPageId: leadPageId,
       leadEmail,
       leadName,
       reason: "grant_failed",
-      rawPackageData: { ...rawPackageData, grantError: grant.error },
+      rawPackageData: { 
+        ...rawPackageData, 
+        grantError: grant.error,
+        targetKind: target.kind,
+        targetRunId: target.runId,
+      },
     });
     if (queued.queued) result.queued = 1;
-    console.error(
-      `[lead purchase grant] grant_failed profile=${profileId} lead=${leadPageId} target=${target.label}:`,
-      grant.error
-    );
+    if (queued.error) {
+      result.errors.push(queued.error);
+      console.error(
+        `[lead purchase grant] CRITICAL queue insert failed after grant_failed requestId=${requestId}:`,
+        queued.error
+      );
+    }
     return result;
   }
 
   result.granted = 1;
   result.details.push(`Granted ${target.kind} ${target.label} (${target.runId}).`);
   console.info(
-    `[lead purchase grant] granted profile=${profileId} lead=${leadPageId} ${target.kind}=${target.runId} label=${target.label}`
+    `[lead purchase grant] SUCCESS requestId=${requestId} profile=${profileId} lead=${leadPageId} ${target.kind}=${target.runId} label=${target.label} elapsed=${Date.now() - startTime}ms`
   );
   return result;
 }
@@ -391,31 +453,75 @@ export async function maybeGrantAccessAfterLeadLink(
   profileId: string,
   linkResult: Pick<LinkLeadsForProfileResult, "leadPageId" | "ambiguous" | "conflicts">
 ): Promise<LeadPurchaseGrantResult | null> {
+  const requestId = `${profileId.slice(0, 8)}-${Date.now()}`;
+  console.info(
+    `[lead purchase grant] start requestId=${requestId} profile=${profileId} lead=${linkResult.leadPageId ?? "none"}`
+  );
+
   if (!linkResult.leadPageId) {
     console.info(
-      `[lead purchase grant] skip — no lead linked profile=${profileId} ambiguous=${linkResult.ambiguous} conflicts=${linkResult.conflicts}`
+      `[lead purchase grant] skip requestId=${requestId} — no lead linked profile=${profileId} ambiguous=${linkResult.ambiguous} conflicts=${linkResult.conflicts}`
     );
     return null;
   }
   // Ambiguous lead match did not produce a trustworthy single lead page.
   if (linkResult.ambiguous > 0) {
     console.warn(
-      `[lead purchase grant] skip — ambiguous lead match profile=${profileId} lead=${linkResult.leadPageId}`
+      `[lead purchase grant] skip requestId=${requestId} — ambiguous lead match profile=${profileId} lead=${linkResult.leadPageId}`
     );
     return null;
   }
 
   try {
-    return await grantAccessFromLinkedLeadPackages(
+    const result = await grantAccessFromLinkedLeadPackages(
       supabase,
       profileId,
       linkResult.leadPageId
     );
+
+    // CRITICAL FIX: If grant was attempted but failed (errors present and not granted),
+    // ensure it's queued. This catches cases where the queue insert inside
+    // grantAccessFromLinkedLeadPackages might have failed silently.
+    if (result.attempted && result.granted === 0 && result.queued === 0 && result.errors.length > 0) {
+      console.error(
+        `[lead purchase grant] grant failed but not queued requestId=${requestId} profile=${profileId} lead=${linkResult.leadPageId} errors=${JSON.stringify(result.errors)}`
+      );
+      try {
+        const queueResult = await enqueueLeadPurchaseGrant(supabase, {
+          profileId,
+          notionLeadPageId: linkResult.leadPageId,
+          leadEmail: null,
+          leadName: null,
+          reason: "grant_failed_retry",
+          rawPackageData: { 
+            originalErrors: result.errors,
+            requestId,
+            timestamp: new Date().toISOString(),
+          },
+        });
+        if (queueResult.queued) {
+          result.queued = 1;
+          result.details.push("Queued after detecting failed grant.");
+        }
+      } catch (retryQueueError) {
+        console.error(
+          `[lead purchase grant] retry queue failed requestId=${requestId} profile=${profileId}:`,
+          retryQueueError instanceof Error ? retryQueueError.message : retryQueueError
+        );
+      }
+    }
+
+    console.info(
+      `[lead purchase grant] complete requestId=${requestId} profile=${profileId} granted=${result.granted} queued=${result.queued} errors=${result.errors.length}`
+    );
+    return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Purchase grant failed.";
+    const stack = error instanceof Error ? error.stack : undefined;
     console.error(
-      `[lead purchase grant] unexpected failure profile=${profileId} lead=${linkResult.leadPageId}:`,
-      message
+      `[lead purchase grant] unexpected failure requestId=${requestId} profile=${profileId} lead=${linkResult.leadPageId}:`,
+      message,
+      stack
     );
     try {
       await enqueueLeadPurchaseGrant(supabase, {
@@ -424,11 +530,16 @@ export async function maybeGrantAccessAfterLeadLink(
         leadEmail: null,
         leadName: null,
         reason: "unexpected_failure",
-        rawPackageData: { error: message },
+        rawPackageData: { 
+          error: message, 
+          stack: stack?.slice(0, 500),
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
       });
     } catch (queueError) {
       console.error(
-        `[lead purchase grant] failed to queue unexpected_failure profile=${profileId}:`,
+        `[lead purchase grant] failed to queue unexpected_failure requestId=${requestId} profile=${profileId}:`,
         queueError instanceof Error ? queueError.message : queueError
       );
     }
