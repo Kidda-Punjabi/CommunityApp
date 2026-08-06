@@ -14,6 +14,7 @@ import { revalidatePath } from "next/cache";
 export type AttendanceActionResult = {
   error?: string;
   success?: string;
+  warning?: string;
 };
 
 export type AttendanceLessonContext = {
@@ -117,7 +118,9 @@ export async function saveCohortLessonAttendance(
     if (error) return { error: error.message };
 
     // Best-effort Notion Attendees push when a matching Lessons Log entry exists.
-    let notionNote = "";
+    let notionSyncSuccess = false;
+    let notionWarning: string | null = null;
+    
     try {
       const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
       const admin = createServiceRoleClient();
@@ -195,22 +198,33 @@ export async function saveCohortLessonAttendance(
           updateHomework: false,
         });
 
-        notionNote = " Notion Attendees updated.";
+        notionSyncSuccess = true;
+        
         if (unmatched.length > 0) {
-          notionNote += ` Warning: no Notion Lead App User ID for: ${unmatched.join(", ")}.`;
+          notionWarning = `Notion sync succeeded, but ${unmatched.length} student${unmatched.length === 1 ? "" : "s"} could not be matched: ${unmatched.join(", ")}. Their Notion Lead may be missing an App User ID.`;
         }
+      } else {
+        // No matching lesson log entry - this is expected for some lessons
+        notionSyncSuccess = true;  // Not an error, just no log to sync to
       }
     } catch (notionError) {
-      notionNote = ` Notion sync failed: ${
-        notionError instanceof Error ? notionError.message : "unknown error"
-      }.`;
+      const errorMessage = notionError instanceof Error ? notionError.message : "Unknown error";
+      notionWarning = `Notion sync failed: ${errorMessage}. Attendance is saved locally and will be retried automatically.`;
     }
 
     revalidatePath("/dashboard/tutor");
     revalidatePath("/dashboard/tutor/attendance");
     revalidatePath("/admin/lesson-log");
+    
+    if (notionWarning) {
+      return {
+        success: `Attendance saved locally for ${marks.length} student${marks.length === 1 ? "" : "s"}.`,
+        warning: notionWarning,
+      };
+    }
+    
     return {
-      success: `Attendance saved for ${marks.length} student${marks.length === 1 ? "" : "s"}.${notionNote}`,
+      success: `Attendance saved and synced to Notion for ${marks.length} student${marks.length === 1 ? "" : "s"}.`,
     };
   } catch (e) {
     return {
