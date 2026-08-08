@@ -25,9 +25,13 @@ export function EnglishExamCourseHub({
       href: `${base}/materials`,
       title: "Materials",
       description:
-        materialCount > 0
-          ? `${materialCount} chapter${materialCount === 1 ? "" : "s"} to read`
-          : "Chapter explanations",
+        config.kind === "life_in_uk"
+          ? materialCount > 0
+            ? `${materialCount} chapters · sentence reader + chapter tests`
+            : "Chapter explanations"
+          : materialCount > 0
+            ? `${materialCount} chapter${materialCount === 1 ? "" : "s"} to read`
+            : "Chapter explanations",
       icon: BookOpen,
     },
     {

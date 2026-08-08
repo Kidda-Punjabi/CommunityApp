@@ -52,6 +52,10 @@ export function isEnglishExamCourse(courseName: string): boolean {
 export type EnglishExamQuestion = {
   id: string;
   quizId: string;
+  quizTitle: string;
+  lessonId: string | null;
+  lessonNumber: number | null;
+  chapterTitle: string;
   questionText: string;
   questionTextPa: string | null;
   optionA: string;
@@ -69,4 +73,27 @@ export type EnglishExamMaterial = {
   title: string;
   lessonNumber: number;
   audioScript: string;
+};
+
+export type EnglishLessonSentence = {
+  id: string;
+  lessonId: string;
+  sortOrder: number;
+  punjabiText: string;
+  romanisedText: string | null;
+  englishText: string;
+  punjabiAudioUrl: string | null;
+  englishAudioUrl: string | null;
+  punjabiAudioStatus: string;
+  englishAudioStatus: string;
+};
+
+export type EnglishChapterScore = {
+  lessonId: string;
+  chapterTitle: string;
+  lessonNumber: number | null;
+  correct: number;
+  total: number;
+  percent: number;
+  materialsHref: string;
 };

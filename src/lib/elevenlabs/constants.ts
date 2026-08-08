@@ -2,6 +2,12 @@
 export const PUNJABI_LESSON_VOICE_ID = "ttyKbP9zTIRyRCN6b2Ye";
 
 /**
+ * English lesson / Life-in-the-UK sentence voice — ElevenLabs Adam (premade).
+ * Used for English Foundations and bilingual exam materials.
+ */
+export const ENGLISH_LESSON_VOICE_ID = "pNInz6obpgDQGcFmaJgB";
+
+/**
  * Learner / player voice for Conversation Practice — distinct from NPC voices.
  * Noor: young female Punjabi (Doaba accent). Vetted for player-response clips only.
  */
@@ -44,6 +50,15 @@ export function getVettedVoice(voiceId: string): VettedVoice | undefined {
 export function resolveVettedVoiceId(voiceId?: string | null): string {
   if (voiceId && getVettedVoice(voiceId)) return voiceId;
   return DEFAULT_VETTED_VOICE_ID;
+}
+
+/**
+ * Resolve TTS voice for synthesis. Allows vetted Punjabi voices and the
+ * approved English Adam voice without remapping Adam → Yatin.
+ */
+export function resolveSpeechVoiceId(voiceId?: string | null): string {
+  if (voiceId === ENGLISH_LESSON_VOICE_ID) return ENGLISH_LESSON_VOICE_ID;
+  return resolveVettedVoiceId(voiceId);
 }
 
 /**

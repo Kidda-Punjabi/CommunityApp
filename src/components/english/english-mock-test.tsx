@@ -7,7 +7,12 @@ import type {
   EnglishExamCourseConfig,
   EnglishExamQuestion,
 } from "@/lib/learning/english-exam-courses";
-import { drawEnglishMockQuestions } from "@/lib/learning/load-english-exam-content";
+import {
+  drawEnglishMockQuestions,
+  filterEnglishQuestionsByLesson,
+  scoreEnglishExamByChapter,
+  shuffleEnglishExamQuestions,
+} from "@/lib/learning/load-english-exam-content";
 import { cn } from "@/lib/ui/styles";
 
 type EnglishMockTestProps = {
@@ -15,6 +20,9 @@ type EnglishMockTestProps = {
   courseId: string;
   config: EnglishExamCourseConfig;
   bank: EnglishExamQuestion[];
+  /** When set, run an untimed chapter test with that lesson's questions. */
+  chapterLessonId?: string | null;
+  chapterTitle?: string | null;
 };
 
 type Phase = "intro" | "testing" | "results";
@@ -26,12 +34,30 @@ function formatClock(totalSeconds: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+function shortChapterLabel(title: string, lessonNumber: number | null) {
+  const match = title.match(/chapter\s*\d+/i);
+  if (match) return match[0];
+  if (lessonNumber != null) return `Chapter ${lessonNumber}`;
+  return title.split("/")[0]?.trim() || title;
+}
+
 export function EnglishMockTest({
   courseName,
   courseId,
   config,
   bank,
+  chapterLessonId = null,
+  chapterTitle = null,
 }: EnglishMockTestProps) {
+  const isChapterMode = Boolean(chapterLessonId);
+  const chapterBank = useMemo(
+    () =>
+      chapterLessonId
+        ? filterEnglishQuestionsByLesson(bank, chapterLessonId)
+        : bank,
+    [bank, chapterLessonId]
+  );
+
   const [phase, setPhase] = useState<Phase>("intro");
   const [questions, setQuestions] = useState<EnglishExamQuestion[]>([]);
   const [index, setIndex] = useState(0);
@@ -61,13 +87,22 @@ export function EnglishMockTest({
     return correct;
   }, [answers, questions]);
 
-  const passed = score >= config.passCorrect;
+  const chapterScores = useMemo(
+    () => scoreEnglishExamByChapter(questions, answers, courseId),
+    [answers, courseId, questions]
+  );
+
+  const passed = isChapterMode
+    ? questions.length > 0 && score / questions.length >= 0.75
+    : score >= config.passCorrect;
   const percent =
     questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
 
   function startTest() {
     finishedRef.current = false;
-    const drawn = drawEnglishMockQuestions(bank, config.mockQuestionCount);
+    const drawn = isChapterMode
+      ? shuffleEnglishExamQuestions(chapterBank)
+      : drawEnglishMockQuestions(bank, config.mockQuestionCount);
     setQuestions(drawn);
     setAnswers({});
     setIndex(0);
@@ -82,7 +117,7 @@ export function EnglishMockTest({
   }
 
   useEffect(() => {
-    if (phase !== "testing") return;
+    if (phase !== "testing" || isChapterMode) return;
     if (secondsLeft <= 0) {
       if (!finishedRef.current) {
         finishedRef.current = true;
@@ -94,12 +129,13 @@ export function EnglishMockTest({
       setSecondsLeft((value) => value - 1);
     }, 1000);
     return () => window.clearTimeout(id);
-  }, [phase, secondsLeft]);
+  }, [phase, secondsLeft, isChapterMode]);
 
-  if (bank.length === 0) {
+  if (chapterBank.length === 0) {
     return (
       <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        No mock questions are available for this course yet.
+        No questions are available for this {isChapterMode ? "chapter" : "course"}{" "}
+        yet.
       </p>
     );
   }
@@ -109,42 +145,54 @@ export function EnglishMockTest({
       <div className="space-y-5">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
-            Mock test
+            {isChapterMode ? "Chapter test" : "Mock test"}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold text-zinc-900">{courseName}</h1>
+          <h1 className="mt-1 text-2xl font-semibold text-zinc-900">
+            {isChapterMode ? chapterTitle || courseName : courseName}
+          </h1>
           <p className="mt-2 text-sm text-zinc-600">
-            Timed practice matching the real exam format (multiple-choice only).
+            {isChapterMode
+              ? "Practice just this chapter — untimed, all questions from the chapter bank."
+              : "Timed practice matching the real exam format (multiple-choice only)."}
           </p>
         </div>
 
         <ul className="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-4 py-4 text-sm text-emerald-950">
-          <li>
-            <span className="font-semibold">{config.mockQuestionCount}</span> questions
-            (random, no repeats)
-          </li>
-          <li>
-            <span className="font-semibold">{config.mockMinutes}</span> minutes
-          </li>
-          <li>
-            Pass mark:{" "}
-            <span className="font-semibold">
-              {config.passCorrect}/{config.mockQuestionCount}
-            </span>{" "}
-            ({config.passPercent}%)
-          </li>
+          {isChapterMode ? (
+            <>
+              <li>
+                <span className="font-semibold">{chapterBank.length}</span> chapter
+                questions
+              </li>
+              <li>Untimed · see explanations on the full practice bank</li>
+              <li>Results include a chapter score you can restudy from</li>
+            </>
+          ) : (
+            <>
+              <li>
+                <span className="font-semibold">{config.mockQuestionCount}</span>{" "}
+                questions (random, no repeats)
+              </li>
+              <li>
+                <span className="font-semibold">{config.mockMinutes}</span> minutes
+              </li>
+              <li>
+                Pass mark:{" "}
+                <span className="font-semibold">
+                  {config.passCorrect}/{config.mockQuestionCount}
+                </span>{" "}
+                ({config.passPercent}%)
+              </li>
+            </>
+          )}
         </ul>
-
-        <p className="text-xs text-zinc-500">
-          Bank size: {bank.length} questions. Your score is shown at the end — nothing is
-          saved to your Punjabi progress.
-        </p>
 
         <button
           type="button"
           onClick={startTest}
           className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-emerald-500"
         >
-          Start mock test
+          {isChapterMode ? "Start chapter test" : "Start mock test"}
         </button>
 
         <Link
@@ -158,6 +206,10 @@ export function EnglishMockTest({
   }
 
   if (phase === "results") {
+    const weakest = [...chapterScores]
+      .filter((row) => row.total > 0)
+      .sort((a, b) => a.percent - b.percent);
+
     return (
       <div className="space-y-5">
         <div
@@ -180,10 +232,68 @@ export function EnglishMockTest({
             {score}/{questions.length}
           </p>
           <p className="mt-1 text-sm text-zinc-600">
-            {percent}% · need {config.passCorrect}/{config.mockQuestionCount} (
-            {config.passPercent}%) to pass
+            {percent}%
+            {!isChapterMode
+              ? ` · need ${config.passCorrect}/${config.mockQuestionCount} (${config.passPercent}%) to pass`
+              : " on this chapter"}
           </p>
         </div>
+
+        {chapterScores.length > 0 ? (
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              By chapter
+            </p>
+            <ul className="mt-3 space-y-2">
+              {chapterScores.map((row) => (
+                <li
+                  key={row.lessonId}
+                  className="flex items-center justify-between gap-3 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-zinc-900">
+                      {shortChapterLabel(row.chapterTitle, row.lessonNumber)}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {row.correct}/{row.total} correct
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span
+                      className={cn(
+                        "tabular-nums font-semibold",
+                        row.percent >= 75 ? "text-emerald-700" : "text-amber-700"
+                      )}
+                    >
+                      {row.percent}%
+                    </span>
+                    <Link
+                      href={row.materialsHref}
+                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-600"
+                    >
+                      Study
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {weakest[0] && weakest[0].percent < 100 ? (
+              <p className="mt-3 text-xs text-zinc-500">
+                Weakest:{" "}
+                <Link
+                  href={weakest[0].materialsHref}
+                  className="font-semibold text-emerald-700 hover:underline"
+                >
+                  {shortChapterLabel(
+                    weakest[0].chapterTitle,
+                    weakest[0].lessonNumber
+                  )}
+                </Link>{" "}
+                — reopen the chapter reader to restudy.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-2">
           <button
@@ -191,14 +301,23 @@ export function EnglishMockTest({
             onClick={startTest}
             className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500"
           >
-            Try another mock
+            Try again
           </button>
-          <Link
-            href={`/dashboard/english/learn/${courseId}/practice`}
-            className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-800"
-          >
-            Review in practice bank
-          </Link>
+          {!isChapterMode ? (
+            <Link
+              href={`/dashboard/english/learn/${courseId}/materials`}
+              className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-800"
+            >
+              Review chapter materials
+            </Link>
+          ) : (
+            <Link
+              href={`/dashboard/english/learn/${courseId}/materials/${chapterLessonId}`}
+              className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-800"
+            >
+              Back to chapter reader
+            </Link>
+          )}
           <Link
             href={`/dashboard/english/learn/${courseId}`}
             className="block text-center text-sm font-medium text-emerald-700"
@@ -210,28 +329,27 @@ export function EnglishMockTest({
     );
   }
 
-  // testing phase
-  if (!question) {
-    return null;
-  }
+  if (!question) return null;
 
   const promptPa = question.questionTextPa?.trim();
-  const urgent = secondsLeft <= 60;
+  const urgent = !isChapterMode && secondsLeft <= 60;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div
-          className={cn(
-            "rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums",
-            urgent
-              ? "bg-red-100 text-red-800"
-              : "bg-zinc-100 text-zinc-800"
-          )}
-          aria-live="polite"
-        >
-          {formatClock(secondsLeft)}
-        </div>
+        {!isChapterMode ? (
+          <div
+            className={cn(
+              "rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums",
+              urgent ? "bg-red-100 text-red-800" : "bg-zinc-100 text-zinc-800"
+            )}
+            aria-live="polite"
+          >
+            {formatClock(secondsLeft)}
+          </div>
+        ) : (
+          <p className="text-xs font-medium text-zinc-500">Untimed chapter test</p>
+        )}
         <EnglishBilingualToggle showEnglish={showEnglish} onChange={setShowEnglish} />
       </div>
 

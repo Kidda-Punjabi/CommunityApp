@@ -6,7 +6,6 @@ import {
 import { fetchAccessiblePrivateCourses } from "@/lib/learning/private-courses";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function EnglishHomePage() {
@@ -52,18 +51,6 @@ export default async function EnglishHomePage() {
           Lessons coming soon.
         </p>
       )}
-
-      <div className="mt-10">
-        <Link
-          href="/dashboard/english/games"
-          className="block rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm transition-colors hover:bg-emerald-50/60"
-        >
-          <h2 className="font-semibold text-zinc-900">Games</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Practice English through interactive games.
-          </p>
-        </Link>
-      </div>
     </div>
   );
 }

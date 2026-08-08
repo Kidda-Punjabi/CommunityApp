@@ -3,7 +3,7 @@ import {
   DEFAULT_VOICE_SETTINGS,
   PUNJABI_LESSON_TTS_MODEL_ID,
   PUNJABI_LESSON_VOICE_ID,
-  resolveVettedVoiceId,
+  resolveSpeechVoiceId,
 } from "@/lib/elevenlabs/constants";
 import { normalizeScriptText } from "@/lib/elevenlabs/normalize-script";
 
@@ -51,7 +51,7 @@ export async function synthesizeSpeech({
   pronunciationDictionaryLocators,
   seed,
 }: SynthesizeSpeechOptions): Promise<SynthesizeSpeechResult> {
-  const resolvedVoiceId = resolveVettedVoiceId(voiceId);
+  const resolvedVoiceId = resolveSpeechVoiceId(voiceId);
   const { normalized, issues } = normalizeScriptText(text);
 
   if (!normalized) {

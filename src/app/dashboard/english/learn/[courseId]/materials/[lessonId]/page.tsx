@@ -1,7 +1,11 @@
+import { EnglishChapterSentenceReader } from "@/components/english/english-chapter-sentence-reader";
 import { renderEnglishMaterialScript } from "@/components/english/english-material-script";
 import { NavLink } from "@/components/ui/nav-link";
 import { getEnglishExamCourseConfig } from "@/lib/learning/english-exam-courses";
-import { loadEnglishExamMaterials } from "@/lib/learning/load-english-exam-content";
+import {
+  loadEnglishExamMaterials,
+  loadLessonSentences,
+} from "@/lib/learning/load-english-exam-content";
 import { fetchAccessibleLearnEnglishCourseById } from "@/lib/learning/private-courses";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
@@ -23,11 +27,17 @@ export default async function EnglishExamMaterialChapterPage({
     session.user.id,
     courseId
   );
-  if (!course || !getEnglishExamCourseConfig(course.name)) notFound();
+  const config = course ? getEnglishExamCourseConfig(course.name) : null;
+  if (!course || !config) notFound();
 
   const materials = await loadEnglishExamMaterials(session.supabase, course.id);
   const material = materials.find((item) => item.id === lessonId);
   if (!material) notFound();
+
+  const useSentenceReader = config.kind === "life_in_uk";
+  const sentences = useSentenceReader
+    ? await loadLessonSentences(session.supabase, lessonId)
+    : [];
 
   return (
     <div className={ui.page}>
@@ -38,13 +48,23 @@ export default async function EnglishExamMaterialChapterPage({
         ← All materials
       </NavLink>
 
-      <h1 className="mt-4 text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
-        {material.title}
-      </h1>
-
-      <article className="mt-6 rounded-2xl border border-emerald-200 bg-white px-4 py-5 sm:px-5">
-        {renderEnglishMaterialScript(material.audioScript)}
-      </article>
+      {useSentenceReader && sentences.length > 0 ? (
+        <div className="mt-4">
+          <EnglishChapterSentenceReader
+            title={material.title}
+            sentences={sentences}
+          />
+        </div>
+      ) : (
+        <>
+          <h1 className="mt-4 text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
+            {material.title}
+          </h1>
+          <article className="mt-6 rounded-2xl border border-emerald-200 bg-white px-4 py-5 sm:px-5">
+            {renderEnglishMaterialScript(material.audioScript)}
+          </article>
+        </>
+      )}
     </div>
   );
 }
