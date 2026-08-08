@@ -143,13 +143,13 @@ function lessonLearnHref(lessonId: string, trackId: LearnTrackId) {
 function trackIdForLesson(
   lesson: HomeLessonRef,
   access: CourseAccessContext
-): LearnTrackId {
+): LearnTrackId | null {
   if (lesson.is_free) return "free";
 
   const course = access.courses.find((item) => item.id === lesson.course_id);
   if (!course) return "free";
   if (course.is_public === false || course.required_tier?.toLowerCase() === "private") {
-    return "english";
+    return null; // Private courses (English) are in a separate section now
   }
 
   return getCourseRequiredTier(course);
@@ -171,8 +171,6 @@ function lessonsInCurriculumOrder(
       continue;
     }
 
-    if (trackId === "english") continue;
-
     const courseIds = new Set(
       findCoursesForTier(access.courses, trackId).map((course) => course.id)
     );
@@ -188,7 +186,7 @@ function lessonsInCurriculumOrder(
 }
 
 function lessonUnitLabel(trackId: LearnTrackId) {
-  return trackId === "community" || trackId === "english" ? "Week" : "Lesson";
+  return trackId === "community" ? "Week" : "Lesson";
 }
 
 function findNextLesson(
@@ -211,7 +209,10 @@ function findNextLesson(
 
     if (completionMap.get(lesson.id)?.fullyComplete) continue;
 
-    return { lesson, trackId: trackIdForLesson(lesson, access) };
+    const trackId = trackIdForLesson(lesson, access);
+    if (!trackId) continue; // Skip private/English lessons
+
+    return { lesson, trackId };
   }
 
   return null;
