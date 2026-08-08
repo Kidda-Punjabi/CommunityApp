@@ -4,8 +4,7 @@ export type LearnTrackId =
   | "free"
   | "foundational"
   | "beginners"
-  | "community"
-  | "english";
+  | "community";
 
 export type LearnTrack = {
   id: LearnTrackId;
@@ -54,14 +53,6 @@ export const LEARN_TRACKS: LearnTrack[] = [
     unlockUrl: "/courses/community",
     lockProductName: "Kidda Community",
   },
-  {
-    id: "english",
-    title: "Learn English",
-    description: "English foundations taught through Punjabi.",
-    tier: null,
-    alwaysUnlocked: false,
-    privateAccess: true,
-  },
 ];
 
 export function getLearnTrack(id: string): LearnTrack | undefined {
@@ -75,7 +66,7 @@ export function learnTrackPath(id: LearnTrackId) {
 /** Hide course-level progress for tracks where lesson completion UI is misleading or unwanted. */
 export function shouldShowLearnCourseProgress(trackId: LearnTrackId): boolean {
   return (
-    trackId !== "community" && trackId !== "beginners" && trackId !== "english"
+    trackId !== "community" && trackId !== "beginners"
   );
 }
 

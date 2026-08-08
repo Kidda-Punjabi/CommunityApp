@@ -150,6 +150,10 @@ export function BottomNav() {
     return null;
   }
 
+  if (pathname.startsWith("/dashboard/english")) {
+    return null;
+  }
+
   return (
     <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200/60 bg-white/90 shadow-[0_-4px_24px_-8px_rgba(24,24,27,0.08)] backdrop-blur-md">
       <div className="pointer-events-auto mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5">
