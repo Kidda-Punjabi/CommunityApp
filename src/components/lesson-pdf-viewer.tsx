@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { saveLessonPdfProgress } from "@/lib/progress/lesson-progress";
+import { learningProductForLesson } from "@/lib/learning/learning-product";
 import { recordStreakActivity } from "@/lib/progress/streak";
 
 type PdfJsModule = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -69,7 +70,10 @@ export function LessonPdfViewer({
       if (shouldComplete && !wasCompleted) {
         pdfCompletedRef.current = true;
         setPdfCompleted(true);
-        await recordStreakActivity(supabase, userId);
+        const product = await learningProductForLesson(supabase, lessonId);
+        if (product === "punjabi") {
+          await recordStreakActivity(supabase, userId);
+        }
       }
     },
     [lessonId]

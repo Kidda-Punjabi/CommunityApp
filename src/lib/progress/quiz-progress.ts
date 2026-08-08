@@ -3,6 +3,10 @@ import {
   awardQuizAttemptPoints,
   tryAwardLessonCompletionPoints,
 } from "@/lib/leaderboard/points";
+import {
+  learningProductForLesson,
+  learningProductForQuiz,
+} from "@/lib/learning/learning-product";
 
 export const PASSING_QUIZ_SCORE = 80;
 
@@ -77,7 +81,16 @@ export async function saveQuizProgress(
 
   if (error) throw error;
 
-  const quizPoints = await awardQuizAttemptPoints(supabase, score);
+  const product = options?.lessonId
+    ? await learningProductForLesson(supabase, options.lessonId)
+    : await learningProductForQuiz(supabase, quizId);
+
+  const quizPoints = await awardQuizAttemptPoints(
+    supabase,
+    score,
+    undefined,
+    product
+  );
   let lessonBonus = 0;
   if (options?.lessonId) {
     lessonBonus = await tryAwardLessonCompletionPoints(supabase, options.lessonId);

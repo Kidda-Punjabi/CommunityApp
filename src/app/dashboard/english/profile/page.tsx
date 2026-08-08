@@ -2,7 +2,7 @@ import { UserAvatar } from "@/components/profile/user-avatar";
 import { fetchAccessiblePrivateCourses } from "@/lib/learning/private-courses";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
-import { loadUserProgression } from "@/lib/progression/load-user-progression";
+import { loadEnglishProgression } from "@/lib/progression/load-english-progression";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -21,7 +21,7 @@ export default async function EnglishProfilePage() {
 
   const [profile, progression] = await Promise.all([
     loadEditableProfile(supabase, user.id),
-    loadUserProgression(supabase, user.id),
+    loadEnglishProgression(supabase, user.id),
   ]);
   const displayName = getDisplayName(profile);
 
@@ -35,7 +35,6 @@ export default async function EnglishProfilePage() {
               preferred_name: profile?.preferred_name,
               avatar_url: profile?.avatar_url,
             }}
-            level={progression.learnerLevel}
             size="lg"
             className="shrink-0 shadow-[0_4px_20px_-4px_rgba(5,150,105,0.12)] ring-4 ring-emerald-50"
           />
@@ -45,7 +44,7 @@ export default async function EnglishProfilePage() {
             </h1>
             <p className="mt-0.5 truncate text-sm text-zinc-500">{user.email}</p>
             <p className="mt-1 text-sm tabular-nums text-zinc-500">
-              {progression.totalXp.toLocaleString()} lifetime XP
+              {progression.totalXp.toLocaleString()} English XP
             </p>
           </div>
         </div>
@@ -61,7 +60,7 @@ export default async function EnglishProfilePage() {
         <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 px-6 py-5">
           <p className="text-xs font-medium text-emerald-700">English learning</p>
           <p className="mt-2 text-sm text-zinc-700">
-            You&apos;re in the English section — separate from Punjabi learning.
+            Progress and XP here are separate from Punjabi learning.
           </p>
           <p className="mt-1 text-xs text-emerald-600">
             Course: {privateCourses[0]?.name}
@@ -86,15 +85,20 @@ export default async function EnglishProfilePage() {
           <div className="mt-3 grid grid-cols-2 gap-4">
             <div>
               <p className="text-2xl font-bold text-zinc-900">
-                {progression.learnerLevel ?? "—"}
+                {progression.lessonsCompleted}
+                {progression.lessonsTotal > 0 ? (
+                  <span className="text-base font-medium text-zinc-400">
+                    /{progression.lessonsTotal}
+                  </span>
+                ) : null}
               </p>
-              <p className="text-xs text-zinc-500">Level</p>
+              <p className="text-xs text-zinc-500">Lessons complete</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-zinc-900">
                 {progression.totalXp.toLocaleString()}
               </p>
-              <p className="text-xs text-zinc-500">Total XP</p>
+              <p className="text-xs text-zinc-500">English XP</p>
             </div>
           </div>
         </div>

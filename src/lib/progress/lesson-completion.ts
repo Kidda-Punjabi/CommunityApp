@@ -135,6 +135,7 @@ export async function fetchLessonCompletionMap(
     { data: setLinks },
     { data: quizzes },
     { data: quizProgress },
+    { data: lessonScopedCards },
   ] = await Promise.all([
     supabase
       .from("lesson_progress")
@@ -153,6 +154,12 @@ export async function fetchLessonCompletionMap(
       .from("quiz_progress")
       .select("quiz_id, completed, score")
       .eq("user_id", userId),
+    // English Foundations (and similar) attach cards via lesson_id with deck_id null.
+    supabase
+      .from("flashcards")
+      .select("id, deck_id, lesson_id")
+      .in("lesson_id", lessonIds)
+      .is("deck_id", null),
   ]);
 
   const deckIds = [
@@ -168,7 +175,10 @@ export async function fetchLessonCompletionMap(
     flashcards = data ?? [];
   }
 
-  const cardIds = flashcards.map((card) => card.id);
+  const cardIds = [
+    ...flashcards.map((card) => card.id),
+    ...(lessonScopedCards ?? []).map((card) => card.id as string),
+  ];
   let flashcardProgress: { flashcard_id: string; confidence: string }[] = [];
   if (cardIds.length > 0) {
     const { data } = await supabase
@@ -205,6 +215,22 @@ export async function fetchLessonCompletionMap(
     const list = flashcardsByDeck.get(card.deck_id) ?? [];
     list.push(card.id);
     flashcardsByDeck.set(card.deck_id, list);
+  }
+
+  // Synthetic deck key for lesson-scoped cards (no set_course_links / deck_id).
+  const LESSON_SCOPED_PREFIX = "__lesson__:";
+  for (const card of lessonScopedCards ?? []) {
+    const lessonId = card.lesson_id as string | null;
+    if (!lessonId) continue;
+    const syntheticDeckId = `${LESSON_SCOPED_PREFIX}${lessonId}`;
+    const decks = decksByLesson.get(lessonId) ?? [];
+    if (!decks.includes(syntheticDeckId)) {
+      decks.push(syntheticDeckId);
+      decksByLesson.set(lessonId, decks);
+    }
+    const list = flashcardsByDeck.get(syntheticDeckId) ?? [];
+    list.push(card.id as string);
+    flashcardsByDeck.set(syntheticDeckId, list);
   }
 
   const confidentCardIds = new Set(

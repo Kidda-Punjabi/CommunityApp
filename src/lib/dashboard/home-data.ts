@@ -19,6 +19,7 @@ import {
   canAccessLessonInContext,
   isLessonContentUnlockedForUser,
 } from "@/lib/learning/learn-access";
+import { isPrivateAccessCourse } from "@/lib/learning/private-courses";
 import {
   learnTrackPath,
   type LearnTrackId,
@@ -251,6 +252,8 @@ function countAccessibleLessonsCompleted(
   contentUnlockedMap: Map<string, boolean>
 ): number {
   return lessons.filter((lesson) => {
+    // English / private courses keep their own stats — exclude from Punjabi home.
+    if (isPrivateAccessCourse(access, lesson.course_id)) return false;
     if (!canAccessLessonInContext(access, lesson)) return false;
     if (
       !isLessonContentUnlockedForUser(
@@ -275,6 +278,7 @@ function countQuizzesPassed(
   for (const row of quizRows) {
     const quiz = row.quizzes;
     if (!quiz) continue;
+    if (isPrivateAccessCourse(access, quiz.course_id)) continue;
     if (!hasAccessToCourse(access.unlockedCourseIds, quiz.course_id)) continue;
 
     if (
@@ -385,14 +389,32 @@ export async function getHomeDashboardData(
     ])
   );
 
+  const lessonCatalog = (allLessons ?? []) as HomeLessonRef[];
+  const privateLessonIds = new Set(
+    lessonCatalog
+      .filter((lesson) => isPrivateAccessCourse(access, lesson.course_id))
+      .map((lesson) => lesson.id)
+  );
+
+  const hasPunjabiLessonProgress = lessonRows.some(
+    (row) => !privateLessonIds.has(row.lesson_id)
+  );
+  const hasPunjabiQuizProgress = quizRows.some((row) => {
+    const courseId = row.quizzes?.course_id;
+    return courseId != null && !isPrivateAccessCourse(access, courseId);
+  });
+  const hasPunjabiFlashcardProgress = flashcardRows.some((row) => {
+    const lessonId = row.flashcards?.lesson_id;
+    return lessonId != null && !privateLessonIds.has(lessonId);
+  });
+
   const hasAnyProgress =
-    lessonRows.length > 0 ||
-    quizRows.length > 0 ||
-    flashcardRows.length > 0 ||
+    hasPunjabiLessonProgress ||
+    hasPunjabiQuizProgress ||
+    hasPunjabiFlashcardProgress ||
     (streakStats.streak ?? 0) > 0 ||
     (presentation.longest_streak ?? 0) > 0;
 
-  const lessonCatalog = (allLessons ?? []) as HomeLessonRef[];
   const [completionMap, contentUnlockedMap] = await Promise.all([
     fetchLessonCompletionMap(supabase, userId, lessonCatalog),
     fetchLessonContentUnlockMap(supabase, userId, lessonCatalog, access),

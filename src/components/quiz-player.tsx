@@ -11,6 +11,10 @@ import { createClient } from "@/lib/supabase/client";
 import { sumPointsEarned } from "@/lib/points/notify-points-earned";
 import { quizScorePercent, saveQuizProgress } from "@/lib/progress/quiz-progress";
 import { PASSING_QUIZ_SCORE } from "@/lib/progress/quiz-progress";
+import {
+  learningProductForLesson,
+  learningProductForQuiz,
+} from "@/lib/learning/learning-product";
 import { recordStreakActivity, type StreakResult } from "@/lib/progress/streak";
 import { SessionProgressBar } from "@/components/session-progress-bar";
 
@@ -85,8 +89,13 @@ export function QuizPlayer({
       }
 
       if (percentage >= PASSING_QUIZ_SCORE) {
-        const result = await recordStreakActivity(supabase, user.id);
-        setStreakResult(result);
+        const product = lessonId
+          ? await learningProductForLesson(supabase, lessonId)
+          : await learningProductForQuiz(supabase, quizId);
+        if (product === "punjabi") {
+          const result = await recordStreakActivity(supabase, user.id);
+          setStreakResult(result);
+        }
       }
     };
 

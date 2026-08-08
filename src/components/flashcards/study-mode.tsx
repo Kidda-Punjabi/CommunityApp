@@ -21,6 +21,7 @@ import {
   type FlashcardProgressRow,
 } from "@/lib/progress/flashcard-progress";
 import { sumPointsEarned } from "@/lib/points/notify-points-earned";
+import { learningProductForFlashcard } from "@/lib/learning/learning-product";
 import { recordStreakActivity, type StreakResult } from "@/lib/progress/streak";
 
 type FlashcardStudyModeProps = {
@@ -126,17 +127,22 @@ export function FlashcardStudyMode({
     if (startedAllConfidentRef.current) return;
 
     const userId = userIdRef.current;
-    if (!userId) return;
+    const firstCardId = deck.cards[0]?.id;
+    if (!userId || !firstCardId) return;
 
     streakUpdatedRef.current = true;
     const supabase = createClient();
-    void recordStreakActivity(supabase, userId)
-      .then(setStreakResult)
+    void learningProductForFlashcard(supabase, firstCardId)
+      .then(async (product) => {
+        if (product !== "punjabi") return;
+        const result = await recordStreakActivity(supabase, userId);
+        setStreakResult(result);
+      })
       .catch((error) => {
         console.error("Failed to record streak activity:", error);
         streakUpdatedRef.current = false;
       });
-  }, [phase, allConfident]);
+  }, [phase, allConfident, kidsMode, deck.cards]);
 
   async function recordConfidence(confidence: FlashcardConfidence) {
     if (!card) return;

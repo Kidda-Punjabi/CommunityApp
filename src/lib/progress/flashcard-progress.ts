@@ -3,6 +3,7 @@ import {
   awardFlashcardConfidentPoints,
   tryAwardLessonCompletionPoints,
 } from "@/lib/leaderboard/points";
+import { learningProductForFlashcard } from "@/lib/learning/learning-product";
 
 export type FlashcardConfidence = "confident" | "not_confident";
 
@@ -81,7 +82,12 @@ export async function saveFlashcardConfidence(
   let lessonBonus = 0;
 
   if (confidence === "confident" && !wasConfident) {
-    flashcardPoints = await awardFlashcardConfidentPoints(supabase);
+    const product = await learningProductForFlashcard(supabase, flashcardId);
+    flashcardPoints = await awardFlashcardConfidentPoints(
+      supabase,
+      undefined,
+      product
+    );
     if (flashcard?.lesson_id) {
       lessonBonus = await tryAwardLessonCompletionPoints(supabase, flashcard.lesson_id);
     }
