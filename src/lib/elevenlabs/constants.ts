@@ -72,5 +72,19 @@ export const DEFAULT_VOICE_SETTINGS = {
   speed: 1.0,
 } as const;
 
+/**
+ * English exam / theory-question TTS — multilingual v2 + speaker boost.
+ * Clearer and less "muffled" than Adam on eleven_v3 for short MCQ prompts.
+ */
+export const ENGLISH_LESSON_TTS_MODEL_ID = "eleven_multilingual_v2";
+
+export const ENGLISH_VOICE_SETTINGS = {
+  stability: 0.45,
+  similarity_boost: 0.85,
+  style: 0.0,
+  speed: 0.92,
+  use_speaker_boost: true,
+} as const;
+
 /** Default MP3 output — matches dashboard mp3_44100_128. */
 export const DEFAULT_OUTPUT_FORMAT = "mp3_44100_128";

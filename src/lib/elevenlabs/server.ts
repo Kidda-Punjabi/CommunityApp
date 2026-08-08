@@ -1,6 +1,8 @@
 import {
   DEFAULT_OUTPUT_FORMAT,
   DEFAULT_VOICE_SETTINGS,
+  ENGLISH_LESSON_TTS_MODEL_ID,
+  ENGLISH_VOICE_SETTINGS,
   PUNJABI_LESSON_TTS_MODEL_ID,
   PUNJABI_LESSON_VOICE_ID,
   resolveSpeechVoiceId,
@@ -24,6 +26,16 @@ export type SynthesizeSpeechOptions = {
   text: string;
   voiceId?: string;
   modelId?: string;
+  outputFormat?: string;
+  voiceSettings?: Partial<{
+    stability: number;
+    similarity_boost: number;
+    style: number;
+    speed: number;
+    use_speaker_boost: boolean;
+  }>;
+  /** Prefer clearer English settings (multilingual v2 + speaker boost). */
+  clarityProfile?: "default" | "english_exam";
   pronunciationDictionaryLocators?: PronunciationDictionaryLocator[];
   seed?: number;
 };
@@ -47,7 +59,10 @@ export type SynthesizeSpeechResult = {
 export async function synthesizeSpeech({
   text,
   voiceId = PUNJABI_LESSON_VOICE_ID,
-  modelId = PUNJABI_LESSON_TTS_MODEL_ID,
+  modelId,
+  outputFormat,
+  voiceSettings,
+  clarityProfile = "default",
   pronunciationDictionaryLocators,
   seed,
 }: SynthesizeSpeechOptions): Promise<SynthesizeSpeechResult> {
@@ -58,19 +73,44 @@ export async function synthesizeSpeech({
     throw new Error("Cannot synthesize empty text.");
   }
 
+  const useEnglishExamClarity = clarityProfile === "english_exam";
+
+  const resolvedModelId =
+    modelId ??
+    (useEnglishExamClarity
+      ? ENGLISH_LESSON_TTS_MODEL_ID
+      : PUNJABI_LESSON_TTS_MODEL_ID);
+
+  const resolvedFormat = outputFormat ?? DEFAULT_OUTPUT_FORMAT;
+
+  const baseSettings = useEnglishExamClarity
+    ? ENGLISH_VOICE_SETTINGS
+    : DEFAULT_VOICE_SETTINGS;
+
+  const mergedSettings = {
+    ...baseSettings,
+    ...voiceSettings,
+  };
+
+  // Speaker boost is not supported on eleven_v3.
+  const settingsForApi =
+    resolvedModelId === PUNJABI_LESSON_TTS_MODEL_ID
+      ? {
+          stability: mergedSettings.stability,
+          similarity_boost: mergedSettings.similarity_boost,
+          style: mergedSettings.style,
+          speed: mergedSettings.speed,
+        }
+      : mergedSettings;
+
   const params = new URLSearchParams({
-    output_format: DEFAULT_OUTPUT_FORMAT,
+    output_format: resolvedFormat,
   });
 
   const body: Record<string, unknown> = {
     text: normalized,
-    model_id: modelId,
-    voice_settings: {
-      stability: DEFAULT_VOICE_SETTINGS.stability,
-      similarity_boost: DEFAULT_VOICE_SETTINGS.similarity_boost,
-      style: DEFAULT_VOICE_SETTINGS.style,
-      speed: DEFAULT_VOICE_SETTINGS.speed,
-    },
+    model_id: resolvedModelId,
+    voice_settings: settingsForApi,
     apply_text_normalization: "auto",
   };
 

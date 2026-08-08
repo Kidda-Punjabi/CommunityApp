@@ -28,6 +28,32 @@ export function cancelOptionSelectionSpeech() {
   window.speechSynthesis.cancel();
 }
 
+function pickEnglishVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+
+  const prefer = [
+    /en-GB/i,
+    /british/i,
+    /daniel/i,
+    /google uk/i,
+    /siri.*en-GB/i,
+  ];
+  for (const pattern of prefer) {
+    const hit = voices.find(
+      (voice) =>
+        pattern.test(voice.lang) ||
+        pattern.test(voice.name) ||
+        pattern.test(voice.voiceURI)
+    );
+    if (hit) return hit;
+  }
+  return (
+    voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ?? null
+  );
+}
+
 /**
  * Read English option text aloud via Web Speech API (en-GB).
  * No-op when unsupported or text is empty.
@@ -40,7 +66,10 @@ export function speakEnglishOptionText(text: string) {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(trimmed);
   utterance.lang = "en-GB";
-  utterance.rate = 1;
+  utterance.rate = 0.95;
+  utterance.pitch = 1;
+  const voice = pickEnglishVoice();
+  if (voice) utterance.voice = voice;
   window.speechSynthesis.speak(utterance);
 }
 

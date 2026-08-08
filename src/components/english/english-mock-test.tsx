@@ -104,8 +104,6 @@ export function EnglishMockTest({
     useOptionSelectionSpeech();
 
   const isExamMode = !isChapterMode && mockMode === "exam";
-  /** Full mock "With support" — not chapter tests (those stay as before). */
-  const isSupportMock = !isChapterMode && mockMode === "support";
   const question = questions[index];
   const answeredCount = Object.keys(answers).length;
 
@@ -637,10 +635,10 @@ export function EnglishMockTest({
             const chosen = answers[question.id] === opt.key;
             const labelPa = opt.labelPa?.trim() || "";
             const labelEn = opt.labelEn?.trim() || "";
-            // Chapter tests keep English-only options; support mock shows PA when present.
-            const showPaOpt = isSupportMock && Boolean(labelPa);
+            // Bilingual surfaces (support mock + chapter tests) show PA options when present.
+            const showPaOpt = !isExamMode && Boolean(labelPa);
             const showEnOpt =
-              isExamMode || isChapterMode || showEnglish || !showPaOpt
+              isExamMode || showEnglish || !showPaOpt
                 ? Boolean(labelEn)
                 : false;
 

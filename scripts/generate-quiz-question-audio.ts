@@ -232,7 +232,11 @@ async function main() {
         continue;
       }
 
-      const storagePath = `${row.quiz_id}/${row.id}-${job.lang}.mp3`;
+      // v2 path for English so CDN/browser caches don't keep muffled v1 clips.
+      const storagePath =
+        job.lang === "en"
+          ? `${row.quiz_id}/${row.id}-en-v2.mp3`
+          : `${row.quiz_id}/${row.id}-pa.mp3`;
       console.log(
         `${dryRun ? "[dry-run] " : ""}TTS ${job.lang} ${job.text.slice(0, 56)}…`
       );
@@ -251,6 +255,7 @@ async function main() {
         const { audio } = await synthesizeSpeech({
           text: job.text,
           voiceId: job.voiceId,
+          clarityProfile: job.lang === "en" ? "english_exam" : "default",
           pronunciationDictionaryLocators:
             job.lang === "pa" && pronunciation ? [pronunciation] : undefined,
         });

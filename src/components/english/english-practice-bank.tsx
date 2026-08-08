@@ -79,11 +79,27 @@ export function EnglishPracticeBank({
   const optionLabels = useMemo(() => {
     if (!question) return [];
     return [
-      { key: "a" as const, label: question.optionA },
-      { key: "b" as const, label: question.optionB },
-      { key: "c" as const, label: question.optionC },
-      { key: "d" as const, label: question.optionD },
-    ].filter((opt) => opt.label?.trim());
+      {
+        key: "a" as const,
+        labelEn: question.optionA,
+        labelPa: question.optionAPa,
+      },
+      {
+        key: "b" as const,
+        labelEn: question.optionB,
+        labelPa: question.optionBPa,
+      },
+      {
+        key: "c" as const,
+        labelEn: question.optionC,
+        labelPa: question.optionCPa,
+      },
+      {
+        key: "d" as const,
+        labelEn: question.optionD,
+        labelPa: question.optionDPa,
+      },
+    ].filter((opt) => opt.labelEn?.trim() || opt.labelPa?.trim());
   }, [question]);
 
   const handlePlay = useCallback(
@@ -136,11 +152,12 @@ export function EnglishPracticeBank({
   function choose(key: string) {
     if (revealed) return;
     setSelected(key);
-    const label = optionLabels.find((opt) => opt.key === key)?.label?.trim();
-    if (label) {
+    const opt = optionLabels.find((item) => item.key === key);
+    const labelEn = opt?.labelEn?.trim() || "";
+    if (labelEn) {
       audioRef.current?.pause();
       setPlayingLang(null);
-      speakOption(label);
+      speakOption(labelEn);
     }
   }
 
@@ -284,6 +301,11 @@ export function EnglishPracticeBank({
             const chosen = selected === opt.key;
             const showResult = revealed && chosen;
             const isAnswer = revealed && opt.key === question.correctAnswer;
+            const labelPa = opt.labelPa?.trim() || "";
+            const labelEn = opt.labelEn?.trim() || "";
+            const showPaOpt = Boolean(labelPa);
+            const showEnOpt =
+              showEnglish || !showPaOpt ? Boolean(labelEn) : false;
             return (
               <button
                 key={opt.key}
@@ -311,7 +333,28 @@ export function EnglishPracticeBank({
                 >
                   {opt.key}
                 </span>
-                <span>{opt.label}</span>
+                <span className="min-w-0 space-y-0.5">
+                  {showPaOpt ? (
+                    <span className="block font-medium text-zinc-900">
+                      {labelPa}
+                    </span>
+                  ) : null}
+                  {showEnOpt ? (
+                    <span
+                      className={cn(
+                        "block",
+                        showPaOpt ? "text-zinc-600" : "font-medium text-zinc-900"
+                      )}
+                    >
+                      {labelEn}
+                    </span>
+                  ) : null}
+                  {!showPaOpt && !showEnOpt ? (
+                    <span className="block font-medium text-zinc-900">
+                      {labelEn || labelPa}
+                    </span>
+                  ) : null}
+                </span>
               </button>
             );
           })}
