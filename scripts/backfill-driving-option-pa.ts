@@ -86,14 +86,25 @@ D: ${row.option_d}`;
   const payload = (await response.json()) as {
     content?: Array<{ type?: string; text?: string }>;
   };
-  const text = payload.content?.find((part) => part.type === "text")?.text?.trim() ?? "";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error(`No JSON in response: ${text.slice(0, 160)}`);
-  const parsed = JSON.parse(jsonMatch[0]) as { a?: string; b?: string; c?: string; d?: string };
-  if (!parsed.a || !parsed.b || !parsed.c || !parsed.d) {
-    throw new Error("Incomplete translation JSON");
+  let text = payload.content?.find((part) => part.type === "text")?.text?.trim() ?? "";
+  text = text.replace(/```json|```/g, "").trim();
+  // Prefer the last JSON object if the model self-corrected (e.g. Urdu then Punjabi).
+  const start = text.lastIndexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error(`No JSON in response: ${text.slice(0, 160)}`);
   }
-  return { a: parsed.a, b: parsed.b, c: parsed.c, d: parsed.d };
+  const raw = text.slice(start, end + 1);
+  const parsed = JSON.parse(raw) as { a?: string; b?: string; c?: string; d?: string };
+  if (!parsed.a?.trim() || !parsed.b?.trim() || !parsed.c?.trim() || !parsed.d?.trim()) {
+    throw new Error(`Incomplete translation JSON: ${raw.slice(0, 160)}`);
+  }
+  return {
+    a: parsed.a.trim(),
+    b: parsed.b.trim(),
+    c: parsed.c.trim(),
+    d: parsed.d.trim(),
+  };
 }
 
 async function main() {
