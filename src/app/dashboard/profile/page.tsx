@@ -9,6 +9,7 @@ import { UserAvatar } from "@/components/profile/user-avatar";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { isAdmin } from "@/lib/auth/admin";
 import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
+import { fetchAccessiblePrivateCourses } from "@/lib/learning/private-courses";
 import {
   getCourseAccessContext,
   tiersFromUnlockedCourses,
@@ -46,6 +47,10 @@ export default async function ProfilePage() {
 
   const showAdminPanel = await canAccessAdminPanel(user!, supabase);
   const showTutorDashboard = await canAccessTutorDashboard(supabase, user!.id);
+  
+  const privateCourses = await fetchAccessiblePrivateCourses(supabase, user!.id);
+  const showEnglishDashboard = privateCourses.length > 0;
+  const englishCourseName = privateCourses[0]?.name ?? "English Course";
 
   const showPlacementReminder = needsPlacementTestReminder({
     placementCompleted: progression.placementCompleted,
@@ -113,6 +118,21 @@ export default async function ProfilePage() {
               className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500"
             >
               Open tutor dashboard
+            </Link>
+          </div>
+        )}
+
+        {showEnglishDashboard && (
+          <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 px-6 py-5">
+            <p className="text-xs font-medium text-emerald-700">Learn English</p>
+            <p className="mt-2 text-sm text-zinc-700">
+              {englishCourseName} - Access your English learning materials and lessons.
+            </p>
+            <Link
+              href="/dashboard/english"
+              className="mt-4 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500"
+            >
+              Open English section
             </Link>
           </div>
         )}

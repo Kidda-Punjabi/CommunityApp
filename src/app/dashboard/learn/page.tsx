@@ -7,7 +7,6 @@ import {
 } from "@/lib/learning/learn-access";
 import { resolveGroupCohortContentGate } from "@/lib/learning/group-cohort-content-gate";
 import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
-import { fetchAccessiblePrivateCourses } from "@/lib/learning/private-courses";
 import { findCoursesForTier } from "@/lib/membership/courses";
 import {
   getCachedAuthSession,
@@ -45,18 +44,14 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap, privateCourses] =
+  const [access, allLessons, completionMap] =
     await Promise.all([
       getCachedCourseAccess(supabase, user),
       lessonsPromise,
       lessonsPromise.then((lessons) =>
         fetchLessonCompletionMap(supabase, user.id, lessons)
       ),
-      fetchAccessiblePrivateCourses(supabase, user.id),
     ]);
-
-  const privateCourse = privateCourses[0] ?? null;
-  const hasEnglishAccess = Boolean(privateCourse);
 
   const foundational = getLearnTrack("foundational")!;
   const beginners = getLearnTrack("beginners")!;
@@ -144,18 +139,6 @@ export default async function LearnPage() {
       status: communityStatus,
       tone: "rose",
     },
-    ...(hasEnglishAccess && privateCourse
-      ? ([
-          {
-            id: "english",
-            kind: "link",
-            href: "/dashboard/english",
-            title: "Learn English",
-            status: privateCourse.name,
-            tone: "emerald",
-          },
-        ] as LearnHubTile[])
-      : []),
     {
       id: "resources",
       kind: "link",
