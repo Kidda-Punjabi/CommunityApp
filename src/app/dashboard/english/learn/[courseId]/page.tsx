@@ -1,4 +1,10 @@
+import { EnglishExamCourseHub } from "@/components/english/english-exam-course-hub";
 import { NavLink } from "@/components/ui/nav-link";
+import { getEnglishExamCourseConfig } from "@/lib/learning/english-exam-courses";
+import {
+  loadEnglishExamMaterials,
+  loadEnglishExamQuestions,
+} from "@/lib/learning/load-english-exam-content";
 import {
   fetchAccessibleLearnEnglishCourseById,
   filterLessonsForPrivateCourse,
@@ -26,6 +32,39 @@ export default async function EnglishLearnCoursePage({
   );
 
   if (!course) notFound();
+
+  const examConfig = getEnglishExamCourseConfig(course.name);
+
+  if (examConfig) {
+    const [materials, questions] = await Promise.all([
+      loadEnglishExamMaterials(session.supabase, course.id),
+      loadEnglishExamQuestions(session.supabase, course.id),
+    ]);
+
+    return (
+      <div className={ui.page}>
+        <div className="mb-6">
+          <NavLink
+            href="/dashboard/english/learn"
+            className="text-sm font-medium text-emerald-700 hover:text-emerald-600"
+          >
+            ← Back to Learn
+          </NavLink>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900">
+            {course.name}
+          </h1>
+        </div>
+
+        <EnglishExamCourseHub
+          courseId={course.id}
+          courseName={course.name}
+          config={examConfig}
+          materialCount={materials.filter((item) => item.audioScript).length}
+          questionCount={questions.length}
+        />
+      </div>
+    );
+  }
 
   if (course.lessonCount <= 0) {
     return (
@@ -77,9 +116,7 @@ export default async function EnglishLearnCoursePage({
         {lessons.map((lesson) => (
           <li key={lesson.id}>
             <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3">
-              <p className="text-sm font-medium text-zinc-900">
-                Week {lesson.lesson_number}: {lesson.title}
-              </p>
+              <p className="text-sm font-medium text-zinc-900">{lesson.title}</p>
             </div>
           </li>
         ))}

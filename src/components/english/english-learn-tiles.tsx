@@ -118,7 +118,16 @@ export function toneForEnglishLearnIndex(index: number): EnglishLearnTileTone {
   return TONE_CYCLE[index % TONE_CYCLE.length]!;
 }
 
-export function statusForEnglishLearnCourse(lessonCount: number): string {
+export function statusForEnglishLearnCourse(
+  lessonCount: number,
+  courseName?: string
+): string {
+  if (courseName) {
+    const name = courseName.toLowerCase();
+    if (name.includes("driving") || name.includes("life in the uk") || (name.includes("life") && name.includes("uk"))) {
+      return "Materials · Practice · Mock";
+    }
+  }
   if (lessonCount <= 0) return "Coming soon";
   return `${lessonCount} lesson${lessonCount === 1 ? "" : "s"}`;
 }

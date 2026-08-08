@@ -31,7 +31,7 @@ export default async function EnglishLearnPage() {
     id: course.id,
     href: `/dashboard/english/learn/${course.id}`,
     title: course.name,
-    status: statusForEnglishLearnCourse(course.lessonCount),
+    status: statusForEnglishLearnCourse(course.lessonCount, course.name),
     tone: toneForEnglishLearnIndex(index),
     icon: iconForEnglishLearnCourse(course.name),
   }));
