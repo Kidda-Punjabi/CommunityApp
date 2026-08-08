@@ -241,6 +241,7 @@ export function TourProvider({
       if (
         pathname.startsWith("/dashboard/tutor") ||
         pathname.startsWith("/dashboard/kids") ||
+        pathname.startsWith("/dashboard/english") ||
         pathname.startsWith("/dashboard/placement")
       ) {
         return;

@@ -2,16 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { pressableClass } from "@/lib/ui/pressable";
+import { cn } from "@/lib/ui/styles";
+import type { ReactNode } from "react";
 
 type NavItem = {
   href: string;
   label: string;
-  icon: (active: boolean) => JSX.Element;
+  match: (pathname: string) => boolean;
+  icon: (active: boolean) => ReactNode;
 };
 
 function iconClass(active: boolean) {
   return `h-6 w-6 transition-colors ${
-    active ? "text-emerald-600" : "text-zinc-400 group-hover:text-zinc-600"
+    active ? "text-emerald-700" : "text-emerald-400 group-hover:text-emerald-600"
   }`;
 }
 
@@ -94,35 +98,60 @@ function ProfileIcon({ active }: { active: boolean }) {
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard/english", label: "Home", icon: HomeIcon },
-  { href: "/dashboard/english/learn", label: "Learn", icon: LearnIcon },
-  { href: "/dashboard/english/games", label: "Games", icon: GamesIcon },
-  { href: "/dashboard/english/profile", label: "Profile", icon: ProfileIcon },
+  {
+    href: "/dashboard/english",
+    label: "Home",
+    match: (pathname) =>
+      pathname === "/dashboard/english" ||
+      pathname.startsWith("/dashboard/english/lesson"),
+    icon: (active) => <HomeIcon active={active} />,
+  },
+  {
+    href: "/dashboard/english/learn",
+    label: "Learn",
+    match: (pathname) => pathname.startsWith("/dashboard/english/learn"),
+    icon: (active) => <LearnIcon active={active} />,
+  },
+  {
+    href: "/dashboard/english/games",
+    label: "Games",
+    match: (pathname) => pathname.startsWith("/dashboard/english/games"),
+    icon: (active) => <GamesIcon active={active} />,
+  },
+  {
+    href: "/dashboard/english/profile",
+    label: "Profile",
+    match: (pathname) => pathname.startsWith("/dashboard/english/profile"),
+    icon: (active) => <ProfileIcon active={active} />,
+  },
 ];
 
 export function EnglishBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-50 border-t border-emerald-200/60 bg-white/90 shadow-[0_-4px_24px_-8px_rgba(5,150,105,0.08)] backdrop-blur-md">
-      <div className="pointer-events-auto mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-emerald-200/70 bg-emerald-50/95 shadow-[0_-4px_24px_-8px_rgba(5,150,105,0.12)] backdrop-blur-md">
+      <div className="mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5">
         {navItems.map((item) => {
-          const active = pathname === item.href;
+          const active = item.match(pathname);
 
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`group flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 transition-colors ${
-                active ? "text-emerald-600" : "text-zinc-500"
-              }`}
+              prefetch={true}
+              className={cn(
+                pressableClass,
+                "group flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 transition-colors",
+                active ? "text-emerald-700" : "text-emerald-500"
+              )}
             >
               <span className="flex h-8 w-8 items-center justify-center">
                 {item.icon(active)}
               </span>
               <span
                 className={`text-[10px] font-semibold tracking-wide ${
-                  active ? "text-emerald-600" : "text-zinc-500"
+                  active ? "text-emerald-700" : "text-emerald-500"
                 }`}
               >
                 {item.label}

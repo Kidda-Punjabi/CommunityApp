@@ -1,30 +1,29 @@
+import { UserAvatar } from "@/components/profile/user-avatar";
 import { fetchAccessiblePrivateCourses } from "@/lib/learning/private-courses";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
 import { loadUserProgression } from "@/lib/progression/load-user-progression";
-import { UserAvatar } from "@/components/profile/user-avatar";
-import { createClient } from "@/lib/supabase/server";
+import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default async function EnglishProfilePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getCachedAuthSession();
+  if (!session) redirect("/login");
 
-  if (!user) redirect("/login");
-
+  const { supabase, user } = session;
   const privateCourses = await fetchAccessiblePrivateCourses(supabase, user.id);
 
   if (privateCourses.length === 0) {
-    redirect("/dashboard/learn");
+    redirect("/dashboard/profile");
   }
 
-  const profile = await loadEditableProfile(supabase, user.id);
+  const [profile, progression] = await Promise.all([
+    loadEditableProfile(supabase, user.id),
+    loadUserProgression(supabase, user.id),
+  ]);
   const displayName = getDisplayName(profile);
-  const progression = await loadUserProgression(supabase, user.id);
 
   return (
     <div className={ui.page}>
@@ -52,7 +51,7 @@ export default async function EnglishProfilePage() {
         </div>
         <Link
           href="/dashboard/profile/edit"
-          className="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          className="shrink-0 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50"
         >
           Edit
         </Link>
@@ -60,9 +59,9 @@ export default async function EnglishProfilePage() {
 
       <div className="mt-8 space-y-4">
         <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 px-6 py-5">
-          <p className="text-xs font-medium text-emerald-700">English Learning</p>
+          <p className="text-xs font-medium text-emerald-700">English learning</p>
           <p className="mt-2 text-sm text-zinc-700">
-            You're currently in the English learning section.
+            You&apos;re in the English section — separate from Punjabi learning.
           </p>
           <p className="mt-1 text-xs text-emerald-600">
             Course: {privateCourses[0]?.name}
@@ -72,7 +71,7 @@ export default async function EnglishProfilePage() {
         <div className="rounded-xl border border-violet-200 bg-white px-6 py-5">
           <p className="text-xs font-medium text-violet-600">Switch to Punjabi</p>
           <p className="mt-2 text-sm text-zinc-600">
-            Return to the main Punjabi learning app with lessons, games, and community.
+            Return to the main Punjabi app with lessons, games, and community.
           </p>
           <Link
             href="/dashboard/home"
@@ -82,11 +81,13 @@ export default async function EnglishProfilePage() {
           </Link>
         </div>
 
-        <div className="rounded-xl border border-zinc-200 bg-white px-6 py-5">
-          <p className="text-xs font-medium text-zinc-500">Progress</p>
+        <div className="rounded-xl border border-emerald-200 bg-white px-6 py-5">
+          <p className="text-xs font-medium text-emerald-700">Progress</p>
           <div className="mt-3 grid grid-cols-2 gap-4">
             <div>
-              <p className="text-2xl font-bold text-zinc-900">{progression.learnerLevel}</p>
+              <p className="text-2xl font-bold text-zinc-900">
+                {progression.learnerLevel ?? "—"}
+              </p>
               <p className="text-xs text-zinc-500">Level</p>
             </div>
             <div>
@@ -99,17 +100,17 @@ export default async function EnglishProfilePage() {
         </div>
 
         <div className="rounded-xl border border-zinc-200 bg-white px-6 py-5">
-          <p className="text-xs font-medium text-zinc-500">Account Settings</p>
+          <p className="text-xs font-medium text-zinc-500">Account</p>
           <div className="mt-4 space-y-3">
             <Link
               href="/dashboard/profile/edit"
-              className="block text-sm font-medium text-violet-600 hover:text-violet-500"
+              className="block text-sm font-medium text-emerald-700 hover:text-emerald-600"
             >
               Edit profile →
             </Link>
             <Link
               href="/dashboard/membership"
-              className="block text-sm font-medium text-violet-600 hover:text-violet-500"
+              className="block text-sm font-medium text-emerald-700 hover:text-emerald-600"
             >
               Manage membership →
             </Link>

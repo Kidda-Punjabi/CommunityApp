@@ -43,7 +43,7 @@ export async function loadPendingCourseResourceTours(
         .eq("user_id", userId),
       supabase
         .from("courses")
-        .select("id, name, required_tier, is_public"),
+        .select("id, name, required_tier, is_public, content_track, is_home_course"),
     ]);
 
   const seen = new Set((seenRows ?? []).map((row) => row.course_id as string));
@@ -57,6 +57,13 @@ export async function loadPendingCourseResourceTours(
     if (seen.has(courseId)) continue;
     const course = courseById.get(courseId);
     if (!course) continue;
+    // Learn-tab English courses aren't Punjabi Learn hub tiles — don't queue tours for them.
+    if (
+      course.content_track === "learn_english" &&
+      course.is_home_course === false
+    ) {
+      continue;
+    }
     const tileId = resolveLearnTourTileId({
       id: course.id as string,
       name: course.name as string,
@@ -90,7 +97,7 @@ export async function loadPreviewCourseResourceTours(): Promise<{
       .select("course_id, granted_at")
       .eq("user_id", user.id)
       .order("granted_at", { ascending: true }),
-    supabase.from("courses").select("id, name, required_tier, is_public"),
+    supabase.from("courses").select("id, name, required_tier, is_public, content_track, is_home_course"),
   ]);
 
   if (!accessRows?.length) {
@@ -106,6 +113,12 @@ export async function loadPreviewCourseResourceTours(): Promise<{
     const courseId = row.course_id as string;
     const course = courseById.get(courseId);
     if (!course) continue;
+    if (
+      course.content_track === "learn_english" &&
+      course.is_home_course === false
+    ) {
+      continue;
+    }
     const tileId = resolveLearnTourTileId({
       id: course.id as string,
       name: course.name as string,
