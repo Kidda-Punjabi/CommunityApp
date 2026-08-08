@@ -148,16 +148,28 @@ async function main() {
   const quizIds = (quizzes ?? []).map((quiz) => quiz.id as string);
   if (quizIds.length === 0) throw new Error("No quizzes found");
 
-  const { data: questions, error: questionError } = await supabase
-    .from("quiz_questions")
-    .select(
-      "id, quiz_id, question_text, question_text_pa, question_audio_en_url, question_audio_pa_url, question_audio_en_status, question_audio_pa_status"
-    )
-    .in("quiz_id", quizIds)
-    .order("question_order", { ascending: true });
-
-  if (questionError) throw new Error(questionError.message);
-  const rows = (questions ?? []) as QuestionRow[];
+  // Page through quiz_ids — a single .in() can silently truncate under PostgREST limits.
+  const rows: QuestionRow[] = [];
+  const pageSize = 200;
+  for (let i = 0; i < quizIds.length; i += 1) {
+    const quizId = quizIds[i]!;
+    let from = 0;
+    for (;;) {
+      const { data: page, error: questionError } = await supabase
+        .from("quiz_questions")
+        .select(
+          "id, quiz_id, question_text, question_text_pa, question_audio_en_url, question_audio_pa_url, question_audio_en_status, question_audio_pa_status"
+        )
+        .eq("quiz_id", quizId)
+        .order("question_order", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (questionError) throw new Error(questionError.message);
+      const chunk = (page ?? []) as QuestionRow[];
+      rows.push(...chunk);
+      if (chunk.length < pageSize) break;
+      from += pageSize;
+    }
+  }
 
   console.log(
     `Courses: ${selectedCourses.map((c) => c.name).join(", ")}\nQuestions: ${rows.length}\nLang: ${langArg} force=${force} dryRun=${dryRun}`
