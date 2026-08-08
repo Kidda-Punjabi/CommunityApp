@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Pause, Play } from "lucide-react";
 import { EnglishBilingualToggle } from "@/components/english/english-bilingual-toggle";
+import { EnglishExamQuestionImage } from "@/components/english/english-exam-question-image";
 import type {
   EnglishExamCourseConfig,
   EnglishExamQuestion,
@@ -540,6 +541,10 @@ export function EnglishMockTest({
       </div>
 
       <div className="rounded-2xl border border-emerald-200 bg-white px-4 py-5">
+        <EnglishExamQuestionImage
+          imageUrl={question.imageUrl}
+          attribution={question.imageAttribution}
+        />
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             {showPaPrompt ? (

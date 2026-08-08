@@ -72,6 +72,8 @@ export type EnglishExamQuestion = {
   questionOrder: number;
   questionAudioEnUrl: string | null;
   questionAudioPaUrl: string | null;
+  imageUrl: string | null;
+  imageAttribution: string | null;
 };
 
 export type EnglishExamMaterial = {
