@@ -107,7 +107,7 @@ export async function loadEnglishExamQuestions(
   const { data: rows, error } = await supabase
     .from("quiz_questions")
     .select(
-      "id, quiz_id, question_text, question_text_pa, option_a, option_b, option_c, option_d, correct_answer, explanation, explanation_pa, question_order"
+      "id, quiz_id, question_text, question_text_pa, option_a, option_b, option_c, option_d, correct_answer, explanation, explanation_pa, question_order, question_audio_en_url, question_audio_pa_url"
     )
     .in("quiz_id", quizIds)
     .order("question_order", { ascending: true });
@@ -133,6 +133,8 @@ export async function loadEnglishExamQuestions(
       explanation: (row.explanation as string | null) ?? null,
       explanationPa: (row.explanation_pa as string | null) ?? null,
       questionOrder: row.question_order as number,
+      questionAudioEnUrl: (row.question_audio_en_url as string | null) ?? null,
+      questionAudioPaUrl: (row.question_audio_pa_url as string | null) ?? null,
     };
   });
 }

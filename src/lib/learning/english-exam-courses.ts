@@ -66,6 +66,8 @@ export type EnglishExamQuestion = {
   explanation: string | null;
   explanationPa: string | null;
   questionOrder: number;
+  questionAudioEnUrl: string | null;
+  questionAudioPaUrl: string | null;
 };
 
 export type EnglishExamMaterial = {
