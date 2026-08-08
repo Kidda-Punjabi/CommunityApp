@@ -208,7 +208,7 @@ BEGIN
     'none'
   ) RETURNING id INTO v_seg;
   INSERT INTO public.lesson_segment_beats (segment_id, beat_number, beat_type, script_text) VALUES
-    (v_seg, 1, 'narration', 'Sometimes we don''t describe a finished action—we describe something that was happening. Punjabi builds this using the same continuous tense structure you already know, but with past auxiliary verbs. I was reading — Mai parh reha si. She was working — Oh kaam kar rahi si. They were waiting — Oh intzaar kar rahe si.');
+    (v_seg, 1, 'narration', 'Sometimes we don''t describe a finished action—we describe something that was happening. Punjabi builds this using the same continuous tense structure you already know, but with past auxiliary verbs. I was reading — Mai parh reha si. She was working — Oh kaam kar rahi si. They were waiting — Oh udeek rahe si.');
 
   -- Segment 8 — Translate: Past continuous
   INSERT INTO public.lesson_segments (
@@ -225,7 +225,7 @@ BEGIN
     (v_seg, 1, 'I was reading.', 'ਮੈਂ ਪੜ੍ਹ ਰਿਹਾ ਸੀ', 'Mai parh reha si'),
     (v_seg, 2, 'She was cooking.', 'ਉਹ ਪਕਾ ਰਹੀ ਸੀ', 'Oh paka rahi si'),
     (v_seg, 3, 'We were walking.', 'ਅਸੀਂ ਤੁਰ ਰਹੇ ਸੀ', 'Asi tur rahe si'),
-    (v_seg, 4, 'They were waiting outside.', 'ਉਹ ਬਾਹਰ ਇੰਤਜ਼ਾਰ ਕਰ ਰਹੇ ਸੀ', 'Oh bahar intzaar kar rahe si'),
+    (v_seg, 4, 'They were waiting outside.', 'ਉਹ ਬਾਹਰ ਉਡੀਕ ਰਹੇ ਸੀ', 'Oh bahar udeek rahe si'),
     (v_seg, 5, 'He was watching TV.', 'ਉਹ ਟੀਵੀ ਵੇਖ ਰਿਹਾ ਸੀ', 'Oh TV vekh reha si'),
     (v_seg, 6, 'I was speaking Punjabi.', 'ਮੈਂ ਪੰਜਾਬੀ ਬੋਲ ਰਿਹਾ ਸੀ', 'Mai Punjabi bol reha si'),
     (v_seg, 7, 'She was helping her mother.', 'ਉਹ ਆਪਣੀ ਮਾਂ ਦੀ ਮਦਦ ਕਰ ਰਹੀ ਸੀ', 'Oh apni maa di madad kar rahi si'),
@@ -350,7 +350,7 @@ BEGIN
     (v_seg, 5, 'They bought a new phone.', 'ਉਹਨਾਂ ਨੇ ਨਵਾਂ ਫ਼ੋਨ ਖਰੀਦਿਆ', 'Ohna ne nava phone khareedya'),
     (v_seg, 6, 'I met my friend yesterday.', 'ਮੈਂ ਕੱਲ੍ਹ ਆਪਣੇ ਦੋਸਤ ਨੂੰ ਮਿਲਿਆ', 'Mai kal apne dost nu milia'),
     (v_seg, 7, 'She read the book last week.', 'ਉਸ ਨੇ ਪਿਛਲੇ ਹਫ਼ਤੇ ਕਿਤਾਬ ਪੜ੍ਹੀ', 'Usne pichhle hafte kitaab parhi'),
-    (v_seg, 8, 'We were waiting outside.', 'ਅਸੀਂ ਬਾਹਰ ਇੰਤਜ਼ਾਰ ਕਰ ਰਹੇ ਸੀ', 'Asi bahar intzaar kar rahe si'),
+    (v_seg, 8, 'We were waiting outside.', 'ਅਸੀਂ ਬਾਹਰ ਉਡੀਕ ਰਹੇ ਸੀ', 'Asi bahar udeek rahe si'),
     (v_seg, 9, 'They were studying yesterday evening.', 'ਉਹ ਕੱਲ੍ਹ ਸ਼ਾਮ ਪੜ੍ਹਾਈ ਕਰ ਰਹੇ ਸੀ', 'Oh kal shaam padhai kar rahe si'),
     (v_seg, 10, 'I watched a film last night.', 'ਮੈਂ ਪਿਛਲੀ ਰਾਤ ਫ਼ਿਲਮ ਦੇਖੀ', 'Mai pichhli raat film dekhi');
 
