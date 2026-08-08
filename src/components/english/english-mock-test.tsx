@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Pause, Play } from "lucide-react";
 import { EnglishBilingualToggle } from "@/components/english/english-bilingual-toggle";
 import { EnglishExamQuestionImage } from "@/components/english/english-exam-question-image";
+import { EnglishOptionSpeechMuteToggle } from "@/components/english/english-option-speech-mute-toggle";
 import type {
   EnglishExamCourseConfig,
   EnglishExamQuestion,
@@ -15,6 +16,10 @@ import {
   scoreEnglishExamByChapter,
   shuffleEnglishExamQuestions,
 } from "@/lib/learning/load-english-exam-content";
+import {
+  cancelOptionSelectionSpeech,
+  useOptionSelectionSpeech,
+} from "@/lib/audio/option-selection-speech";
 import {
   applySpeechPlaybackRate,
   useSpeechPlaybackRate,
@@ -95,6 +100,8 @@ export function EnglishMockTest({
   const finishedRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { rate: speechRate } = useSpeechPlaybackRate();
+  const { muted: optionSpeechMuted, setMuted: setOptionSpeechMuted, speakOption } =
+    useOptionSelectionSpeech();
 
   const isExamMode = !isChapterMode && mockMode === "exam";
   /** Full mock "With support" — not chapter tests (those stay as before). */
@@ -154,6 +161,7 @@ export function EnglishMockTest({
         audioRef.current.pause();
         audioRef.current = null;
       }
+      cancelOptionSelectionSpeech();
     };
   }, []);
 
@@ -165,6 +173,7 @@ export function EnglishMockTest({
   useEffect(() => {
     audioRef.current?.pause();
     setPlayingLang(null);
+    cancelOptionSelectionSpeech();
   }, [index, phase]);
 
   function startTest(mode: MockMode = mockMode) {
@@ -205,6 +214,7 @@ export function EnglishMockTest({
 
       const audio = audioRef.current;
       if (!audio) return;
+      cancelOptionSelectionSpeech();
       applySpeechPlaybackRate(audio, speechRate);
       setPlayingLang(lang);
       setAudioNotice(null);
@@ -514,14 +524,20 @@ export function EnglishMockTest({
         ) : (
           <p className="text-xs font-medium text-zinc-500">Untimed chapter test</p>
         )}
-        {!isExamMode ? (
-          <EnglishBilingualToggle
-            showEnglish={showEnglish}
-            onChange={setShowEnglish}
+        <div className="flex items-center gap-2">
+          <EnglishOptionSpeechMuteToggle
+            muted={optionSpeechMuted}
+            onChange={setOptionSpeechMuted}
           />
-        ) : (
-          <p className="text-xs font-medium text-zinc-500">Exam simulation</p>
-        )}
+          {!isExamMode ? (
+            <EnglishBilingualToggle
+              showEnglish={showEnglish}
+              onChange={setShowEnglish}
+            />
+          ) : (
+            <p className="text-xs font-medium text-zinc-500">Exam simulation</p>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center justify-between text-xs font-medium text-zinc-500">
@@ -632,17 +648,29 @@ export function EnglishMockTest({
               <button
                 key={opt.key}
                 type="button"
-                onClick={() =>
-                  setAnswers((prev) => ({ ...prev, [question.id]: opt.key }))
-                }
+                onClick={() => {
+                  setAnswers((prev) => ({ ...prev, [question.id]: opt.key }));
+                  if (labelEn) {
+                    audioRef.current?.pause();
+                    setPlayingLang(null);
+                    speakOption(labelEn);
+                  }
+                }}
                 className={cn(
                   "flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left text-sm transition-colors",
                   chosen
-                    ? "border-emerald-400 bg-emerald-50 text-zinc-900"
-                    : "border-zinc-200 bg-white text-zinc-800 hover:border-emerald-300"
+                    ? "border-zinc-400 bg-zinc-100 text-zinc-900"
+                    : "border-zinc-200 bg-white text-zinc-800 hover:border-zinc-300"
                 )}
               >
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-semibold uppercase text-zinc-600">
+                <span
+                  className={cn(
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase",
+                    chosen
+                      ? "bg-zinc-200 text-zinc-700"
+                      : "bg-zinc-100 text-zinc-600"
+                  )}
+                >
                   {opt.key}
                 </span>
                 <span className="min-w-0 space-y-0.5">

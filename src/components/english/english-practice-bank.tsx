@@ -5,7 +5,12 @@ import Link from "next/link";
 import { Pause, Play } from "lucide-react";
 import { EnglishBilingualToggle } from "@/components/english/english-bilingual-toggle";
 import { EnglishExamQuestionImage } from "@/components/english/english-exam-question-image";
+import { EnglishOptionSpeechMuteToggle } from "@/components/english/english-option-speech-mute-toggle";
 import type { EnglishExamQuestion } from "@/lib/learning/english-exam-courses";
+import {
+  cancelOptionSelectionSpeech,
+  useOptionSelectionSpeech,
+} from "@/lib/audio/option-selection-speech";
 import {
   applySpeechPlaybackRate,
   useSpeechPlaybackRate,
@@ -42,6 +47,8 @@ export function EnglishPracticeBank({
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { rate: speechRate } = useSpeechPlaybackRate();
+  const { muted: optionSpeechMuted, setMuted: setOptionSpeechMuted, speakOption } =
+    useOptionSelectionSpeech();
 
   const question = questions[index];
   const total = questions.length;
@@ -53,6 +60,7 @@ export function EnglishPracticeBank({
         audioRef.current.pause();
         audioRef.current = null;
       }
+      cancelOptionSelectionSpeech();
     };
   }, []);
 
@@ -65,6 +73,7 @@ export function EnglishPracticeBank({
   useEffect(() => {
     audioRef.current?.pause();
     setPlayingLang(null);
+    cancelOptionSelectionSpeech();
   }, [index]);
 
   const optionLabels = useMemo(() => {
@@ -92,6 +101,7 @@ export function EnglishPracticeBank({
 
       const audio = audioRef.current;
       if (!audio) return;
+      cancelOptionSelectionSpeech();
       applySpeechPlaybackRate(audio, speechRate);
       setPlayingLang(lang);
       setAudioNotice(null);
@@ -126,6 +136,12 @@ export function EnglishPracticeBank({
   function choose(key: string) {
     if (revealed) return;
     setSelected(key);
+    const label = optionLabels.find((opt) => opt.key === key)?.label?.trim();
+    if (label) {
+      audioRef.current?.pause();
+      setPlayingLang(null);
+      speakOption(label);
+    }
   }
 
   function check() {
@@ -158,7 +174,13 @@ export function EnglishPracticeBank({
             Untimed · {total} questions · {courseName}
           </p>
         </div>
-        <EnglishBilingualToggle showEnglish={showEnglish} onChange={setShowEnglish} />
+        <div className="flex items-center gap-2">
+          <EnglishOptionSpeechMuteToggle
+            muted={optionSpeechMuted}
+            onChange={setOptionSpeechMuted}
+          />
+          <EnglishBilingualToggle showEnglish={showEnglish} onChange={setShowEnglish} />
+        </div>
       </div>
 
       <div className="flex items-center justify-between text-xs font-medium text-zinc-500">
@@ -275,11 +297,18 @@ export function EnglishPracticeBank({
                     : showResult && !isCorrect
                       ? "border-red-300 bg-red-50 text-red-950"
                       : chosen
-                        ? "border-emerald-400 bg-emerald-50/70 text-zinc-900"
-                        : "border-zinc-200 bg-white text-zinc-800 hover:border-emerald-300"
+                        ? "border-zinc-400 bg-zinc-100 text-zinc-900"
+                        : "border-zinc-200 bg-white text-zinc-800 hover:border-zinc-300"
                 )}
               >
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-semibold uppercase text-zinc-600">
+                <span
+                  className={cn(
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase",
+                    chosen && !revealed
+                      ? "bg-zinc-200 text-zinc-700"
+                      : "bg-zinc-100 text-zinc-600"
+                  )}
+                >
                   {opt.key}
                 </span>
                 <span>{opt.label}</span>
