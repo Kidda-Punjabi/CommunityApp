@@ -22,17 +22,19 @@ export function PullToRefresh({
   const [isLocked, setIsLocked] = useState(false);
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const isPulling = useRef(false);
 
   useEffect(() => {
     if (!enabled) return;
 
-    const container = containerRef.current;
-    if (!container) return;
+    const content = contentRef.current;
+    if (!content) return;
 
     const handleTouchStart = (e: TouchEvent) => {
-      // Only start if we're at the top of the scroll
-      if (container.scrollTop === 0 && !isRefreshing) {
+      // Check if we're at the top of the scrollable area
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      if (scrollTop === 0 && !isRefreshing) {
         startY.current = e.touches[0].clientY;
         isPulling.current = true;
       }
@@ -46,8 +48,9 @@ export function PullToRefresh({
 
       // Only pull down, not up
       if (distance > 0) {
-        // Prevent default scrolling when pulling
-        if (container.scrollTop === 0) {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        // Prevent default scrolling when at top and pulling down
+        if (scrollTop === 0) {
           e.preventDefault();
         }
 
@@ -90,31 +93,32 @@ export function PullToRefresh({
       }
     };
 
-    container.addEventListener("touchstart", handleTouchStart, { passive: true });
-    container.addEventListener("touchmove", handleTouchMove, { passive: false });
-    container.addEventListener("touchend", handleTouchEnd);
+    // Attach to document for better touch detection
+    document.addEventListener("touchstart", handleTouchStart, { passive: true });
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd);
 
     return () => {
-      container.removeEventListener("touchstart", handleTouchStart);
-      container.removeEventListener("touchmove", handleTouchMove);
-      container.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
     };
   }, [enabled, threshold, isRefreshing, pullDistance, isLocked, router]);
 
   return (
-    <div ref={containerRef} className="relative flex h-full min-h-0 flex-1 flex-col overflow-y-auto">
-      {/* Pull-to-refresh indicator - anchored to pulled space */}
+    <div ref={containerRef} className="relative flex h-full min-h-0 flex-1 flex-col">
+      {/* Pull-to-refresh indicator - fixed to viewport */}
       {pullDistance > 10 && (
         <div
-          className="absolute left-0 right-0 flex justify-center"
+          className="pointer-events-none fixed left-0 right-0 z-50 flex justify-center"
           style={{
-            top: `${Math.max(0, pullDistance - 40)}px`,
+            top: `${Math.min(pullDistance + 20, threshold + 40)}px`,
             transition: isPulling.current ? "none" : "top 0.3s ease-out, opacity 0.2s",
             opacity: Math.min(pullDistance / 30, 1),
           }}
         >
           <div
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
+            className={`flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition-all duration-200 ${
               isLocked
                 ? "bg-violet-600"
                 : "bg-zinc-400"
@@ -144,7 +148,9 @@ export function PullToRefresh({
         </div>
       )}
 
-      {children}
+      <div ref={contentRef} className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto">
+        {children}
+      </div>
     </div>
   );
 }
