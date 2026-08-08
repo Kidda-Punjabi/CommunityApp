@@ -1,3 +1,4 @@
+import { EnglishBottomNav } from "@/components/english/english-bottom-nav";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import { redirect } from "next/navigation";
@@ -23,8 +24,11 @@ export default async function EnglishLayout({
   }
 
   return (
-    <div className={`flex min-h-0 flex-1 flex-col bg-emerald-50/40 ${ui.navClearance}`}>
-      {children}
+    <div className={`flex min-h-dvh flex-1 flex-col bg-emerald-50/40 ${ui.navClearance}`}>
+      <div className="relative isolate mx-auto flex w-full max-w-lg flex-1 flex-col bg-emerald-50/40">
+        {children}
+      </div>
+      <EnglishBottomNav />
     </div>
   );
 }
