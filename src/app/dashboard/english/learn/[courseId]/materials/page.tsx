@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BookOpen, ClipboardCheck } from "lucide-react";
 import { NavLink } from "@/components/ui/nav-link";
 import { getEnglishExamCourseConfig } from "@/lib/learning/english-exam-courses";
 import {
@@ -62,35 +63,63 @@ export default async function EnglishExamMaterialsPage({
             questions,
             material.id
           );
+          const readHref = `/dashboard/english/learn/${course.id}/materials/${material.id}`;
+          const testHref = `/dashboard/english/learn/${course.id}/mock?chapter=${material.id}`;
+
           return (
             <li
               key={material.id}
               className="rounded-2xl border border-emerald-200 bg-white px-4 py-4"
             >
-              <Link
-                href={`/dashboard/english/learn/${course.id}/materials/${material.id}`}
-                className={cn(
-                  pressableClass,
-                  "block transition-opacity hover:opacity-90"
-                )}
-              >
-                <p className="text-sm font-semibold text-zinc-900">
-                  {material.title}
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {material.audioScript || showChapterTests
-                    ? "Open chapter"
-                    : "No text yet"}
-                </p>
-              </Link>
-              {showChapterTests && chapterQuestions.length > 0 ? (
+              <p className="text-sm font-semibold leading-snug text-zinc-900">
+                {material.title}
+              </p>
+
+              {showChapterTests ? (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Link
+                    href={readHref}
+                    className={cn(
+                      pressableClass,
+                      "inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-100"
+                    )}
+                  >
+                    <BookOpen className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />
+                    Read
+                  </Link>
+                  {chapterQuestions.length > 0 ? (
+                    <Link
+                      href={testHref}
+                      className={cn(
+                        pressableClass,
+                        "inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
+                      )}
+                    >
+                      <ClipboardCheck
+                        className="h-4 w-4 shrink-0"
+                        strokeWidth={2.25}
+                        aria-hidden
+                      />
+                      Test ({chapterQuestions.length})
+                    </Link>
+                  ) : (
+                    <span className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-400">
+                      Test (0)
+                    </span>
+                  )}
+                </div>
+              ) : (
                 <Link
-                  href={`/dashboard/english/learn/${course.id}/mock?chapter=${material.id}`}
-                  className="mt-3 inline-flex text-xs font-semibold text-emerald-700 hover:text-emerald-600"
+                  href={readHref}
+                  className={cn(
+                    pressableClass,
+                    "mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-100"
+                  )}
                 >
-                  Chapter test ({chapterQuestions.length} questions) →
+                  <BookOpen className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />
+                  Read
                 </Link>
-              ) : null}
+              )}
             </li>
           );
         })}
