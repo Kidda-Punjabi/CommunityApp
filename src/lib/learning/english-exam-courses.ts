@@ -62,6 +62,10 @@ export type EnglishExamQuestion = {
   optionB: string;
   optionC: string;
   optionD: string;
+  optionAPa: string | null;
+  optionBPa: string | null;
+  optionCPa: string | null;
+  optionDPa: string | null;
   correctAnswer: "a" | "b" | "c" | "d";
   explanation: string | null;
   explanationPa: string | null;

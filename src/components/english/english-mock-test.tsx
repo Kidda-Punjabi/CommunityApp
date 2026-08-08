@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Pause, Play } from "lucide-react";
 import { EnglishBilingualToggle } from "@/components/english/english-bilingual-toggle";
 import type {
   EnglishExamCourseConfig,
@@ -13,6 +14,10 @@ import {
   scoreEnglishExamByChapter,
   shuffleEnglishExamQuestions,
 } from "@/lib/learning/load-english-exam-content";
+import {
+  applySpeechPlaybackRate,
+  useSpeechPlaybackRate,
+} from "@/lib/audio/speech-playback";
 import { cn } from "@/lib/ui/styles";
 
 type EnglishMockTestProps = {
@@ -26,6 +31,9 @@ type EnglishMockTestProps = {
 };
 
 type Phase = "intro" | "testing" | "results";
+/** Full mock only — chapter tests always stay bilingual (support). */
+type MockMode = "support" | "exam";
+type LangKey = "punjabi" | "english";
 
 function formatClock(totalSeconds: number) {
   const safe = Math.max(0, totalSeconds);
@@ -38,7 +46,23 @@ function shortChapterLabel(title: string, lessonNumber: number | null) {
   const match = title.match(/chapter\s*\d+/i);
   if (match) return match[0];
   if (lessonNumber != null) return `Chapter ${lessonNumber}`;
+  // Drop bilingual trailing half ("English / ਪੰਜਾਬੀ") for exam-facing labels.
   return title.split("/")[0]?.trim() || title;
+}
+
+function englishChapterTitle(title: string, lessonNumber: number | null) {
+  const englishHalf = title.split("/")[0]?.trim();
+  if (englishHalf) return englishHalf;
+  return shortChapterLabel(title, lessonNumber);
+}
+
+function playAudioUrl(url: string, audio: HTMLAudioElement) {
+  return new Promise<void>((resolve, reject) => {
+    audio.src = url;
+    audio.onended = () => resolve();
+    audio.onerror = () => reject(new Error("Playback failed"));
+    void audio.play().catch(reject);
+  });
 }
 
 export function EnglishMockTest({
@@ -59,24 +83,48 @@ export function EnglishMockTest({
   );
 
   const [phase, setPhase] = useState<Phase>("intro");
+  const [mockMode, setMockMode] = useState<MockMode>("support");
   const [questions, setQuestions] = useState<EnglishExamQuestion[]>([]);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [secondsLeft, setSecondsLeft] = useState(config.mockMinutes * 60);
   const [showEnglish, setShowEnglish] = useState(true);
+  const [playingLang, setPlayingLang] = useState<LangKey | null>(null);
+  const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const finishedRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { rate: speechRate } = useSpeechPlaybackRate();
 
+  const isExamMode = !isChapterMode && mockMode === "exam";
+  /** Full mock "With support" — not chapter tests (those stay as before). */
+  const isSupportMock = !isChapterMode && mockMode === "support";
   const question = questions[index];
   const answeredCount = Object.keys(answers).length;
 
   const optionLabels = useMemo(() => {
     if (!question) return [];
     return [
-      { key: "a" as const, label: question.optionA },
-      { key: "b" as const, label: question.optionB },
-      { key: "c" as const, label: question.optionC },
-      { key: "d" as const, label: question.optionD },
-    ].filter((opt) => opt.label?.trim());
+      {
+        key: "a" as const,
+        labelEn: question.optionA,
+        labelPa: question.optionAPa,
+      },
+      {
+        key: "b" as const,
+        labelEn: question.optionB,
+        labelPa: question.optionBPa,
+      },
+      {
+        key: "c" as const,
+        labelEn: question.optionC,
+        labelPa: question.optionCPa,
+      },
+      {
+        key: "d" as const,
+        labelEn: question.optionD,
+        labelPa: question.optionDPa,
+      },
+    ].filter((opt) => opt.labelEn?.trim() || opt.labelPa?.trim());
   }, [question]);
 
   const score = useMemo(() => {
@@ -98,8 +146,30 @@ export function EnglishMockTest({
   const percent =
     questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
 
-  function startTest() {
+  useEffect(() => {
+    audioRef.current = new Audio();
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    applySpeechPlaybackRate(audioRef.current, speechRate);
+  }, [speechRate]);
+
+  useEffect(() => {
+    audioRef.current?.pause();
+    setPlayingLang(null);
+  }, [index, phase]);
+
+  function startTest(mode: MockMode = mockMode) {
     finishedRef.current = false;
+    setMockMode(mode);
+    setShowEnglish(true);
     const drawn = isChapterMode
       ? shuffleEnglishExamQuestions(chapterBank)
       : drawEnglishMockQuestions(bank, config.mockQuestionCount);
@@ -113,8 +183,42 @@ export function EnglishMockTest({
   function finishTest() {
     if (finishedRef.current) return;
     finishedRef.current = true;
+    audioRef.current?.pause();
+    setPlayingLang(null);
     setPhase("results");
   }
+
+  const handlePlay = useCallback(
+    async (lang: LangKey) => {
+      if (!question) return;
+      if (isExamMode && lang === "punjabi") return;
+      const url =
+        lang === "punjabi"
+          ? question.questionAudioPaUrl?.trim()
+          : question.questionAudioEnUrl?.trim();
+      if (!url) {
+        setAudioNotice("Audio not ready yet");
+        window.setTimeout(() => setAudioNotice(null), 2200);
+        return;
+      }
+
+      const audio = audioRef.current;
+      if (!audio) return;
+      applySpeechPlaybackRate(audio, speechRate);
+      setPlayingLang(lang);
+      setAudioNotice(null);
+
+      try {
+        await playAudioUrl(url, audio);
+      } catch {
+        setAudioNotice("Couldn’t play this clip");
+        window.setTimeout(() => setAudioNotice(null), 2200);
+      } finally {
+        setPlayingLang((current) => (current === lang ? null : current));
+      }
+    },
+    [isExamMode, question, speechRate]
+  );
 
   useEffect(() => {
     if (phase !== "testing" || isChapterMode) return;
@@ -187,13 +291,45 @@ export function EnglishMockTest({
           )}
         </ul>
 
-        <button
-          type="button"
-          onClick={startTest}
-          className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-emerald-500"
-        >
-          {isChapterMode ? "Start chapter test" : "Start mock test"}
-        </button>
+        {isChapterMode ? (
+          <button
+            type="button"
+            onClick={() => startTest("support")}
+            className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-emerald-500"
+          >
+            Start chapter test
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Choose how you want to sit this mock
+            </p>
+            <button
+              type="button"
+              onClick={() => startTest("support")}
+              className="w-full rounded-2xl border border-emerald-200 bg-white px-4 py-4 text-left transition-colors hover:border-emerald-400 hover:bg-emerald-50/50"
+            >
+              <p className="text-sm font-semibold text-zinc-900">With support</p>
+              <p className="mt-1 text-sm leading-snug text-zinc-600">
+                Punjabi + English questions and options, language toggle, and
+                audio in both languages — same bilingual help as practice.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => startTest("exam")}
+              className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left transition-colors hover:border-emerald-400 hover:bg-emerald-50/50"
+            >
+              <p className="text-sm font-semibold text-zinc-900">
+                Full English (exam simulation)
+              </p>
+              <p className="mt-1 text-sm leading-snug text-zinc-600">
+                English only — no Punjabi text, options, toggle, or Punjabi
+                audio. Closest to sitting the real test.
+              </p>
+            </button>
+          </div>
+        )}
 
         <Link
           href={`/dashboard/english/learn/${courseId}`}
@@ -209,6 +345,11 @@ export function EnglishMockTest({
     const weakest = [...chapterScores]
       .filter((row) => row.total > 0)
       .sort((a, b) => a.percent - b.percent);
+
+    const chapterLabel = (title: string, lessonNumber: number | null) =>
+      isExamMode
+        ? englishChapterTitle(title, lessonNumber)
+        : shortChapterLabel(title, lessonNumber);
 
     return (
       <div className="space-y-5">
@@ -237,6 +378,13 @@ export function EnglishMockTest({
               ? ` · need ${config.passCorrect}/${config.mockQuestionCount} (${config.passPercent}%) to pass`
               : " on this chapter"}
           </p>
+          {!isChapterMode ? (
+            <p className="mt-2 text-xs font-medium text-zinc-500">
+              {isExamMode
+                ? "Full English (exam simulation)"
+                : "With support"}
+            </p>
+          ) : null}
         </div>
 
         {chapterScores.length > 0 ? (
@@ -252,7 +400,7 @@ export function EnglishMockTest({
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium text-zinc-900">
-                      {shortChapterLabel(row.chapterTitle, row.lessonNumber)}
+                      {chapterLabel(row.chapterTitle, row.lessonNumber)}
                     </p>
                     <p className="text-xs text-zinc-500">
                       {row.correct}/{row.total} correct
@@ -284,7 +432,7 @@ export function EnglishMockTest({
                   href={weakest[0].materialsHref}
                   className="font-semibold text-emerald-700 hover:underline"
                 >
-                  {shortChapterLabel(
+                  {chapterLabel(
                     weakest[0].chapterTitle,
                     weakest[0].lessonNumber
                   )}
@@ -296,13 +444,23 @@ export function EnglishMockTest({
         ) : null}
 
         <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={startTest}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500"
-          >
-            Try again
-          </button>
+          {isChapterMode ? (
+            <button
+              type="button"
+              onClick={() => startTest("support")}
+              className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500"
+            >
+              Try again
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPhase("intro")}
+              className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500"
+            >
+              Try again
+            </button>
+          )}
           {!isChapterMode ? (
             <Link
               href={`/dashboard/english/learn/${courseId}/materials`}
@@ -331,7 +489,12 @@ export function EnglishMockTest({
 
   if (!question) return null;
 
-  const promptPa = question.questionTextPa?.trim();
+  const promptPa = !isExamMode ? question.questionTextPa?.trim() : "";
+  const showPaPrompt = Boolean(promptPa);
+  const showEnPrompt = isExamMode || showEnglish || !showPaPrompt;
+  const showPaPlay =
+    !isExamMode && Boolean(promptPa || question.questionAudioPaUrl);
+  const showEnPlay = isExamMode || showEnglish;
   const urgent = !isChapterMode && secondsLeft <= 60;
 
   return (
@@ -350,7 +513,14 @@ export function EnglishMockTest({
         ) : (
           <p className="text-xs font-medium text-zinc-500">Untimed chapter test</p>
         )}
-        <EnglishBilingualToggle showEnglish={showEnglish} onChange={setShowEnglish} />
+        {!isExamMode ? (
+          <EnglishBilingualToggle
+            showEnglish={showEnglish}
+            onChange={setShowEnglish}
+          />
+        ) : (
+          <p className="text-xs font-medium text-zinc-500">Exam simulation</p>
+        )}
       </div>
 
       <div className="flex items-center justify-between text-xs font-medium text-zinc-500">
@@ -370,26 +540,89 @@ export function EnglishMockTest({
       </div>
 
       <div className="rounded-2xl border border-emerald-200 bg-white px-4 py-5">
-        {promptPa ? (
-          <p className="text-base font-medium leading-snug text-zinc-900">{promptPa}</p>
-        ) : null}
-        {showEnglish ? (
-          <p
-            className={cn(
-              "text-sm leading-snug text-zinc-600",
-              promptPa ? "mt-2" : "text-base font-medium text-zinc-900"
-            )}
-          >
-            {question.questionText}
-          </p>
-        ) : null}
-        {!promptPa && !showEnglish ? (
-          <p className="text-base font-medium text-zinc-900">{question.questionText}</p>
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            {showPaPrompt ? (
+              <p className="text-base font-medium leading-snug text-zinc-900">
+                {promptPa}
+              </p>
+            ) : null}
+            {showEnPrompt ? (
+              <p
+                className={cn(
+                  "text-sm leading-snug text-zinc-600",
+                  showPaPrompt ? "" : "text-base font-medium text-zinc-900"
+                )}
+              >
+                {question.questionText}
+              </p>
+            ) : null}
+          </div>
+
+          {!isChapterMode ? (
+            <div className="flex shrink-0 items-center gap-2 pt-0.5">
+              {showPaPlay ? (
+                <button
+                  type="button"
+                  aria-label="Play Punjabi question"
+                  title="Play Punjabi"
+                  onClick={() => void handlePlay("punjabi")}
+                  className={cn(
+                    "flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors",
+                    playingLang === "punjabi"
+                      ? "bg-emerald-700"
+                      : "bg-emerald-600 hover:bg-emerald-500"
+                  )}
+                >
+                  {playingLang === "punjabi" ? (
+                    <Pause className="h-3.5 w-3.5" fill="currentColor" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5 translate-x-px" fill="currentColor" />
+                  )}
+                </button>
+              ) : null}
+              {showEnPlay ? (
+                <button
+                  type="button"
+                  aria-label="Play English question"
+                  title="Play English"
+                  onClick={() => void handlePlay("english")}
+                  className={cn(
+                    "flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors",
+                    playingLang === "english"
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                      : "border-emerald-600 text-emerald-700 hover:bg-emerald-50",
+                    isExamMode &&
+                      "border-0 bg-emerald-600 text-white hover:bg-emerald-500"
+                  )}
+                >
+                  {playingLang === "english" ? (
+                    <Pause className="h-3.5 w-3.5" fill="currentColor" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5 translate-x-px" fill="currentColor" />
+                  )}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        {audioNotice ? (
+          <p className="mt-2 text-xs font-medium text-amber-700">{audioNotice}</p>
         ) : null}
 
         <div className="mt-4 space-y-2">
           {optionLabels.map((opt) => {
             const chosen = answers[question.id] === opt.key;
+            const labelPa = opt.labelPa?.trim() || "";
+            const labelEn = opt.labelEn?.trim() || "";
+            // Chapter tests keep English-only options; support mock shows PA when present.
+            const showPaOpt = isSupportMock && Boolean(labelPa);
+            const showEnOpt =
+              isExamMode || isChapterMode || showEnglish || !showPaOpt
+                ? Boolean(labelEn)
+                : false;
+
             return (
               <button
                 key={opt.key}
@@ -407,7 +640,28 @@ export function EnglishMockTest({
                 <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-semibold uppercase text-zinc-600">
                   {opt.key}
                 </span>
-                <span>{opt.label}</span>
+                <span className="min-w-0 space-y-0.5">
+                  {showPaOpt ? (
+                    <span className="block font-medium text-zinc-900">
+                      {labelPa}
+                    </span>
+                  ) : null}
+                  {showEnOpt ? (
+                    <span
+                      className={cn(
+                        "block",
+                        showPaOpt ? "text-zinc-600" : "font-medium text-zinc-900"
+                      )}
+                    >
+                      {labelEn}
+                    </span>
+                  ) : null}
+                  {!showPaOpt && !showEnOpt ? (
+                    <span className="block font-medium text-zinc-900">
+                      {labelEn || labelPa}
+                    </span>
+                  ) : null}
+                </span>
               </button>
             );
           })}

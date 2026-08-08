@@ -107,7 +107,7 @@ export async function loadEnglishExamQuestions(
   const { data: rows, error } = await supabase
     .from("quiz_questions")
     .select(
-      "id, quiz_id, question_text, question_text_pa, option_a, option_b, option_c, option_d, correct_answer, explanation, explanation_pa, question_order, question_audio_en_url, question_audio_pa_url"
+      "id, quiz_id, question_text, question_text_pa, option_a, option_b, option_c, option_d, option_a_pa, option_b_pa, option_c_pa, option_d_pa, correct_answer, explanation, explanation_pa, question_order, question_audio_en_url, question_audio_pa_url"
     )
     .in("quiz_id", quizIds)
     .order("question_order", { ascending: true });
@@ -129,6 +129,10 @@ export async function loadEnglishExamQuestions(
       optionB: row.option_b as string,
       optionC: row.option_c as string,
       optionD: row.option_d as string,
+      optionAPa: (row.option_a_pa as string | null) ?? null,
+      optionBPa: (row.option_b_pa as string | null) ?? null,
+      optionCPa: (row.option_c_pa as string | null) ?? null,
+      optionDPa: (row.option_d_pa as string | null) ?? null,
       correctAnswer: row.correct_answer as "a" | "b" | "c" | "d",
       explanation: (row.explanation as string | null) ?? null,
       explanationPa: (row.explanation_pa as string | null) ?? null,
