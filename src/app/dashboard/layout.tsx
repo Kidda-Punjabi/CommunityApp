@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { KidsExitButton } from "@/components/kids/kids-exit-button";
 import { KidSessionProvider } from "@/components/kids/kid-session-provider";
 import { KidsShellRouteGuard } from "@/components/kids/kids-shell-route-guard";
@@ -64,28 +65,30 @@ export default async function DashboardLayout({
             <PointsToastProvider />
             <TabNavProvider>
               <KidsShellRouteGuard />
-              <div
-                className={`flex min-h-dvh flex-1 flex-col ${
-                  kidsShellActive
-                    ? "bg-gradient-to-b from-sky-100 via-violet-50 to-amber-50"
-                    : ui.pageBg
-                }`}
-              >
-                <ActivityDateSync />
-                <LastPlayedGameTracker />
-                {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
-                {showKidsExit && <KidsExitButton />}
+              <PullToRefresh>
                 <div
-                  className={
+                  className={`flex min-h-dvh flex-1 flex-col ${
                     kidsShellActive
-                      ? "relative isolate flex w-full flex-1 flex-col"
-                      : `relative isolate mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance}`
-                  }
+                      ? "bg-gradient-to-b from-sky-100 via-violet-50 to-amber-50"
+                      : ui.pageBg
+                  }`}
                 >
-                  {children}
+                  <ActivityDateSync />
+                  <LastPlayedGameTracker />
+                  {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
+                  {showKidsExit && <KidsExitButton />}
+                  <div
+                    className={
+                      kidsShellActive
+                        ? "relative isolate flex w-full flex-1 flex-col"
+                        : `relative isolate mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance}`
+                    }
+                  >
+                    {children}
+                  </div>
+                  <BottomNav />
                 </div>
-                <BottomNav />
-              </div>
+              </PullToRefresh>
             </TabNavProvider>
           </AudioManagerProvider>
         </KidSessionProvider>
