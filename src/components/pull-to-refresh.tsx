@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 type PullToRefreshProps = {
   children: React.ReactNode;
-  /** Threshold in pixels before refresh activates (default: 80) */
+  /** Threshold in pixels before refresh activates (default: 60) */
   threshold?: number;
   /** Whether pull-to-refresh is enabled (default: true) */
   enabled?: boolean;
@@ -13,7 +13,7 @@ type PullToRefreshProps = {
 
 export function PullToRefresh({
   children,
-  threshold = 80,
+  threshold = 60,
   enabled = true,
 }: PullToRefreshProps) {
   const router = useRouter();
@@ -52,7 +52,7 @@ export function PullToRefresh({
         }
 
         // Apply resistance as you pull further
-        const resistance = 0.5;
+        const resistance = 0.4;
         const adjustedDistance = distance * resistance;
         setPullDistance(adjustedDistance);
 
@@ -101,31 +101,27 @@ export function PullToRefresh({
     };
   }, [enabled, threshold, isRefreshing, pullDistance, isLocked, router]);
 
-  const indicatorOpacity = Math.min(pullDistance / threshold, 1);
-  const spinnerRotation = (pullDistance / threshold) * 360;
-
   return (
-    <div ref={containerRef} className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto">
-      {/* Pull-to-refresh indicator */}
-      <div
-        className="pointer-events-none fixed left-0 right-0 top-0 z-50 flex justify-center"
-        style={{
-          transform: `translateY(${Math.min(pullDistance, threshold + 20)}px)`,
-          transition: isPulling.current ? "none" : "transform 0.3s ease-out",
-          opacity: indicatorOpacity,
-        }}
-      >
+    <div ref={containerRef} className="relative flex h-full min-h-0 flex-1 flex-col overflow-y-auto">
+      {/* Pull-to-refresh indicator - anchored to pulled space */}
+      {pullDistance > 10 && (
         <div
-          className={`mt-4 flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition-colors ${
-            isLocked
-              ? "bg-violet-600 ring-4 ring-violet-200"
-              : "bg-white ring-2 ring-zinc-200"
-          }`}
+          className="absolute left-0 right-0 flex justify-center"
+          style={{
+            top: `${Math.max(0, pullDistance - 40)}px`,
+            transition: isPulling.current ? "none" : "top 0.3s ease-out, opacity 0.2s",
+            opacity: Math.min(pullDistance / 30, 1),
+          }}
         >
-          {isRefreshing ? (
-            // Spinning loader when refreshing
+          <div
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
+              isLocked
+                ? "bg-violet-600"
+                : "bg-zinc-400"
+            }`}
+          >
             <svg
-              className="h-6 w-6 animate-spin text-white"
+              className={`h-5 w-5 text-white ${isRefreshing || isLocked ? "animate-spin" : ""}`}
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -136,7 +132,7 @@ export function PullToRefresh({
                 cy="12"
                 r="10"
                 stroke="currentColor"
-                strokeWidth="4"
+                strokeWidth="3"
               />
               <path
                 className="opacity-75"
@@ -144,53 +140,7 @@ export function PullToRefresh({
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-          ) : (
-            // Arrow that rotates as you pull
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`h-6 w-6 transition-colors ${
-                isLocked ? "text-white" : "text-violet-600"
-              }`}
-              style={{
-                transform: `rotate(${isLocked ? 180 : spinnerRotation}deg)`,
-                transition: isPulling.current ? "none" : "transform 0.3s ease-out",
-              }}
-            >
-              <path d="M12 5v14M19 12l-7 7-7-7" />
-            </svg>
-          )}
-        </div>
-      </div>
-
-      {/* Status text */}
-      {pullDistance > 20 && (
-        <div
-          className="pointer-events-none fixed left-0 right-0 top-0 z-40 flex justify-center pt-20 text-center text-sm font-semibold"
-          style={{
-            transform: `translateY(${Math.min(pullDistance, threshold + 20)}px)`,
-            transition: isPulling.current ? "none" : "transform 0.3s ease-out",
-            opacity: indicatorOpacity,
-          }}
-        >
-          <span
-            className={`rounded-full px-3 py-1 ${
-              isLocked
-                ? "bg-violet-100 text-violet-900"
-                : "bg-zinc-100 text-zinc-700"
-            }`}
-          >
-            {isRefreshing
-              ? "Refreshing..."
-              : isLocked
-                ? "Release to refresh"
-                : "Pull down to refresh"}
-          </span>
+          </div>
         </div>
       )}
 
