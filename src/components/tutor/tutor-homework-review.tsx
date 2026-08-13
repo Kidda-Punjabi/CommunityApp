@@ -23,6 +23,26 @@ function formatSubmittedAt(iso: string): string {
   }).format(new Date(iso));
 }
 
+function TimingBadge({
+  state,
+}: {
+  state: PendingHomeworkReviewRow["timingState"];
+}) {
+  if (state === "on_time" || state === "unknown") return null;
+  if (state === "late") {
+    return (
+      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
+        Late (&lt;24h)
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-900">
+      After lesson
+    </span>
+  );
+}
+
 function ReviewAudioPlayer({ storagePath }: { storagePath: string }) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +109,7 @@ function HomeworkReviewCard({
             Submitted {formatSubmittedAt(submission.submittedAt)}
           </p>
         </div>
+        <TimingBadge state={submission.timingState} />
       </div>
 
       <div className="mt-4">

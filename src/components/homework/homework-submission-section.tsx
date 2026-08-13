@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  getHomeworkNearLessonWarning,
   getHomeworkPlaybackUrl,
   submitHomeworkRecording,
 } from "@/app/dashboard/learn/homework-actions";
@@ -14,7 +15,7 @@ import {
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import { lessonContentRowButtonClass } from "@/components/lesson-card";
-import { cn, ui } from "@/lib/ui/styles";
+import { ui } from "@/lib/ui/styles";
 
 type HomeworkSubmissionSectionProps = {
   lessonId: string;
@@ -67,6 +68,25 @@ function HomeworkAudioPlayback({ storagePath }: { storagePath: string }) {
   return <audio controls src={audioUrl} className="w-full" preload="metadata" />;
 }
 
+function NearLessonWarningBanner({
+  message,
+  tone = "late",
+}: {
+  message: string;
+  tone?: "late" | "post_lesson";
+}) {
+  const classes =
+    tone === "post_lesson"
+      ? "rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3"
+      : "rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3";
+  const textClass = tone === "post_lesson" ? "text-sm text-rose-950" : "text-sm text-amber-950";
+  return (
+    <div className={classes}>
+      <p className={textClass}>{message}</p>
+    </div>
+  );
+}
+
 function HomeworkRecorderBody({
   lessonId,
   localSubmission,
@@ -79,14 +99,38 @@ function HomeworkRecorderBody({
   const router = useRouter();
   const recorder = useAudioRecorder();
   const [pending, startTransition] = useTransition();
+  const submitLockRef = useRef(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [nearLessonWarning, setNearLessonWarning] = useState<string | null>(null);
+  const [timingTone, setTimingTone] = useState<"late" | "post_lesson">("late");
+
+  useEffect(() => {
+    if (localSubmission) {
+      setNearLessonWarning(null);
+      return;
+    }
+
+    let cancelled = false;
+    getHomeworkNearLessonWarning(lessonId).then((result) => {
+      if (cancelled) return;
+      setNearLessonWarning(result.nearLessonWarning ?? null);
+      setTimingTone(result.timingState === "post_lesson" ? "post_lesson" : "late");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId, localSubmission]);
 
   function handleSubmit() {
     if (!recorder.blob) {
       setActionError("Please record your homework first.");
       return;
     }
+
+    if (submitLockRef.current || pending) return;
+    submitLockRef.current = true;
 
     setActionError(null);
     setActionSuccess(null);
@@ -102,15 +146,20 @@ function HomeworkRecorderBody({
     formData.append("duration_seconds", String(recorder.durationSeconds));
 
     startTransition(async () => {
-      const result = await submitHomeworkRecording(lessonId, formData);
-      if (result.error) {
-        setActionError(result.error);
-        return;
-      }
+      try {
+        const result = await submitHomeworkRecording(lessonId, formData);
+        if (result.error) {
+          setActionError(result.error);
+          router.refresh();
+          return;
+        }
 
-      setActionSuccess(result.success ?? "Homework submitted!");
-      recorder.discardRecording();
-      router.refresh();
+        setActionSuccess(result.success ?? "Homework submitted!");
+        recorder.discardRecording();
+        router.refresh();
+      } finally {
+        submitLockRef.current = false;
+      }
     });
   }
 
@@ -188,11 +237,21 @@ function HomeworkRecorderBody({
         </p>
       ) : null}
 
+      {nearLessonWarning ? (
+        <div className={variant === "standalone" ? "mt-3" : "mb-3"}>
+          <NearLessonWarningBanner message={nearLessonWarning} tone={timingTone} />
+        </div>
+      ) : null}
+
       {recorder.state === "idle" ? (
         <button
           type="button"
           onClick={() => void recorder.startRecording()}
-          className={variant === "standalone" ? `mt-3 ${ui.btnSecondary}` : ui.btnSecondary}
+          className={
+            variant === "standalone" || nearLessonWarning
+              ? `mt-3 ${ui.btnSecondary}`
+              : ui.btnSecondary
+          }
         >
           Record homework
         </button>

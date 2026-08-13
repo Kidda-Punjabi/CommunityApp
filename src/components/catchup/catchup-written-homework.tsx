@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { submitTextHomeworkAction } from "@/app/catchup/catchup-actions";
+import { useEffect, useRef, useState, useTransition } from "react";
+import {
+  getCatchupHomeworkNearLessonWarning,
+  submitTextHomeworkAction,
+} from "@/app/catchup/catchup-actions";
 import type { HomeworkTextQuestion } from "@/lib/catchup/load-segment-questions";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import { ui } from "@/lib/ui/styles";
@@ -22,7 +25,28 @@ export function CatchupWrittenHomework({
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [nearLessonWarning, setNearLessonWarning] = useState<string | null>(null);
+  const [timingTone, setTimingTone] = useState<"late" | "post_lesson">("late");
   const [pending, startTransition] = useTransition();
+  const submitLockRef = useRef(false);
+
+  useEffect(() => {
+    if (existingSubmission) {
+      setNearLessonWarning(null);
+      return;
+    }
+
+    let cancelled = false;
+    getCatchupHomeworkNearLessonWarning(lessonId).then((result) => {
+      if (cancelled) return;
+      setNearLessonWarning(result.nearLessonWarning ?? null);
+      setTimingTone(result.timingState === "post_lesson" ? "post_lesson" : "late");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [existingSubmission, lessonId]);
 
   if (existingSubmission?.status === "reviewed") {
     return (
@@ -65,6 +89,9 @@ export function CatchupWrittenHomework({
   }
 
   function handleSubmit() {
+    if (submitLockRef.current || pending) return;
+    submitLockRef.current = true;
+
     setError(null);
     setSuccess(null);
 
@@ -74,17 +101,22 @@ export function CatchupWrittenHomework({
     }));
 
     if (payload.some((row) => !row.answer_text)) {
+      submitLockRef.current = false;
       setError("Please answer every question before submitting.");
       return;
     }
 
     startTransition(async () => {
-      const result = await submitTextHomeworkAction(lessonId, payload);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await submitTextHomeworkAction(lessonId, payload);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setSuccess(result.success ?? "Homework submitted!");
+      } finally {
+        submitLockRef.current = false;
       }
-      setSuccess(result.success ?? "Homework submitted!");
     });
   }
 
@@ -101,6 +133,23 @@ export function CatchupWrittenHomework({
 
   return (
     <div className="space-y-4">
+      {nearLessonWarning ? (
+        <div
+          className={
+            timingTone === "post_lesson"
+              ? "rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3"
+              : "rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3"
+          }
+        >
+          <p
+            className={
+              timingTone === "post_lesson" ? "text-sm text-rose-950" : "text-sm text-amber-950"
+            }
+          >
+            {nearLessonWarning}
+          </p>
+        </div>
+      ) : null}
       <ol className="space-y-4">
         {questions.map((question) => (
           <li key={question.id} className="rounded-2xl border border-zinc-200 bg-white px-4 py-3">

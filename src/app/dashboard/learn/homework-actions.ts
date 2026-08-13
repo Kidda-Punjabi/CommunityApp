@@ -1,10 +1,14 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
 import {
+  HOMEWORK_ALREADY_SUBMITTED_MESSAGE,
   HOMEWORK_RECORDINGS_BUCKET,
   createHomeworkPlaybackUrl,
   homeworkStoragePath,
+  homeworkSubmitErrorMessage,
+  homeworkTimingWarningMessage,
 } from "@/lib/tutoring/homework-submissions";
 import { revalidatePath } from "next/cache";
 
@@ -12,6 +16,8 @@ export type HomeworkActionResult = {
   error?: string;
   success?: string;
   playbackUrl?: string;
+  nearLessonWarning?: string | null;
+  timingState?: "on_time" | "late" | "post_lesson" | "unknown" | null;
 };
 
 function revalidateHomeworkPaths() {
@@ -37,6 +43,28 @@ export async function getHomeworkPlaybackUrl(
     return { playbackUrl };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not load audio." };
+  }
+}
+
+export async function getHomeworkNearLessonWarning(
+  lessonId: string
+): Promise<HomeworkActionResult> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return { nearLessonWarning: null, timingState: null };
+
+    const state = await getHomeworkTimingState(supabase, user.id, lessonId);
+    return {
+      nearLessonWarning: homeworkTimingWarningMessage(state),
+      timingState: state,
+    };
+  } catch {
+    // Soft warning only — never block submission if lookup fails.
+    return { nearLessonWarning: null, timingState: null };
   }
 }
 
@@ -68,10 +96,11 @@ export async function submitHomeworkRecording(
       .select("id, status")
       .eq("lesson_id", lessonId)
       .eq("student_id", user.id)
+      .eq("is_practice", false)
       .maybeSingle();
 
     if (existing) {
-      return { error: "You have already submitted homework for this lesson." };
+      return { error: HOMEWORK_ALREADY_SUBMITTED_MESSAGE };
     }
 
     const extension = file.name.split(".").pop() || "webm";
@@ -103,7 +132,7 @@ export async function submitHomeworkRecording(
 
     if (insertError) {
       await supabase.storage.from(HOMEWORK_RECORDINGS_BUCKET).remove([storagePath]);
-      return { error: insertError.message };
+      return { error: homeworkSubmitErrorMessage(insertError) };
     }
 
     revalidateHomeworkPaths();

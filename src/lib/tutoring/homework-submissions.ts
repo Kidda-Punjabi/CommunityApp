@@ -51,6 +51,49 @@ function isMissingHomeworkSchema(message: string): boolean {
   return message.toLowerCase().includes("homework_submissions");
 }
 
+/** Shown when a formal (non-practice) row already exists for this lesson. */
+export const HOMEWORK_ALREADY_SUBMITTED_MESSAGE =
+  "You've already submitted homework for this lesson.";
+
+export const HOMEWORK_NEAR_LESSON_WARNING =
+  "Heads up — it's less than 24 hours until your lesson. Your tutor may not be able to mark this in time, but please still submit — it shows you're putting in the effort.";
+
+export const HOMEWORK_POST_LESSON_WARNING =
+  "This lesson has already taken place. You can still submit your homework, but whether it gets marked is completely up to your tutor — there's a good chance it won't be reviewed.";
+
+export function homeworkTimingWarningMessage(
+  state: "on_time" | "late" | "post_lesson" | "unknown" | null | undefined
+): string | null {
+  if (state === "late") return HOMEWORK_NEAR_LESSON_WARNING;
+  if (state === "post_lesson") return HOMEWORK_POST_LESSON_WARNING;
+  return null;
+}
+
+export function isDuplicateFormalHomeworkError(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  if (error.code === "23505") return true;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("homework_submissions_one_formal_per_lesson") ||
+    (message.includes("duplicate key") && message.includes("homework_submissions")) ||
+    (message.includes("unique") &&
+      message.includes("lesson_id") &&
+      message.includes("student_id"))
+  );
+}
+
+export function homeworkSubmitErrorMessage(error: {
+  code?: string;
+  message?: string;
+}): string {
+  if (isDuplicateFormalHomeworkError(error)) {
+    return HOMEWORK_ALREADY_SUBMITTED_MESSAGE;
+  }
+  return error.message?.trim() || "Failed to submit homework.";
+}
+
 export async function fetchHomeworkSubmissionsForUser(
   supabase: SupabaseClient,
   userId: string,
@@ -65,6 +108,7 @@ export async function fetchHomeworkSubmissionsForUser(
       "id, lesson_id, storage_path, mime_type, duration_seconds, submission_type, text_answers, status, approved, tutor_comment, submitted_at"
     )
     .eq("student_id", userId)
+    .eq("is_practice", false)
     .in("lesson_id", lessonIds);
 
   if (error) {
@@ -98,6 +142,8 @@ export type PendingHomeworkReviewRow = {
     answerRomanised: string;
     answerGurmukhi: string | null;
   }>;
+  /** Relative to the matched live lesson start at submit time. */
+  timingState: "on_time" | "late" | "post_lesson" | "unknown";
 };
 
 export async function loadPendingHomeworkReviews(
@@ -133,12 +179,18 @@ export async function loadPendingHomeworkReviews(
   const { loadHomeworkTextQuestionsForLesson } = await import(
     "@/lib/catchup/load-segment-questions"
   );
+  const {
+    findHomeworkLessonSessionStartsAt,
+    homeworkTimingStateFromStartsAt,
+  } = await import("@/lib/tutoring/homework-near-lesson");
 
   const rows = await Promise.all(
     (data ?? []).map(async (row) => {
       const student = Array.isArray(row.student) ? row.student[0] : row.student;
       const lesson = Array.isArray(row.lesson) ? row.lesson[0] : row.lesson;
       const lessonId = row.lesson_id as string;
+      const studentId = row.student_id as string;
+      const submittedAt = row.submitted_at as string;
       const submissionType: HomeworkSubmissionType =
         row.submission_type === "text" ? "text" : "voice";
 
@@ -152,14 +204,24 @@ export async function loadPendingHomeworkReviews(
             }))
           : [];
 
+      const lessonStartsAt = await findHomeworkLessonSessionStartsAt(
+        supabase,
+        studentId,
+        lessonId
+      );
+      const timingState = homeworkTimingStateFromStartsAt(
+        lessonStartsAt,
+        new Date(submittedAt)
+      );
+
       return {
         id: row.id as string,
-        studentId: row.student_id as string,
+        studentId,
         studentName: getDisplayName(student) ?? "Student",
         lessonId,
         lessonTitle: (lesson?.title as string) ?? "Lesson",
         lessonNumber: (lesson?.lesson_number as number) ?? 0,
-        submittedAt: row.submitted_at as string,
+        submittedAt,
         submissionType,
         storagePath: (row.storage_path as string | null) ?? null,
         mimeType: (row.mime_type as string | null) ?? null,
@@ -168,6 +230,7 @@ export async function loadPendingHomeworkReviews(
           (row.text_answers as Array<{ question_number: number; answer_text: string }> | null) ??
           null,
         answerKeys,
+        timingState,
       };
     })
   );

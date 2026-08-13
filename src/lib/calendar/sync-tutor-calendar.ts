@@ -46,7 +46,7 @@ type SessionUpsertRow = {
   google_updated_at: string | null;
   updated_at: string;
   status: "scheduled";
-  rescheduling_allowed?: boolean;
+  rescheduling_allowed: boolean;
 };
 
 async function getValidAccessToken(
@@ -75,9 +75,15 @@ function buildSessionRow(
   tutorId: string,
   event: GoogleCalendarEvent,
   match: ReturnType<typeof matchEventToStudents>,
-  updatedAt: string
+  updatedAt: string,
+  existing?: ExistingSessionRow | null
 ): SessionUpsertRow {
   const cohortId = match.studentId ? null : match.cohortId;
+  // Always set explicitly — PostgREST upserts omit defaults and null out missing
+  // NOT NULL columns (this was leaving Arshdeep's sync stuck after unmatched events).
+  const reschedulingAllowed = cohortId
+    ? false
+    : (existing?.rescheduling_allowed ?? true);
   return {
     tutor_id: tutorId,
     google_event_id: event.id,
@@ -95,7 +101,7 @@ function buildSessionRow(
     google_updated_at: event.updated ?? null,
     updated_at: updatedAt,
     status: "scheduled",
-    ...(cohortId ? { rescheduling_allowed: false } : {}),
+    rescheduling_allowed: reschedulingAllowed,
   };
 }
 
@@ -183,7 +189,7 @@ export async function syncTutorGoogleCalendar(
   for (const event of events) {
     const match = matchEventToStudents(event, students, cohorts);
     const existing = existingByGoogleEventId.get(event.id);
-    const row = buildSessionRow(tutorId, event, match, updatedAt);
+    const row = buildSessionRow(tutorId, event, match, updatedAt, existing);
 
     await removeReplacedRecurringInstance(adminClient, tutorId, event, match);
 
@@ -210,11 +216,21 @@ export async function syncTutorGoogleCalendar(
     synced += 1;
   }
 
+  console.info(
+    `[calendar sync] tutor=${tutorId} events=${events.length} upsert=${toUpsert.length} manual=${manualUpdates.length} cancelled=${cancelledEventIds.length} full=${isFullSync}`
+  );
+
   await runInChunks(toUpsert, DB_CHUNK_SIZE, async (chunk) => {
     const { error: upsertError } = await adminClient
       .from("tutor_scheduled_sessions")
       .upsert(chunk, { onConflict: "tutor_id,google_event_id" });
-    if (upsertError) throw upsertError;
+    if (upsertError) {
+      console.error(
+        `[calendar sync] upsert failed tutor=${tutorId}:`,
+        upsertError.message
+      );
+      throw upsertError;
+    }
   });
 
   await runInChunks(manualUpdates, DB_CHUNK_SIZE, async (chunk) => {
@@ -229,17 +245,39 @@ export async function syncTutorGoogleCalendar(
     );
   });
 
-  if (isFullSync) {
-    await reconcileRemovedCalendarEvents(adminClient, tutorId, seenGoogleEventIds);
-  }
-
-  await adminClient
+  // Mark sync complete as soon as session writes succeed so UI can't stay stuck
+  // on "syncing" if reconcile (or sync_token write) fails afterwards.
+  const syncedAt = new Date().toISOString();
+  const { error: syncedAtError } = await adminClient
     .from("tutor_google_calendar_connections")
     .update({
-      last_synced_at: new Date().toISOString(),
+      last_synced_at: syncedAt,
       sync_token: nextSyncToken ?? connection.sync_token,
     })
     .eq("tutor_id", tutorId);
+
+  if (syncedAtError) {
+    console.error(
+      `[calendar sync] last_synced_at update failed tutor=${tutorId}:`,
+      syncedAtError.message
+    );
+    throw syncedAtError;
+  }
+
+  if (isFullSync) {
+    try {
+      await reconcileRemovedCalendarEvents(adminClient, tutorId, seenGoogleEventIds);
+    } catch (reconcileError) {
+      console.error(
+        `[calendar sync] reconcile failed tutor=${tutorId} (sessions already saved, last_synced_at=${syncedAt}):`,
+        reconcileError instanceof Error ? reconcileError.message : reconcileError
+      );
+    }
+  }
+
+  console.info(
+    `[calendar sync] complete tutor=${tutorId} synced=${synced} last_synced_at=${syncedAt}`
+  );
 
   return { synced, skipped };
 }

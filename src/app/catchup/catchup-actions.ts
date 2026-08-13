@@ -3,12 +3,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { awardQuizAttemptPoints } from "@/lib/leaderboard/points";
 import type { TextHomeworkAnswer } from "@/lib/catchup/load-segment-questions";
+import {
+  HOMEWORK_ALREADY_SUBMITTED_MESSAGE,
+  homeworkSubmitErrorMessage,
+  homeworkTimingWarningMessage,
+} from "@/lib/tutoring/homework-submissions";
+import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
 import { revalidatePath } from "next/cache";
 
 export type CatchupActionResult = {
   error?: string;
   success?: string;
   pointsEarned?: number;
+  nearLessonWarning?: string | null;
+  timingState?: "on_time" | "late" | "post_lesson" | "unknown" | null;
 };
 
 function revalidateCatchupPaths() {
@@ -40,6 +48,27 @@ export async function awardCatchupActivityPointsAction(
   }
 }
 
+export async function getCatchupHomeworkNearLessonWarning(
+  lessonId: string
+): Promise<CatchupActionResult> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return { nearLessonWarning: null, timingState: null };
+
+    const state = await getHomeworkTimingState(supabase, user.id, lessonId);
+    return {
+      nearLessonWarning: homeworkTimingWarningMessage(state),
+      timingState: state,
+    };
+  } catch {
+    return { nearLessonWarning: null, timingState: null };
+  }
+}
+
 export async function submitTextHomeworkAction(
   lessonId: string,
   answers: TextHomeworkAnswer[]
@@ -61,10 +90,11 @@ export async function submitTextHomeworkAction(
       .select("id")
       .eq("lesson_id", lessonId)
       .eq("student_id", user.id)
+      .eq("is_practice", false)
       .maybeSingle();
 
     if (existing) {
-      return { error: "You have already submitted homework for this lesson." };
+      return { error: HOMEWORK_ALREADY_SUBMITTED_MESSAGE };
     }
 
     const { error: insertError } = await supabase.from("homework_submissions").insert({
@@ -79,7 +109,7 @@ export async function submitTextHomeworkAction(
       submitted_at: new Date().toISOString(),
     });
 
-    if (insertError) return { error: insertError.message };
+    if (insertError) return { error: homeworkSubmitErrorMessage(insertError) };
 
     revalidateCatchupPaths();
     return { success: "Homework submitted! Your tutor will review your written answers." };

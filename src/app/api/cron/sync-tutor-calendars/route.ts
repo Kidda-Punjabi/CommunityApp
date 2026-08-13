@@ -34,15 +34,23 @@ export async function GET(request: Request) {
   const results: Array<{ tutorId: string; synced: number; skipped: number; error?: string }> = [];
 
   for (const connection of connections ?? []) {
+    const tutorId = connection.tutor_id as string;
     try {
-      const result = await syncTutorGoogleCalendar(client, connection.tutor_id);
-      results.push({ tutorId: connection.tutor_id, ...result });
+      console.info(`[cron calendar sync] start tutor=${tutorId}`);
+      const result = await syncTutorGoogleCalendar(client, tutorId);
+      console.info(
+        `[cron calendar sync] ok tutor=${tutorId} synced=${result.synced}`
+      );
+      results.push({ tutorId, ...result });
     } catch (syncError) {
+      const message =
+        syncError instanceof Error ? syncError.message : "Sync failed.";
+      console.error(`[cron calendar sync] failed tutor=${tutorId}:`, message);
       results.push({
-        tutorId: connection.tutor_id,
+        tutorId,
         synced: 0,
         skipped: 0,
-        error: syncError instanceof Error ? syncError.message : "Sync failed.",
+        error: message,
       });
     }
   }
