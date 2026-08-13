@@ -133,14 +133,20 @@ export async function saveCohortLessonAttendance(
       );
       const { data: logRows } = await admin
         .from("cohort_lesson_log_entries")
-        .select("id, notion_page_id, status, lesson_date")
+        .select("id, notion_page_id, status, lesson_date, lesson_id")
         .eq("cohort_id", cohortId)
-        .order("lesson_date", { ascending: true });
+        .order("lesson_date", { ascending: true })
+        .order("id", { ascending: true });
 
       const countable = (logRows ?? []).filter((row) =>
         isCountableLessonLogStatus(row.status as string | null)
       );
-      const matched = lessonNumber > 0 ? countable[lessonNumber - 1] : null;
+      // Prefer the log row already linked to this curriculum lesson; fall back to
+      // chronological position among non-cancelled entries (lesson N → index N-1).
+      const matchedByLessonId = countable.find((row) => row.lesson_id === lessonId);
+      const matched =
+        matchedByLessonId ??
+        (lessonNumber > 0 ? countable[lessonNumber - 1] ?? null : null);
 
       if (matched?.notion_page_id) {
         const {

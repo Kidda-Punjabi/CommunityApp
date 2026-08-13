@@ -126,6 +126,9 @@ async function readLessonLogRelationIds(
 /**
  * Replace Attendees and/or Homework relations on a Lessons Log Notion page.
  * Full array replace so absences / incomplete homework remove Lead pages.
+ *
+ * Always sends `archived: false` so writes succeed when the linked Lessons Log
+ * page was archived/trashed in Notion (otherwise PATCH returns validation_error).
  */
 export async function pushLessonLogAttendanceHomeworkToNotion(options: {
   notionPageId: string;
@@ -151,7 +154,7 @@ export async function pushLessonLogAttendanceHomeworkToNotion(options: {
 
   await notionJson(`/pages/${options.notionPageId}`, {
     method: "PATCH",
-    body: JSON.stringify({ properties }),
+    body: JSON.stringify({ archived: false, properties }),
   });
 }
 
