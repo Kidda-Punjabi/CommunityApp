@@ -28,7 +28,7 @@ export function AccountCard({ isFreeOnly }: AccountCardProps) {
           <AccountListRow href="/dashboard/profile/sound" label="Sound effects" />
           <AccountListRow href="/dashboard/profile/kids" label="Kids Mode" />
           <AccountListRow href="/dashboard/profile/feedback" label="Share lesson feedback" />
-          <AccountListRow href="/dashboard/profile/help" label="Help articles" />
+          <AccountListRow href="/dashboard/profile/help" label="Help Centre" />
           <AccountListRow
             label="Book a call with the team"
             onClick={() => setBookCallOpen(true)}

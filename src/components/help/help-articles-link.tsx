@@ -9,9 +9,9 @@ type HelpArticlesLinkProps = {
 export function HelpArticlesLink({ href, className }: HelpArticlesLinkProps) {
   return (
     <Link href={href} className={className ?? ui.cardInteractive}>
-      <p className="font-semibold text-zinc-900">Help articles</p>
+      <p className="font-semibold text-zinc-900">Help Centre</p>
       <p className="mt-1 text-sm text-zinc-500">
-        FAQs and step-by-step guides for using Kidda — homework, lessons, billing, and more.
+        Cancellations, cohorts, and guides for using Kidda — homework, lessons, billing, and more.
       </p>
       <p className="mt-2 text-sm font-semibold text-violet-600">Browse help →</p>
     </Link>

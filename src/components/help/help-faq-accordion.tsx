@@ -1,28 +1,19 @@
 "use client";
 
-import { GotAnotherQuestion } from "@/components/help/got-another-question";
-import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { useState } from "react";
 import type { HelpContent, HelpSection } from "@/lib/help/types";
-import { ui } from "@/lib/ui/styles";
-
-type HelpArticlesViewProps = {
-  content: HelpContent;
-  backHref: string;
-  backLabel?: string;
-};
 
 function HelpSectionBlock({ section }: { section: HelpSection }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
-    <section>
-      <h2 className="text-lg font-semibold text-zinc-900">{section.title}</h2>
+    <section className="mt-6 first:mt-0">
+      <h3 className="text-base font-semibold text-zinc-900">{section.title}</h3>
       {section.description && (
         <p className="mt-1 text-sm text-zinc-500">{section.description}</p>
       )}
-      <div className="mt-4 divide-y divide-zinc-100 overflow-hidden rounded-3xl border border-zinc-200/80 bg-white">
+      <div className="mt-3 divide-y divide-zinc-100 overflow-hidden rounded-3xl border border-zinc-200/80 bg-white">
         {section.articles.map((article) => {
           const isOpen = openId === article.id;
           return (
@@ -70,25 +61,12 @@ function HelpSectionBlock({ section }: { section: HelpSection }) {
   );
 }
 
-export function HelpArticlesView({ content, backHref }: HelpArticlesViewProps) {
+export function HelpFaqAccordion({ content }: { content: HelpContent }) {
   return (
-    <div className={ui.page}>
-      <BackLink fallbackHref={backHref} className="mb-6 inline-flex items-center gap-1">
-        ← Back
-      </BackLink>
-
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{content.title}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-600">{content.intro}</p>
-      </div>
-
-      <div className="space-y-10">
-        {content.sections.map((section) => (
-          <HelpSectionBlock key={section.id} section={section} />
-        ))}
-      </div>
-
-      <GotAnotherQuestion />
+    <div className="space-y-2">
+      {content.sections.map((section) => (
+        <HelpSectionBlock key={section.id} section={section} />
+      ))}
     </div>
   );
 }

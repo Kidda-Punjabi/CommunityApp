@@ -99,8 +99,12 @@ export const STUDENT_HELP: HelpContent = {
           id: "group-lesson-changes",
           question: "Can I reschedule a group lesson?",
           answer:
-            "No — group cohort sessions can't be rescheduled to a different time. If you can't make your usual group, you can request to join a different cohort for that lesson, but only if you let us know at least 3 days before the session. Open Schedule on the lesson and use “Request to join alternate cohort”. 1-to-1 lessons can still be rescheduled with at least 24 hours notice.",
-          links: [{ label: "Upcoming lessons", href: "/dashboard/schedule" }],
+            "Group cohort sessions can’t be moved to a different time, and once your cohort has started you can’t permanently switch to another cohort. If you can’t attend a scheduled group session, give at least 7 days’ notice so we can try to offer an alternative that same week when available. Missed group sessions aren’t refundable. 1–1 lessons can be rescheduled with at least 24 hours’ notice.",
+          links: [
+            { label: "Upcoming lessons", href: "/dashboard/schedule" },
+            { label: "Cancellations & Refunds", href: "/dashboard/profile/help/cancellations-refunds" },
+            { label: "Changing cohorts", href: "/dashboard/profile/help/changing-cohorts" },
+          ],
         },
         {
           id: "events",
