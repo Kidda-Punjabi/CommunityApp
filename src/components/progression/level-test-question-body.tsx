@@ -10,7 +10,10 @@ import type {
   LevelTestSentenceTile,
 } from "@/lib/progression/level-tests";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
+import { PunjabiWithRomanisation } from "@/components/learn/punjabi-with-romanisation";
 import { ui } from "@/lib/ui/styles";
+
+const ROMANISED_CLASS = "mt-0.5 block text-sm font-normal text-violet-600";
 
 type LevelTestQuestionBodyProps = {
   question: LevelTestQuestion;
@@ -20,34 +23,18 @@ type LevelTestQuestionBodyProps = {
   onSentenceBuilderAnswer: (isCorrect: boolean, selectedTiles: string[]) => void;
 };
 
-function PunjabiWithRomanised({
-  punjabi,
-  romanised,
-  punjabiClassName = "font-semibold text-zinc-900",
-  romanisedClassName = "font-normal text-violet-600",
-}: {
-  punjabi: string;
-  romanised?: string;
-  punjabiClassName?: string;
-  romanisedClassName?: string;
-}) {
-  return (
-    <span className="flex w-full flex-col items-center text-center gap-0.5">
-      <span className={`text-lg ${punjabiClassName}`}>{punjabi}</span>
-      {romanised ? (
-        <span className={`text-sm ${romanisedClassName}`}>{romanised}</span>
-      ) : null}
-    </span>
-  );
-}
-
 function McqPrompt({ question }: { question: LevelTestMcqQuestion }) {
   return (
     <div className="space-y-2 text-center">
       {question.questionGurmukhi ? (
-        <p className="text-3xl font-semibold text-zinc-900">{question.questionGurmukhi}</p>
-      ) : null}
-      {question.questionRomanised ? (
+        <PunjabiWithRomanisation
+          gurmukhi={question.questionGurmukhi}
+          romanised={question.questionRomanised}
+          className="block"
+          textClassName="block text-3xl font-semibold text-zinc-900"
+          romanisedClassName="mt-1 block text-lg font-normal text-violet-600"
+        />
+      ) : question.questionRomanised ? (
         <p className="text-lg text-violet-600">{question.questionRomanised}</p>
       ) : null}
       <p className="text-lg font-semibold leading-snug text-zinc-900">
@@ -64,9 +51,12 @@ function McqOptionLabel({ option }: { option: LevelTestMcqQuestion["options"][nu
 
   if (hasGurmukhi) {
     return (
-      <PunjabiWithRomanised
-        punjabi={option.textGurmukhi ?? ""}
+      <PunjabiWithRomanisation
+        gurmukhi={option.textGurmukhi ?? ""}
         romanised={option.textRomanised}
+        className="block w-full text-center"
+        textClassName="block text-lg font-semibold text-zinc-900"
+        romanisedClassName={ROMANISED_CLASS}
       />
     );
   }
@@ -176,9 +166,13 @@ function ConjugationQuestionBody({
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
           Pick the correct verb form
         </p>
-        <p className="mt-3 text-xl font-semibold text-zinc-900">
-          {question.punjabiSentenceWithBlank}
-        </p>
+        <PunjabiWithRomanisation
+          gurmukhi={question.punjabiSentenceWithBlank}
+          romanised={question.punjabiSentenceRomanised}
+          className="mt-3 block"
+          textClassName="block text-xl font-semibold text-zinc-900"
+          romanisedClassName="mt-1 block text-base font-normal text-violet-600"
+        />
         <EnglishWithGenderMarkers
           as="p"
           text={question.englishTranslation}
@@ -216,16 +210,17 @@ function ConjugationQuestionBody({
               }
               className={`${className}${locked ? " pointer-events-none" : ""}`}
             >
-              <PunjabiWithRomanised
-                punjabi={option.gurmukhi}
+              <PunjabiWithRomanisation
+                gurmukhi={option.gurmukhi}
                 romanised={option.romanised}
-                punjabiClassName="font-medium"
+                className="block w-full text-center"
+                textClassName="block text-lg font-medium text-zinc-900"
                 romanisedClassName={
                   showResult && isCorrect
-                    ? "font-normal text-green-700"
+                    ? "mt-0.5 block text-sm font-normal text-green-700"
                     : showResult && isSelected
-                      ? "font-normal text-red-700"
-                      : "font-normal text-violet-600"
+                      ? "mt-0.5 block text-sm font-normal text-red-700"
+                      : ROMANISED_CLASS
                 }
               />
             </button>
@@ -307,21 +302,26 @@ function SentenceBuilderQuestionBody({
               disabled={Boolean(feedback) || locked}
               className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-80"
             >
-              <span>{tile.gurmukhi}</span>
-              {tile.romanised ? (
-                <span className="mt-0.5 block text-xs font-normal text-violet-200">
-                  {tile.romanised}
-                </span>
-              ) : null}
+              <PunjabiWithRomanisation
+                gurmukhi={tile.gurmukhi}
+                romanised={tile.romanised}
+                className="block"
+                textClassName="block"
+                romanisedClassName="mt-0.5 block text-xs font-normal text-violet-200"
+              />
             </button>
           ))}
         </div>
       </div>
 
       {feedback === "wrong" ? (
-        <p className="text-center text-sm font-medium text-zinc-900">
-          {question.correctTiles.join(" ")}
-        </p>
+        <PunjabiWithRomanisation
+          gurmukhi={question.correctTiles.join(" ")}
+          romanised={question.correctRomanised}
+          className="block text-center"
+          textClassName="block text-sm font-medium text-zinc-900"
+          romanisedClassName="mt-0.5 block text-sm font-normal text-violet-600"
+        />
       ) : null}
 
       <div className="flex flex-wrap gap-2">
@@ -333,12 +333,13 @@ function SentenceBuilderQuestionBody({
             disabled={Boolean(feedback) || locked}
             className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300 disabled:opacity-70"
           >
-            <span>{tile.gurmukhi}</span>
-            {tile.romanised ? (
-              <span className="mt-0.5 block text-xs font-normal text-violet-600">
-                {tile.romanised}
-              </span>
-            ) : null}
+            <PunjabiWithRomanisation
+              gurmukhi={tile.gurmukhi}
+              romanised={tile.romanised}
+              className="block"
+              textClassName="block"
+              romanisedClassName="mt-0.5 block text-xs font-normal text-violet-600"
+            />
           </button>
         ))}
       </div>

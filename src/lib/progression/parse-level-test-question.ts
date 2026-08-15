@@ -20,6 +20,17 @@ function optionalString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function firstString(
+  record: Record<string, unknown>,
+  ...keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = optionalString(record[key]);
+    if (value) return value;
+  }
+  return undefined;
+}
+
 function parseMcqContent(
   row: Record<string, unknown>,
   content: Record<string, unknown>
@@ -34,9 +45,9 @@ function parseMcqContent(
     const option = asRecord(entry) ?? {};
     return {
       id: String(index),
-      textGurmukhi: optionalString(option.text_gurmukhi),
-      textRomanised: optionalString(option.text_romanised),
-      textEnglish: optionalString(option.text_english),
+      textGurmukhi: firstString(option, "text_gurmukhi", "gurmukhi"),
+      textRomanised: firstString(option, "text_romanised", "romanised"),
+      textEnglish: firstString(option, "text_english", "english"),
     };
   });
 
@@ -54,8 +65,8 @@ function parseMcqContent(
     id: String(row.id ?? ""),
     from_level: Number(row.from_level ?? 0),
     question_order: Number(row.question_order ?? 0),
-    questionGurmukhi: optionalString(content.question_gurmukhi),
-    questionRomanised: optionalString(content.question_romanised),
+    questionGurmukhi: firstString(content, "question_gurmukhi", "gurmukhi"),
+    questionRomanised: firstString(content, "question_romanised", "romanised"),
     questionEnglish,
     options,
     correctOptionId: String(correctIndex),
@@ -66,10 +77,31 @@ function parseConjugationContent(
   row: Record<string, unknown>,
   content: Record<string, unknown>
 ): LevelTestQuestion | null {
-  const punjabiSentenceWithBlank = optionalString(content.punjabi_sentence_with_blank);
+  const punjabiSentenceWithBlank = firstString(
+    content,
+    "punjabi_sentence_with_blank",
+    "punjabi_sentence"
+  );
+  const punjabiSentenceRomanised = firstString(
+    content,
+    "punjabi_sentence_with_blank_romanised",
+    "punjabi_sentence_romanised"
+  );
   const englishTranslation = optionalString(content.english_translation);
-  const targetGurmukhi = optionalString(content.target_verb_gurmukhi);
-  const targetRomanised = optionalString(content.target_verb_romanised);
+  const targetGurmukhi = firstString(
+    content,
+    "target_verb_gurmukhi",
+    "gurmukhi"
+  );
+  const targetRomanised = firstString(
+    content,
+    "target_verb_romanised",
+    "romanised"
+  );
+  const targetRootRomanised = firstString(
+    content,
+    "target_verb_root_romanised"
+  );
 
   if (!punjabiSentenceWithBlank || !englishTranslation || !targetGurmukhi) {
     return null;
@@ -80,8 +112,8 @@ function parseConjugationContent(
         .map((entry) => asRecord(entry))
         .filter((entry): entry is Record<string, unknown> => entry !== null)
         .map((entry) => ({
-          gurmukhi: optionalString(entry.gurmukhi) ?? "",
-          romanised: optionalString(entry.romanised),
+          gurmukhi: firstString(entry, "gurmukhi", "text_gurmukhi") ?? "",
+          romanised: firstString(entry, "romanised", "text_romanised"),
         }))
         .filter((entry) => entry.gurmukhi.length > 0)
     : [];
@@ -107,6 +139,9 @@ function parseConjugationContent(
     from_level: Number(row.from_level ?? 0),
     question_order: Number(row.question_order ?? 0),
     punjabiSentenceWithBlank,
+    punjabiSentenceRomanised:
+      punjabiSentenceRomanised ??
+      (targetRootRomanised ? `${targetRootRomanised} ___` : undefined),
     englishTranslation,
     options,
     correctOptionId: "correct",
@@ -127,8 +162,8 @@ function parseSentenceBuilderContent(
     .map((entry) => asRecord(entry))
     .filter((entry): entry is Record<string, unknown> => entry !== null)
     .map((entry) => ({
-      gurmukhi: optionalString(entry.gurmukhi) ?? "",
-      romanised: optionalString(entry.romanised) ?? "",
+      gurmukhi: firstString(entry, "gurmukhi", "text_gurmukhi") ?? "",
+      romanised: firstString(entry, "romanised", "text_romanised") ?? "",
     }))
     .filter((entry) => entry.gurmukhi.length > 0);
 
@@ -148,6 +183,10 @@ function parseSentenceBuilderContent(
     question_order: Number(row.question_order ?? 0),
     englishPrompt,
     correctTiles,
+    correctRomanised: orderedTiles
+      .map((tile) => tile.romanised)
+      .filter(Boolean)
+      .join(" "),
     tiles,
   };
 }

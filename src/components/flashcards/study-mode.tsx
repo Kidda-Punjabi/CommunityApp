@@ -1,6 +1,7 @@
 "use client";
 
 import { emojiForIcon } from "@/components/games/PictureMatch/emojiMap";
+import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { LessonFeedbackPanel } from "@/components/feedback/lesson-feedback-panel";
@@ -12,7 +13,7 @@ import { DeckProgressBar } from "@/components/deck-progress-bar";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { createClient } from "@/lib/supabase/client";
-import type { FlashcardDeckContext } from "@/lib/flashcards/types";
+import type { FlashcardDeckCard, FlashcardDeckContext } from "@/lib/flashcards/types";
 import { deckPracticeHref, shuffleArray } from "@/lib/flashcards/utils";
 import {
   computeDeckConfidenceStats,
@@ -33,6 +34,20 @@ type FlashcardStudyModeProps = {
 };
 
 type SessionPhase = "studying" | "summary";
+
+const TRAILING_ROMANISATION = /^(.*?)\s*\(([^)]+)\)\s*$/u;
+const GURMUKHI = /[\u0A00-\u0A7F]/;
+
+function studyCardLine(card: FlashcardDeckCard, text: string) {
+  const romanised = card.romanised?.trim() || null;
+  if (romanised && text === card.back_text) {
+    const match = text.trim().match(TRAILING_ROMANISATION);
+    if (match && GURMUKHI.test(match[1])) {
+      return { text: match[1].trim(), romanised };
+    }
+  }
+  return { text, romanised };
+}
 
 export function FlashcardStudyMode({
   deck,
@@ -103,6 +118,9 @@ export function FlashcardStudyMode({
       ? card.front_text
       : card.back_text
     : "";
+  const shownText =
+    kidsMode && !flipped ? "" : flipped ? answerText : kidsMode ? "?" : promptText;
+  const shownLine = card && shownText ? studyCardLine(card, shownText) : null;
 
   useEffect(() => {
     const supabase = createClient();
@@ -341,9 +359,17 @@ export function FlashcardStudyMode({
                 {emojiForIcon(card.icon_name)}
               </p>
             )}
-            <p className={`font-semibold text-zinc-900 ${kidsMode ? "mt-4 text-center text-2xl" : "mt-4 text-xl"}`}>
-              {kidsMode && !flipped ? "" : flipped ? answerText : kidsMode ? "?" : promptText}
-            </p>
+            {shownLine ? (
+              <FlashcardBilingualLine
+                text={shownLine.text}
+                romanised={shownLine.romanised}
+                className={`text-zinc-900 ${kidsMode ? "mt-4 text-center" : "mt-4"}`}
+                gurmukhiClassName={`font-semibold text-zinc-900 ${kidsMode ? "text-2xl" : "text-xl"}`}
+                romanisedClassName={`mt-2 block font-normal text-violet-600 ${
+                  kidsMode ? "text-center text-base" : "text-sm"
+                }`}
+              />
+            ) : null}
             <p className={`text-violet-600 ${kidsMode ? "mt-8 text-center text-base font-bold" : "mt-6 text-sm"}`}>
               {flipped
                 ? kidsMode

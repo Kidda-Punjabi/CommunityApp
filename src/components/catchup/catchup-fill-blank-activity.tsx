@@ -5,6 +5,7 @@ import { awardCatchupActivityPointsAction } from "@/app/catchup/catchup-actions"
 import { passedTypedAnswer, scoreTypedAnswer } from "@/lib/catchup/check-typed-answer";
 import type { FillBlankQuestion } from "@/lib/catchup/load-segment-questions";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
+import { PunjabiWithRomanisation } from "@/components/learn/punjabi-with-romanisation";
 import { ui } from "@/lib/ui/styles";
 
 type QuestionResult = {
@@ -86,12 +87,28 @@ export function CatchupFillBlankActivity({
                   passed ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"
                 }`}
               >
-                <p className="font-medium text-zinc-900">
-                  {question.promptEnglish ?? question.promptRomanised ?? question.promptGurmukhi}
-                </p>
+                <PunjabiWithRomanisation
+                  gurmukhi={question.promptGurmukhi}
+                  romanised={question.promptRomanised}
+                  className="block"
+                  textClassName="block font-medium text-zinc-900"
+                  romanisedClassName="mt-1 block text-sm font-normal text-violet-600"
+                />
+                {question.promptEnglish ? (
+                  <p className="mt-1 text-xs text-zinc-500">{question.promptEnglish}</p>
+                ) : null}
                 <p className="mt-1 text-zinc-600">
                   Your answer: {answers[question.questionNumber] || "—"}
-                  {passed ? " ✓" : ` (expected: ${question.blankAnswerRomanised})`}
+                  {passed
+                    ? " ✓"
+                    : ` (expected: ${
+                        [
+                          question.blankAnswerGurmukhi,
+                          question.blankAnswerRomanised,
+                        ]
+                          .filter(Boolean)
+                          .join(" / ") || "—"
+                      })`}
                 </p>
               </li>
             );
@@ -113,12 +130,13 @@ export function CatchupFillBlankActivity({
       <ol className="space-y-4">
         {questions.map((question) => (
           <li key={question.id} className="rounded-2xl border border-zinc-200 bg-white px-4 py-3">
-            <p className="text-sm font-medium text-zinc-900">
-              {question.questionNumber}. {question.promptGurmukhi}
-            </p>
-            {question.promptRomanised ? (
-              <p className="mt-1 text-sm text-zinc-500">{question.promptRomanised}</p>
-            ) : null}
+            <PunjabiWithRomanisation
+              gurmukhi={`${question.questionNumber}. ${question.promptGurmukhi}`}
+              romanised={question.promptRomanised}
+              className="block"
+              textClassName="block text-sm font-medium text-zinc-900"
+              romanisedClassName="mt-1 block text-sm font-normal text-violet-600"
+            />
             {question.promptEnglish ? (
               <p className="mt-1 text-xs text-zinc-400">{question.promptEnglish}</p>
             ) : null}

@@ -38,6 +38,7 @@ export type LevelTestConjugationQuestion = {
   from_level: number;
   question_order: number;
   punjabiSentenceWithBlank: string;
+  punjabiSentenceRomanised?: string;
   englishTranslation: string;
   options: LevelTestConjugationOption[];
   correctOptionId: string;
@@ -56,6 +57,7 @@ export type LevelTestSentenceBuilderQuestion = {
   question_order: number;
   englishPrompt: string;
   correctTiles: string[];
+  correctRomanised?: string;
   tiles: LevelTestSentenceTile[];
 };
 
