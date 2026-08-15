@@ -47,13 +47,24 @@ export async function loadCohortAttendanceRoster(
   cohortId: string,
   lessonId: string
 ): Promise<CohortAttendanceRosterStudent[]> {
-  const [{ data: activeMembers }, { data: attendanceRows, error: attendanceError }] =
-    await Promise.all([
+  // Assigned tutors can always read their course_enrollments (tutor_id = auth.uid()).
+  // cohort_members SELECT often goes through is_tutor()/current_app_role(), which can
+  // be false when staff roles live only in profile_roles — so enrollments are the
+  // reliable roster source; members supplement left_at when visible.
+  const [
+    { data: memberRows },
+    { data: enrollmentRows, error: enrollmentError },
+    { data: attendanceRows, error: attendanceError },
+  ] = await Promise.all([
     supabase
       .from("cohort_members")
+      .select("user_id, left_at")
+      .eq("cohort_id", cohortId),
+    supabase
+      .from("course_enrollments")
       .select("user_id")
       .eq("cohort_id", cohortId)
-      .is("left_at", null),
+      .eq("delivery_mode", "group"),
     supabase
       .from("cohort_lesson_attendance")
       .select("student_id, attended, marked_at")
@@ -61,12 +72,30 @@ export async function loadCohortAttendanceRoster(
       .eq("lesson_id", lessonId),
   ]);
 
+  if (enrollmentError) throw enrollmentError;
+
   if (attendanceError) {
     if (isMissingAttendanceSchema(attendanceError.message)) return [];
     throw attendanceError;
   }
 
-  const activeIds = new Set((activeMembers ?? []).map((row) => row.user_id as string));
+  const activeIds = new Set<string>();
+  for (const row of enrollmentRows ?? []) {
+    activeIds.add(row.user_id as string);
+  }
+
+  const membersVisible = (memberRows ?? []).length > 0;
+  if (membersVisible) {
+    for (const row of memberRows ?? []) {
+      const userId = row.user_id as string;
+      if (row.left_at == null) {
+        activeIds.add(userId);
+      } else {
+        activeIds.delete(userId);
+      }
+    }
+  }
+
   const attendanceByStudent = new Map(
     (attendanceRows ?? []).map((row) => [
       row.student_id as string,
