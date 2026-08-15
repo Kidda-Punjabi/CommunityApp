@@ -1,21 +1,49 @@
 "use client";
 
 import { BackLink } from "@/components/navigation/back-link";
+import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { useMemo, useState } from "react";
 import { SessionProgressBar } from "@/components/session-progress-bar";
-import type { FlashcardDeckContext } from "@/lib/flashcards/types";
+import type { FlashcardDeckCard, FlashcardDeckContext } from "@/lib/flashcards/types";
 import { deckPracticeHref, pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
 
 type FlashcardTestModeProps = {
   deck: FlashcardDeckContext;
 };
 
+type TestLine = {
+  value: string;
+  text: string;
+  romanised: string | null;
+};
+
 type Question = {
   cardId: string;
-  prompt: string;
+  prompt: Omit<TestLine, "value">;
   correctAnswer: string;
-  options: string[];
+  options: TestLine[];
 };
+
+const TRAILING_ROMANISATION = /^(.*?)\s*\(([^)]+)\)\s*$/u;
+const GURMUKHI = /[\u0A00-\u0A7F]/;
+
+function testLine(
+  text: string,
+  romanised: string | null
+): { text: string; romanised: string | null } {
+  const latin = romanised?.trim() || null;
+  if (latin) {
+    const match = text.trim().match(TRAILING_ROMANISATION);
+    if (match && GURMUKHI.test(match[1])) {
+      return { text: match[1].trim(), romanised: latin };
+    }
+  }
+  return { text, romanised: latin };
+}
+
+function romanisedForBack(cards: FlashcardDeckCard[], backText: string): string | null {
+  return cards.find((card) => card.back_text === backText)?.romanised?.trim() || null;
+}
 
 function buildQuestions(deck: FlashcardDeckContext): Question[] {
   const backs = deck.cards.map((card) => card.back_text);
@@ -23,11 +51,19 @@ function buildQuestions(deck: FlashcardDeckContext): Question[] {
   return shuffleArray(deck.cards).map((card) => {
     const wrongCount = Math.min(3, Math.max(backs.length - 1, 0));
     const wrongAnswers = pickRandomItems(backs, wrongCount, card.back_text);
-    const options = shuffleArray([card.back_text, ...wrongAnswers]);
+    const options = shuffleArray([card.back_text, ...wrongAnswers]).map((text) => {
+      const line = testLine(
+        text,
+        text === card.back_text
+          ? card.romanised
+          : romanisedForBack(deck.cards, text)
+      );
+      return { value: text, ...line };
+    });
 
     return {
       cardId: card.id,
-      prompt: card.front_text,
+      prompt: testLine(card.front_text, card.romanised),
       correctAnswer: card.back_text,
       options,
     };
@@ -48,10 +84,10 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
 
   const question = questions[index];
 
-  function handleSelect(option: string) {
+  function handleSelect(optionText: string) {
     if (selected) return;
-    setSelected(option);
-    if (option === question.correctAnswer) {
+    setSelected(optionText);
+    if (optionText === question.correctAnswer) {
       setScore((prev) => prev + 1);
     }
   }
@@ -99,11 +135,16 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
       </div>
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <p className="text-lg font-medium text-zinc-900">{question.prompt}</p>
+        <FlashcardBilingualLine
+          text={question.prompt.text}
+          romanised={question.prompt.romanised}
+          gurmukhiClassName="text-lg font-medium text-zinc-900"
+          romanisedClassName="mt-1 block text-sm font-normal text-violet-600"
+        />
         <div className="mt-4 space-y-2">
           {question.options.map((option) => {
-            const isSelected = selected === option;
-            const isCorrect = option === question.correctAnswer;
+            const isSelected = selected === option.value;
+            const isCorrect = option.value === question.correctAnswer;
             const showResult = Boolean(selected);
 
             let className =
@@ -122,12 +163,17 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
 
             return (
               <button
-                key={option}
+                key={option.value}
                 type="button"
-                onClick={() => handleSelect(option)}
+                onClick={() => handleSelect(option.value)}
                 className={className}
               >
-                {option}
+                <FlashcardBilingualLine
+                  text={option.text}
+                  romanised={option.romanised}
+                  gurmukhiClassName="font-medium text-zinc-900"
+                  romanisedClassName="mt-0.5 block text-sm font-normal text-violet-600"
+                />
               </button>
             );
           })}
