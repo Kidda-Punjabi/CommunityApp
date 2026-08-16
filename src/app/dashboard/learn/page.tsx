@@ -1,5 +1,6 @@
 import { LearnCourseRow } from "@/components/learn/learn-course-row";
 import { LearnCourseTiles, type LearnHubTile } from "@/components/learn/learn-course-tiles";
+import { LearnKidsProgressLink } from "@/components/learn/learn-kids-progress-link";
 import { LearnSecondaryTiles } from "@/components/learn/learn-secondary-tiles";
 import { NavLink } from "@/components/ui/nav-link";
 import { fetchLearnContent } from "@/lib/learning/load-learn-content";
@@ -55,7 +56,7 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap, actor, kidsCourses] =
+  const [access, allLessons, completionMap, actor, kidsCourses, kidProfileCount] =
     await Promise.all([
       getCachedCourseAccess(supabase, user),
       lessonsPromise,
@@ -64,6 +65,11 @@ export default async function LearnPage() {
       ),
       resolveCourseActor(supabase, user.id),
       fetchAccessibleKidsCourses(supabase, user.id),
+      supabase
+        .from("kid_profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("parent_user_id", user.id)
+        .then(({ count }) => count ?? 0),
     ]);
 
   const foundational = getLearnTrack("foundational")!;
@@ -225,7 +231,8 @@ export default async function LearnPage() {
         />
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 space-y-3">
+        {kidProfileCount > 0 ? <LearnKidsProgressLink /> : null}
         <LearnSecondaryTiles
           communityHref={communityHref}
           communityStatus={communityStatus}
