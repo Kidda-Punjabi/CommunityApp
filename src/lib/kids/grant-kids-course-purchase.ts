@@ -126,6 +126,26 @@ async function grantKidCourseAccess(
     { onConflict: "kid_profile_id,course_id" }
   );
   if (accessError) return { error: accessError.message };
+
+  const { data: course } = await supabase
+    .from("courses")
+    .select("required_tier")
+    .eq("id", courseId)
+    .maybeSingle();
+  const courseTier = course?.required_tier?.trim();
+  if (courseTier) {
+    const { error: tierError } = await supabase.from("profile_course_access").upsert(
+      {
+        user_id: null,
+        kid_profile_id: kidProfileId,
+        course_tier: courseTier,
+        granted_at: new Date().toISOString(),
+      },
+      { onConflict: "kid_profile_id,course_tier" }
+    );
+    if (tierError) return { error: tierError.message };
+  }
+
   return {};
 }
 

@@ -23,9 +23,11 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .single();
 
-  const ok = await verifyKidsPin(pin ?? "", profile?.kids_pin_hash ?? null);
-  if (!ok) {
-    return NextResponse.json({ error: "Incorrect PIN. Try again." }, { status: 403 });
+  if (profile?.kids_pin_hash) {
+    const ok = await verifyKidsPin(pin ?? "", profile.kids_pin_hash);
+    if (!ok) {
+      return NextResponse.json({ error: "Incorrect PIN. Try again." }, { status: 403 });
+    }
   }
 
   const cookieStore = await cookies();

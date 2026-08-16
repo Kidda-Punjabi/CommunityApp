@@ -82,7 +82,14 @@ export async function DELETE() {
   }
 
   const cookieStore = await cookies();
-  cookieStore.delete(KID_PROFILE_COOKIE);
+  const activeKid = cookieStore.get(KID_PROFILE_COOKIE)?.value?.trim();
+  if (activeKid) {
+    return NextResponse.json(
+      { error: "Enter your PIN to return to the parent account." },
+      { status: 403 }
+    );
+  }
+
   await syncKidSessionContext(user.id, null);
 
   return NextResponse.json({ ok: true, redirectTo: "/dashboard/home" });

@@ -32,6 +32,7 @@ export function ProfileSwitcher({
   const [pendingKidId, setPendingKidId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sessionUnlocked, setSessionUnlocked] = useState(pinUnlocked);
+  const [parentPinOpen, setParentPinOpen] = useState(false);
   const unlocked = sessionUnlocked || !hasPin;
 
   async function switchToKid(kidProfileId: string) {
@@ -56,12 +57,25 @@ export function ProfileSwitcher({
       return;
     }
     setError(null);
-    const response = await fetch("/api/kids/switch", { method: "DELETE" });
+    if (hasPin) {
+      setParentPinOpen(true);
+      return;
+    }
+    await switchToParent();
+  }
+
+  async function switchToParent(pin?: string) {
+    const response = await fetch("/api/kids/exit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: pin ?? "" }),
+    });
     const data = (await response.json()) as { error?: string; redirectTo?: string };
     if (!response.ok) {
       setError(data.error ?? "Could not switch to parent account.");
       return;
     }
+    setParentPinOpen(false);
     router.push(data.redirectTo ?? "/dashboard/home");
     router.refresh();
   }
@@ -173,6 +187,20 @@ export function ProfileSwitcher({
           }}
           onClose={() => setPendingKidId(null)}
         />
+      )}
+
+      {parentPinOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6">
+            <PinPad
+              title="Enter your PIN"
+              subtitle="To use your parent account"
+              onComplete={(pin) => void switchToParent(pin)}
+              onCancel={() => setParentPinOpen(false)}
+              error={error}
+            />
+          </div>
+        </div>
       )}
 
       {showManage ? (

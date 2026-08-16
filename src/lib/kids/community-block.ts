@@ -1,6 +1,3 @@
-export const KID_PROFILE_COOKIE = "kidda_kid_profile_id";
-export const KIDS_PIN_UNLOCKED_COOKIE = "kidda_kids_pin_unlocked";
-
 /** Paths blocked while a kid profile is the active session actor. */
 export const KID_BLOCKED_COMMUNITY_PATHS = [
   "/dashboard/community",
