@@ -6,6 +6,7 @@ export type KidProfile = {
   name: string;
   avatar_icon: KidAvatarIcon;
   age_tier: KidAgeTier;
+  total_xp?: number;
   created_at: string;
   updated_at: string;
 };

@@ -36,6 +36,13 @@ import {
 } from "@/lib/progress/activity-date";
 import { getUserActivityDate } from "@/lib/progress/server-activity-date";
 import { fetchLessonContentUnlockMap } from "@/lib/tutoring/lesson-content-access";
+import {
+  actorFilter,
+  resolveCourseActor,
+} from "@/lib/kids/course-actor";
+import { loadViewerWeeklyPoints } from "@/lib/leaderboard/load-viewer-weekly-points";
+import { getCurrentWeekStart } from "@/lib/leaderboard/week";
+import { isKidAvatarIcon, type KidAvatarIcon } from "@/lib/kids/constants";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type HomePrimaryCta = {
@@ -49,6 +56,9 @@ export type HomeMotivationData = {
 
 export type HomeDashboardData = {
   displayName: string | null;
+  kidAvatarIcon: KidAvatarIcon | null;
+  profileHref: string;
+  headerPoints: number;
   isFreeTier: boolean;
   primaryCta: HomePrimaryCta;
   starterPackHref: string;
@@ -299,17 +309,24 @@ export async function getHomeDashboardData(
   user: User
 ): Promise<HomeDashboardData> {
   const userId = user.id;
-  const access = await getCourseAccessContext(supabase, user);
+  const [access, actor, activityDate] = await Promise.all([
+    getCourseAccessContext(supabase, user),
+    resolveCourseActor(supabase, userId),
+    getUserActivityDate(),
+  ]);
+  const progressFilter = actorFilter(actor);
 
-  const activityDate = await getUserActivityDate();
-
-  const { data: streakRow } = await supabase
+  let streakQuery = supabase
     .from("user_streaks")
     .select(
       "current_streak, longest_streak, last_activity_date, redemption_available, streak_broken_date, streak_before_break"
     )
-    .eq("user_id", userId)
-    .maybeSingle();
+    .eq("user_id", userId);
+  streakQuery =
+    actor.kind === "kid"
+      ? streakQuery.eq("kid_profile_id", actor.kidProfileId)
+      : streakQuery.is("kid_profile_id", null);
+  const { data: streakRow } = await streakQuery.maybeSingle();
 
   const rowSnapshot = streakRow ? mapStreakRowSnapshot(streakRow) : null;
   const presentation = computeStreakPresentation(rowSnapshot, activityDate);
@@ -317,6 +334,7 @@ export async function getHomeDashboardData(
 
   const [
     profile,
+    { data: activeKid },
     { data: lessonProgress },
     { data: quizProgress },
     { data: flashcardProgress },
@@ -326,20 +344,29 @@ export async function getHomeDashboardData(
     { data: quizQuestions },
     { data: events },
     membersStudiedToday,
+    parentWeeklyPoints,
   ] = await Promise.all([
     loadEditableProfile(supabase, userId),
+    actor.kind === "kid"
+      ? supabase
+          .from("kid_profiles")
+          .select("name, avatar_icon, total_xp")
+          .eq("id", actor.kidProfileId)
+          .eq("parent_user_id", userId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     supabase
       .from("lesson_progress")
       .select(
         "lesson_id, completed, last_position, seconds_listened, updated_at, lessons(id, title, lesson_number, is_free)"
       )
-      .eq("user_id", userId),
+      .eq(progressFilter.column, progressFilter.value),
     supabase
       .from("quiz_progress")
       .select(
         "quiz_id, completed, score, last_attempted_at, quizzes(id, title, level_number, course_id)"
       )
-      .eq("user_id", userId),
+      .eq(progressFilter.column, progressFilter.value),
     supabase
       .from("flashcard_progress")
       .select(
@@ -355,6 +382,9 @@ export async function getHomeDashboardData(
     supabase.from("quiz_questions").select("quiz_id"),
     supabase.from("events").select("*").order("starts_at", { ascending: true }),
     loadMembersStudiedToday(supabase, activityDate),
+    actor.kind === "kid"
+      ? Promise.resolve(0)
+      : loadViewerWeeklyPoints(supabase, userId, getCurrentWeekStart(activityDate)),
   ]);
 
   const lessonRows = (lessonProgress ?? []).map((row) => ({
@@ -378,7 +408,20 @@ export async function getHomeDashboardData(
     };
   }) as FlashcardProgressJoined[];
 
-  const displayName = getDisplayName(profile);
+  const kidAvatarIcon =
+    actor.kind === "kid" &&
+    typeof activeKid?.avatar_icon === "string" &&
+    isKidAvatarIcon(activeKid.avatar_icon)
+      ? activeKid.avatar_icon
+      : null;
+  const displayName =
+    actor.kind === "kid"
+      ? (activeKid?.name?.trim() || null)
+      : getDisplayName(profile);
+  const headerPoints =
+    actor.kind === "kid" ? Number(activeKid?.total_xp ?? 0) : parentWeeklyPoints;
+  const profileHref =
+    actor.kind === "kid" ? "/dashboard/profile/kids" : "/dashboard/profile";
   const isFreeTier = access.isFreeOnly;
   const studiedToday = presentation.day_gap === 0;
 
@@ -499,6 +542,9 @@ export async function getHomeDashboardData(
 
   return {
     displayName,
+    kidAvatarIcon,
+    profileHref,
+    headerPoints,
     isFreeTier,
     primaryCta,
     starterPackHref,

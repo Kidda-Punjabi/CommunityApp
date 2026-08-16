@@ -18,7 +18,7 @@ export default async function HomePage() {
   if (!session) redirect("/login");
 
   const supabase = await createClient();
-  const [{ dashboard, profile, onboarding, unreadNotificationCount, weeklyPoints }, pathItems] =
+  const [{ dashboard, profile, onboarding, unreadNotificationCount }, pathItems] =
     await Promise.all([
       getHomeTabData(session.user.id),
       loadEverydayPunjabiPathItems(supabase, session.user.id),
@@ -43,9 +43,11 @@ export default async function HomePage() {
             preferred_name: profile?.preferred_name ?? null,
             avatar_url: profile?.avatar_url ?? null,
           }}
-          learnerLevel={onboarding.learnerLevel}
+          kidAvatarIcon={dashboard.kidAvatarIcon}
+          learnerLevel={dashboard.kidAvatarIcon ? null : onboarding.learnerLevel}
           unreadNotificationCount={unreadNotificationCount}
-          weeklyPoints={weeklyPoints}
+          weeklyPoints={dashboard.headerPoints}
+          profileHref={dashboard.profileHref}
         />
 
         <HomeStreakBanner />

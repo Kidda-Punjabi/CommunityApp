@@ -1069,6 +1069,7 @@ async function fetchStreakDebugRow(
     .from("user_streaks")
     .select(STREAK_DEBUG_SELECT)
     .eq("user_id", userId)
+    .is("kid_profile_id", null)
     .maybeSingle();
 
   if (!extended.error) {
@@ -1083,6 +1084,7 @@ async function fetchStreakDebugRow(
     .from("user_streaks")
     .select(STREAK_DEBUG_SELECT_BASE)
     .eq("user_id", userId)
+    .is("kid_profile_id", null)
     .maybeSingle();
 
   if (base.error) return { data: null, error: withDbHint(base.error.message) };
@@ -1193,6 +1195,7 @@ export async function debugSetUserStreakDate(input: {
         .from("user_streaks")
         .update(fullUpdate)
         .eq("user_id", lookup.userId)
+        .is("kid_profile_id", null)
         .select(STREAK_DEBUG_SELECT)
         .single();
 
@@ -1203,6 +1206,7 @@ export async function debugSetUserStreakDate(input: {
           .from("user_streaks")
           .update(baseUpdate)
           .eq("user_id", lookup.userId)
+          .is("kid_profile_id", null)
           .select(STREAK_DEBUG_SELECT_BASE)
           .single();
         if (base.error) saveError = withDbHint(base.error.message);

@@ -6,6 +6,7 @@ import {
   presentationToHomeStats,
 } from "@/lib/progress/activity-date";
 import { evaluateUserStreak } from "@/lib/progress/streak";
+import { resolveCourseActor } from "@/lib/kids/course-actor";
 import { createClient } from "@/lib/supabase/server";
 
 const STREAK_SELECT =
@@ -13,11 +14,13 @@ const STREAK_SELECT =
 
 async function fetchStreakRow(userId: string) {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("user_streaks")
-    .select(STREAK_SELECT)
-    .eq("user_id", userId)
-    .maybeSingle();
+  const actor = await resolveCourseActor(supabase, userId);
+  let query = supabase.from("user_streaks").select(STREAK_SELECT).eq("user_id", userId);
+  query =
+    actor.kind === "kid"
+      ? query.eq("kid_profile_id", actor.kidProfileId)
+      : query.is("kid_profile_id", null);
+  const { data, error } = await query.maybeSingle();
 
   if (error) throw error;
   return data;

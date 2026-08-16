@@ -1,7 +1,6 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getHomeDashboardData } from "@/lib/dashboard/home-data";
-import { loadViewerWeeklyPoints } from "@/lib/leaderboard/load-viewer-weekly-points";
 import { getCurrentWeekStart } from "@/lib/leaderboard/week";
 import { loadUnreadNotificationCount } from "@/lib/notifications/load-notifications";
 import { loadOnboardingProfile } from "@/lib/progression/load-user-progression";
@@ -30,13 +29,12 @@ export const getHomeTabData = cache(async (userId: string) => {
   const activityDate = await getUserActivityDate();
   const currentWeekStart = getCurrentWeekStart(activityDate);
 
-  const [dashboard, profile, onboarding, unreadNotificationCount, weeklyPoints] =
+  const [dashboard, profile, onboarding, unreadNotificationCount] =
     await Promise.all([
       getHomeDashboardData(supabase, user),
       loadEditableProfile(supabase, userId),
       loadOnboardingProfile(supabase, userId),
       loadUnreadNotificationCount(supabase, userId),
-      loadViewerWeeklyPoints(supabase, userId, currentWeekStart),
     ]);
 
   return {
@@ -44,7 +42,6 @@ export const getHomeTabData = cache(async (userId: string) => {
     profile,
     onboarding,
     unreadNotificationCount,
-    weeklyPoints,
     activityDate,
     currentWeekStart,
   };

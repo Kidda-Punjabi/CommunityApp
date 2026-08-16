@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveCourseActor } from "@/lib/kids/course-actor";
 import {
   learningProductForLesson,
   type LearningProduct,
 } from "@/lib/learning/learning-product";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
+import { fetchLessonCompletionMap } from "@/lib/progress/lesson-completion";
 import { notifyActivityRewards, notifyXpEarned } from "@/lib/points/notify-points-earned";
 import { getCurrentWeekStart } from "./week";
 
@@ -57,6 +59,14 @@ export async function awardWeeklyPoints(
   activityDate?: string
 ): Promise<number> {
   if (points <= 0) return 0;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const actor = await resolveCourseActor(supabase, user.id);
+    if (actor.kind === "kid") return 0;
+  }
 
   const date = activityDate ?? getLocalActivityDate();
   const { error } = await supabase.rpc("award_weekly_points", {
@@ -129,11 +139,63 @@ async function awardEnglishActivityXp(
   return xp;
 }
 
+async function tryAwardKidLessonCompletionXp(
+  supabase: SupabaseClient,
+  userId: string,
+  kidProfileId: string,
+  lessonId: string
+): Promise<number> {
+  const { data: lesson } = await supabase
+    .from("lessons")
+    .select("id, course_id, lesson_number, pdf_url, audio_url")
+    .eq("id", lessonId)
+    .maybeSingle();
+
+  if (!lesson) return 0;
+
+  const completionMap = await fetchLessonCompletionMap(supabase, userId, [lesson]);
+  if (!completionMap.get(lessonId)?.fullyComplete) return 0;
+
+  const { data, error } = await supabase
+    .from("kid_lesson_xp_awarded")
+    .insert({ kid_profile_id: kidProfileId, lesson_id: lessonId })
+    .select("kid_profile_id")
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "23505") return 0;
+    console.error("Failed to record kid lesson XP:", error.message);
+    return 0;
+  }
+
+  if (!data) return 0;
+
+  const pts = lessonCompletedPoints();
+  const xp = await awardXp(supabase, pts);
+  notifyXpEarned(xp);
+  return xp;
+}
+
 export async function tryAwardLessonCompletionPoints(
   supabase: SupabaseClient,
   lessonId: string,
   activityDate?: string
 ): Promise<number> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const actor = await resolveCourseActor(supabase, user.id);
+  if (actor.kind === "kid") {
+    return tryAwardKidLessonCompletionXp(
+      supabase,
+      user.id,
+      actor.kidProfileId,
+      lessonId
+    );
+  }
+
   const product = await learningProductForLesson(supabase, lessonId);
   if (product === "english") {
     const { data, error } = await supabase.rpc(
