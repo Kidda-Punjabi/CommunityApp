@@ -21,7 +21,7 @@ import { loadPendingCourseResourceTours } from "@/app/dashboard/tours/actions";
 import { AudioManagerProvider } from "@/lib/audio/audio-manager";
 import { loadSoundSettings } from "@/lib/audio/load-sound-settings";
 import { loadKidSession } from "@/lib/kids/session";
-import { usesKidsShell } from "@/lib/kids/constants";
+import { isKidProfilePickerPath, usesKidsShell } from "@/lib/kids/constants";
 import { ui } from "@/lib/ui/styles";
 
 export default async function DashboardLayout({
@@ -49,7 +49,7 @@ export default async function DashboardLayout({
   const kidsShellActive = Boolean(kid && usesKidsShell(kid.age_tier));
   const headerList = await headers();
   const pathname = headerList.get("x-pathname") ?? "";
-  const isPickerScreen = pathname === "/dashboard/profile/kids";
+  const isPickerScreen = isKidProfilePickerPath(pathname);
   const isWhoIsLearningFlow =
     isPickerScreen || pathname.startsWith("/dashboard/profile/kids/");
   const shouldPickWhoIsLearning =

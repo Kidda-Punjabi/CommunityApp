@@ -3,6 +3,12 @@ export const KIDS_PIN_UNLOCKED_COOKIE = "kidda_kids_pin_unlocked";
 /** Session-scoped: set after the post-login picker so we do not re-prompt this tab. */
 export const WHO_IS_LEARNING_COOKIE = "kidda_who_is_learning";
 
+export const KID_PROFILE_PICKER_PATH = "/dashboard/profile/kids";
+
+export function isKidProfilePickerPath(pathname: string): boolean {
+  return pathname === KID_PROFILE_PICKER_PATH || pathname === `${KID_PROFILE_PICKER_PATH}/`;
+}
+
 export const KID_AVATAR_ICONS = [
   "Cat",
   "Dog",
