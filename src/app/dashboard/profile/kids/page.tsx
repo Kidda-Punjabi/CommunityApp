@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ProfileSwitcher } from "@/components/kids/profile-switcher";
 import { loadKidSession } from "@/lib/kids/session";
 import { getDisplayName } from "@/lib/profile/display-name";
@@ -31,26 +30,16 @@ export default async function KidsProfileSwitcherPage() {
   const parentName = getDisplayName(profile) ?? user.email?.split("@")[0] ?? "Parent";
 
   return (
-    <div className={ui.page}>
-      {kidActive ? null : (
-        <Link
-          href="/dashboard/profile"
-          className="text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          ← Back to profile
-        </Link>
-      )}
-      <h1 className="mt-4 text-2xl font-bold text-zinc-900">Who is learning?</h1>
-      <p className="mt-2 text-sm text-zinc-600">
-        Pick a profile to continue. You can switch anytime from the avatar in the corner.
-      </p>
-      <div className="mt-6">
+    <div className={`flex min-h-dvh flex-col items-center justify-center px-6 py-12 ${ui.pageBg}`}>
+      <h1 className="font-heading text-3xl font-bold tracking-tight text-zinc-900">
+        Who&apos;s learning?
+      </h1>
+      <div className="mt-12">
         <ProfileSwitcher
           kidProfiles={kidProfiles ?? []}
           hasPin={Boolean(profile?.kids_pin_hash)}
           parentName={parentName}
           kidActive={kidActive}
-          showManage={!kidActive}
         />
       </div>
     </div>

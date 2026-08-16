@@ -40,6 +40,11 @@ export const ui = {
   btnIcon:
     "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-[0_2px_10px_-2px_rgba(124,58,237,0.4)] transition-colors group-hover:bg-violet-500",
 
+  /** Parent profile avatar — same violet as primary buttons / brand CTAs. */
+  avatarParent: "bg-violet-600 text-white",
+  /** Kid profile avatar — same sky as the kids shell (chip, kids home). */
+  avatarKid: "bg-sky-400 text-white",
+
   input:
     "block w-full rounded-full border border-zinc-200 bg-white px-5 py-3 text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20",
 

@@ -59,10 +59,10 @@ export default async function ManageKidsPage() {
   return (
     <div className={ui.page}>
       <Link
-        href="/dashboard/profile/kids"
+        href="/dashboard/profile"
         className="text-sm font-medium text-violet-600 hover:text-violet-500"
       >
-        ← Profile switcher
+        ← Back to profile
       </Link>
       <h1 className="mt-4 text-2xl font-bold text-zinc-900">Manage kid profiles</h1>
       <ParentKidsDashboard

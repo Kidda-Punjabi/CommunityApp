@@ -49,19 +49,23 @@ export default async function DashboardLayout({
   const kidsShellActive = Boolean(kid && usesKidsShell(kid.age_tier));
   const headerList = await headers();
   const pathname = headerList.get("x-pathname") ?? "";
-  const isWhoIsLearningPicker =
-    pathname === "/dashboard/profile/kids" ||
-    pathname.startsWith("/dashboard/profile/kids/");
+  const isPickerScreen = pathname === "/dashboard/profile/kids";
+  const isWhoIsLearningFlow =
+    isPickerScreen || pathname.startsWith("/dashboard/profile/kids/");
   const shouldPickWhoIsLearning =
     onboarding.hasSeenOnboarding &&
     kidSession.hasKidProfiles &&
     kidSession.hasPin &&
     !kidSession.pickedWhoThisSession &&
-    !isWhoIsLearningPicker &&
+    !isWhoIsLearningFlow &&
     !access.viewAs?.active;
 
   if (shouldPickWhoIsLearning) {
     redirect("/dashboard/profile/kids");
+  }
+
+  if (isPickerScreen) {
+    return <div className={`flex min-h-dvh flex-col ${ui.pageBg}`}>{children}</div>;
   }
 
   const parentInitial = (user.email?.trim().charAt(0) ?? "P").toUpperCase();

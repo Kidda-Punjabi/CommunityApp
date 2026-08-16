@@ -148,6 +148,10 @@ export function BottomNav() {
     return null;
   }
 
+  if (pathname === "/dashboard/profile/kids") {
+    return null;
+  }
+
   if (pathname.startsWith("/dashboard/kids")) {
     return null;
   }

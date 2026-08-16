@@ -11,13 +11,14 @@ import {
   type KidAvatarIcon,
 } from "@/lib/kids/constants";
 import type { KidProfile } from "@/lib/kids/types";
+import { pressableClass } from "@/lib/ui/pressable";
+import { cn, ui } from "@/lib/ui/styles";
 
 type ProfileSwitcherProps = {
   kidProfiles: KidProfile[];
   hasPin: boolean;
   parentName: string;
   kidActive?: boolean;
-  showManage?: boolean;
 };
 
 export function ProfileSwitcher({
@@ -25,7 +26,6 @@ export function ProfileSwitcher({
   hasPin,
   parentName,
   kidActive = false,
-  showManage = true,
 }: ProfileSwitcherProps) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
@@ -91,23 +91,22 @@ export function ProfileSwitcher({
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-zinc-600">
-        Choose who is learning. Switching to a kid does not need a PIN. Returning to the parent
-        account does.
-      </p>
-
-      <div className="grid gap-3 sm:grid-cols-2">
+    <div className="flex flex-col items-center">
+      <div className="flex flex-wrap items-start justify-center gap-x-8 gap-y-8">
         <button
           type="button"
           onClick={handleParentCard}
-          className="flex flex-col items-center rounded-3xl border-2 border-violet-200 bg-violet-50 p-6 text-center hover:border-violet-400"
+          className={cn(pressableClass, "group flex w-28 flex-col items-center")}
         >
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-violet-600 text-2xl font-bold text-white">
+          <span
+            className={cn(
+              "flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold ring-2 ring-transparent transition group-hover:ring-violet-600 group-hover:ring-offset-2 group-hover:ring-offset-zinc-50",
+              ui.avatarParent
+            )}
+          >
             {parentName.charAt(0).toUpperCase()}
           </span>
-          <span className="mt-3 font-semibold text-zinc-900">{parentName}</span>
-          <span className="mt-1 text-xs text-zinc-500">Parent account</span>
+          <span className="mt-3 text-center text-sm font-semibold text-zinc-900">{parentName}</span>
         </button>
 
         {kidProfiles.map((kid) => (
@@ -115,29 +114,36 @@ export function ProfileSwitcher({
             key={kid.id}
             type="button"
             onClick={() => switchToKid(kid.id)}
-            className="flex flex-col items-center rounded-3xl border-2 border-sky-200 bg-sky-50 p-6 text-center hover:border-sky-400"
+            className={cn(pressableClass, "group flex w-28 flex-col items-center")}
           >
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-400 text-white">
-              <KidLucideIcon name={kid.avatar_icon} className="h-9 w-9" />
+            <span
+              className={cn(
+                "flex h-24 w-24 items-center justify-center rounded-full ring-2 ring-transparent transition group-hover:ring-sky-400 group-hover:ring-offset-2 group-hover:ring-offset-zinc-50",
+                ui.avatarKid
+              )}
+            >
+              <KidLucideIcon name={kid.avatar_icon} className="h-12 w-12" />
             </span>
-            <span className="mt-3 font-semibold text-zinc-900">{kid.name}</span>
-            <span className="mt-1 text-xs text-zinc-500 capitalize">
-              {kid.age_tier.replace("_", " ")}
-            </span>
+            <span className="mt-3 text-center text-sm font-semibold text-zinc-900">{kid.name}</span>
           </button>
         ))}
 
         <button
           type="button"
           onClick={() => setShowCreate(true)}
-          className="flex min-h-[10rem] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-zinc-300 p-6 text-zinc-500 hover:border-violet-300 hover:text-violet-600"
+          className={cn(
+            pressableClass,
+            "group flex w-24 flex-col items-center text-zinc-400 hover:text-zinc-500"
+          )}
         >
-          <span className="text-3xl">+</span>
-          <span className="mt-2 text-sm font-semibold">Add kid profile</span>
+          <span className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 text-3xl font-light transition group-hover:border-zinc-400">
+            +
+          </span>
+          <span className="mt-3 text-center text-xs font-medium">Add profile</span>
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-8 text-sm text-red-600">{error}</p>}
 
       {showCreate && (
         <CreateKidProfileDialog
@@ -178,19 +184,7 @@ export function ProfileSwitcher({
           </div>
         </div>
       )}
-
-      {showManage ? (
-        <LinkRow href="/dashboard/profile/kids/manage" label="Manage kid profiles & PIN" />
-      ) : null}
     </div>
-  );
-}
-
-function LinkRow({ href, label }: { href: string; label: string }) {
-  return (
-    <a href={href} className="block text-center text-sm font-medium text-violet-600 hover:text-violet-500">
-      {label}
-    </a>
   );
 }
 
