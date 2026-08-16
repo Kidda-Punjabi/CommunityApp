@@ -19,7 +19,8 @@ export type AdminAttentionItem = {
     | "group_cohort_placement_pending"
     | "notion_cohort_writeback"
     | "notion_lead_link"
-    | "cohort_switch_pending";
+    | "cohort_switch_pending"
+    | "unmatched_kids_checkout";
   title: string;
   detail: string;
   href: string;

@@ -34,6 +34,11 @@ type LearnLessonListProps = {
   staffSection?: ReactNode;
   footerSection?: ReactNode;
   contentUnlockedMap?: Map<string, boolean>;
+  /**
+   * When true, lesson content follows `contentUnlockedMap` only (missing = locked).
+   * Needed for kids group courses: private `course_access` must not unlock every lesson.
+   */
+  honorContentUnlockMap?: boolean;
   recordingMap?: Map<string, LessonRecordingView>;
   homeworkMap?: Map<string, HomeworkSubmissionView>;
   /** lesson_id → cohort_lesson_homework.completed */
@@ -63,6 +68,7 @@ export function LearnLessonList({
   staffSection,
   footerSection,
   contentUnlockedMap,
+  honorContentUnlockMap = false,
   recordingMap,
   homeworkMap,
   cohortHomeworkCompletedMap,
@@ -79,6 +85,13 @@ export function LearnLessonList({
 
   function lessonAccess(lesson: LessonWithCourse) {
     const canBrowse = canAccessLessonInContext(access, lesson);
+    if (honorContentUnlockMap) {
+      return {
+        canBrowse,
+        contentUnlocked:
+          canBrowse && (lesson.is_free || unlockedMap.get(lesson.id) === true),
+      };
+    }
     const contentUnlocked = isLessonContentUnlockedForUser(
       access,
       lesson,

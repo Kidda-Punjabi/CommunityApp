@@ -19,6 +19,7 @@ import {
 import { isAdmin } from "@/lib/auth/admin";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { resolveCourseActor } from "@/lib/kids/course-actor";
+import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
@@ -38,13 +39,31 @@ export async function getUserUnlockedCourseIds(
   userId: string
 ): Promise<Set<string>> {
   const actor = await resolveCourseActor(supabase, userId);
-  const query = supabase.from("course_access").select("course_id");
+  const db =
+    actor.kind === "kid" ? (tryCreateServiceRoleClient().client ?? supabase) : supabase;
+  const query = db.from("course_access").select("course_id");
   const { data: rows } =
     actor.kind === "kid"
       ? await query.eq("kid_profile_id", actor.kidProfileId)
       : await query.eq("user_id", userId);
 
-  return new Set((rows ?? []).map((row) => row.course_id));
+  const ids = new Set(
+    (rows ?? [])
+      .map((row) => row.course_id as string | null)
+      .filter((id): id is string => Boolean(id))
+  );
+
+  if (actor.kind === "kid") {
+    const [{ data: enrollments }, { data: packages }] = await Promise.all([
+      db.from("course_enrollments").select("course_id").eq("kid_profile_id", actor.kidProfileId),
+      db.from("student_packages").select("course_id").eq("kid_profile_id", actor.kidProfileId),
+    ]);
+    for (const row of [...(enrollments ?? []), ...(packages ?? [])]) {
+      if (row.course_id) ids.add(row.course_id as string);
+    }
+  }
+
+  return ids;
 }
 
 async function readViewAsState(user: User | null) {

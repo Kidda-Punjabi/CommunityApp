@@ -11,7 +11,7 @@ import {
 import { completeGroupPurchaseFromCheckoutSession } from "@/lib/group-purchase/complete-group-purchase-after-payment";
 import {
   grantKidsCoursePurchaseFromSession,
-  isKidsCourseCheckoutSession,
+  resolveIsKidsCoursePurchase,
 } from "@/lib/kids/grant-kids-course-purchase";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { type PaidCourseTier } from "@/lib/membership/access";
@@ -21,7 +21,10 @@ import type Stripe from "stripe";
 
 export { syncStripePurchasesForUser };
 
-async function resolveUserIdFromSession(session: Stripe.Checkout.Session) {
+async function resolveUserIdFromSession(
+  session: Stripe.Checkout.Session,
+  isKidsPurchase: boolean
+) {
   const fromApp =
     session.metadata?.app_user_id ?? session.metadata?.supabase_user_id ?? null;
   if (fromApp) return fromApp;
@@ -29,7 +32,7 @@ async function resolveUserIdFromSession(session: Stripe.Checkout.Session) {
   // Booking-widget kids sessions put the Notion package page UUID in
   // client_reference_id. Adult widget/in-app checkout still uses it as the
   // app user id when present.
-  if (!isKidsCourseCheckoutSession(session) && session.client_reference_id) {
+  if (!isKidsPurchase && session.client_reference_id) {
     return session.client_reference_id;
   }
 
@@ -82,14 +85,17 @@ function purchasesForSession(
 
 export async function syncMembershipFromCheckoutSession(sessionId: string) {
   const stripe = getStripe();
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  const session = await stripe.checkout.sessions.retrieve(sessionId, {
+    expand: ["line_items.data.price.product"],
+  });
 
   if (session.payment_status !== "paid" && session.status !== "complete") {
     return { updated: false, unlockedTiers: [] as PaidCourseTier[] };
   }
 
-  const userId = await resolveUserIdFromSession(session);
-  if (isKidsCourseCheckoutSession(session)) {
+  const isKidsPurchase = await resolveIsKidsCoursePurchase(session);
+  const userId = await resolveUserIdFromSession(session, isKidsPurchase);
+  if (isKidsPurchase) {
     const result = await grantKidsCoursePurchaseFromSession(session, userId);
     if (result.error && !result.queued) {
       throw new Error(result.error);

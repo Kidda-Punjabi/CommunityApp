@@ -15,7 +15,7 @@ function normalizeKidName(name: string): string {
   return name.trim().replace(/\s+/g, " ");
 }
 
-function kidNameFromSession(session: Stripe.Checkout.Session): string | null {
+export function kidNameFromSession(session: Stripe.Checkout.Session): string | null {
   const fromMeta = session.metadata?.kid_name?.trim();
   if (fromMeta) return fromMeta;
   const field = session.custom_fields?.find((item) => item.key === "kid_name");
@@ -23,7 +23,9 @@ function kidNameFromSession(session: Stripe.Checkout.Session): string | null {
   return value || null;
 }
 
-export function isKidsCourseCheckoutSession(session: Stripe.Checkout.Session): boolean {
+export const MISSING_KIDS_CHECKOUT_MARKERS_REASON = "missing_kids_checkout_markers";
+
+export function hasKidsCheckoutMarkers(session: Stripe.Checkout.Session): boolean {
   if (session.metadata?.audience_type?.trim().toLowerCase() === "kids") return true;
   const checkoutKey = session.metadata?.checkout_key?.trim() ?? "";
   if (checkoutKey === "beginners-kids-group") return true;
@@ -32,6 +34,81 @@ export function isKidsCourseCheckoutSession(session: Stripe.Checkout.Session): b
       session.metadata?.kid_profile_id?.trim() ||
       kidNameFromSession(session)
   );
+}
+
+export function isKidsCourseCheckoutSession(session: Stripe.Checkout.Session): boolean {
+  return hasKidsCheckoutMarkers(session);
+}
+
+function courseTrackFromJoin(
+  courses: { content_track?: string | null } | { content_track?: string | null }[] | null | undefined
+): string | null {
+  const course = Array.isArray(courses) ? courses[0] : courses;
+  return course?.content_track ?? null;
+}
+
+function productIdsFromSession(session: Stripe.Checkout.Session): string[] {
+  const ids: string[] = [];
+  for (const item of session.line_items?.data ?? []) {
+    const product = item.price && typeof item.price !== "string" ? item.price.product : null;
+    if (typeof product === "string") ids.push(product);
+    else if (product && typeof product === "object" && !product.deleted && product.id) {
+      ids.push(product.id);
+    }
+  }
+  const metaProduct = session.metadata?.product_id?.trim();
+  if (metaProduct) ids.push(metaProduct);
+  return [...new Set(ids)];
+}
+
+export async function resolveIsKidsCoursePurchase(
+  session: Stripe.Checkout.Session
+): Promise<boolean> {
+  if (isKidsCourseCheckoutSession(session)) return true;
+
+  const supabase = createServiceRoleClient();
+  const notionPageId =
+    session.client_reference_id?.trim() ||
+    session.metadata?.notion_page_id?.trim() ||
+    "";
+
+  if (notionPageId) {
+    const { data: cohort } = await supabase
+      .from("cohorts")
+      .select("id, course_id, courses(content_track)")
+      .eq("notion_page_id", notionPageId)
+      .maybeSingle();
+    if (courseTrackFromJoin(cohort?.courses) === "kids") return true;
+  }
+
+  const productIds = productIdsFromSession(session);
+  if (productIds.length > 0) {
+    const { data: pkgs } = await supabase
+      .from("packages")
+      .select("slug, stripe_product_id, courses(content_track)")
+      .in("stripe_product_id", productIds);
+    for (const pkg of pkgs ?? []) {
+      if (pkg.slug === KIDS_BEGINNERS_PACKAGE_SLUG) return true;
+      if (courseTrackFromJoin(pkg.courses) === "kids") return true;
+    }
+  }
+
+  const { data: kidsPkg } = await supabase
+    .from("packages")
+    .select("id, course_id, courses(content_track)")
+    .eq("slug", KIDS_BEGINNERS_PACKAGE_SLUG)
+    .maybeSingle();
+  if (courseTrackFromJoin(kidsPkg?.courses) === "kids" && notionPageId) {
+    const { data: cohort } = await supabase
+      .from("cohorts")
+      .select("id")
+      .eq("notion_page_id", notionPageId)
+      .eq("course_id", kidsPkg?.course_id)
+      .maybeSingle();
+    if (cohort?.id) return true;
+  }
+
+  return false;
 }
 
 export async function findOrCreateKidProfileForPurchase(
@@ -177,9 +254,48 @@ export async function grantKidsCoursePurchaseFromSession(
   const supabase = createServiceRoleClient();
   const kidName = kidNameFromSession(session);
   const kidProfileIdMeta = session.metadata?.kid_profile_id?.trim() || null;
-  const cohortId = session.metadata?.cohort_id?.trim() || null;
+  let cohortId = session.metadata?.cohort_id?.trim() || null;
   const email =
     session.customer_details?.email ?? session.customer_email ?? null;
+  const notionPageId =
+    session.client_reference_id?.trim() ||
+    session.metadata?.notion_page_id?.trim() ||
+    "";
+
+  if (!cohortId && notionPageId) {
+    const { data: cohort } = await supabase
+      .from("cohorts")
+      .select("id")
+      .eq("notion_page_id", notionPageId)
+      .maybeSingle();
+    if (cohort?.id) cohortId = cohort.id as string;
+  }
+
+  if (!kidName && !kidProfileIdMeta) {
+    await enqueueKidsCoursePurchaseGrant(supabase, {
+      sessionId: session.id,
+      parentEmail: email,
+      parentUserId,
+      kidName: null,
+      kidProfileId: null,
+      cohortId,
+      reason: MISSING_KIDS_CHECKOUT_MARKERS_REASON,
+      rawMetadata: {
+        ...(session.metadata ?? {}),
+        ...(notionPageId ? { notion_page_id: notionPageId } : {}),
+      } as Record<string, unknown>,
+    });
+    console.error(
+      "[kids purchase grant] queued — kids product without checkout markers",
+      "session=",
+      session.id,
+      "email=",
+      email,
+      "cohort=",
+      cohortId
+    );
+    return { granted: false, queued: true, error: MISSING_KIDS_CHECKOUT_MARKERS_REASON };
+  }
 
   if (!parentUserId) {
     await enqueueKidsCoursePurchaseGrant(supabase, {
@@ -306,13 +422,23 @@ export async function grantKidsCoursePurchaseFromSession(
     return { granted: false, queued: true, error: message };
   }
 
-  const access = await grantKidCourseAccess(
-    supabase,
-    kid.kidProfileId,
-    pkg.course_id as string
-  );
-  if (access.error) {
-    console.error("[kids purchase grant] course_access failed:", access.error);
+  const courseIdsToGrant = new Set<string>([pkg.course_id as string]);
+  if (cohortId) {
+    const { data: cohortCourse } = await supabase
+      .from("cohorts")
+      .select("course_id")
+      .eq("id", cohortId)
+      .maybeSingle();
+    if (typeof cohortCourse?.course_id === "string" && cohortCourse.course_id) {
+      courseIdsToGrant.add(cohortCourse.course_id);
+    }
+  }
+
+  for (const courseId of courseIdsToGrant) {
+    const access = await grantKidCourseAccess(supabase, kid.kidProfileId, courseId);
+    if (access.error) {
+      console.error("[kids purchase grant] course_access failed:", access.error, "course=", courseId);
+    }
   }
 
   if (cohortId) {
@@ -388,6 +514,18 @@ export async function grantKidsCoursePurchaseFromSession(
         session.id
       );
       return { granted: false, queued: true, error: groupResult.error };
+    }
+
+    for (const courseId of courseIdsToGrant) {
+      const access = await grantKidCourseAccess(supabase, kid.kidProfileId, courseId);
+      if (access.error) {
+        console.error(
+          "[kids purchase grant] course_access retry failed:",
+          access.error,
+          "course=",
+          courseId
+        );
+      }
     }
   }
 

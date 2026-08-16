@@ -10,7 +10,8 @@ export type GroupPurchaseAttentionItem = {
     | "group_cohort_setup"
     | "group_cohort_placement_pending"
     | "notion_cohort_writeback"
-    | "notion_lead_link";
+    | "notion_lead_link"
+    | "unmatched_kids_checkout";
   title: string;
   detail: string;
   href: string;
@@ -138,6 +139,36 @@ export async function loadGroupPurchaseAttention(): Promise<{
       items,
       error: leadLinkError instanceof Error ? leadLinkError.message : "Lead link attention failed.",
     };
+  }
+
+  const { data: unmatchedKids, error: unmatchedError } = await supabase
+    .from("kids_course_purchase_grant_queue")
+    .select("id, parent_email, cohort_id, reason, stripe_checkout_session_id, created_at, cohorts(name)")
+    .eq("resolved", false)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (unmatchedError && !unmatchedError.message.includes("kids_course_purchase_grant_queue")) {
+    return { items, error: unmatchedError.message };
+  }
+
+  for (const row of unmatchedKids ?? []) {
+    const cohort = Array.isArray(row.cohorts) ? row.cohorts[0] : row.cohorts;
+    const cohortName = cohort?.name ?? "kids cohort";
+    const email = row.parent_email ?? "unknown email";
+    const missingMarkers = row.reason === "missing_kids_checkout_markers";
+    items.push({
+      id: `unmatched-kids-${row.id}`,
+      kind: "unmatched_kids_checkout",
+      title: missingMarkers
+        ? `Unnamed kids purchase needs reconciliation (${cohortName})`
+        : `Kids purchase grant still queued (${cohortName})`,
+      detail: missingMarkers
+        ? `${email} paid via a path that skipped kids checkout (no child name). Rename the Notion Kid lead, then create the kid profile. Session ${row.stripe_checkout_session_id}.`
+        : `${email} — ${row.reason}. Session ${row.stripe_checkout_session_id}.`,
+      href: row.cohort_id ? `/admin/packages?cohort=${row.cohort_id}` : "/admin/packages",
+      urgent: true,
+    });
   }
 
   return { items };

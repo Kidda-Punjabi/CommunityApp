@@ -7,6 +7,7 @@ import {
   syncStudentPackagesFromPurchases,
   type PurchaseForStudentPackage,
 } from "./sync-student-packages-from-payment";
+import { resolveIsKidsCoursePurchase } from "@/lib/kids/grant-kids-course-purchase";
 import type Stripe from "stripe";
 
 function tiersFromLineItems(
@@ -63,6 +64,16 @@ export async function collectTiersForCustomer(
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
       expand: ["data.price.product"],
     });
+    const sessionWithItems = {
+      ...session,
+      line_items: {
+        object: "list" as const,
+        data: lineItems.data,
+        has_more: false,
+        url: "",
+      },
+    } as Stripe.Checkout.Session;
+    if (await resolveIsKidsCoursePurchase(sessionWithItems)) continue;
 
     for (const tier of tiersFromLineItems(lineItems.data)) {
       tiers.add(tier);
@@ -100,6 +111,16 @@ export async function collectPurchasesForCustomer(
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
       expand: ["data.price.product"],
     });
+    const sessionWithItems = {
+      ...session,
+      line_items: {
+        object: "list" as const,
+        data: lineItems.data,
+        has_more: false,
+        url: "",
+      },
+    } as Stripe.Checkout.Session;
+    if (await resolveIsKidsCoursePurchase(sessionWithItems)) continue;
 
     const checkoutKey = session.metadata?.checkout_key ?? null;
     const purchasedAt = new Date(session.created * 1000).toISOString();

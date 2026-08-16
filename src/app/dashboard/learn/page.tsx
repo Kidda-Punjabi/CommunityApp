@@ -1,8 +1,8 @@
+import { LearnCertificatesButton } from "@/components/learn/learn-certificates-button";
 import { LearnCourseRow } from "@/components/learn/learn-course-row";
 import { LearnCourseTiles, type LearnHubTile } from "@/components/learn/learn-course-tiles";
 import { LearnKidsProgressLink } from "@/components/learn/learn-kids-progress-link";
 import { LearnSecondaryTiles } from "@/components/learn/learn-secondary-tiles";
-import { NavLink } from "@/components/ui/nav-link";
 import { fetchLearnContent } from "@/lib/learning/load-learn-content";
 import {
   canAccessLessonInContext,
@@ -14,6 +14,7 @@ import {
   fetchAccessibleKidsCourses,
   kidsCourseLearnPath,
 } from "@/lib/learning/kids-courses";
+import { kidsCourseHubStatus } from "@/lib/learning/kids-cohort-display";
 import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
 import { courseDetailPath } from "@/lib/learn/course-levels";
 import { loadRegisteredComingSoonLevels } from "@/lib/learn/course-interest";
@@ -23,14 +24,12 @@ import {
   getCachedAuthSession,
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
-import { pressableClass } from "@/lib/ui/pressable";
-import { cn, ui } from "@/lib/ui/styles";
+import { ui } from "@/lib/ui/styles";
 import {
   fetchLessonCompletionMap,
   summarizeCourseProgress,
 } from "@/lib/progress/lesson-completion";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
-import { Award } from "lucide-react";
 import { redirect } from "next/navigation";
 
 function shortStartsStatus(startDate: string): string {
@@ -131,21 +130,18 @@ export default async function LearnPage() {
     ? community.unlockUrl ?? "/courses/community"
     : learnTrackPath("community");
 
-  const kidsTiles: LearnHubTile[] = kidsCourses.map((course) => {
-    const courseLessons = allLessons.filter((lesson) => lesson.course_id === course.id);
-    const progress = summarizeCourseProgress(courseLessons, completionMap);
-    return {
-      id: `kids-${course.id}`,
-      kind: "kids-course" as const,
-      href: kidsCourseLearnPath(course.id),
-      title: course.name,
-      status:
-        progress.totalLessons > 0
-          ? `${progress.completedLessons} of ${progress.totalLessons} lessons`
-          : "Lessons ready",
-      tone: "accent" as const,
-    };
-  });
+  const kidsTiles: LearnHubTile[] = kidsCourses.map((course) => ({
+    id: `kids-${course.id}`,
+    kind: "kids-course" as const,
+    href: kidsCourseLearnPath(course.id),
+    title: course.name,
+    status: kidsCourseHubStatus({
+      cohortName: course.cohortName,
+      startDate: course.startDate,
+      gated: course.gated,
+    }),
+    tone: "accent" as const,
+  }));
 
   if (actor.kind === "kid") {
     const tiles: LearnHubTile[] =
@@ -156,16 +152,19 @@ export default async function LearnPage() {
               id: "more",
               kind: "static",
               title: "Your courses",
-              status: "Ask a grown-up to enrol you",
+              status: "Your class will show here once you're enrolled",
               tone: "muted",
             },
           ];
 
     return (
       <div className={ui.page}>
-        <div className="mb-5">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
-          <p className="mt-1 text-sm text-zinc-500">Courses and tools in one place.</p>
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
+            <p className="mt-1 text-sm text-zinc-500">Courses and tools in one place.</p>
+          </div>
+          <LearnCertificatesButton />
         </div>
         <LearnCourseTiles tiles={tiles} />
       </div>
@@ -179,16 +178,7 @@ export default async function LearnPage() {
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
           <p className="mt-1 text-sm text-zinc-500">Courses and tools in one place.</p>
         </div>
-        <NavLink
-          href="/dashboard/learn/certificates"
-          aria-label="Certificates"
-          className={cn(
-            pressableClass,
-            "flex h-10 w-10 items-center justify-center rounded-full bg-white text-violet-700 shadow-[0_2px_10px_-2px_rgba(124,58,237,0.35)] ring-1 ring-violet-100 hover:bg-violet-50"
-          )}
-        >
-          <Award className="h-5 w-5" aria-hidden />
-        </NavLink>
+        <LearnCertificatesButton />
       </div>
 
       {kidsTiles.length > 0 ? (
@@ -240,6 +230,7 @@ export default async function LearnPage() {
         <LearnSecondaryTiles
           communityHref={communityHref}
           communityStatus={communityStatus}
+          communityLocked={communityLocked}
         />
       </div>
     </div>

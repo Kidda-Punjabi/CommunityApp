@@ -50,11 +50,25 @@ function summarizeEvent(event: Stripe.Event): Record<string, unknown> {
   return summary;
 }
 
+/** Plain JSON of event.data.object — the session/subscription Stripe actually sent. */
+function rawPayloadFromEvent(event: Stripe.Event): Record<string, unknown> {
+  try {
+    return JSON.parse(JSON.stringify(event.data.object)) as Record<string, unknown>;
+  } catch (error) {
+    const object = event.data.object as { id?: string };
+    return {
+      serialize_error: true,
+      object_id: object?.id ?? null,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /** Best-effort insert — never throws (logging must not break webhook ACK). */
 export async function logStripeWebhookReceived(event: Stripe.Event): Promise<void> {
   try {
     const admin = createServiceRoleClient();
-    await admin.from("stripe_webhook_events").upsert(
+    const { error } = await admin.from("stripe_webhook_events").upsert(
       {
         id: event.id,
         event_type: event.type,
@@ -62,10 +76,14 @@ export async function logStripeWebhookReceived(event: Stripe.Event): Promise<voi
         checkout_session_id: checkoutSessionIdFromEvent(event),
         processing_status: "received",
         payload_summary: summarizeEvent(event),
+        raw_payload: rawPayloadFromEvent(event),
         received_at: new Date().toISOString(),
       },
       { onConflict: "id" }
     );
+    if (error) {
+      console.error("[stripe_webhook_events] failed to log received:", error.message);
+    }
   } catch (error) {
     console.error("[stripe_webhook_events] failed to log received:", error);
   }

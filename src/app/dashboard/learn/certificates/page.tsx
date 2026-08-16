@@ -1,10 +1,12 @@
 import { LockedCertificateRow } from "@/components/learn/locked-certificate-row";
 import { BackLink } from "@/components/navigation/back-link";
 import { NavLink } from "@/components/ui/nav-link";
+import { resolveCourseActor } from "@/lib/kids/course-actor";
 import {
   CERTIFICATE_FORMAT_FOOTNOTE,
-  MOCK_CERTIFICATES,
+  certificatesForLearnActor,
 } from "@/lib/learn/certificate-mock";
+import { fetchAccessibleKidsCourses, kidsCourseLearnPath } from "@/lib/learning/kids-courses";
 import { pressableClass } from "@/lib/ui/pressable";
 import { cn, ui } from "@/lib/ui/styles";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
@@ -20,6 +22,17 @@ export default async function CertificatesPage() {
   const session = await getCachedAuthSession();
   if (!session) redirect("/login");
 
+  const { supabase, user } = session;
+  const [actor, kidsCourses] = await Promise.all([
+    resolveCourseActor(supabase, user.id),
+    fetchAccessibleKidsCourses(supabase, user.id),
+  ]);
+
+  const certificates = certificatesForLearnActor({
+    isKid: actor.kind === "kid",
+    kidsCourseHref: kidsCourses[0] ? kidsCourseLearnPath(kidsCourses[0].id) : null,
+  });
+
   return (
     <div className={ui.page}>
       <BackLink href="/dashboard/learn">← Back to Learn</BackLink>
@@ -31,7 +44,7 @@ export default async function CertificatesPage() {
       </div>
 
       <div className="space-y-3">
-        {MOCK_CERTIFICATES.map((cert) => {
+        {certificates.map((cert) => {
           if (cert.status === "locked") {
             return (
               <LockedCertificateRow
