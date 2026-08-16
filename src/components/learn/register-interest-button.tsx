@@ -28,7 +28,7 @@ export function RegisterInterestButton({
       className={cn(
         pressableClass,
         "shrink-0 whitespace-nowrap rounded-full font-semibold text-white shadow-sm",
-        compact ? "px-2.5 py-1 text-[11px] leading-none" : "px-3.5 py-1.5 text-xs",
+        compact ? "px-2 py-1 text-[10px] leading-none" : "px-3.5 py-1.5 text-xs",
         className
       )}
     >

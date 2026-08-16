@@ -40,13 +40,13 @@ export function LearnCourseRow({
     );
     const copy = (
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className={cn("truncate font-heading text-sm font-semibold leading-tight", theme.ink)}>
+        <div className="flex items-center gap-1.5">
+          <p className={cn("whitespace-nowrap font-heading text-sm font-semibold leading-tight", theme.ink)}>
             {theme.title}
           </p>
           <span
             className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none",
+              "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
               theme.tagBg,
               theme.tagInk
             )}
@@ -71,20 +71,20 @@ export function LearnCourseRow({
       <div
         data-tour={tourId}
         className={cn(
-          "flex min-h-[60px] items-center gap-3 rounded-2xl px-3.5 py-2 shadow-[0_1px_8px_-4px_rgba(24,24,27,0.06)]",
+          "flex min-h-[60px] items-center gap-2 rounded-2xl px-3 py-2 shadow-[0_1px_8px_-4px_rgba(24,24,27,0.06)]",
           theme.rowBg
         )}
       >
         {href ? (
           <NavLink
             href={href}
-            className={cn(pressableClass, "flex min-w-0 flex-1 items-center gap-3")}
+            className={cn(pressableClass, "flex min-w-0 flex-1 items-center gap-2")}
           >
             {icon}
             {copy}
           </NavLink>
         ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {icon}
             {copy}
           </div>
