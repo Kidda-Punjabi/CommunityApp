@@ -32,6 +32,7 @@ import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
 import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
 import { fetchQuizProgressMap } from "@/lib/progress/quiz-progress";
 import { CommunityLeadSection } from "@/components/learn/course-staff-section";
+import { CourseAboutBlock } from "@/components/learn/course-about-block";
 import {
   loadCommunityLeads,
 } from "@/lib/tutoring/load-course-staff";
@@ -319,7 +320,12 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       }
       staffSection={staffSection}
       footerSection={
-        studentPackage ? <BuyExtraOneToOneCard pkg={studentPackage} /> : null
+        track.id === "beginners" || studentPackage ? (
+          <div className="space-y-4">
+            {track.id === "beginners" ? <CourseAboutBlock level="beginners" /> : null}
+            {studentPackage ? <BuyExtraOneToOneCard pkg={studentPackage} /> : null}
+          </div>
+        ) : null
       }
       contentUnlockedMap={contentUnlockedMap}
       recordingMap={recordingMap}

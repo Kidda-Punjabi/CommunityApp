@@ -1,7 +1,7 @@
 import { LearnCourseRow } from "@/components/learn/learn-course-row";
 import { BackLink } from "@/components/navigation/back-link";
 import { NavLink } from "@/components/ui/nav-link";
-import { courseDetailPath } from "@/lib/learn/course-levels";
+import { learnTrackPath } from "@/lib/learning/learn-catalog";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import { redirect } from "next/navigation";
@@ -31,11 +31,11 @@ export default async function PlacementResultPage() {
 
       <LearnCourseRow
         level="beginners"
-        href={courseDetailPath("beginners")}
+        href={learnTrackPath("beginners")}
         status="Recommended for you"
       />
 
-      <NavLink href={courseDetailPath("beginners")} className={`${ui.btnPrimaryBlock} mt-6`}>
+      <NavLink href={learnTrackPath("beginners")} className={`${ui.btnPrimaryBlock} mt-6`}>
         View Beginner course
       </NavLink>
 

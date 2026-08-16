@@ -204,7 +204,11 @@ export default async function LearnPage() {
         <LearnCourseRow
           level="beginners"
           tourId="learn-tile-beginners"
-          href={courseDetailPath("beginners")}
+          href={
+            beginnersLocked
+              ? beginners.unlockUrl ?? "/courses/beginners"
+              : learnTrackPath("beginners")
+          }
           status={beginnersStatus}
         />
         <LearnCourseRow
