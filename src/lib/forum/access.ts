@@ -1,5 +1,6 @@
 import type { AppRole } from "@/lib/auth/admin-access";
 import { hasAnyRole } from "@/lib/auth/profile-roles";
+import { resolveCourseActor } from "@/lib/kids/course-actor";
 import { loadCurrentUserAppRoles } from "@/lib/tutoring/tutor-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -11,6 +12,9 @@ export async function canAccessForum(
   supabase: SupabaseClient,
   userId: string
 ): Promise<boolean> {
+  const actor = await resolveCourseActor(supabase, userId);
+  if (actor.kind === "kid") return false;
+
   const [membershipResult, roles] = await Promise.all([
     supabase
       .from("memberships")

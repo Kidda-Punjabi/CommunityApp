@@ -9,6 +9,7 @@ import {
   homeworkTimingWarningMessage,
 } from "@/lib/tutoring/homework-submissions";
 import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
+import { homeworkWrite, resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
 import { revalidatePath } from "next/cache";
 
 export type CatchupActionResult = {
@@ -85,11 +86,13 @@ export async function submitTextHomeworkAction(
       return { error: "Please answer every question before submitting." };
     }
 
+    const actor = await resolveCourseActor(supabase, user.id);
+    const studentFilter = studentActorFilter(actor);
     const { data: existing } = await supabase
       .from("homework_submissions")
       .select("id")
       .eq("lesson_id", lessonId)
-      .eq("student_id", user.id)
+      .eq(studentFilter.column, studentFilter.value)
       .eq("is_practice", false)
       .maybeSingle();
 
@@ -97,17 +100,18 @@ export async function submitTextHomeworkAction(
       return { error: HOMEWORK_ALREADY_SUBMITTED_MESSAGE };
     }
 
-    const { error: insertError } = await supabase.from("homework_submissions").insert({
-      lesson_id: lessonId,
-      student_id: user.id,
-      submission_type: "text",
-      text_answers: answers.map((row) => ({
-        question_number: row.question_number,
-        answer_text: row.answer_text.trim(),
-      })),
-      status: "pending_review",
-      submitted_at: new Date().toISOString(),
-    });
+    const { error: insertError } = await supabase.from("homework_submissions").insert(
+      homeworkWrite(actor, {
+        lesson_id: lessonId,
+        submission_type: "text",
+        text_answers: answers.map((row) => ({
+          question_number: row.question_number,
+          answer_text: row.answer_text.trim(),
+        })),
+        status: "pending_review",
+        submitted_at: new Date().toISOString(),
+      })
+    );
 
     if (insertError) return { error: homeworkSubmitErrorMessage(insertError) };
 
@@ -141,8 +145,9 @@ export async function submitPracticeRecordingAction(
         ? Number.parseInt(durationRaw, 10)
         : null;
 
+    const actor = await resolveCourseActor(supabase, user.id);
     const extension = file.name.split(".").pop() || "webm";
-    const storagePath = `${lessonId}/${user.id}/practice-${Date.now()}.${extension}`;
+    const storagePath = `${lessonId}/${actor.kind === "kid" ? actor.kidProfileId : user.id}/practice-${Date.now()}.${extension}`;
 
     const { error: uploadError } = await supabase.storage
       .from("homework-recordings")
@@ -153,18 +158,19 @@ export async function submitPracticeRecordingAction(
 
     if (uploadError) return { error: uploadError.message };
 
-    const { error: insertError } = await supabase.from("homework_submissions").insert({
-      lesson_id: lessonId,
-      student_id: user.id,
-      submission_type: "voice",
-      storage_path: storagePath,
-      mime_type: file.type || null,
-      duration_seconds:
-        durationSeconds != null && Number.isFinite(durationSeconds) ? durationSeconds : null,
-      status: "pending_review",
-      is_practice: true,
-      submitted_at: new Date().toISOString(),
-    });
+    const { error: insertError } = await supabase.from("homework_submissions").insert(
+      homeworkWrite(actor, {
+        lesson_id: lessonId,
+        submission_type: "voice",
+        storage_path: storagePath,
+        mime_type: file.type || null,
+        duration_seconds:
+          durationSeconds != null && Number.isFinite(durationSeconds) ? durationSeconds : null,
+        status: "pending_review",
+        is_practice: true,
+        submitted_at: new Date().toISOString(),
+      })
+    );
 
     if (insertError) {
       await supabase.storage.from("homework-recordings").remove([storagePath]);

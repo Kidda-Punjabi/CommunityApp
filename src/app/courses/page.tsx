@@ -19,6 +19,11 @@ const PRODUCTS = [
     price: "12-week live course",
   },
   {
+    slug: "beginners-kids" as const,
+    tagline: "Ages 10–12 · live kids circle",
+    price: "12-week group course",
+  },
+  {
     slug: "community" as const,
     tagline: "Ongoing live speaking practice",
     price: "£99/yr",

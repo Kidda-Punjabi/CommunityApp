@@ -35,7 +35,7 @@ function courseMatchesTier(
 
   const name = course.name.toLowerCase();
   if (tier === "foundational" && name.includes("foundational")) return true;
-  if (tier === "beginners" && name.includes("beginner")) return true;
+  if (tier === "beginners" && name.includes("beginner") && !name.includes("kids")) return true;
   if (tier === "community" && name.includes("community")) return true;
 
   return false;

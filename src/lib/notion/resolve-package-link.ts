@@ -46,6 +46,9 @@ export type PackageLinkSkipReason =
   | "ambiguous";
 
 function inferCourseFromTitle(title: string): string | null {
+  if (/kids\s*circle/i.test(title) || (/kids/i.test(title) && /beginner/i.test(title))) {
+    return "Kids Beginners Course";
+  }
   if (/beginner/i.test(title)) return "Beginners Course";
   if (/foundational|refresher/i.test(title)) return "Foundational Course";
   if (/community/i.test(title)) return "Community";
@@ -66,6 +69,7 @@ export function readNotionCourseLabel(page: NotionPackageLinkInput): string | nu
 
   if (deliveryType?.toLowerCase() === "foundational course") return "Foundational Course";
   if (deliveryType?.toLowerCase() === "community") return "Kidda Community";
+  if (fromTitle === "Kids Beginners Course") return fromTitle;
 
   if (fromProperty && fromTitle && fromProperty.trim().toLowerCase() !== fromTitle.toLowerCase()) {
     const propertyLower = fromProperty.toLowerCase();
@@ -127,7 +131,12 @@ function courseByName(courses: CatalogCourse[], label: string | null): CatalogCo
     courses.find((course) => course.name.trim().toLowerCase() === normalized) ??
     courses.find((course) => {
       const name = course.name.toLowerCase();
-      if (normalized.includes("beginner")) return name.includes("beginner");
+      if (normalized.includes("kids") && (normalized.includes("beginner") || normalized.includes("circle"))) {
+        return name.includes("kids") && name.includes("beginner");
+      }
+      if (normalized.includes("beginner")) {
+        return name.includes("beginner") && !name.includes("kids");
+      }
       if (normalized.includes("foundational") || normalized.includes("refresher")) {
         return name.includes("foundational");
       }

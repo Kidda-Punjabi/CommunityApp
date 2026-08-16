@@ -10,6 +10,7 @@ import {
   type PackageCatalogEntry,
 } from "@/lib/packages/catalog";
 import { getDisplayName } from "@/lib/profile/display-name";
+import { actorFilter, resolveCourseActor } from "@/lib/kids/course-actor";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type StudentPackageStatus = "active" | "pending_setup" | "content_only";
@@ -81,13 +82,12 @@ function resolveCatalogEntry(
   enrollment: EnrollmentRow | null,
   purchasedPackageSlug: string | null
 ): PackageCatalogEntry {
-  if (tier === "beginners" && !enrollment) {
-    const fromPurchase =
-      purchasedPackageSlug != null
-        ? getPackageCatalogEntryBySlug(purchasedPackageSlug)
-        : undefined;
+  if (purchasedPackageSlug) {
+    const fromPurchase = getPackageCatalogEntryBySlug(purchasedPackageSlug);
     if (fromPurchase) return fromPurchase;
+  }
 
+  if (tier === "beginners" && !enrollment) {
     return (
       PACKAGE_CATALOG.find((entry) => entry.slug === "beginners-1-1") ??
       PACKAGE_CATALOG.find((entry) => entry.tier === "beginners")!
@@ -134,6 +134,8 @@ export async function loadStudentPackages(
 
   if (access.unlockedCourseIds.size === 0) return [];
 
+  const actor = await resolveCourseActor(supabase, user.id);
+  const filter = actorFilter(actor);
   const unlockedCourseIds = [...access.unlockedCourseIds];
 
   const [{ data: accessRows }, { data: enrollmentRows }, { data: studentPackageRows }] =
@@ -141,17 +143,17 @@ export async function loadStudentPackages(
       supabase
         .from("course_access")
         .select("course_id, granted_at")
-        .eq("user_id", user.id)
+        .eq(filter.column, filter.value)
         .in("course_id", unlockedCourseIds),
       supabase
         .from("course_enrollments")
         .select("id, course_id, tutor_id, delivery_mode, cohort_id")
-        .eq("user_id", user.id)
+        .eq(filter.column, filter.value)
         .in("course_id", unlockedCourseIds),
       supabase
         .from("student_packages")
         .select("course_id, packages(slug)")
-        .eq("user_id", user.id)
+        .eq(filter.column, filter.value)
         .in("course_id", unlockedCourseIds),
     ]);
 
@@ -205,13 +207,15 @@ export async function loadStudentPackages(
     const course = access.courses.find((row) => row.id === accessRow.course_id);
     if (!course?.required_tier || course.required_tier === "free") continue;
 
-    const tier = course.required_tier as PaidCourseTier;
+    const purchasedSlug = purchasedSlugByCourseId.get(accessRow.course_id) ?? null;
+    const catalogTier: PaidCourseTier =
+      course.required_tier === "foundational" ||
+      course.required_tier === "beginners" ||
+      course.required_tier === "community"
+        ? course.required_tier
+        : "beginners";
     const enrollment = enrollmentByCourseId.get(accessRow.course_id) ?? null;
-    const catalog = resolveCatalogEntry(
-      tier,
-      enrollment,
-      purchasedSlugByCourseId.get(accessRow.course_id) ?? null
-    );
+    const catalog = resolveCatalogEntry(catalogTier, enrollment, purchasedSlug);
     const status = packageStatus(catalog, enrollment);
 
     const packageSessions = sessionLoad.sessions
@@ -233,7 +237,7 @@ export async function loadStudentPackages(
       name: catalog.name,
       description: catalog.description,
       learnTrackId: catalog.learnTrackId,
-      tier,
+      tier: catalog.tier,
       courseId: accessRow.course_id,
       status,
       purchasedAt: accessRow.granted_at ?? null,

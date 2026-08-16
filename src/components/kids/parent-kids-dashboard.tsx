@@ -3,13 +3,16 @@
 import { useState } from "react";
 import { KidLucideIcon } from "@/components/kids/kid-lucide-icon";
 import { PinPad } from "@/components/kids/pin-pad";
+import type { ParentKidCourseProgress } from "@/lib/kids/load-parent-course-progress";
 import type { KidProgressSummary } from "@/lib/kids/types";
 
 export function ParentKidsDashboard({
   summaries,
+  courseProgress = [],
   hasPin,
 }: {
   summaries: KidProgressSummary[];
+  courseProgress?: ParentKidCourseProgress[];
   hasPin: boolean;
 }) {
   const [showPinChange, setShowPinChange] = useState(false);
@@ -26,6 +29,17 @@ export function ParentKidsDashboard({
           ))}
         </div>
       )}
+
+      {courseProgress.some((row) => row.courses.length > 0) ? (
+        <div className="space-y-4">
+          <h2 className="font-semibold text-zinc-900">Course progress</h2>
+          {courseProgress.map((row) =>
+            row.courses.length === 0 ? null : (
+              <KidCourseProgressCard key={row.profile.id} progress={row} />
+            )
+          )}
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-4">
         <h2 className="font-semibold text-zinc-900">Grown-up PIN</h2>
@@ -125,6 +139,56 @@ function KidSummaryCard({ summary }: { summary: KidProgressSummary }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function homeworkTimingLabel(
+  status: ParentKidCourseProgress["courses"][number]["lessons"][number]["homeworkStatus"],
+  timing: ParentKidCourseProgress["courses"][number]["lessons"][number]["homeworkTiming"]
+) {
+  if (status === "not_submitted") return "Not submitted";
+  if (timing === "late") return "Late";
+  if (timing === "post_lesson") return "Post-lesson";
+  if (timing === "on_time") return "On time";
+  return status === "reviewed" ? "Reviewed" : "Pending review";
+}
+
+function KidCourseProgressCard({ progress }: { progress: ParentKidCourseProgress }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <p className="font-semibold text-zinc-900">{progress.profile.name}</p>
+      {progress.courses.map((course) => (
+        <div key={course.courseId} className="mt-3">
+          <p className="text-sm font-medium text-zinc-700">{course.courseName}</p>
+          <ul className="mt-2 space-y-2">
+            {course.lessons.map((lesson) => (
+              <li
+                key={lesson.lessonId}
+                className="rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs text-zinc-700"
+              >
+                <p className="font-semibold text-zinc-900">
+                  Lesson {lesson.lessonNumber}: {lesson.lessonTitle}
+                </p>
+                <p className="mt-1">
+                  Homework: {homeworkTimingLabel(lesson.homeworkStatus, lesson.homeworkTiming)}
+                  {lesson.attended === true
+                    ? " · Present"
+                    : lesson.attended === false
+                      ? " · Absent"
+                      : " · Attendance not marked"}
+                </p>
+                {lesson.tutorComment ? (
+                  <p className="mt-1 text-zinc-600">Tutor (homework): {lesson.tutorComment}</p>
+                ) : null}
+                {lesson.attendanceNote ? (
+                  <p className="mt-1 text-zinc-600">Tutor (attendance): {lesson.attendanceNote}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

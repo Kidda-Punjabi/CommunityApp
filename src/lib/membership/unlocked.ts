@@ -18,6 +18,7 @@ import {
 } from "./view-as";
 import { isAdmin } from "@/lib/auth/admin";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
+import { resolveCourseActor } from "@/lib/kids/course-actor";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
@@ -36,10 +37,12 @@ export async function getUserUnlockedCourseIds(
   supabase: SupabaseClient,
   userId: string
 ): Promise<Set<string>> {
-  const { data: rows } = await supabase
-    .from("course_access")
-    .select("course_id")
-    .eq("user_id", userId);
+  const actor = await resolveCourseActor(supabase, userId);
+  const query = supabase.from("course_access").select("course_id");
+  const { data: rows } =
+    actor.kind === "kid"
+      ? await query.eq("kid_profile_id", actor.kidProfileId)
+      : await query.eq("user_id", userId);
 
   return new Set((rows ?? []).map((row) => row.course_id));
 }

@@ -1,4 +1,4 @@
-export type ProductSlug = "foundational" | "beginners" | "community";
+export type ProductSlug = "foundational" | "beginners" | "beginners-kids" | "community";
 
 export type ProductFeature = {
   title: string;
@@ -45,12 +45,18 @@ export type ProductPageContent = {
   footerNote?: string;
 };
 
-export const PRODUCT_SLUGS: ProductSlug[] = ["foundational", "beginners", "community"];
+export const PRODUCT_SLUGS: ProductSlug[] = [
+  "foundational",
+  "beginners",
+  "beginners-kids",
+  "community",
+];
 
 export function getProductContent(slug: ProductSlug): ProductPageContent {
   const content: Record<ProductSlug, ProductPageContent> = {
     foundational: FOUNDATIONAL_CONTENT,
     beginners: BEGINNERS_CONTENT,
+    "beginners-kids": BEGINNERS_KIDS_CONTENT,
     community: COMMUNITY_CONTENT,
   };
   return content[slug];
@@ -298,7 +304,7 @@ const BEGINNERS_CONTENT: ProductPageContent = {
     {
       question: "Can children join the course?",
       answer:
-        "This cohort is designed for adults. For children's Punjabi lessons, please contact us separately.",
+        "This cohort is designed for adults. Children aged 10–12 should join the Kids Beginners Course instead.",
     },
     {
       question: "Will I actually be able to hold a conversation by the end?",
@@ -319,6 +325,120 @@ const BEGINNERS_CONTENT: ProductPageContent = {
       question: "How big are the group classes?",
       answer:
         "Small cohorts only — we cap enrolment so every learner gets attention and speaking time.",
+    },
+  ],
+};
+
+const BEGINNERS_KIDS_CONTENT: ProductPageContent = {
+  slug: "beginners-kids",
+  tier: "beginners",
+  heroBadge: "Ages 10–12 · Limited spots per circle",
+  heroTitle: "Kids Beginners Punjabi",
+  heroHighlight: "In Just 12 Weeks!",
+  heroSubtitle:
+    "A 12-week live group course for children aged 10–12 — the same beginners path as our adult course, taught in a kid-friendly circle with weekly lessons, homework, and speaking practice.",
+  heroCta: "ENROL MY CHILD",
+  featuresSectionTitle: "How they'll learn",
+  features: [
+    {
+      icon: "👥",
+      title: "Live Kids Circle",
+      description:
+        "Small-group lessons with other children the same age, so they practise speaking Punjabi out loud every week — not just watching a screen.",
+    },
+    {
+      icon: "🎙️",
+      title: "Weekly Speaking Practice",
+      description:
+        "Short, guided speaking tasks that turn new words into sentences they can actually use at home.",
+    },
+    {
+      icon: "📝",
+      title: "Homework & Quizzes",
+      description:
+        "Bite-sized homework after each lesson, with tutor feedback you can follow on the parent dashboard.",
+    },
+  ],
+  includedSectionTitle: "What's Included",
+  includedItems: [
+    "1 live group lesson per week in a kids circle (ages 10–12)",
+    "Weekly speaking practice and homework",
+    "Lesson slides, recordings, and quizzes in the Kidda app",
+    "Parent view of homework, attendance, and tutor notes",
+    "Completion certificate at the end of 12 weeks",
+  ],
+  curriculumSectionTitle: "What Will We Cover?",
+  curriculum: [
+    { week: 1, emoji: "👋", title: "Sounds, Greetings & Basics", description: "Punjabi sounds and greetings — introducing yourself and saying hello." },
+    { week: 2, emoji: "🗣️", title: "Sentence Structure", description: "How Punjabi sentences are built, so they can start making their own." },
+    { week: 3, emoji: "⏳", title: "Verb Endings & Continuous Tense", description: "Talk about what they are doing right now." },
+    { week: 4, emoji: "🔗", title: "Ability & Connecting", description: "Say what they can do, and join ideas together." },
+    { week: 5, emoji: "📝", title: "Verbals", description: "Use verbs more flexibly in everyday sentences." },
+    { week: 6, emoji: "💛", title: "Wants & Needs", description: "Talk about what they want, need, and like." },
+    { week: 7, emoji: "❓", title: "Questions, Negatives & Adjectives", description: "Ask questions, say no, and describe people and things." },
+    { week: 8, emoji: "📅", title: "Past Tense", description: "Talk about what already happened." },
+    { week: 9, emoji: "🔮", title: "Future Tense", description: "Talk about plans and what they will do." },
+    { week: 10, emoji: "📣", title: "Imperatives", description: "Give instructions and make requests politely." },
+    { week: 11, emoji: "📚", title: "Vocab and Recap", description: "Bring the first 10 weeks together with extra vocabulary." },
+    { week: 12, emoji: "🎓", title: "Presentation", description: "A final speaking project to show what they can do." },
+  ],
+  audienceSectionTitle: "Who is this for?",
+  audience: {
+    title: "Built for children aged 10–12 who are ready for a real beginners course — not bedtime stories.",
+    items: [
+      "Children aged 10–12 who want to start speaking Punjabi",
+      "Heritage learners who hear Punjabi at home but rarely speak it",
+      "Families who want a structured weekly class with homework they can see",
+      "Kids who have finished (or don't need) the younger Kids Mode activities",
+    ],
+  },
+  pricingSectionTitle: "Invest in their Punjabi",
+  pricingTiers: [
+    {
+      id: "group",
+      name: "12-Week Kids Circle",
+      price: "£400",
+      priceNote: "Live group lessons · ages 10–12 · 12 weeks",
+      highlight: true,
+      features: [
+        "1 live group lesson per week with a Punjabi tutor",
+        "Kid-specific slides, recordings, and practice (added as we go)",
+        "Homework and attendance you can follow as a parent",
+        "Small circles so every child gets speaking time",
+      ],
+      checkoutKey: "beginners-kids-group",
+    },
+  ],
+  faq: [
+    {
+      question: "What age is this for?",
+      answer:
+        "This course is for children aged 10–12. Younger children use Kids Mode on the family account; adults should join the standard Beginners course.",
+    },
+    {
+      question: "Does my child need their own login?",
+      answer:
+        "No. You buy the course on your account, create or pick their profile at checkout, and switch to them with your grown-up PIN.",
+    },
+    {
+      question: "Do they need to know Punjabi already?",
+      answer:
+        "No. This is a beginners course. Hearing Punjabi at home helps, but it is not required.",
+    },
+    {
+      question: "How are the lessons taught?",
+      answer:
+        "Live group sessions with a real instructor, plus homework and quizzes in the app. Recordings are added after each class.",
+    },
+    {
+      question: "Can I see their homework and attendance?",
+      answer:
+        "Yes. From your parent account you can see homework timing, attendance, and any tutor notes — without switching into their profile.",
+    },
+    {
+      question: "What if they miss a class?",
+      answer:
+        "Sessions are recorded so they can catch up. Homework can still be submitted after the lesson.",
     },
   ],
 };

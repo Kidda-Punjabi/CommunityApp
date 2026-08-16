@@ -6,6 +6,7 @@ export type CheckoutKey =
   | "beginners"
   | "beginners-group"
   | "beginners-one-to-one"
+  | "beginners-kids-group"
   | "one-to-one-session"
   | "community";
 
@@ -62,6 +63,14 @@ export const CHECKOUT_CONFIGS: CheckoutConfig[] = [
     productSlug: "beginners",
   },
   {
+    key: "beginners-kids-group",
+    priceIdEnv: "STRIPE_CHECKOUT_PRICE_BEGINNERS_KIDS_GROUP",
+    paymentLinkEnv: "STRIPE_PAYMENT_LINK_BEGINNERS_KIDS_GROUP",
+    mode: "payment",
+    label: "Kids Beginners Course (Group)",
+    productSlug: "beginners-kids",
+  },
+  {
     key: "one-to-one-session",
     priceIdEnv: "STRIPE_CHECKOUT_PRICE_ONE_TO_ONE_SESSION",
     paymentLinkEnv: "STRIPE_PAYMENT_LINK_ONE_TO_ONE_SESSION",
@@ -95,6 +104,11 @@ export function resolveCheckoutPriceId(key: string): string | null {
   const direct = getPriceIdForCheckout(key);
   if (direct) return direct;
   if (key === "beginners-group") return getPriceIdForCheckout("beginners");
+  if (key === "beginners-kids-group") {
+    return (
+      getPriceIdForCheckout("beginners-group") ?? getPriceIdForCheckout("beginners")
+    );
+  }
   return null;
 }
 
@@ -110,6 +124,12 @@ export function resolvePaymentLinkForCheckout(key: string): string | null {
   const direct = getPaymentLinkForCheckout(key);
   if (direct) return direct;
   if (key === "beginners-group") return getPaymentLinkForCheckout("beginners");
+  if (key === "beginners-kids-group") {
+    return (
+      getPaymentLinkForCheckout("beginners-group") ??
+      getPaymentLinkForCheckout("beginners")
+    );
+  }
   if (key === ONE_TO_ONE_SESSION_CHECKOUT_KEY) {
     return "https://buy.stripe.com/8x2cN62KV3oeeBncA34ZG0C";
   }

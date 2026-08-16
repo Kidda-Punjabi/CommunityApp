@@ -1,5 +1,6 @@
 import "server-only";
 
+import { resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -15,14 +16,18 @@ export async function loadStudentCohortHomeworkCompletedMap(
   const map = new Map<string, boolean>();
   if (courseIds.length === 0 || lessonIds.length === 0) return map;
 
-  const { data: enrollment, error: enrollmentError } = await supabase
+  const actor = await resolveCourseActor(supabase, userId);
+  const enrollmentQuery = supabase
     .from("course_enrollments")
     .select("cohort_id")
-    .eq("user_id", userId)
     .in("course_id", courseIds)
     .eq("delivery_mode", "group")
-    .not("cohort_id", "is", null)
-    .maybeSingle();
+    .not("cohort_id", "is", null);
+
+  const { data: enrollment, error: enrollmentError } =
+    actor.kind === "kid"
+      ? await enrollmentQuery.eq("kid_profile_id", actor.kidProfileId).maybeSingle()
+      : await enrollmentQuery.eq("user_id", userId).maybeSingle();
 
   if (enrollmentError) {
     console.error(
@@ -35,11 +40,12 @@ export async function loadStudentCohortHomeworkCompletedMap(
   const cohortId = enrollment?.cohort_id as string | null;
   if (!cohortId) return map;
 
+  const studentFilter = studentActorFilter(actor);
   const { data, error } = await supabase
     .from("cohort_lesson_homework")
     .select("lesson_id, completed")
     .eq("cohort_id", cohortId)
-    .eq("student_id", userId)
+    .eq(studentFilter.column, studentFilter.value)
     .in("lesson_id", lessonIds);
 
   if (error) {

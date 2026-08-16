@@ -5,7 +5,7 @@ import {
   loadFlashcardTopicOptions,
   loadGrammarSentenceTopicOptions,
 } from "@/lib/group-games/load-topic-options";
-import { createClient } from "@/lib/supabase/server";
+import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { ui } from "@/lib/ui/styles";
 
 type GroupGamesPageProps = {
@@ -22,7 +22,7 @@ function resolveLockedGameType(value?: string): GroupGameType | null {
 export default async function GroupGamesPage({ searchParams }: GroupGamesPageProps) {
   const { cancelled, game_type: gameType } = await searchParams;
   const lockedGameType = resolveLockedGameType(gameType);
-  const supabase = await createClient();
+  const { supabase } = await requireNoKidCommunityAccess();
 
   const [flashcardTopics, grammarTopics] = await Promise.all([
     loadFlashcardTopicOptions(supabase).catch(() => []),

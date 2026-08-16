@@ -43,6 +43,15 @@ export const PACKAGE_CATALOG: PackageCatalogEntry[] = [
     description: "Small-group Punjabi lessons on a fixed weekly schedule.",
   },
   {
+    slug: "beginners-kids-group",
+    name: "Kids Beginners Course (Group)",
+    learnTrackId: "beginners",
+    tier: "beginners",
+    deliveryMode: "group",
+    includesLiveSessions: true,
+    description: "Small-group Punjabi beginners lessons for ages 10–12.",
+  },
+  {
     slug: "community",
     name: "Kidda Community",
     learnTrackId: "community",

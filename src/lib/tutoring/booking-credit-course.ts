@@ -11,6 +11,7 @@ const TIER_BY_CHECKOUT_KEY: Record<string, "foundational" | "beginners" | "commu
   "foundational-full": "foundational",
   "beginners-one-to-one": "beginners",
   "beginners-group": "beginners",
+  "beginners-kids-group": "beginners",
   beginners: "beginners",
   community: "community",
   // "one-to-one-session" is course-agnostic — require metadata.course_id.
@@ -25,6 +26,7 @@ export async function courseIdForTier(
     .from("courses")
     .select("id")
     .eq("required_tier", tier)
+    .eq("is_public", true)
     .order("display_order", { ascending: true })
     .limit(1)
     .maybeSingle();

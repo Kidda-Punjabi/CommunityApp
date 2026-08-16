@@ -50,6 +50,7 @@ import { fetchTopicMasteryMap, stageFillsForMastery } from "@/lib/free-lessons/m
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
+import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import { BackLink } from "@/components/navigation/back-link";
@@ -66,6 +67,10 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
   const track = getLearnTrack(trackId);
 
   if (!track) notFound();
+
+  if (trackId === "community") {
+    await requireNoKidCommunityAccess();
+  }
 
   const supabase = await createClient();
   const {

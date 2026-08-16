@@ -801,12 +801,13 @@ export async function createPackageRun(input: {
 
       const { data: course } = await supabase
         .from("courses")
-        .select("required_tier")
+        .select("required_tier, content_track")
         .eq("id", courseId)
         .maybeSingle();
 
-      if (course?.required_tier !== "beginners") {
-        return { error: "Group cohorts are only supported for the Beginners course." };
+      const isKidsCourse = course?.content_track === "kids";
+      if (course?.required_tier !== "beginners" && !isKidsCourse) {
+        return { error: "Group cohorts are only supported for Beginners and kids courses." };
       }
 
       const { data, error } = await supabase

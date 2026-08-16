@@ -51,6 +51,7 @@ export async function completeGroupPurchaseAfterPayment(
     userId: string;
     session: Stripe.Checkout.Session;
     studentPackageId: string;
+    kidProfileId?: string | null;
   }
 ): Promise<CompleteGroupPurchaseResult> {
   const rawCohortId = params.session.metadata?.cohort_id?.trim();
@@ -67,12 +68,19 @@ export async function completeGroupPurchaseAfterPayment(
 
   const { data: studentPackage, error: spLoadError } = await supabase
     .from("student_packages")
-    .select("id, user_id, course_id, package_id, status, enrollment_id, packages(delivery_mode, slug)")
+    .select("id, user_id, kid_profile_id, course_id, package_id, status, enrollment_id, packages(delivery_mode, slug)")
     .eq("id", params.studentPackageId)
     .maybeSingle();
 
   if (spLoadError) return { completed: false, error: spLoadError.message };
-  if (!studentPackage || studentPackage.user_id !== params.userId) {
+  if (!studentPackage) {
+    return { completed: false, error: "Student package mismatch." };
+  }
+  if (params.kidProfileId) {
+    if (studentPackage.kid_profile_id !== params.kidProfileId) {
+      return { completed: false, error: "Student package mismatch." };
+    }
+  } else if (studentPackage.user_id !== params.userId) {
     return { completed: false, error: "Student package mismatch." };
   }
 
@@ -174,6 +182,7 @@ export async function completeGroupPurchaseAfterPayment(
     p_payment_date: paymentDate,
     p_stripe_session_id: params.session.id,
     p_stripe_payment_intent: paymentIntent,
+    ...(params.kidProfileId ? { p_kid_profile_id: params.kidProfileId } : {}),
   });
 
   if (rpcError) {
@@ -259,14 +268,16 @@ export async function completeGroupPurchaseAfterPayment(
 
   // Lead create/link is awaited inside tryWriteBack → resolveLeadPageIdForCohortWriteBack
   // before any Confirmed PATCH — never fire write-back concurrently with lead resolution.
-  const { data: authUser } = await supabase.auth.admin.getUserById(params.userId);
-  await tryWriteBackCohortConfirmedAfterEnrollment(supabase, {
-    userId: params.userId,
-    cohortId,
-    cohortName: core.cohort_name ?? cohort.name,
-    notionPageId: core.notion_page_id ?? cohort.notion_page_id ?? null,
-    email: authUser.user?.email ?? null,
-  });
+  if (!params.kidProfileId) {
+    const { data: authUser } = await supabase.auth.admin.getUserById(params.userId);
+    await tryWriteBackCohortConfirmedAfterEnrollment(supabase, {
+      userId: params.userId,
+      cohortId,
+      cohortName: core.cohort_name ?? cohort.name,
+      notionPageId: core.notion_page_id ?? cohort.notion_page_id ?? null,
+      email: authUser.user?.email ?? null,
+    });
+  }
 
   return { completed: true };
 }

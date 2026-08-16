@@ -1,10 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { KID_PROFILE_COOKIE, KIDS_PIN_UNLOCKED_COOKIE } from "@/lib/kids/constants";
+import { KIDS_PIN_UNLOCKED_COOKIE } from "@/lib/kids/constants";
 import { verifyKidsPin } from "@/lib/kids/pin";
-import { kidsPinUnlockedCookieOptions, syncKidSessionContext } from "@/lib/kids/session";
+import { kidsPinUnlockedCookieOptions } from "@/lib/kids/session";
 import { createClient } from "@/lib/supabase/server";
 
+/** Unlock the profile switcher for this browser session. Does not change the active profile. */
 export async function POST(request: Request) {
   const { pin } = (await request.json()) as { pin?: string };
 
@@ -29,9 +30,7 @@ export async function POST(request: Request) {
   }
 
   const cookieStore = await cookies();
-  cookieStore.delete(KID_PROFILE_COOKIE);
   cookieStore.set(KIDS_PIN_UNLOCKED_COOKIE, "1", kidsPinUnlockedCookieOptions());
-  await syncKidSessionContext(user.id, null);
 
-  return NextResponse.json({ ok: true, redirectTo: "/dashboard/profile/kids" });
+  return NextResponse.json({ ok: true });
 }

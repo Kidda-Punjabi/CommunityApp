@@ -58,16 +58,16 @@ export async function loadCohortAttendanceRoster(
   ] = await Promise.all([
     supabase
       .from("cohort_members")
-      .select("user_id, left_at")
+      .select("user_id, kid_profile_id, left_at")
       .eq("cohort_id", cohortId),
     supabase
       .from("course_enrollments")
-      .select("user_id")
+      .select("user_id, kid_profile_id")
       .eq("cohort_id", cohortId)
       .eq("delivery_mode", "group"),
     supabase
       .from("cohort_lesson_attendance")
-      .select("student_id, attended, marked_at")
+      .select("student_id, kid_profile_id, attended, marked_at, tutor_note")
       .eq("cohort_id", cohortId)
       .eq("lesson_id", lessonId),
   ]);
@@ -79,44 +79,61 @@ export async function loadCohortAttendanceRoster(
     throw attendanceError;
   }
 
-  const activeIds = new Set<string>();
+  const activeUserIds = new Set<string>();
+  const activeKidIds = new Set<string>();
   for (const row of enrollmentRows ?? []) {
-    activeIds.add(row.user_id as string);
+    if (row.user_id) activeUserIds.add(row.user_id as string);
+    if (row.kid_profile_id) activeKidIds.add(row.kid_profile_id as string);
   }
 
   const membersVisible = (memberRows ?? []).length > 0;
   if (membersVisible) {
     for (const row of memberRows ?? []) {
-      const userId = row.user_id as string;
-      if (row.left_at == null) {
-        activeIds.add(userId);
-      } else {
-        activeIds.delete(userId);
+      if (row.user_id) {
+        if (row.left_at == null) activeUserIds.add(row.user_id as string);
+        else activeUserIds.delete(row.user_id as string);
+      }
+      if (row.kid_profile_id) {
+        if (row.left_at == null) activeKidIds.add(row.kid_profile_id as string);
+        else activeKidIds.delete(row.kid_profile_id as string);
       }
     }
   }
 
-  const attendanceByStudent = new Map(
-    (attendanceRows ?? []).map((row) => [
-      row.student_id as string,
-      {
-        attended: row.attended as boolean,
-        markedAt: row.marked_at as string,
-      },
-    ])
-  );
-
-  const rosterIds = new Set<string>([...activeIds]);
-  for (const studentId of attendanceByStudent.keys()) {
-    rosterIds.add(studentId);
+  const attendanceByActor = new Map<
+    string,
+    { attended: boolean; markedAt: string; tutorNote: string | null }
+  >();
+  for (const row of attendanceRows ?? []) {
+    const key = (row.kid_profile_id as string | null) ?? (row.student_id as string | null);
+    if (!key) continue;
+    attendanceByActor.set(key, {
+      attended: row.attended as boolean,
+      markedAt: row.marked_at as string,
+      tutorNote: (row.tutor_note as string | null) ?? null,
+    });
   }
 
-  if (rosterIds.size === 0) return [];
+  const rosterUserIds = new Set<string>([...activeUserIds]);
+  const rosterKidIds = new Set<string>([...activeKidIds]);
+  for (const row of attendanceRows ?? []) {
+    if (row.student_id) rosterUserIds.add(row.student_id as string);
+    if (row.kid_profile_id) rosterKidIds.add(row.kid_profile_id as string);
+  }
 
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, full_name, preferred_name")
-    .in("id", [...rosterIds]);
+  if (rosterUserIds.size === 0 && rosterKidIds.size === 0) return [];
+
+  const [{ data: profiles }, { data: kids }] = await Promise.all([
+    rosterUserIds.size
+      ? supabase
+          .from("profiles")
+          .select("id, full_name, preferred_name")
+          .in("id", [...rosterUserIds])
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null; preferred_name: string | null }> }),
+    rosterKidIds.size
+      ? supabase.from("kid_profiles").select("id, name").in("id", [...rosterKidIds])
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+  ]);
 
   const nameById = new Map(
     (profiles ?? []).map((profile) => [
@@ -124,19 +141,56 @@ export async function loadCohortAttendanceRoster(
       getDisplayName(profile) ?? "Student",
     ] as const)
   );
+  for (const kid of kids ?? []) {
+    nameById.set(kid.id, kid.name || "Student");
+  }
 
-  return [...rosterIds]
-    .map((studentId) => {
-      const existing = attendanceByStudent.get(studentId);
-      return {
-        studentId,
-        studentName: nameById.get(studentId) ?? "Student",
-        isActiveMember: activeIds.has(studentId),
-        attended: existing?.attended ?? null,
-        markedAt: existing?.markedAt ?? null,
-      };
-    })
-    .sort((a, b) => a.studentName.localeCompare(b.studentName));
+  const roster: CohortAttendanceRosterStudent[] = [];
+  for (const studentId of rosterUserIds) {
+    const existing = attendanceByActor.get(studentId);
+    roster.push({
+      studentId,
+      studentName: nameById.get(studentId) ?? "Student",
+      isActiveMember: activeUserIds.has(studentId),
+      attended: existing?.attended ?? null,
+      markedAt: existing?.markedAt ?? null,
+    });
+  }
+  for (const kidId of rosterKidIds) {
+    const existing = attendanceByActor.get(kidId);
+    roster.push({
+      studentId: kidId,
+      studentName: nameById.get(kidId) ?? "Student",
+      isActiveMember: activeKidIds.has(kidId),
+      attended: existing?.attended ?? null,
+      markedAt: existing?.markedAt ?? null,
+    });
+  }
+
+  return roster.sort((a, b) => a.studentName.localeCompare(b.studentName));
+}
+
+export async function kidProfileIdsInCohort(
+  supabase: SupabaseClient,
+  cohortId: string
+): Promise<Set<string>> {
+  const [{ data: kidMembers }, { data: kidEnrollments }] = await Promise.all([
+    supabase
+      .from("cohort_members")
+      .select("kid_profile_id")
+      .eq("cohort_id", cohortId)
+      .not("kid_profile_id", "is", null),
+    supabase
+      .from("course_enrollments")
+      .select("kid_profile_id")
+      .eq("cohort_id", cohortId)
+      .not("kid_profile_id", "is", null),
+  ]);
+  return new Set(
+    [...(kidMembers ?? []), ...(kidEnrollments ?? [])]
+      .map((row) => row.kid_profile_id as string | null)
+      .filter((id): id is string => Boolean(id))
+  );
 }
 
 export async function loadLessonsWithAttendanceMarked(

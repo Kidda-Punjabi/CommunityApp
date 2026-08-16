@@ -255,6 +255,11 @@ export async function syncStripePurchasesForUser(userId: string, email: string) 
   }
 
   const unlockedTiers = [...tiers];
+  const { drainKidsCoursePurchaseGrantQueue } = await import(
+    "@/lib/kids/grant-kids-course-purchase"
+  );
+  await drainKidsCoursePurchaseGrantQueue(userId, email);
+
   if (!unlockedTiers.length) {
     return { updated: false, unlockedTiers: [] as PaidCourseTier[] };
   }

@@ -13,6 +13,7 @@ export type KidProfile = {
 export type KidSession = {
   activeKidProfile: KidProfile | null;
   hasPin: boolean;
+  pinUnlocked: boolean;
 };
 
 export type KidSticker = {

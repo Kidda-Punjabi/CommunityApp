@@ -5,7 +5,12 @@ import {
   KID_PROFILE_COOKIE,
   usesKidsShell,
 } from "@/lib/kids/constants";
-import { kidProfileCookieOptions, syncKidSessionContext } from "@/lib/kids/session";
+import { kidHomeHref } from "@/lib/kids/load-kid-content";
+import {
+  isKidsPinUnlocked,
+  kidProfileCookieOptions,
+  syncKidSessionContext,
+} from "@/lib/kids/session";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -22,6 +27,16 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("kids_pin_hash")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.kids_pin_hash && !(await isKidsPinUnlocked())) {
+    return NextResponse.json({ error: "Enter your PIN to switch profiles." }, { status: 403 });
   }
 
   const { data: kid } = await supabase
@@ -41,7 +56,7 @@ export async function POST(request: Request) {
 
   const redirectTo = usesKidsShell(kid.age_tier)
     ? "/dashboard/kids"
-    : "/dashboard/home";
+    : kidHomeHref(kid.age_tier);
 
   return NextResponse.json({ ok: true, redirectTo, ageTier: kid.age_tier });
 }
@@ -56,9 +71,19 @@ export async function DELETE() {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("kids_pin_hash")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.kids_pin_hash && !(await isKidsPinUnlocked())) {
+    return NextResponse.json({ error: "Enter your PIN to switch profiles." }, { status: 403 });
+  }
+
   const cookieStore = await cookies();
   cookieStore.delete(KID_PROFILE_COOKIE);
   await syncKidSessionContext(user.id, null);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, redirectTo: "/dashboard/home" });
 }

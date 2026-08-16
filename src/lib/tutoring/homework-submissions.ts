@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
 
 export type HomeworkSubmissionStatus = "pending_review" | "reviewed";
 export type HomeworkSubmissionType = "voice" | "text";
@@ -102,12 +103,14 @@ export async function fetchHomeworkSubmissionsForUser(
   const map = new Map<string, HomeworkSubmissionView>();
   if (lessonIds.length === 0) return map;
 
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = studentActorFilter(actor);
   const { data, error } = await supabase
     .from("homework_submissions")
     .select(
       "id, lesson_id, storage_path, mime_type, duration_seconds, submission_type, text_answers, status, approved, tutor_comment, submitted_at"
     )
-    .eq("student_id", userId)
+    .eq(filter.column, filter.value)
     .eq("is_practice", false)
     .in("lesson_id", lessonIds);
 

@@ -4,6 +4,7 @@ import {
 } from "@/lib/learning/learn-access";
 import { isPrivateAccessCourse } from "@/lib/learning/private-courses";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
+import { actorFilter, resolveCourseActor } from "@/lib/kids/course-actor";
 import type { CourseAccessContext } from "@/lib/membership/unlocked";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -39,10 +40,12 @@ export async function fetchLessonContentUnlockMap(
   const enrolledCourseIds = new Set<string>();
   if (isAdmin) {
     const courseIds = [...new Set(lessons.map((lesson) => lesson.course_id))];
+    const actor = await resolveCourseActor(supabase, userId);
+    const filter = actorFilter(actor);
     const { data: enrollments } = await supabase
       .from("course_enrollments")
       .select("course_id")
-      .eq("user_id", userId)
+      .eq(filter.column, filter.value)
       .in("course_id", courseIds);
     for (const row of enrollments ?? []) {
       if (row.course_id) enrolledCourseIds.add(row.course_id as string);
@@ -225,10 +228,12 @@ export async function fetchLessonRecordingsForUser(
   const map = new Map<string, LessonRecordingView>();
   if (lessonIds.length === 0) return map;
 
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   const { data: enrollmentRows } = await supabase
     .from("course_enrollments")
     .select("course_id, delivery_mode, cohort_id")
-    .eq("user_id", userId);
+    .eq(filter.column, filter.value);
 
   const homeCohortIds = [
     ...new Set(

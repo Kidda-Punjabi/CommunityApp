@@ -48,7 +48,7 @@ export default async function CoursePage({ params }: CoursePageProps) {
   } = await supabase.auth.getUser();
 
   let owned = false;
-  if (user) {
+  if (user && slug !== "beginners-kids") {
     const access = await getCourseAccessContext(supabase, user);
     const ids = courseIdsForTiers(access.courses, [content.tier]);
     owned = [...ids].some((id) => access.unlockedCourseIds.has(id));

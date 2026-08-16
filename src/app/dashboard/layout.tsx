@@ -60,7 +60,11 @@ export default async function DashboardLayout({
         pendingCourseTours={pendingCourseTours}
         kidsShellActive={kidsShellActive}
       >
-        <KidSessionProvider activeKidProfile={kid} hasPin={kidSession.hasPin}>
+        <KidSessionProvider
+          activeKidProfile={kid}
+          hasPin={kidSession.hasPin}
+          pinUnlocked={kidSession.pinUnlocked}
+        >
           <AudioManagerProvider initialSettings={soundSettings}>
             <PointsToastProvider />
             <TabNavProvider>

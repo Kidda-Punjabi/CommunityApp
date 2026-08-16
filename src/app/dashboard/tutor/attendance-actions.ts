@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import {
+  kidProfileIdsInCohort,
   loadCohortAttendanceLessons,
   loadCohortAttendanceRoster,
   loadLessonsWithAttendanceMarked,
@@ -99,22 +100,45 @@ export async function saveCohortLessonAttendance(
       return { error: "Mark at least one student before saving." };
     }
 
+    const kidIds = await kidProfileIdsInCohort(supabase, cohortId);
+
     const now = new Date().toISOString();
-    const rows = marks.map((mark) => ({
-      cohort_id: cohortId,
-      lesson_id: lessonId,
-      student_id: mark.studentId,
-      attended: mark.attended,
-      marked_by: userId,
-      marked_at: now,
-      updated_at: now,
-    }));
+    const adultMarks = marks.filter((mark) => !kidIds.has(mark.studentId));
+    const kidMarks = marks.filter((mark) => kidIds.has(mark.studentId));
 
-    const { error } = await supabase.from("cohort_lesson_attendance").upsert(rows, {
-      onConflict: "cohort_id,lesson_id,student_id",
-    });
+    if (adultMarks.length > 0) {
+      const { error } = await supabase.from("cohort_lesson_attendance").upsert(
+        adultMarks.map((mark) => ({
+          cohort_id: cohortId,
+          lesson_id: lessonId,
+          student_id: mark.studentId,
+          kid_profile_id: null,
+          attended: mark.attended,
+          marked_by: userId,
+          marked_at: now,
+          updated_at: now,
+        })),
+        { onConflict: "cohort_id,lesson_id,student_id" }
+      );
+      if (error) return { error: error.message };
+    }
 
-    if (error) return { error: error.message };
+    if (kidMarks.length > 0) {
+      const { error } = await supabase.from("cohort_lesson_attendance").upsert(
+        kidMarks.map((mark) => ({
+          cohort_id: cohortId,
+          lesson_id: lessonId,
+          student_id: null,
+          kid_profile_id: mark.studentId,
+          attended: mark.attended,
+          marked_by: userId,
+          marked_at: now,
+          updated_at: now,
+        })),
+        { onConflict: "cohort_id,lesson_id,kid_profile_id" }
+      );
+      if (error) return { error: error.message };
+    }
 
     // Best-effort Notion Attendees push when a matching Lessons Log entry exists.
     let notionNote = "";

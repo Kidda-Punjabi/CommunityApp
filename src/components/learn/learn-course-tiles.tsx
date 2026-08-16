@@ -52,6 +52,14 @@ export type LearnHubTile =
       title: string;
       status: string;
       tone: "sky";
+    }
+  | {
+      id: string;
+      kind: "kids-course";
+      href: string;
+      title: string;
+      status: string;
+      tone: "accent";
     };
 
 /**
@@ -81,9 +89,12 @@ const ICON_WRAP: Record<LearnHubTile["tone"], string> = {
   sky: "bg-sky-600/15 text-sky-700",
 };
 
-function TileIcon({ id }: { id: LearnHubTile["id"] }) {
+function TileIcon({ tile }: { tile: LearnHubTile }) {
   const className = "h-6 w-6";
-  switch (id) {
+  if (tile.kind === "kids-course") {
+    return <BookOpen className={className} aria-hidden />;
+  }
+  switch (tile.id) {
     case "foundational":
       return <BookOpen className={className} aria-hidden />;
     case "beginners":
@@ -115,7 +126,7 @@ function TileBody({
             ICON_WRAP[tile.tone]
           )}
         >
-          <TileIcon id={tile.id} />
+          <TileIcon tile={tile} />
         </span>
         {children}
       </div>
@@ -157,7 +168,7 @@ export function LearnCourseTiles({ tiles }: { tiles: LearnHubTile[] }) {
             className={cn(pressableClass, tileShell, tone, "transition-opacity hover:opacity-95")}
           >
             <TileBody tile={tile}>
-              {tile.id === "foundational" && tile.percent != null ? (
+              {tile.kind === "link" && tile.id === "foundational" && tile.percent != null ? (
                 <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-bold tabular-nums text-violet-800">
                   {tile.percent}%
                 </span>

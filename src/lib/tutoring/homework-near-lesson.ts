@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
 
 const NEAR_LESSON_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -16,7 +17,8 @@ export type HomeworkTimingState = "on_time" | "late" | "post_lesson" | "unknown"
 export async function findHomeworkLessonSessionStartsAt(
   supabase: SupabaseClient,
   studentId: string,
-  lessonId: string
+  lessonId: string,
+  kidProfileId?: string | null
 ): Promise<string | null> {
   const { data: lesson, error: lessonError } = await supabase
     .from("lessons")
@@ -30,10 +32,18 @@ export async function findHomeworkLessonSessionStartsAt(
   const lessonNumber = Number(lesson.lesson_number);
   if (!Number.isFinite(lessonNumber) || lessonNumber < 1) return null;
 
+  const actor = kidProfileId
+    ? ({ kind: "kid" as const, userId: studentId, kidProfileId })
+    : await resolveCourseActor(supabase, studentId);
+  const enrollmentFilter =
+    actor.kind === "kid"
+      ? { column: "kid_profile_id" as const, value: actor.kidProfileId }
+      : { column: "user_id" as const, value: actor.userId };
+
   const { data: enrollment } = await supabase
     .from("course_enrollments")
     .select("cohort_id, delivery_mode")
-    .eq("user_id", studentId)
+    .eq(enrollmentFilter.column, enrollmentFilter.value)
     .eq("course_id", courseId)
     .maybeSingle();
 
@@ -51,7 +61,12 @@ export async function findHomeworkLessonSessionStartsAt(
   if (cohortId) {
     query = query.eq("cohort_id", cohortId);
   } else {
-    query = query.eq("student_id", studentId).eq("course_id", courseId);
+    const studentFilter = studentActorFilter(actor);
+    if (studentFilter.column === "student_id") {
+      query = query.eq("student_id", studentFilter.value).eq("course_id", courseId);
+    } else {
+      query = query.eq("course_id", courseId);
+    }
   }
 
   const { data: sessions, error: sessionError } = await query;
@@ -110,9 +125,15 @@ export async function getHomeworkTimingState(
   supabase: SupabaseClient,
   studentId: string,
   lessonId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  kidProfileId?: string | null
 ): Promise<HomeworkTimingState> {
-  const startsAt = await findHomeworkLessonSessionStartsAt(supabase, studentId, lessonId);
+  const startsAt = await findHomeworkLessonSessionStartsAt(
+    supabase,
+    studentId,
+    lessonId,
+    kidProfileId
+  );
   return homeworkTimingStateFromStartsAt(startsAt, now);
 }
 

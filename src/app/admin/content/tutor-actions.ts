@@ -197,12 +197,12 @@ export async function createBeginnersCohort(
 
     const { data: course } = await supabase
       .from("courses")
-      .select("required_tier")
+      .select("required_tier, content_track")
       .eq("id", courseId)
       .maybeSingle();
 
-    if (course?.required_tier !== "beginners") {
-      return { error: "Cohorts are only for the Beginners course." };
+    if (course?.required_tier !== "beginners" && course?.content_track !== "kids") {
+      return { error: "Cohorts are only for Beginners and kids courses." };
     }
 
     const { error } = await supabase.from("cohorts").insert({

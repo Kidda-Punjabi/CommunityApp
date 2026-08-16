@@ -1,6 +1,7 @@
 import "server-only";
 
 import { UK_DISPLAY_TIMEZONE } from "@/lib/calendar/uk-display-time";
+import { resolveCourseActor } from "@/lib/kids/course-actor";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type GroupCohortContentGate = {
@@ -73,13 +74,18 @@ export async function resolveGroupCohortContentGate(
 ): Promise<GroupCohortContentGate | null> {
   if (courseIds.length === 0) return null;
 
-  const { data: enrollments, error } = await supabase
+  const actor = await resolveCourseActor(supabase, userId);
+  const enrollmentQuery = supabase
     .from("course_enrollments")
     .select("id, course_id, delivery_mode, cohort_id")
-    .eq("user_id", userId)
     .in("course_id", courseIds)
     .eq("delivery_mode", "group")
     .not("cohort_id", "is", null);
+
+  const { data: enrollments, error } =
+    actor.kind === "kid"
+      ? await enrollmentQuery.eq("kid_profile_id", actor.kidProfileId)
+      : await enrollmentQuery.eq("user_id", userId);
 
   if (error) throw error;
 

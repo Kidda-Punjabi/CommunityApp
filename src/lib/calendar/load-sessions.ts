@@ -23,6 +23,7 @@ import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labe
 import { filterStudentScheduleSessions } from "@/lib/calendar/filter-student-schedule-sessions";
 import { resolvePrimaryOneToOneSeriesByCourse } from "@/lib/calendar/resolve-student-one-to-one-series";
 import { isSessionVisibleToStudent, type StudentEnrollmentContext } from "@/lib/calendar/session-visibility";
+import { actorFilter, resolveCourseActor } from "@/lib/kids/course-actor";
 
 const IN_FILTER_CHUNK_SIZE = 80;
 
@@ -116,10 +117,12 @@ export async function loadStudentUpcomingSessions(
 ): Promise<StudentSessionsLoadResult> {
   const nowIso = new Date().toISOString();
 
+  const actor = await resolveCourseActor(supabase, studentId);
+  const filter = actorFilter(actor);
   const { data: enrollments, error: enrollmentsError } = await supabase
     .from("course_enrollments")
     .select("tutor_id, cohort_id, delivery_mode, course_id")
-    .eq("user_id", studentId);
+    .eq(filter.column, filter.value);
 
   if (enrollmentsError) {
     if (isCalendarSchemaMissingError(enrollmentsError)) {

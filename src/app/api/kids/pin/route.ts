@@ -1,5 +1,8 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { KIDS_PIN_UNLOCKED_COOKIE } from "@/lib/kids/constants";
 import { hashKidsPin, isValidPin, verifyKidsPin } from "@/lib/kids/pin";
+import { kidsPinUnlockedCookieOptions } from "@/lib/kids/session";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -46,6 +49,8 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    const cookieStore = await cookies();
+    cookieStore.set(KIDS_PIN_UNLOCKED_COOKIE, "1", kidsPinUnlockedCookieOptions());
     return NextResponse.json({ ok: true });
   }
 
@@ -63,7 +68,8 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
+  const cookieStore = await cookies();
+  cookieStore.set(KIDS_PIN_UNLOCKED_COOKIE, "1", kidsPinUnlockedCookieOptions());
   return NextResponse.json({ ok: true });
 }
 

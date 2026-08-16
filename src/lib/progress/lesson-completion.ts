@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isQuizPassing } from "@/lib/progress/quiz-progress";
+import { actorFilter, resolveCourseActor } from "@/lib/kids/course-actor";
 
 export type LessonCompletionStatus = {
   fullyComplete: boolean;
@@ -129,6 +130,8 @@ export async function fetchLessonCompletionMap(
 
   const lessonIds = lessons.map((lesson) => lesson.id);
   const courseIds = [...new Set(lessons.map((lesson) => lesson.course_id))];
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
 
   const [
     { data: lessonProgress },
@@ -140,7 +143,7 @@ export async function fetchLessonCompletionMap(
     supabase
       .from("lesson_progress")
       .select("lesson_id, completed, pdf_completed")
-      .eq("user_id", userId)
+      .eq(filter.column, filter.value)
       .in("lesson_id", lessonIds),
     supabase
       .from("set_course_links")
@@ -153,7 +156,7 @@ export async function fetchLessonCompletionMap(
     supabase
       .from("quiz_progress")
       .select("quiz_id, completed, score")
-      .eq("user_id", userId),
+      .eq(filter.column, filter.value),
     // English Foundations (and similar) attach cards via lesson_id with deck_id null.
     supabase
       .from("flashcards")

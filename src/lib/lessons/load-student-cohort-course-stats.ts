@@ -1,6 +1,7 @@
 import "server-only";
 
 import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
+import { resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type StudentCohortCourseStats = {
@@ -28,14 +29,18 @@ export async function loadStudentCohortCourseStats(
 ): Promise<StudentCohortCourseStats | null> {
   if (courseIds.length === 0) return null;
 
-  const { data: enrollment, error: enrollmentError } = await supabase
+  const actor = await resolveCourseActor(supabase, userId);
+  const enrollmentQuery = supabase
     .from("course_enrollments")
     .select("cohort_id, delivery_mode, course_id")
-    .eq("user_id", userId)
     .in("course_id", courseIds)
     .eq("delivery_mode", "group")
-    .not("cohort_id", "is", null)
-    .maybeSingle();
+    .not("cohort_id", "is", null);
+
+  const { data: enrollment, error: enrollmentError } =
+    actor.kind === "kid"
+      ? await enrollmentQuery.eq("kid_profile_id", actor.kidProfileId).maybeSingle()
+      : await enrollmentQuery.eq("user_id", userId).maybeSingle();
 
   if (enrollmentError) {
     console.error("loadStudentCohortCourseStats enrollment:", enrollmentError.message);
@@ -69,20 +74,21 @@ export async function loadStudentCohortCourseStats(
 
   if (availableLessonIds.length === 0) return null;
 
+  const studentFilter = studentActorFilter(actor);
   const [{ data: attendanceRows, error: attendanceError }, { data: homeworkRows, error: homeworkError }] =
     await Promise.all([
       supabase
         .from("cohort_lesson_attendance")
         .select("lesson_id, attended")
         .eq("cohort_id", cohortId)
-        .eq("student_id", userId)
+        .eq(studentFilter.column, studentFilter.value)
         .in("lesson_id", availableLessonIds)
         .eq("attended", true),
       supabase
         .from("cohort_lesson_homework")
         .select("lesson_id, completed")
         .eq("cohort_id", cohortId)
-        .eq("student_id", userId)
+        .eq(studentFilter.column, studentFilter.value)
         .in("lesson_id", availableLessonIds)
         .eq("completed", true),
     ]);

@@ -21,6 +21,8 @@ type CreateCheckoutSessionOptions = {
   oneToOneBookingId?: string;
   /** Course this 1-to-1 session credit is for (required for course-scoped credits). */
   courseId?: string;
+  kidProfileId?: string;
+  kidName?: string;
 };
 
 async function resolveStripeCustomerId(userId: string, email: string): Promise<string> {
@@ -63,6 +65,8 @@ export async function createCheckoutSession({
   cohortSeatHoldId,
   oneToOneBookingId,
   courseId,
+  kidProfileId,
+  kidName,
 }: CreateCheckoutSessionOptions) {
   const config = getCheckoutConfig(checkoutKey);
   if (!config) {
@@ -192,6 +196,24 @@ export async function createCheckoutSession({
     }
   }
 
+  if (user) {
+    const slug = await (await import("@/lib/group-purchase/checkout-keys")).packageSlugForCheckoutKey(
+      checkoutKey
+    );
+    if (slug) {
+      const { data: pkg } = await supabase
+        .from("packages")
+        .select("course_id, courses(content_track)")
+        .eq("slug", slug)
+        .maybeSingle();
+      const course = Array.isArray(pkg?.courses) ? pkg?.courses[0] : pkg?.courses;
+      const track = (course as { content_track?: string | null } | null)?.content_track;
+      if (track === "kids" && !kidProfileId?.trim() && !kidName?.trim()) {
+        throw new Error("Choose or name the child this course is for.");
+      }
+    }
+  }
+
   if (!priceId && paymentLink) {
     if (needsOneToOneSlot && oneToOneBookingId && user) {
       // Payment links can't carry booking metadata — the pending hold on the user is enough.
@@ -239,6 +261,8 @@ export async function createCheckoutSession({
       ...(needsGroupCohort && cohortId && cohortSeatHoldId
         ? { cohort_id: cohortId, cohort_seat_hold_id: cohortSeatHoldId }
         : {}),
+      ...(kidProfileId?.trim() ? { kid_profile_id: kidProfileId.trim() } : {}),
+      ...(kidName?.trim() ? { kid_name: kidName.trim() } : {}),
       ...(needsOneToOneSlot && oneToOneBookingId
         ? {
             one_to_one_booking_id: oneToOneBookingId.trim(),

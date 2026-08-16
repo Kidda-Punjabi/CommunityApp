@@ -1,4 +1,5 @@
 export const KID_PROFILE_COOKIE = "kidda_kid_profile_id";
+export const KIDS_PIN_UNLOCKED_COOKIE = "kidda_kids_pin_unlocked";
 
 export const KID_AVATAR_ICONS = [
   "Cat",

@@ -15,19 +15,24 @@ import type { KidProfile } from "@/lib/kids/types";
 type ProfileSwitcherProps = {
   kidProfiles: KidProfile[];
   hasPin: boolean;
+  pinUnlocked: boolean;
   parentName: string;
+  showManage?: boolean;
 };
 
 export function ProfileSwitcher({
   kidProfiles,
   hasPin,
+  pinUnlocked,
   parentName,
+  showManage = true,
 }: ProfileSwitcherProps) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
-  const [pinSetup, setPinSetup] = useState(false);
   const [pendingKidId, setPendingKidId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionUnlocked, setSessionUnlocked] = useState(pinUnlocked);
+  const unlocked = sessionUnlocked || !hasPin;
 
   async function switchToKid(kidProfileId: string) {
     setError(null);
@@ -41,7 +46,7 @@ export function ProfileSwitcher({
       setError(data.error ?? "Could not switch profile.");
       return;
     }
-    router.push(data.redirectTo ?? "/dashboard/kids");
+    router.push(data.redirectTo ?? "/dashboard/learn");
     router.refresh();
   }
 
@@ -50,11 +55,19 @@ export function ProfileSwitcher({
       router.push("/dashboard/profile");
       return;
     }
-    setPinSetup(true);
+    setError(null);
+    const response = await fetch("/api/kids/switch", { method: "DELETE" });
+    const data = (await response.json()) as { error?: string; redirectTo?: string };
+    if (!response.ok) {
+      setError(data.error ?? "Could not switch to parent account.");
+      return;
+    }
+    router.push(data.redirectTo ?? "/dashboard/home");
+    router.refresh();
   }
 
-  async function handlePinComplete(pin: string) {
-    const response = await fetch("/api/kids/exit", {
+  async function handleUnlockPin(pin: string) {
+    const response = await fetch("/api/kids/unlock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pin }),
@@ -64,9 +77,28 @@ export function ProfileSwitcher({
       setError(data.error ?? "Incorrect PIN.");
       return;
     }
-    setPinSetup(false);
-    router.push("/dashboard/profile");
+    setError(null);
+    setSessionUnlocked(true);
     router.refresh();
+  }
+
+  if (hasPin && !unlocked) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-zinc-600">
+          Enter your PIN to switch between profiles. You won&apos;t be asked again this session.
+        </p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="rounded-3xl border border-zinc-200 bg-white p-6">
+          <PinPad
+            title="Enter your PIN"
+            subtitle="Unlock the profile switcher"
+            onComplete={handleUnlockPin}
+            error={error}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -143,21 +175,9 @@ export function ProfileSwitcher({
         />
       )}
 
-      {pinSetup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6">
-            <PinPad
-              title="Enter your PIN"
-              subtitle="To use your parent account"
-              onComplete={handlePinComplete}
-              onCancel={() => setPinSetup(false)}
-              error={error}
-            />
-          </div>
-        </div>
-      )}
-
-      <LinkRow href="/dashboard/profile/kids/manage" label="Manage kid profiles & PIN" />
+      {showManage ? (
+        <LinkRow href="/dashboard/profile/kids/manage" label="Manage kid profiles & PIN" />
+      ) : null}
     </div>
   );
 }

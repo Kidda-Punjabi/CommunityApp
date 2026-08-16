@@ -21,18 +21,31 @@ export async function requireNoActiveKidProfile(redirectTo?: string) {
   return { user, supabase };
 }
 
+/** Community / social surfaces are unreachable while a kid profile is active. */
+export async function requireNoKidCommunityAccess() {
+  return requireNoActiveKidProfile();
+}
+
 export async function requireForumAccessAllowed() {
+  return requireNoActiveKidProfile();
+}
+
+/** For server actions / APIs that cannot redirect. */
+export async function rejectIfKidCommunityBlocked(): Promise<
+  | { blocked: true; error: string }
+  | { blocked: false; user: { id: string }; supabase: Awaited<ReturnType<typeof createClient>> }
+> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+  if (!user) return { blocked: true, error: "You must be signed in." };
 
   const session = await loadKidSession(user.id);
   if (session.activeKidProfile) {
-    redirect(kidHomeHref(session.activeKidProfile.age_tier));
+    return { blocked: true, error: "Community is not available on a kid profile." };
   }
 
-  return { user, supabase };
+  return { blocked: false, user, supabase };
 }

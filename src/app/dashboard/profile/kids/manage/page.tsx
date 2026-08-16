@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ParentKidsDashboard } from "@/components/kids/parent-kids-dashboard";
 import { requireNoActiveKidProfile } from "@/lib/kids/guards";
+import { loadParentKidsCourseProgress } from "@/lib/kids/load-parent-course-progress";
+import type { KidProfile } from "@/lib/kids/types";
 import { ui } from "@/lib/ui/styles";
 
 export default async function ManageKidsPage() {
@@ -42,6 +44,12 @@ export default async function ManageKidsPage() {
     })
   );
 
+  const courseProgress = await loadParentKidsCourseProgress(
+    supabase,
+    user.id,
+    (kidProfiles ?? []) as KidProfile[]
+  );
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("kids_pin_hash")
@@ -59,6 +67,7 @@ export default async function ManageKidsPage() {
       <h1 className="mt-4 text-2xl font-bold text-zinc-900">Manage kid profiles</h1>
       <ParentKidsDashboard
         summaries={summaries}
+        courseProgress={courseProgress}
         hasPin={Boolean(profile?.kids_pin_hash)}
       />
     </div>

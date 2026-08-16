@@ -7,6 +7,11 @@ import {
   learningProductForLesson,
   learningProductForQuiz,
 } from "@/lib/learning/learning-product";
+import {
+  actorFilter,
+  quizProgressWrite,
+  resolveCourseActor,
+} from "@/lib/kids/course-actor";
 
 export const PASSING_QUIZ_SCORE = 80;
 
@@ -48,10 +53,12 @@ export async function fetchQuizProgressMap(
   supabase: SupabaseClient,
   userId: string
 ): Promise<Map<string, QuizProgressRow>> {
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   const { data } = await supabase
     .from("quiz_progress")
     .select("quiz_id, completed, score")
-    .eq("user_id", userId);
+    .eq(filter.column, filter.value);
 
   return new Map((data ?? []).map((row) => [row.quiz_id, row]));
 }
@@ -68,15 +75,17 @@ export async function saveQuizProgress(
   score: number,
   options?: { lessonId?: string | null }
 ): Promise<SaveQuizProgressResult> {
+  const actor = await resolveCourseActor(supabase, userId);
   const { error } = await supabase.from("quiz_progress").upsert(
-    {
-      user_id: userId,
+    quizProgressWrite(actor, {
       quiz_id: quizId,
       completed: true,
       score,
       last_attempted_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,quiz_id" }
+    }),
+    {
+      onConflict: actor.kind === "kid" ? "kid_profile_id,quiz_id" : "user_id,quiz_id",
+    }
   );
 
   if (error) throw error;

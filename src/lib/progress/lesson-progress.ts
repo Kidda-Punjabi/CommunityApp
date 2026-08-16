@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { tryAwardLessonCompletionPoints } from "@/lib/leaderboard/points";
+import {
+  actorFilter,
+  lessonProgressWrite,
+  resolveCourseActor,
+} from "@/lib/kids/course-actor";
 
 export type LessonProgressRow = {
   lesson_id: string;
@@ -15,12 +20,14 @@ export async function fetchLessonProgressMap(
   supabase: SupabaseClient,
   userId: string
 ): Promise<Map<string, LessonProgressRow>> {
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   const { data } = await supabase
     .from("lesson_progress")
     .select(
       "lesson_id, completed, seconds_listened, last_position, last_page_viewed, total_pages, pdf_completed"
     )
-    .eq("user_id", userId);
+    .eq(filter.column, filter.value);
 
   return new Map(
     (data ?? []).map((row) => [
@@ -50,15 +57,18 @@ export async function saveLessonProgress(
   userId: string,
   input: SaveLessonProgressInput
 ): Promise<number> {
+  const actor = await resolveCourseActor(supabase, userId);
   const { error } = await supabase.from("lesson_progress").upsert(
-    {
-      user_id: userId,
+    lessonProgressWrite(actor, {
       lesson_id: input.lessonId,
       last_position: input.lastPosition,
       seconds_listened: input.secondsListened,
       completed: input.completed,
-    },
-    { onConflict: "user_id,lesson_id" }
+    }),
+    {
+      onConflict:
+        actor.kind === "kid" ? "kid_profile_id,lesson_id" : "user_id,lesson_id",
+    }
   );
 
   if (error) throw error;
@@ -78,15 +88,18 @@ export async function saveLessonPdfProgress(
   userId: string,
   input: SaveLessonPdfProgressInput
 ): Promise<number> {
+  const actor = await resolveCourseActor(supabase, userId);
   const { error } = await supabase.from("lesson_progress").upsert(
-    {
-      user_id: userId,
+    lessonProgressWrite(actor, {
       lesson_id: input.lessonId,
       last_page_viewed: input.lastPageViewed,
       total_pages: input.totalPages,
       pdf_completed: input.pdfCompleted,
-    },
-    { onConflict: "user_id,lesson_id" }
+    }),
+    {
+      onConflict:
+        actor.kind === "kid" ? "kid_profile_id,lesson_id" : "user_id,lesson_id",
+    }
   );
 
   if (error) throw error;

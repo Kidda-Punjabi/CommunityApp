@@ -49,6 +49,10 @@ export function GroupCohortCheckout({
     Array<{ id: string; name: string }>
   >([]);
   const [selectedCohortId, setSelectedCohortId] = useState<string>("");
+  const [requiresKidProfile, setRequiresKidProfile] = useState(false);
+  const [kidProfiles, setKidProfiles] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedKidProfileId, setSelectedKidProfileId] = useState<string>("");
+  const [newKidName, setNewKidName] = useState("");
   const [loadingCohorts, setLoadingCohorts] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -65,12 +69,19 @@ export function GroupCohortCheckout({
           cohorts?: CohortOption[];
           checkingAvailability?: Array<{ id: string; name: string }>;
           syncWarning?: string | null;
+          requiresKidProfile?: boolean;
+          kidProfiles?: Array<{ id: string; name: string }>;
           error?: string;
         };
         if (!res.ok) throw new Error(data.error ?? "Could not load cohorts.");
         if (!cancelled) {
           setCohorts(data.cohorts ?? []);
           setCheckingAvailability(data.checkingAvailability ?? []);
+          setRequiresKidProfile(Boolean(data.requiresKidProfile));
+          setKidProfiles(data.kidProfiles ?? []);
+          if ((data.kidProfiles ?? []).length === 1) {
+            setSelectedKidProfileId(data.kidProfiles![0].id);
+          }
           if (data.syncWarning && (data.cohorts ?? []).length === 0) {
             setLoadError(data.syncWarning);
           }
@@ -99,6 +110,10 @@ export function GroupCohortCheckout({
       setCheckoutError("Choose a cohort to continue.");
       return;
     }
+    if (requiresKidProfile && !selectedKidProfileId && !newKidName.trim()) {
+      setCheckoutError("Choose an existing child or enter a name for a new profile.");
+      return;
+    }
 
     setCheckingOut(true);
     setCheckoutError(null);
@@ -121,6 +136,10 @@ export function GroupCohortCheckout({
           checkoutKey,
           cohortId: selectedCohortId,
           cohortSeatHoldId: holdData.holdId,
+          ...(selectedKidProfileId ? { kidProfileId: selectedKidProfileId } : {}),
+          ...(!selectedKidProfileId && newKidName.trim()
+            ? { kidName: newKidName.trim() }
+            : {}),
         }),
       });
 
@@ -192,6 +211,53 @@ export function GroupCohortCheckout({
           </ul>
         )}
       </div>
+
+      {requiresKidProfile ? (
+        <div className={`${ui.cardBordered} mb-4 text-left`}>
+          <p className="text-sm font-semibold text-zinc-900">Who is this course for?</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            One checkout per child. Pick an existing profile or add a name — we&apos;ll create the
+            profile after payment.
+          </p>
+          {kidProfiles.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {kidProfiles.map((kid) => {
+                const selected = selectedKidProfileId === kid.id;
+                return (
+                  <li key={kid.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedKidProfileId(kid.id);
+                        setNewKidName("");
+                      }}
+                      className={`w-full rounded-2xl border px-4 py-3 text-left text-sm font-semibold ${
+                        selected
+                          ? "border-violet-400 bg-violet-50"
+                          : "border-zinc-200 bg-white hover:border-violet-200"
+                      }`}
+                    >
+                      {kid.name}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          <label className="mt-3 block text-xs font-medium text-zinc-600">
+            Or add a new child
+            <input
+              value={newKidName}
+              onChange={(e) => {
+                setNewKidName(e.target.value);
+                if (e.target.value.trim()) setSelectedKidProfileId("");
+              }}
+              className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900"
+              placeholder="Child's name"
+            />
+          </label>
+        </div>
+      ) : null}
 
       <button
         type="button"

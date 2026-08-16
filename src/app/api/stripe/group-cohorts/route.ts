@@ -38,7 +38,7 @@ export async function GET(request: Request) {
 
   const { data: pkg, error: pkgError } = await supabase
     .from("packages")
-    .select("id, course_id, delivery_mode")
+    .select("id, course_id, delivery_mode, courses(content_track)")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -112,9 +112,23 @@ export async function GET(request: Request) {
     })
   );
 
+  const course = Array.isArray(pkg.courses) ? pkg.courses[0] : pkg.courses;
+  const requiresKidProfile =
+    (course as { content_track?: string | null } | null)?.content_track === "kids";
+
+  const { data: kidProfiles } = requiresKidProfile
+    ? await supabase
+        .from("kid_profiles")
+        .select("id, name")
+        .eq("parent_user_id", user.id)
+        .order("created_at", { ascending: true })
+    : { data: [] as Array<{ id: string; name: string }> };
+
   return NextResponse.json({
     cohorts: rows.filter((row): row is NonNullable<typeof row> => row !== null),
     checkingAvailability,
     syncWarning,
+    requiresKidProfile,
+    kidProfiles: kidProfiles ?? [],
   });
 }

@@ -9,6 +9,10 @@ import {
   type PurchaseForStudentPackage,
 } from "./sync-student-packages-from-payment";
 import { completeGroupPurchaseFromCheckoutSession } from "@/lib/group-purchase/complete-group-purchase-after-payment";
+import {
+  grantKidsCoursePurchaseFromSession,
+  isKidsCourseCheckoutSession,
+} from "@/lib/kids/grant-kids-course-purchase";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { type PaidCourseTier } from "@/lib/membership/access";
 import { tierFromStripeIds } from "./products";
@@ -84,6 +88,14 @@ export async function syncMembershipFromCheckoutSession(sessionId: string) {
   }
 
   const userId = await resolveUserIdFromSession(session);
+  if (isKidsCourseCheckoutSession(session)) {
+    const result = await grantKidsCoursePurchaseFromSession(session, userId);
+    if (result.error && !result.queued) {
+      throw new Error(result.error);
+    }
+    return { updated: result.granted, unlockedTiers: [] as PaidCourseTier[] };
+  }
+
   if (!userId) {
     throw new Error("Could not match checkout session to an app user by email.");
   }

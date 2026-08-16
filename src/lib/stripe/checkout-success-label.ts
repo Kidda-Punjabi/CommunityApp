@@ -33,6 +33,7 @@ export async function formatCheckoutSuccessAccessLabel(
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     const key = session.metadata?.checkout_key;
     if (key === "beginners-group") return "Beginners Course (Group)";
+    if (key === "beginners-kids-group") return "Kids Beginners Course (Group)";
     if (key === "beginners-one-to-one") return "Beginners Course (1-to-1)";
     if (key?.startsWith("foundational")) return "Foundational Course";
     if (key === "community") return "Kidda Community";

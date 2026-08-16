@@ -1,6 +1,7 @@
 import { kidHomeHref } from "@/lib/kids/load-kid-content";
 import { loadKidSession } from "@/lib/kids/session";
 import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export default async function ProfileSectionLayout({
@@ -15,8 +16,12 @@ export default async function ProfileSectionLayout({
 
   if (!user) redirect("/login");
 
+  const headerList = await headers();
+  const pathname = headerList.get("x-pathname") ?? "";
+  const isProfileSwitcher = pathname === "/dashboard/profile/kids";
+
   const session = await loadKidSession(user.id);
-  if (session.activeKidProfile) {
+  if (session.activeKidProfile && !isProfileSwitcher) {
     redirect(kidHomeHref(session.activeKidProfile.age_tier));
   }
 

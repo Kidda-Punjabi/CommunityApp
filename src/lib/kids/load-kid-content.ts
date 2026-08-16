@@ -36,7 +36,7 @@ export function kidUsesStickerRewards(ageTier: KidAgeTier): boolean {
 }
 
 export function kidHomeHref(ageTier: KidAgeTier): string {
-  return usesKidsShell(ageTier) ? "/dashboard/kids" : "/dashboard/home";
+  return usesKidsShell(ageTier) ? "/dashboard/kids" : "/dashboard/learn";
 }
 
 export function assertKidProfileOwnership(

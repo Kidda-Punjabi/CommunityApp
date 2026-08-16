@@ -6,8 +6,13 @@ import {
   isLearnTrackUnlocked,
 } from "@/lib/learning/learn-access";
 import { resolveGroupCohortContentGate } from "@/lib/learning/group-cohort-content-gate";
+import {
+  fetchAccessibleKidsCourses,
+  kidsCourseLearnPath,
+} from "@/lib/learning/kids-courses";
 import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
 import { findCoursesForTier } from "@/lib/membership/courses";
+import { resolveCourseActor } from "@/lib/kids/course-actor";
 import {
   getCachedAuthSession,
   getCachedCourseAccess,
@@ -44,13 +49,15 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap] =
+  const [access, allLessons, completionMap, actor, kidsCourses] =
     await Promise.all([
       getCachedCourseAccess(supabase, user),
       lessonsPromise,
       lessonsPromise.then((lessons) =>
         fetchLessonCompletionMap(supabase, user.id, lessons)
       ),
+      resolveCourseActor(supabase, user.id),
+      fetchAccessibleKidsCourses(supabase, user.id),
     ]);
 
   const foundational = getLearnTrack("foundational")!;
@@ -107,7 +114,23 @@ export default async function LearnPage() {
 
   const communityStatus = communityLocked ? "Unlock to start" : "Lessons ready";
 
-  const tiles: LearnHubTile[] = [
+  const kidsTiles: LearnHubTile[] = kidsCourses.map((course) => {
+    const courseLessons = allLessons.filter((lesson) => lesson.course_id === course.id);
+    const progress = summarizeCourseProgress(courseLessons, completionMap);
+    return {
+      id: `kids-${course.id}`,
+      kind: "kids-course" as const,
+      href: kidsCourseLearnPath(course.id),
+      title: course.name,
+      status:
+        progress.totalLessons > 0
+          ? `${progress.completedLessons} of ${progress.totalLessons} lessons`
+          : "Lessons ready",
+      tone: "accent" as const,
+    };
+  });
+
+  const adultTiles: LearnHubTile[] = [
     {
       id: "foundational",
       kind: "link",
@@ -148,6 +171,21 @@ export default async function LearnPage() {
       tone: "sky",
     },
   ];
+
+  const tiles: LearnHubTile[] =
+    actor.kind === "kid"
+      ? kidsTiles.length > 0
+        ? kidsTiles
+        : [
+            {
+              id: "more",
+              kind: "static",
+              title: "Your courses",
+              status: "Ask a grown-up to enrol you",
+              tone: "muted",
+            },
+          ]
+      : [...kidsTiles, ...adultTiles];
 
   return (
     <div className={ui.page}>

@@ -16,6 +16,8 @@ export async function POST(request: Request) {
   let cohortSeatHoldId: string | undefined;
   let oneToOneBookingId: string | undefined;
   let courseId: string | undefined;
+  let kidProfileId: string | undefined;
+  let kidName: string | undefined;
 
   try {
     const body = (await request.json()) as {
@@ -25,6 +27,8 @@ export async function POST(request: Request) {
       cohortSeatHoldId?: string;
       oneToOneBookingId?: string;
       courseId?: string;
+      kidProfileId?: string;
+      kidName?: string;
     };
     checkoutKey = body.checkoutKey ?? "";
     embedded = Boolean(body.embedded);
@@ -32,6 +36,8 @@ export async function POST(request: Request) {
     cohortSeatHoldId = body.cohortSeatHoldId?.trim();
     oneToOneBookingId = body.oneToOneBookingId?.trim();
     courseId = body.courseId?.trim();
+    kidProfileId = body.kidProfileId?.trim();
+    kidName = body.kidName?.trim();
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
@@ -44,6 +50,8 @@ export async function POST(request: Request) {
       cohortSeatHoldId,
       oneToOneBookingId,
       courseId,
+      kidProfileId,
+      kidName,
     });
 
     if (result.type === "payment_link") {

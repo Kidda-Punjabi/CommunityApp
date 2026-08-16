@@ -16,14 +16,19 @@ import {
   REFERRAL_COOKIE_MAX_AGE_SECONDS,
   REFERRAL_COOKIE_NAME,
 } from "@/lib/referrals/constants";
+import { isKidBlockedCommunityPath } from "@/lib/kids/community-block";
+import { KID_PROFILE_COOKIE } from "@/lib/kids/constants";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const POST_AUTH_PATH = "/dashboard/home";
 
 export async function updateSession(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+
   let supabaseResponse = NextResponse.next({
-    request,
+    request: { headers: requestHeaders },
   });
 
   const supabase = createServerClient(
@@ -39,7 +44,7 @@ export async function updateSession(request: NextRequest) {
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({
-            request,
+            request: { headers: requestHeaders },
           });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -153,6 +158,32 @@ export async function updateSession(request: NextRequest) {
     if (!user) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  if (user && isKidBlockedCommunityPath(request.nextUrl.pathname)) {
+    const kidCookie = request.cookies.get(KID_PROFILE_COOKIE)?.value?.trim();
+    if (kidCookie) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard/learn";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  const profilePath = request.nextUrl.pathname;
+  const isKidsSwitcher = profilePath === "/dashboard/profile/kids";
+  if (
+    user &&
+    !isKidsSwitcher &&
+    (profilePath === "/dashboard/profile" || profilePath.startsWith("/dashboard/profile/"))
+  ) {
+    const kidCookie = request.cookies.get(KID_PROFILE_COOKIE)?.value?.trim();
+    if (kidCookie) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard/learn";
+      url.search = "";
       return NextResponse.redirect(url);
     }
   }

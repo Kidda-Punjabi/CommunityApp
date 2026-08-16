@@ -1,5 +1,8 @@
 import { cookies } from "next/headers";
-import { KID_PROFILE_COOKIE } from "@/lib/kids/constants";
+import {
+  KID_PROFILE_COOKIE,
+  KIDS_PIN_UNLOCKED_COOKIE,
+} from "@/lib/kids/constants";
 import type { KidProfile, KidSession } from "@/lib/kids/types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,15 +12,29 @@ export async function getActiveKidProfileIdFromCookie(): Promise<string | null> 
   return value || null;
 }
 
+export async function isKidsPinUnlocked(): Promise<boolean> {
+  const cookieStore = await cookies();
+  return cookieStore.get(KIDS_PIN_UNLOCKED_COOKIE)?.value === "1";
+}
+
 export async function loadKidSession(userId: string): Promise<KidSession> {
   const supabase = await createClient();
-  const kidProfileId = await getActiveKidProfileIdFromCookie();
 
   const { data: profileRow } = await supabase
     .from("profiles")
     .select("kids_pin_hash")
     .eq("id", userId)
     .maybeSingle();
+
+  const { data: context } = await supabase
+    .from("kid_session_context")
+    .select("active_kid_profile_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  let kidProfileId =
+    (context?.active_kid_profile_id as string | null | undefined) ??
+    (await getActiveKidProfileIdFromCookie());
 
   let activeKidProfile: KidProfile | null = null;
 
@@ -31,12 +48,19 @@ export async function loadKidSession(userId: string): Promise<KidSession> {
 
     if (data) {
       activeKidProfile = data as KidProfile;
+      if (context?.active_kid_profile_id !== kidProfileId) {
+        await syncKidSessionContext(userId, kidProfileId);
+      }
+    } else {
+      kidProfileId = null;
+      await syncKidSessionContext(userId, null);
     }
   }
 
   return {
     activeKidProfile,
     hasPin: Boolean(profileRow?.kids_pin_hash),
+    pinUnlocked: await isKidsPinUnlocked(),
   };
 }
 
@@ -59,5 +83,15 @@ export function kidProfileCookieOptions(maxAgeSeconds = 60 * 60 * 24 * 30) {
     sameSite: "lax" as const,
     path: "/",
     maxAge: maxAgeSeconds,
+  };
+}
+
+/** Session-scoped: cleared when the browser session ends. */
+export function kidsPinUnlockedCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
   };
 }

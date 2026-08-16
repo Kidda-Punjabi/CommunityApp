@@ -27,11 +27,13 @@ export function packageSlugFromCheckoutKey(checkoutKey: string): string | null {
   }
   if (checkoutKey === "beginners-one-to-one") return "beginners-1-1";
   if (checkoutKey === "beginners-group" || checkoutKey === "beginners") return "beginners-group";
+  if (checkoutKey === "beginners-kids-group") return "beginners-kids-group";
   if (checkoutKey === "community") return "community";
   const config = getCheckoutConfig(checkoutKey);
   if (!config) return null;
   if (config.productSlug === "foundational") return "foundational";
   if (config.productSlug === "community") return "community";
+  if (config.productSlug === "beginners-kids") return "beginners-kids-group";
   if (checkoutKey.includes("one-to-one") || checkoutKey.includes("1-1")) return "beginners-1-1";
   if (config.productSlug === "beginners") return "beginners-group";
   return null;
@@ -51,7 +53,9 @@ function membershipStatusForSlug(slug: string): PackageMembershipStatus {
 }
 
 function checklistTypeForSlug(slug: string): "group" | "one_to_one" {
-  return slug === "beginners-group" ? "group" : "one_to_one";
+  return slug === "beginners-group" || slug === "beginners-kids-group"
+    ? "group"
+    : "one_to_one";
 }
 
 export async function ensureOnboardingChecklistForStudentPackage(

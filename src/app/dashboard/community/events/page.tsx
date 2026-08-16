@@ -9,11 +9,13 @@ import { formatRecurrenceLabel } from "@/lib/events/recurrence";
 import { canAccessEvent } from "@/lib/membership/access";
 import { normalizeTier } from "@/lib/membership/tiers";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
+import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { ui } from "@/lib/ui/styles";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
 export default async function CommunityEventsPage() {
+  await requireNoKidCommunityAccess();
   const supabase = await createClient();
   const {
     data: { user },

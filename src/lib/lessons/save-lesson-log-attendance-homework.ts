@@ -1,6 +1,7 @@
 import "server-only";
 
 import { resolveCurriculumLessonForLogEntry } from "@/lib/lessons/lesson-log-roster";
+import { kidProfileIdsInCohort } from "@/lib/tutoring/cohort-attendance";
 import {
   matchStudentsToNotionLeads,
   pushLessonLogAttendanceHomeworkToNotion,
@@ -71,42 +72,95 @@ export async function saveLessonLogAttendanceHomework(
   }
 
   const now = new Date().toISOString();
-  const attendanceRows = options.marks.map((mark) => ({
-    cohort_id: entry.cohort_id,
-    lesson_id: curriculum.lessonId,
-    student_id: mark.studentId,
-    attended: mark.attended,
-    marked_by: options.markedBy,
-    marked_at: now,
-    updated_at: now,
-  }));
-  const homeworkRows = options.marks.map((mark) => ({
-    cohort_id: entry.cohort_id,
-    lesson_id: curriculum.lessonId,
-    student_id: mark.studentId,
-    completed: mark.homeworkCompleted,
-    marked_by: options.markedBy,
-    marked_at: now,
-    updated_at: now,
-  }));
+  const kidIds = await kidProfileIdsInCohort(supabase, entry.cohort_id);
+  const adultMarks = options.marks.filter((mark) => !kidIds.has(mark.studentId));
+  const kidMarks = options.marks.filter((mark) => kidIds.has(mark.studentId));
 
-  const { error: attendanceError } = await supabase
-    .from("cohort_lesson_attendance")
-    .upsert(attendanceRows, { onConflict: "cohort_id,lesson_id,student_id" });
-  if (attendanceError) {
-    return { ok: false, error: attendanceError.message };
+  if (adultMarks.length > 0) {
+    const { error: attendanceError } = await supabase
+      .from("cohort_lesson_attendance")
+      .upsert(
+        adultMarks.map((mark) => ({
+          cohort_id: entry.cohort_id,
+          lesson_id: curriculum.lessonId,
+          student_id: mark.studentId,
+          kid_profile_id: null,
+          attended: mark.attended,
+          marked_by: options.markedBy,
+          marked_at: now,
+          updated_at: now,
+        })),
+        { onConflict: "cohort_id,lesson_id,student_id" }
+      );
+    if (attendanceError) {
+      return { ok: false, error: attendanceError.message };
+    }
+  }
+
+  if (kidMarks.length > 0) {
+    const { error: attendanceError } = await supabase
+      .from("cohort_lesson_attendance")
+      .upsert(
+        kidMarks.map((mark) => ({
+          cohort_id: entry.cohort_id,
+          lesson_id: curriculum.lessonId,
+          student_id: null,
+          kid_profile_id: mark.studentId,
+          attended: mark.attended,
+          marked_by: options.markedBy,
+          marked_at: now,
+          updated_at: now,
+        })),
+        { onConflict: "cohort_id,lesson_id,kid_profile_id" }
+      );
+    if (attendanceError) {
+      return { ok: false, error: attendanceError.message };
+    }
   }
 
   let homeworkTableMissing = false;
-  const { error: homeworkError } = await supabase
-    .from("cohort_lesson_homework")
-    .upsert(homeworkRows, { onConflict: "cohort_id,lesson_id,student_id" });
-  if (homeworkError) {
-    if (homeworkError.message.toLowerCase().includes("cohort_lesson_homework")) {
-      // Pre-migration: still push Notion Homework; app table comes later.
-      homeworkTableMissing = true;
-    } else {
-      return { ok: false, error: homeworkError.message };
+  if (adultMarks.length > 0) {
+    const { error: homeworkError } = await supabase.from("cohort_lesson_homework").upsert(
+      adultMarks.map((mark) => ({
+        cohort_id: entry.cohort_id,
+        lesson_id: curriculum.lessonId,
+        student_id: mark.studentId,
+        kid_profile_id: null,
+        completed: mark.homeworkCompleted,
+        marked_by: options.markedBy,
+        marked_at: now,
+        updated_at: now,
+      })),
+      { onConflict: "cohort_id,lesson_id,student_id" }
+    );
+    if (homeworkError) {
+      if (homeworkError.message.toLowerCase().includes("cohort_lesson_homework")) {
+        homeworkTableMissing = true;
+      } else {
+        return { ok: false, error: homeworkError.message };
+      }
+    }
+  }
+  if (!homeworkTableMissing && kidMarks.length > 0) {
+    const { error: homeworkError } = await supabase.from("cohort_lesson_homework").upsert(
+      kidMarks.map((mark) => ({
+        cohort_id: entry.cohort_id,
+        lesson_id: curriculum.lessonId,
+        student_id: null,
+        kid_profile_id: mark.studentId,
+        completed: mark.homeworkCompleted,
+        marked_by: options.markedBy,
+        marked_at: now,
+        updated_at: now,
+      })),
+      { onConflict: "cohort_id,lesson_id,kid_profile_id" }
+    );
+    if (homeworkError) {
+      if (homeworkError.message.toLowerCase().includes("cohort_lesson_homework")) {
+        homeworkTableMissing = true;
+      } else {
+        return { ok: false, error: homeworkError.message };
+      }
     }
   }
 
