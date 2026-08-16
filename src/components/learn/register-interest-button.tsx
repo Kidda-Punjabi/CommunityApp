@@ -7,11 +7,13 @@ import { useState } from "react";
 type RegisterInterestButtonProps = {
   courseTitle: string;
   className?: string;
+  compact?: boolean;
 };
 
 export function RegisterInterestButton({
   courseTitle,
   className,
+  compact = false,
 }: RegisterInterestButtonProps) {
   const [done, setDone] = useState(false);
 
@@ -25,7 +27,8 @@ export function RegisterInterestButton({
       }}
       className={cn(
         pressableClass,
-        "rounded-full px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm",
+        "shrink-0 whitespace-nowrap rounded-full font-semibold text-white shadow-sm",
+        compact ? "px-2.5 py-1 text-[11px] leading-none" : "px-3.5 py-1.5 text-xs",
         className
       )}
     >
