@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -13,21 +13,34 @@ export type CertificatePdfInput = {
   founderName?: string;
 };
 
+/** A4 landscape. HTML mock is 1123×794px at 96dpi; 1 CSS px = 0.75pt. */
 const PAGE_WIDTH = 842;
 const PAGE_HEIGHT = 595;
-const FOOTER_H = 30;
+const PX = 0.75;
+const FOOTER_H = 46 * PX;
+
 const PURPLE = rgb(124 / 255, 77 / 255, 224 / 255);
-const INK = rgb(0.1, 0.1, 0.12);
-const MUTED = rgb(0.45, 0.45, 0.5);
-const LINE = rgb(0.82, 0.8, 0.86);
+const INK = rgb(38 / 255, 33 / 255, 92 / 255);
+const BODY = rgb(74 / 255, 69 / 255, 104 / 255);
+const PRESENTED = rgb(107 / 255, 102 / 255, 136 / 255);
+const EYEBROW = rgb(166 / 255, 162 / 255, 190 / 255);
+const CEFR_BG = rgb(238 / 255, 237 / 255, 254 / 255);
+const CEFR_INK = rgb(60 / 255, 52 / 255, 137 / 255);
+const SIG_LINE = rgb(214 / 255, 211 / 255, 230 / 255);
+const SIG_TITLE = rgb(139 / 255, 135 / 255, 163 / 255);
+const DISCLAIMER = rgb(184 / 255, 180 / 255, 204 / 255);
+const FOOTER_INK = rgb(239 / 255, 234 / 255, 252 / 255);
+
 const FOUNDER_NAME = "Gurupma Singh";
 const SITE = "webapp.kidda.app";
+const FOOTER_COPY = "KIDDA  ·  SPEAKING PUNJABI WITH CONFIDENCE";
 
 const ASSET_ROOT = join(process.cwd(), "public");
 
 let assetCache: {
   logo: Uint8Array;
   poppinsRegular: Uint8Array;
+  poppinsMedium: Uint8Array;
   poppinsSemi: Uint8Array;
   poppinsBold: Uint8Array;
   script: Uint8Array;
@@ -35,14 +48,15 @@ let assetCache: {
 
 async function loadAssets() {
   if (assetCache) return assetCache;
-  const [logo, poppinsRegular, poppinsSemi, poppinsBold, script] = await Promise.all([
+  const [logo, poppinsRegular, poppinsMedium, poppinsSemi, poppinsBold, script] = await Promise.all([
     readFile(join(ASSET_ROOT, "logo/kidda-peacock.png")),
     readFile(join(ASSET_ROOT, "fonts/certificate/Poppins-Regular.ttf")),
+    readFile(join(ASSET_ROOT, "fonts/certificate/Poppins-Medium.ttf")),
     readFile(join(ASSET_ROOT, "fonts/certificate/Poppins-SemiBold.ttf")),
     readFile(join(ASSET_ROOT, "fonts/certificate/Poppins-Bold.ttf")),
-    readFile(join(ASSET_ROOT, "fonts/certificate/GreatVibes-Regular.ttf")),
+    readFile(join(ASSET_ROOT, "fonts/certificate/Caveat-SemiBold.ttf")),
   ]);
-  assetCache = { logo, poppinsRegular, poppinsSemi, poppinsBold, script };
+  assetCache = { logo, poppinsRegular, poppinsMedium, poppinsSemi, poppinsBold, script };
   return assetCache;
 }
 
@@ -52,6 +66,16 @@ function pdfSafeText(value: string): string {
     .join("")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function firstName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed || /^course tutor$/i.test(trimmed)) return "Tutor";
+  return trimmed.split(/\s+/)[0] ?? trimmed;
+}
+
+function courseLabel(courseTitle: string): string {
+  return /course$/i.test(courseTitle) ? courseTitle : `${courseTitle} Course`;
 }
 
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
@@ -77,7 +101,7 @@ function drawCentered(
   y: number,
   font: PDFFont,
   size: number,
-  color: ReturnType<typeof rgb>
+  color: RGB
 ) {
   const width = font.widthOfTextAtSize(text, size);
   page.drawText(text, {
@@ -95,7 +119,7 @@ function drawTrackedCentered(
   y: number,
   font: PDFFont,
   size: number,
-  color: ReturnType<typeof rgb>,
+  color: RGB,
   tracking: number
 ) {
   const chars = [...text];
@@ -107,6 +131,75 @@ function drawTrackedCentered(
     page.drawText(ch, { x, y, font, size, color });
     x += font.widthOfTextAtSize(ch, size) + tracking;
   }
+}
+
+type TextRun = { text: string; font: PDFFont; size: number; color: RGB };
+
+function drawCenteredRuns(page: PDFPage, runs: TextRun[], y: number) {
+  const total = runs.reduce((sum, run) => sum + run.font.widthOfTextAtSize(run.text, run.size), 0);
+  let x = (PAGE_WIDTH - total) / 2;
+  for (const run of runs) {
+    page.drawText(run.text, {
+      x,
+      y,
+      font: run.font,
+      size: run.size,
+      color: run.color,
+    });
+    x += run.font.widthOfTextAtSize(run.text, run.size);
+  }
+}
+
+function drawPill(
+  page: PDFPage,
+  options: { text: string; font: PDFFont; size: number; y: number }
+) {
+  const padX = 18 * PX;
+  const height = 25 * PX;
+  const width = options.font.widthOfTextAtSize(options.text, options.size) + padX * 2;
+  const x = (PAGE_WIDTH - width) / 2;
+  const radius = height / 2;
+  page.drawCircle({ x: x + radius, y: options.y + radius, size: radius, color: CEFR_BG });
+  page.drawCircle({
+    x: x + width - radius,
+    y: options.y + radius,
+    size: radius,
+    color: CEFR_BG,
+  });
+  page.drawRectangle({
+    x: x + radius,
+    y: options.y,
+    width: width - height,
+    height,
+    color: CEFR_BG,
+  });
+  page.drawText(options.text, {
+    x: x + padX,
+    y: options.y + 6.2 * PX,
+    font: options.font,
+    size: options.size,
+    color: CEFR_INK,
+  });
+}
+
+function drawScriptName(
+  page: PDFPage,
+  text: string,
+  centerX: number,
+  y: number,
+  font: PDFFont,
+  size: number,
+  color: RGB
+) {
+  const chars = [...text];
+  const widths = chars.map((ch) => font.widthOfTextAtSize(ch, size));
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  let x = centerX - total / 2;
+  for (let i = 0; i < chars.length; i++) {
+    page.drawText(chars[i], { x, y, font, size, color });
+    x += widths[i];
+  }
+  return total;
 }
 
 function drawSignatureBlock(
@@ -122,47 +215,40 @@ function drawSignatureBlock(
     title: string;
   }
 ) {
-  const blockW = 200;
-  const scriptSize = 26;
+  const blockW = 210 * PX;
+  const scriptSize = 40 * PX;
   let size = scriptSize;
-  while (size > 16 && options.scriptFont.widthOfTextAtSize(options.scriptName, size) > blockW) {
+  while (size > 18 && options.scriptFont.widthOfTextAtSize(options.scriptName, size) > blockW) {
     size -= 1;
   }
-  const scriptW = options.scriptFont.widthOfTextAtSize(options.scriptName, size);
-  page.drawText(options.scriptName, {
-    x: options.centerX - scriptW / 2,
-    y: options.scriptY,
-    font: options.scriptFont,
-    size,
-    color: INK,
-  });
+  drawScriptName(page, options.scriptName, options.centerX, options.scriptY, options.scriptFont, size, INK);
 
-  const lineY = options.scriptY - 10;
+  const lineY = options.scriptY - 6 * PX;
   page.drawLine({
-    start: { x: options.centerX - 78, y: lineY },
-    end: { x: options.centerX + 78, y: lineY },
-    thickness: 0.7,
-    color: LINE,
+    start: { x: options.centerX - blockW / 2, y: lineY },
+    end: { x: options.centerX + blockW / 2, y: lineY },
+    thickness: 1.4 * PX,
+    color: SIG_LINE,
   });
 
-  const nameSize = 9;
+  const nameSize = 13.5 * PX;
   const nameW = options.nameFont.widthOfTextAtSize(options.printedName, nameSize);
   page.drawText(options.printedName, {
     x: options.centerX - nameW / 2,
-    y: lineY - 16,
+    y: lineY - 8 * PX - nameSize * 0.2,
     font: options.nameFont,
     size: nameSize,
     color: INK,
   });
 
-  const titleSize = 8;
+  const titleSize = 11.5 * PX;
   const titleW = options.titleFont.widthOfTextAtSize(options.title, titleSize);
   page.drawText(options.title, {
     x: options.centerX - titleW / 2,
-    y: lineY - 28,
+    y: lineY - 8 * PX - nameSize - 1 * PX - titleSize * 0.15,
     font: options.titleFont,
     size: titleSize,
-    color: MUTED,
+    color: SIG_TITLE,
   });
 }
 
@@ -179,6 +265,7 @@ export async function buildCertificatePdf(input: CertificatePdfInput): Promise<U
   const awardedOn = pdfSafeText(input.awardedOn) || "";
   const tutorName = pdfSafeText(input.tutorName) || "Course Tutor";
   const founderName = pdfSafeText(input.founderName || FOUNDER_NAME) || FOUNDER_NAME;
+  const courseName = courseLabel(courseTitle);
 
   const assets = await loadAssets();
   const pdf = await PDFDocument.create();
@@ -186,6 +273,7 @@ export async function buildCertificatePdf(input: CertificatePdfInput): Promise<U
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
   const poppins = await pdf.embedFont(assets.poppinsRegular);
+  const poppinsMedium = await pdf.embedFont(assets.poppinsMedium);
   const poppinsSemi = await pdf.embedFont(assets.poppinsSemi);
   const poppinsBold = await pdf.embedFont(assets.poppinsBold);
   const script = await pdf.embedFont(assets.script);
@@ -199,119 +287,157 @@ export async function buildCertificatePdf(input: CertificatePdfInput): Promise<U
     color: rgb(1, 1, 1),
   });
 
-  const logoSize = 58;
-  page.drawImage(logo, {
-    x: (PAGE_WIDTH - logoSize) / 2,
-    y: PAGE_HEIGHT - 80,
-    width: logoSize,
-    height: logoSize,
+  const motifR = 110 * PX;
+  page.drawCircle({
+    x: 20 * PX,
+    y: PAGE_HEIGHT - 20 * PX,
+    size: motifR,
+    color: PURPLE,
+    opacity: 0.05,
+  });
+  page.drawCircle({
+    x: PAGE_WIDTH - 20 * PX,
+    y: 20 * PX,
+    size: motifR,
+    color: PURPLE,
+    opacity: 0.05,
   });
 
-  drawTrackedCentered(page, "KIDDA", PAGE_HEIGHT - 102, poppinsBold, 16, PURPLE, 5.5);
+  const logoW = 74 * PX;
+  const logoH = logoW * (logo.height / logo.width);
+
+  let nameSize = 44 * PX;
+  while (nameSize > 22 && poppinsSemi.widthOfTextAtSize(studentName, nameSize) > PAGE_WIDTH - 180) {
+    nameSize -= 1;
+  }
+
+  const bodySize = 16 * PX;
+  const bodyLead = 16 * 1.7 * PX;
+  const disclaimerSize = 10.5 * PX;
+  const disclaimerLead = 10.5 * 1.5 * PX;
+  const disclaimer = certificateCefrDisclaimer(cefr);
+  const disclaimerLines = wrapText(disclaimer, poppins, disclaimerSize, 520 * PX);
+
+  const stackH =
+    logoH +
+    10 * PX +
+    26 * PX +
+    34 * PX +
+    13 * PX +
+    22 * PX +
+    15 * PX +
+    10 * PX +
+    nameSize * 1.1 +
+    22 * PX +
+    bodyLead +
+    6 * PX +
+    bodyLead +
+    18 * PX +
+    25 * PX +
+    46 * PX +
+    50 * PX +
+    6 * PX +
+    8 * PX +
+    13.5 * PX +
+    1 * PX +
+    11.5 * PX +
+    34 * PX +
+    12 * PX +
+    10 * PX +
+    disclaimerLines.length * disclaimerLead;
+
+  const contentH = PAGE_HEIGHT - FOOTER_H;
+  let y = FOOTER_H + (contentH + stackH) / 2;
+
+  const advance = (amount: number) => {
+    y -= amount;
+    return y;
+  };
+
+  page.drawImage(logo, {
+    x: (PAGE_WIDTH - logoW) / 2,
+    y: advance(logoH),
+    width: logoW,
+    height: logoH,
+  });
+  advance(10 * PX);
+
+  drawTrackedCentered(page, "KIDDA", advance(26 * PX), poppinsBold, 26 * PX, PURPLE, 1 * PX);
+  advance(34 * PX);
+
   drawTrackedCentered(
     page,
     "CERTIFICATE OF ACHIEVEMENT",
-    PAGE_HEIGHT - 128,
-    poppinsSemi,
-    10,
-    PURPLE,
-    2.4
+    advance(13 * PX),
+    poppinsMedium,
+    13 * PX,
+    EYEBROW,
+    3 * PX
+  );
+  advance(22 * PX);
+
+  drawCentered(page, "This certifies that", advance(15 * PX), poppins, 15 * PX, PRESENTED);
+  advance(10 * PX);
+
+  drawCentered(page, studentName, advance(nameSize * 1.1), poppinsSemi, nameSize, INK);
+  advance(22 * PX);
+
+  drawCenteredRuns(page, [
+    { text: "has successfully completed the ", font: poppins, size: bodySize, color: BODY },
+    { text: courseName, font: poppinsBold, size: bodySize, color: INK },
+    { text: ",", font: poppins, size: bodySize, color: BODY },
+  ], advance(bodyLead));
+  advance(6 * PX);
+  drawCentered(
+    page,
+    "demonstrating confident, everyday spoken Punjabi through live tutor-led classes.",
+    advance(bodyLead),
+    poppins,
+    bodySize,
+    BODY
   );
 
-  drawCentered(page, "This certifies that", PAGE_HEIGHT - 162, poppins, 12, MUTED);
-
-  let nameSize = 34;
-  while (nameSize > 18 && poppinsBold.widthOfTextAtSize(studentName, nameSize) > PAGE_WIDTH - 160) {
-    nameSize -= 1;
-  }
-  drawCentered(page, studentName, PAGE_HEIGHT - 204, poppinsBold, nameSize, INK);
-
-  const body = `has successfully completed the ${courseTitle} Course, demonstrating confident, everyday spoken Punjabi through live tutor-led classes.`;
-  const bodyLines = wrapText(body, poppins, 12, 560);
-  let bodyY = PAGE_HEIGHT - 236;
-  for (const line of bodyLines) {
-    drawCentered(page, line, bodyY, poppins, 12, MUTED);
-    bodyY -= 18;
-  }
-
-  const badge = `CEFR ${cefr}`;
-  const badgeSize = 10;
-  const badgePadX = 16;
-  const badgeH = 22;
-  const badgeW = poppinsSemi.widthOfTextAtSize(badge, badgeSize) + badgePadX * 2;
-  const badgeX = (PAGE_WIDTH - badgeW) / 2;
-  const badgeY = bodyY - 28;
-  const badgeR = badgeH / 2;
-  page.drawCircle({ x: badgeX + badgeR, y: badgeY + badgeR, size: badgeR, color: PURPLE });
-  page.drawCircle({
-    x: badgeX + badgeW - badgeR,
-    y: badgeY + badgeR,
-    size: badgeR,
-    color: PURPLE,
-  });
-  page.drawRectangle({
-    x: badgeX + badgeR,
-    y: badgeY,
-    width: badgeW - badgeH,
-    height: badgeH,
-    color: PURPLE,
-  });
-  page.drawText(badge, {
-    x: badgeX + badgePadX,
-    y: badgeY + 6.5,
+  advance(18 * PX);
+  const badgeY = advance(25 * PX);
+  drawPill(page, {
+    text: `CEFR ${cefr}  ·  Speaking Proficiency`,
     font: poppinsSemi,
-    size: badgeSize,
-    color: rgb(1, 1, 1),
+    size: 13 * PX,
+    y: badgeY,
   });
 
-  const scriptY = 168;
+  advance(46 * PX);
+  const scriptY = advance(50 * PX) + 8 * PX;
+  const sigCenterOffset = (210 / 2 + 130 / 2) * PX;
   drawSignatureBlock(page, {
-    centerX: PAGE_WIDTH / 2 - 130,
+    centerX: PAGE_WIDTH / 2 - sigCenterOffset,
     scriptY,
     scriptFont: script,
     nameFont: poppinsSemi,
     titleFont: poppins,
-    scriptName: founderName,
+    scriptName: firstName(founderName),
     printedName: founderName,
-    title: "Founder",
+    title: "Founder, Kidda",
   });
   drawSignatureBlock(page, {
-    centerX: PAGE_WIDTH / 2 + 130,
+    centerX: PAGE_WIDTH / 2 + sigCenterOffset,
     scriptY,
     scriptFont: script,
     nameFont: poppinsSemi,
     titleFont: poppins,
-    scriptName: tutorName,
-    printedName: tutorName,
+    scriptName: firstName(tutorName),
+    printedName: tutorName === "Course Tutor" ? "Course Tutor" : tutorName,
     title: "Course Tutor",
   });
+  advance(6 * PX + 8 * PX + 13.5 * PX + 1 * PX + 11.5 * PX);
 
-  const metaY = 96;
-  const dateText = awardedOn ? `Awarded ${awardedOn}` : "";
-  if (dateText) {
-    const dateW = poppins.widthOfTextAtSize(dateText, 9);
-    const siteW = poppins.widthOfTextAtSize(SITE, 9);
-    const metaGap = 28;
-    const metaTotal = dateW + metaGap + siteW;
-    const metaX = (PAGE_WIDTH - metaTotal) / 2;
-    page.drawText(dateText, { x: metaX, y: metaY, font: poppins, size: 9, color: MUTED });
-    page.drawText(SITE, {
-      x: metaX + dateW + metaGap,
-      y: metaY,
-      font: poppins,
-      size: 9,
-      color: MUTED,
-    });
-  } else {
-    drawCentered(page, SITE, metaY, poppins, 9, MUTED);
-  }
+  advance(34 * PX);
+  const dateLine = awardedOn ? `Awarded ${awardedOn}  ·  ${SITE}` : SITE;
+  drawCentered(page, dateLine, advance(12 * PX), poppins, 12 * PX, EYEBROW);
 
-  const disclaimer = certificateCefrDisclaimer(cefr);
-  const disclaimerLines = wrapText(disclaimer, poppins, 7.5, PAGE_WIDTH - 120);
-  let disclaimerY = FOOTER_H + 14 + (disclaimerLines.length - 1) * 10;
+  advance(10 * PX);
   for (const line of disclaimerLines) {
-    drawCentered(page, line, disclaimerY, poppins, 7.5, MUTED);
-    disclaimerY -= 10;
+    drawCentered(page, line, advance(disclaimerLead), poppins, disclaimerSize, DISCLAIMER);
   }
 
   page.drawRectangle({
@@ -321,6 +447,15 @@ export async function buildCertificatePdf(input: CertificatePdfInput): Promise<U
     height: FOOTER_H,
     color: PURPLE,
   });
+  drawTrackedCentered(
+    page,
+    FOOTER_COPY,
+    (FOOTER_H - 12 * PX) / 2 + 1.5,
+    poppinsMedium,
+    12 * PX,
+    FOOTER_INK,
+    0.5 * PX
+  );
 
   return pdf.save();
 }
