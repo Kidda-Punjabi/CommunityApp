@@ -1,4 +1,7 @@
+import { LearnCourseRow } from "@/components/learn/learn-course-row";
 import { LearnCourseTiles, type LearnHubTile } from "@/components/learn/learn-course-tiles";
+import { LearnSecondaryTiles } from "@/components/learn/learn-secondary-tiles";
+import { NavLink } from "@/components/ui/nav-link";
 import { fetchLearnContent } from "@/lib/learning/load-learn-content";
 import {
   canAccessLessonInContext,
@@ -11,18 +14,21 @@ import {
   kidsCourseLearnPath,
 } from "@/lib/learning/kids-courses";
 import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
+import { courseDetailPath } from "@/lib/learn/course-levels";
 import { findCoursesForTier } from "@/lib/membership/courses";
 import { resolveCourseActor } from "@/lib/kids/course-actor";
 import {
   getCachedAuthSession,
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
-import { ui } from "@/lib/ui/styles";
+import { pressableClass } from "@/lib/ui/pressable";
+import { cn, ui } from "@/lib/ui/styles";
 import {
   fetchLessonCompletionMap,
   summarizeCourseProgress,
 } from "@/lib/progress/lesson-completion";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
+import { Award } from "lucide-react";
 import { redirect } from "next/navigation";
 
 function shortStartsStatus(startDate: string): string {
@@ -113,6 +119,9 @@ export default async function LearnPage() {
       : "Lessons ready";
 
   const communityStatus = communityLocked ? "Unlock to start" : "Lessons ready";
+  const communityHref = communityLocked
+    ? community.unlockUrl ?? "/courses/community"
+    : learnTrackPath("community");
 
   const kidsTiles: LearnHubTile[] = kidsCourses.map((course) => {
     const courseLessons = allLessons.filter((lesson) => lesson.course_id === course.id);
@@ -130,51 +139,9 @@ export default async function LearnPage() {
     };
   });
 
-  const adultTiles: LearnHubTile[] = [
-    {
-      id: "foundational",
-      kind: "link",
-      href: foundationalLocked
-        ? foundational.unlockUrl ?? "/courses/foundational"
-        : learnTrackPath("foundational"),
-      title: "Foundational course",
-      status: foundationalStatus,
-      percent: foundationalLocked ? null : foundationalPercent,
-      tone: "accent",
-    },
-    {
-      id: "beginners",
-      kind: "link",
-      href: beginnersLocked
-        ? beginners.unlockUrl ?? "/courses/beginners"
-        : learnTrackPath("beginners"),
-      title: "Beginners course",
-      status: beginnersStatus,
-      tone: "amber",
-    },
-    {
-      id: "community",
-      kind: "link",
-      href: communityLocked
-        ? community.unlockUrl ?? "/courses/community"
-        : learnTrackPath("community"),
-      title: "Community",
-      status: communityStatus,
-      tone: "rose",
-    },
-    {
-      id: "resources",
-      kind: "link",
-      href: "/dashboard/learn/resources",
-      title: "Resources",
-      status: "Tools & shortcuts",
-      tone: "sky",
-    },
-  ];
-
-  const tiles: LearnHubTile[] =
-    actor.kind === "kid"
-      ? kidsTiles.length > 0
+  if (actor.kind === "kid") {
+    const tiles: LearnHubTile[] =
+      kidsTiles.length > 0
         ? kidsTiles
         : [
             {
@@ -184,19 +151,82 @@ export default async function LearnPage() {
               status: "Ask a grown-up to enrol you",
               tone: "muted",
             },
-          ]
-      : [...kidsTiles, ...adultTiles];
+          ];
+
+    return (
+      <div className={ui.page}>
+        <div className="mb-5">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
+          <p className="mt-1 text-sm text-zinc-500">Courses and tools in one place.</p>
+        </div>
+        <LearnCourseTiles tiles={tiles} />
+      </div>
+    );
+  }
 
   return (
     <div className={ui.page}>
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Courses and tools in one place.
-        </p>
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
+          <p className="mt-1 text-sm text-zinc-500">Courses and tools in one place.</p>
+        </div>
+        <NavLink
+          href="/dashboard/learn/certificates"
+          aria-label="Certificates"
+          className={cn(
+            pressableClass,
+            "flex h-10 w-10 items-center justify-center rounded-full bg-white text-violet-700 shadow-[0_2px_10px_-2px_rgba(124,58,237,0.35)] ring-1 ring-violet-100 hover:bg-violet-50"
+          )}
+        >
+          <Award className="h-5 w-5" aria-hidden />
+        </NavLink>
       </div>
 
-      <LearnCourseTiles tiles={tiles} />
+      {kidsTiles.length > 0 ? (
+        <div className="mb-5">
+          <LearnCourseTiles tiles={kidsTiles} />
+        </div>
+      ) : null}
+
+      <div className="space-y-3">
+        <LearnCourseRow
+          level="foundational"
+          tourId="learn-tile-foundational"
+          href={
+            foundationalLocked
+              ? foundational.unlockUrl ?? "/courses/foundational"
+              : learnTrackPath("foundational")
+          }
+          status={foundationalStatus}
+          percent={foundationalLocked ? null : foundationalPercent}
+        />
+        <LearnCourseRow
+          level="beginners"
+          tourId="learn-tile-beginners"
+          href={courseDetailPath("beginners")}
+          status={beginnersStatus}
+        />
+        <LearnCourseRow
+          level="intermediate"
+          href={courseDetailPath("intermediate")}
+          status="Next after Beginner"
+          comingSoon
+        />
+        <LearnCourseRow
+          level="advanced"
+          href={courseDetailPath("advanced")}
+          status="Next after Intermediate"
+          comingSoon
+        />
+      </div>
+
+      <div className="mt-6">
+        <LearnSecondaryTiles
+          communityHref={communityHref}
+          communityStatus={communityStatus}
+        />
+      </div>
     </div>
   );
 }
