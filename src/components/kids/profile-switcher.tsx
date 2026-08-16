@@ -15,25 +15,23 @@ import type { KidProfile } from "@/lib/kids/types";
 type ProfileSwitcherProps = {
   kidProfiles: KidProfile[];
   hasPin: boolean;
-  pinUnlocked: boolean;
   parentName: string;
+  kidActive?: boolean;
   showManage?: boolean;
 };
 
 export function ProfileSwitcher({
   kidProfiles,
   hasPin,
-  pinUnlocked,
   parentName,
+  kidActive = false,
   showManage = true,
 }: ProfileSwitcherProps) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
   const [pendingKidId, setPendingKidId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sessionUnlocked, setSessionUnlocked] = useState(pinUnlocked);
   const [parentPinOpen, setParentPinOpen] = useState(false);
-  const unlocked = sessionUnlocked || !hasPin;
 
   async function switchToKid(kidProfileId: string) {
     setError(null);
@@ -57,7 +55,7 @@ export function ProfileSwitcher({
       return;
     }
     setError(null);
-    if (hasPin) {
+    if (kidActive && hasPin) {
       setParentPinOpen(true);
       return;
     }
@@ -65,60 +63,38 @@ export function ProfileSwitcher({
   }
 
   async function switchToParent(pin?: string) {
-    const response = await fetch("/api/kids/exit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pin ?? "" }),
-    });
+    if (kidActive) {
+      const response = await fetch("/api/kids/exit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pin ?? "" }),
+      });
+      const data = (await response.json()) as { error?: string; redirectTo?: string };
+      if (!response.ok) {
+        setError(data.error ?? "Could not switch to parent account.");
+        return;
+      }
+      setParentPinOpen(false);
+      router.push(data.redirectTo ?? "/dashboard/home");
+      router.refresh();
+      return;
+    }
+
+    const response = await fetch("/api/kids/switch", { method: "DELETE" });
     const data = (await response.json()) as { error?: string; redirectTo?: string };
     if (!response.ok) {
-      setError(data.error ?? "Could not switch to parent account.");
+      setError(data.error ?? "Could not continue as parent.");
       return;
     }
-    setParentPinOpen(false);
     router.push(data.redirectTo ?? "/dashboard/home");
     router.refresh();
-  }
-
-  async function handleUnlockPin(pin: string) {
-    const response = await fetch("/api/kids/unlock", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
-    });
-    const data = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setError(data.error ?? "Incorrect PIN.");
-      return;
-    }
-    setError(null);
-    setSessionUnlocked(true);
-    router.refresh();
-  }
-
-  if (hasPin && !unlocked) {
-    return (
-      <div className="space-y-4">
-        <p className="text-sm text-zinc-600">
-          Enter your PIN to switch between profiles. You won&apos;t be asked again this session.
-        </p>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="rounded-3xl border border-zinc-200 bg-white p-6">
-          <PinPad
-            title="Enter your PIN"
-            subtitle="Unlock the profile switcher"
-            onComplete={handleUnlockPin}
-            error={error}
-          />
-        </div>
-      </div>
-    );
   }
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-600">
-        Choose who is learning. Kid profiles stay on your membership — no separate login.
+        Choose who is learning. Switching to a kid does not need a PIN. Returning to the parent
+        account does.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">

@@ -22,18 +22,19 @@ import type Stripe from "stripe";
 export { syncStripePurchasesForUser };
 
 async function resolveUserIdFromSession(session: Stripe.Checkout.Session) {
-  const fromMetadata =
-    session.metadata?.app_user_id ??
-    session.metadata?.supabase_user_id ??
-    session.client_reference_id ??
-    null;
-  if (fromMetadata) return fromMetadata;
+  const fromApp =
+    session.metadata?.app_user_id ?? session.metadata?.supabase_user_id ?? null;
+  if (fromApp) return fromApp;
+
+  // Booking-widget kids sessions put the Notion package page UUID in
+  // client_reference_id. Adult widget/in-app checkout still uses it as the
+  // app user id when present.
+  if (!isKidsCourseCheckoutSession(session) && session.client_reference_id) {
+    return session.client_reference_id;
+  }
 
   const email =
-    session.customer_details?.email ??
-    session.customer_email ??
-    null;
-
+    session.customer_details?.email ?? session.customer_email ?? null;
   if (!email) return null;
   return findUserIdByEmail(email);
 }
@@ -93,7 +94,7 @@ export async function syncMembershipFromCheckoutSession(sessionId: string) {
     if (result.error && !result.queued) {
       throw new Error(result.error);
     }
-    return { updated: result.granted, unlockedTiers: [] as PaidCourseTier[] };
+    return { updated: result.granted || result.queued, unlockedTiers: [] as PaidCourseTier[] };
   }
 
   if (!userId) {

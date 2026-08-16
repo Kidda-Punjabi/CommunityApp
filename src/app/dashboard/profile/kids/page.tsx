@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ProfileSwitcher } from "@/components/kids/profile-switcher";
-import { loadKidSession, isKidsPinUnlocked } from "@/lib/kids/session";
+import { loadKidSession } from "@/lib/kids/session";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -13,10 +13,7 @@ export default async function KidsProfileSwitcherPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [pinUnlocked, kidSession] = await Promise.all([
-    isKidsPinUnlocked(),
-    loadKidSession(user.id),
-  ]);
+  const kidSession = await loadKidSession(user.id);
   const kidActive = kidSession.activeKidProfile !== null;
 
   const { data: kidProfiles } = await supabase
@@ -43,16 +40,16 @@ export default async function KidsProfileSwitcherPage() {
           ← Back to profile
         </Link>
       )}
-      <h1 className="mt-4 text-2xl font-bold text-zinc-900">Switch profile</h1>
+      <h1 className="mt-4 text-2xl font-bold text-zinc-900">Who is learning?</h1>
       <p className="mt-2 text-sm text-zinc-600">
-        Choose who is using the app. Grown-up PIN unlocks this switcher once per session.
+        Pick a profile to continue. You can switch anytime from the avatar in the corner.
       </p>
       <div className="mt-6">
         <ProfileSwitcher
           kidProfiles={kidProfiles ?? []}
           hasPin={Boolean(profile?.kids_pin_hash)}
-          pinUnlocked={pinUnlocked}
           parentName={parentName}
+          kidActive={kidActive}
           showManage={!kidActive}
         />
       </div>

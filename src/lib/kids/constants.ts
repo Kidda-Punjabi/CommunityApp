@@ -1,5 +1,7 @@
 export const KID_PROFILE_COOKIE = "kidda_kid_profile_id";
 export const KIDS_PIN_UNLOCKED_COOKIE = "kidda_kids_pin_unlocked";
+/** Session-scoped: set after the post-login picker so we do not re-prompt this tab. */
+export const WHO_IS_LEARNING_COOKIE = "kidda_who_is_learning";
 
 export const KID_AVATAR_ICONS = [
   "Cat",

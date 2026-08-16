@@ -7,8 +7,8 @@ import {
 } from "@/lib/kids/constants";
 import { kidHomeHref } from "@/lib/kids/load-kid-content";
 import {
-  isKidsPinUnlocked,
   kidProfileCookieOptions,
+  markWhoIsLearningPicked,
   syncKidSessionContext,
 } from "@/lib/kids/session";
 import { createClient } from "@/lib/supabase/server";
@@ -29,16 +29,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("kids_pin_hash")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profile?.kids_pin_hash && !(await isKidsPinUnlocked())) {
-    return NextResponse.json({ error: "Enter your PIN to switch profiles." }, { status: 403 });
-  }
-
   const { data: kid } = await supabase
     .from("kid_profiles")
     .select("*")
@@ -52,6 +42,7 @@ export async function POST(request: Request) {
 
   const cookieStore = await cookies();
   cookieStore.set(KID_PROFILE_COOKIE, kidProfileId, kidProfileCookieOptions());
+  markWhoIsLearningPicked(cookieStore);
   await syncKidSessionContext(user.id, kidProfileId);
 
   const redirectTo = usesKidsShell(kid.age_tier)
@@ -71,16 +62,6 @@ export async function DELETE() {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("kids_pin_hash")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profile?.kids_pin_hash && !(await isKidsPinUnlocked())) {
-    return NextResponse.json({ error: "Enter your PIN to switch profiles." }, { status: 403 });
-  }
-
   const cookieStore = await cookies();
   const activeKid = cookieStore.get(KID_PROFILE_COOKIE)?.value?.trim();
   if (activeKid) {
@@ -90,6 +71,7 @@ export async function DELETE() {
     );
   }
 
+  markWhoIsLearningPicked(cookieStore);
   await syncKidSessionContext(user.id, null);
 
   return NextResponse.json({ ok: true, redirectTo: "/dashboard/home" });

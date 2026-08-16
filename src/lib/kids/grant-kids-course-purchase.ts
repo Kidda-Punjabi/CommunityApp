@@ -1,8 +1,10 @@
 import "server-only";
 
 import { completeGroupPurchaseAfterPayment } from "@/lib/group-purchase/complete-group-purchase-after-payment";
+import { cohortHoldExpiresAt } from "@/lib/group-purchase/cohort-capacity";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { packageSlugFromCheckoutKey } from "@/lib/stripe/sync-student-packages-from-payment";
+import { KIDS_BEGINNERS_PACKAGE_SLUG } from "@/lib/learning/kids-beginners";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 
@@ -11,6 +13,25 @@ const DEFAULT_KID_AGE_TIER = "independent";
 
 function normalizeKidName(name: string): string {
   return name.trim().replace(/\s+/g, " ");
+}
+
+function kidNameFromSession(session: Stripe.Checkout.Session): string | null {
+  const fromMeta = session.metadata?.kid_name?.trim();
+  if (fromMeta) return fromMeta;
+  const field = session.custom_fields?.find((item) => item.key === "kid_name");
+  const value = field?.text?.value?.trim();
+  return value || null;
+}
+
+export function isKidsCourseCheckoutSession(session: Stripe.Checkout.Session): boolean {
+  if (session.metadata?.audience_type?.trim().toLowerCase() === "kids") return true;
+  const checkoutKey = session.metadata?.checkout_key?.trim() ?? "";
+  if (checkoutKey === "beginners-kids-group") return true;
+  return Boolean(
+    session.metadata?.kid_name?.trim() ||
+      session.metadata?.kid_profile_id?.trim() ||
+      kidNameFromSession(session)
+  );
 }
 
 export async function findOrCreateKidProfileForPurchase(
@@ -154,7 +175,7 @@ export async function grantKidsCoursePurchaseFromSession(
   parentUserId: string | null
 ): Promise<{ granted: boolean; queued: boolean; error?: string }> {
   const supabase = createServiceRoleClient();
-  const kidName = session.metadata?.kid_name?.trim() || null;
+  const kidName = kidNameFromSession(session);
   const kidProfileIdMeta = session.metadata?.kid_profile_id?.trim() || null;
   const cohortId = session.metadata?.cohort_id?.trim() || null;
   const email =
@@ -201,7 +222,21 @@ export async function grantKidsCoursePurchaseFromSession(
   }
 
   const checkoutKey = session.metadata?.checkout_key ?? null;
-  const slug = checkoutKey ? packageSlugFromCheckoutKey(checkoutKey) : null;
+  let slug = checkoutKey ? packageSlugFromCheckoutKey(checkoutKey) : null;
+  if (!slug && session.metadata?.audience_type?.trim().toLowerCase() === "kids") {
+    slug = KIDS_BEGINNERS_PACKAGE_SLUG;
+  }
+  if (!slug && cohortId) {
+    const { data: cohort } = await supabase
+      .from("cohorts")
+      .select("course_id, courses(content_track)")
+      .eq("id", cohortId)
+      .maybeSingle();
+    const course = Array.isArray(cohort?.courses) ? cohort?.courses[0] : cohort?.courses;
+    if ((course as { content_track?: string | null } | null)?.content_track === "kids") {
+      slug = KIDS_BEGINNERS_PACKAGE_SLUG;
+    }
+  }
   if (!slug) {
     const message = "Unknown checkout product for kids purchase.";
     await enqueueKidsCoursePurchaseGrant(supabase, {
@@ -281,9 +316,57 @@ export async function grantKidsCoursePurchaseFromSession(
   }
 
   if (cohortId) {
+    let holdId = session.metadata?.cohort_seat_hold_id?.trim() || null;
+    if (!holdId) {
+      const { data: existingHold } = await supabase
+        .from("cohort_seat_holds")
+        .select("id")
+        .eq("stripe_checkout_session_id", session.id)
+        .maybeSingle();
+      if (existingHold?.id) {
+        holdId = existingHold.id as string;
+      } else {
+        const { data: hold, error: holdError } = await supabase
+          .from("cohort_seat_holds")
+          .insert({
+            cohort_id: cohortId,
+            user_id: parentUserId,
+            expires_at: cohortHoldExpiresAt(),
+            stripe_checkout_session_id: session.id,
+          })
+          .select("id")
+          .single();
+        if (holdError || !hold?.id) {
+          const message = holdError?.message ?? "Could not reserve a cohort seat after payment.";
+          await enqueueKidsCoursePurchaseGrant(supabase, {
+            sessionId: session.id,
+            parentEmail: email,
+            parentUserId,
+            kidName,
+            kidProfileId: kid.kidProfileId,
+            cohortId,
+            reason: message,
+            rawMetadata: (session.metadata ?? {}) as Record<string, unknown>,
+          });
+          return { granted: false, queued: true, error: message };
+        }
+        holdId = hold.id as string;
+      }
+    }
+
+    const sessionForGrant = {
+      ...session,
+      metadata: {
+        ...(session.metadata ?? {}),
+        cohort_id: cohortId,
+        cohort_seat_hold_id: holdId,
+        checkout_key: checkoutKey ?? "beginners-kids-group",
+      },
+    } as Stripe.Checkout.Session;
+
     const groupResult = await completeGroupPurchaseAfterPayment(supabase, {
       userId: parentUserId,
-      session,
+      session: sessionForGrant,
       studentPackageId: studentPackage.id,
       kidProfileId: kid.kidProfileId,
     });
@@ -351,12 +434,4 @@ export async function drainKidsCoursePurchaseGrantQueue(parentUserId: string, em
       );
     }
   }
-}
-
-export function isKidsCourseCheckoutSession(session: Stripe.Checkout.Session): boolean {
-  const checkoutKey = session.metadata?.checkout_key?.trim() ?? "";
-  if (checkoutKey === "beginners-kids-group") return true;
-  return Boolean(
-    session.metadata?.kid_name?.trim() || session.metadata?.kid_profile_id?.trim()
-  );
 }

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import {
   KID_PROFILE_COOKIE,
   KIDS_PIN_UNLOCKED_COOKIE,
+  WHO_IS_LEARNING_COOKIE,
 } from "@/lib/kids/constants";
 import type { KidProfile, KidSession } from "@/lib/kids/types";
 import { createClient } from "@/lib/supabase/server";
@@ -15,6 +16,11 @@ export async function getActiveKidProfileIdFromCookie(): Promise<string | null> 
 export async function isKidsPinUnlocked(): Promise<boolean> {
   const cookieStore = await cookies();
   return cookieStore.get(KIDS_PIN_UNLOCKED_COOKIE)?.value === "1";
+}
+
+export async function hasPickedWhoThisSession(): Promise<boolean> {
+  const cookieStore = await cookies();
+  return cookieStore.get(WHO_IS_LEARNING_COOKIE)?.value === "1";
 }
 
 export async function loadKidSession(userId: string): Promise<KidSession> {
@@ -57,10 +63,17 @@ export async function loadKidSession(userId: string): Promise<KidSession> {
     }
   }
 
+  const { count: kidCount } = await supabase
+    .from("kid_profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("parent_user_id", userId);
+
   return {
     activeKidProfile,
     hasPin: Boolean(profileRow?.kids_pin_hash),
     pinUnlocked: await isKidsPinUnlocked(),
+    hasKidProfiles: (kidCount ?? 0) > 0,
+    pickedWhoThisSession: await hasPickedWhoThisSession(),
   };
 }
 
@@ -94,4 +107,8 @@ export function kidsPinUnlockedCookieOptions() {
     sameSite: "lax" as const,
     path: "/",
   };
+}
+
+export function markWhoIsLearningPicked(cookieStore: Awaited<ReturnType<typeof cookies>>) {
+  cookieStore.set(WHO_IS_LEARNING_COOKIE, "1", kidsPinUnlockedCookieOptions());
 }

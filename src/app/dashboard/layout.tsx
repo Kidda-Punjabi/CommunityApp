@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { BottomNav } from "@/components/bottom-nav";
 import { PullToRefresh } from "@/components/pull-to-refresh";
-import { KidsExitButton } from "@/components/kids/kids-exit-button";
+import { ProfileSwitchChip } from "@/components/kids/profile-switch-chip";
 import { KidSessionProvider } from "@/components/kids/kid-session-provider";
 import { KidsShellRouteGuard } from "@/components/kids/kids-shell-route-guard";
 import { TabNavProvider } from "@/components/navigation/tab-nav-provider";
@@ -46,8 +47,25 @@ export default async function DashboardLayout({
 
   const kid = kidSession.activeKidProfile;
   const kidsShellActive = Boolean(kid && usesKidsShell(kid.age_tier));
-  const showKidsExit =
-    kid && !usesKidsShell(kid.age_tier) && !access.viewAs?.active;
+  const headerList = await headers();
+  const pathname = headerList.get("x-pathname") ?? "";
+  const isWhoIsLearningPicker =
+    pathname === "/dashboard/profile/kids" ||
+    pathname.startsWith("/dashboard/profile/kids/");
+  const shouldPickWhoIsLearning =
+    onboarding.hasSeenOnboarding &&
+    kidSession.hasKidProfiles &&
+    kidSession.hasPin &&
+    !kidSession.pickedWhoThisSession &&
+    !isWhoIsLearningPicker &&
+    !access.viewAs?.active;
+
+  if (shouldPickWhoIsLearning) {
+    redirect("/dashboard/profile/kids");
+  }
+
+  const parentInitial = (user.email?.trim().charAt(0) ?? "P").toUpperCase();
+  const showProfileChip = kidSession.hasKidProfiles && !access.viewAs?.active;
 
   return (
     <FirstRunProvider
@@ -64,6 +82,8 @@ export default async function DashboardLayout({
           activeKidProfile={kid}
           hasPin={kidSession.hasPin}
           pinUnlocked={kidSession.pinUnlocked}
+          hasKidProfiles={kidSession.hasKidProfiles}
+          parentInitial={parentInitial}
         >
           <AudioManagerProvider initialSettings={soundSettings}>
             <PointsToastProvider />
@@ -80,7 +100,7 @@ export default async function DashboardLayout({
                   <ActivityDateSync />
                   <LastPlayedGameTracker />
                   {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
-                  {showKidsExit && <KidsExitButton />}
+                  {showProfileChip && <ProfileSwitchChip />}
                   <div
                     className={
                       kidsShellActive

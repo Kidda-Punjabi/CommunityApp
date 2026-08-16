@@ -41,13 +41,17 @@ export async function POST(request: Request) {
     const premiumHandled = await handlePremiumWebhookEvent(event);
 
     // Premium Payment Link checkouts must not also run course/package grant logic.
+    let membershipUpdated = false;
     if (!premiumHandled) {
-      await syncMembershipFromStripeEvent(event);
+      const membership = await syncMembershipFromStripeEvent(event);
+      membershipUpdated = Boolean(membership && "updated" in membership && membership.updated);
     }
 
     await logStripeWebhookResult(
       event.id,
-      bookingResult === "processed" || premiumHandled ? "processed" : "ignored"
+      bookingResult === "processed" || premiumHandled || membershipUpdated
+        ? "processed"
+        : "ignored"
     );
     return NextResponse.json({ received: true });
   } catch (error) {

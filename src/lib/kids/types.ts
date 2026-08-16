@@ -14,6 +14,8 @@ export type KidSession = {
   activeKidProfile: KidProfile | null;
   hasPin: boolean;
   pinUnlocked: boolean;
+  hasKidProfiles: boolean;
+  pickedWhoThisSession: boolean;
 };
 
 export type KidSticker = {

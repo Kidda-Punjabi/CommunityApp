@@ -1,4 +1,3 @@
-import { KidsExitButton } from "@/components/kids/kids-exit-button";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { KidsShellNav } from "@/components/kids/kids-shell-nav";
 import { loadKidSession } from "@/lib/kids/session";
@@ -23,7 +22,6 @@ export default async function KidsLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="flex min-h-dvh w-full flex-1 flex-col bg-gradient-to-b from-sky-100 via-violet-50 to-amber-50 pb-24">
-      <KidsExitButton />
       <FloatingSoundToggle placement="top-left" />
       <div className="mx-auto w-full max-w-lg flex-1 px-4 pt-12">{children}</div>
       <KidsShellNav ageTier={kid.age_tier} />

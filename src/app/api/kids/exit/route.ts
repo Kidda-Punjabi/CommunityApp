@@ -2,7 +2,11 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { KID_PROFILE_COOKIE, KIDS_PIN_UNLOCKED_COOKIE } from "@/lib/kids/constants";
 import { verifyKidsPin } from "@/lib/kids/pin";
-import { kidsPinUnlockedCookieOptions, syncKidSessionContext } from "@/lib/kids/session";
+import {
+  kidsPinUnlockedCookieOptions,
+  markWhoIsLearningPicked,
+  syncKidSessionContext,
+} from "@/lib/kids/session";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -33,7 +37,8 @@ export async function POST(request: Request) {
   const cookieStore = await cookies();
   cookieStore.delete(KID_PROFILE_COOKIE);
   cookieStore.set(KIDS_PIN_UNLOCKED_COOKIE, "1", kidsPinUnlockedCookieOptions());
+  markWhoIsLearningPicked(cookieStore);
   await syncKidSessionContext(user.id, null);
 
-  return NextResponse.json({ ok: true, redirectTo: "/dashboard/profile/kids" });
+  return NextResponse.json({ ok: true, redirectTo: "/dashboard/home" });
 }

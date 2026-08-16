@@ -8,7 +8,10 @@ import {
   hasOpenCohortWriteBackAttention,
   tryWriteBackCohortConfirmedAfterEnrollment,
 } from "@/lib/notion/cohort-notion-writeback";
-import { getCohortCheckoutRemainingSpots } from "@/lib/group-purchase/cohort-capacity";
+import {
+  getCohortCheckoutRemainingSpots,
+  getCohortRemainingSpots,
+} from "@/lib/group-purchase/cohort-capacity";
 import { packageSlugFromCheckoutKey } from "@/lib/stripe/sync-student-packages-from-payment";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
@@ -148,9 +151,16 @@ export async function completeGroupPurchaseAfterPayment(
   }
 
   const capacity = cohort.capacity ?? 7;
-  const remaining = await getCohortCheckoutRemainingSpots(supabase, cohortId, capacity, {
-    honorHoldId: holdId,
-  });
+  // Kids widget checkouts already occupy a Notion Confirmed seat (parent lead).
+  // Counting that again would block the kid-scoped app enrollment. Adult
+  // checkout still uses Notion + holds.
+  const remaining = params.kidProfileId
+    ? await getCohortRemainingSpots(supabase, cohortId, capacity, {
+        honorHoldId: holdId,
+      })
+    : await getCohortCheckoutRemainingSpots(supabase, cohortId, capacity, {
+        honorHoldId: holdId,
+      });
 
   if (remaining <= 0) {
     console.error(
