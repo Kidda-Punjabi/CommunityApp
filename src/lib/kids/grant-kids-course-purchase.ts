@@ -132,8 +132,8 @@ async function grantKidCourseAccess(
     .select("required_tier")
     .eq("id", courseId)
     .maybeSingle();
-  const courseTier = course?.required_tier?.trim();
-  if (courseTier) {
+  const courseTier = course?.required_tier?.trim().toLowerCase();
+  if (courseTier === "foundational" || courseTier === "beginners" || courseTier === "community") {
     const { error: tierError } = await supabase.from("profile_course_access").upsert(
       {
         user_id: null,
