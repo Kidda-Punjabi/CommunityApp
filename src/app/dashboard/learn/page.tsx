@@ -16,6 +16,7 @@ import {
 } from "@/lib/learning/kids-courses";
 import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
 import { courseDetailPath } from "@/lib/learn/course-levels";
+import { loadRegisteredComingSoonLevels } from "@/lib/learn/course-interest";
 import { findCoursesForTier } from "@/lib/membership/courses";
 import { resolveCourseActor } from "@/lib/kids/course-actor";
 import {
@@ -56,7 +57,7 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap, actor, kidsCourses, kidProfileCount] =
+  const [access, allLessons, completionMap, actor, kidsCourses, kidProfileCount, registeredInterest] =
     await Promise.all([
       getCachedCourseAccess(supabase, user),
       lessonsPromise,
@@ -70,6 +71,7 @@ export default async function LearnPage() {
         .select("id", { count: "exact", head: true })
         .eq("parent_user_id", user.id)
         .then(({ count }) => count ?? 0),
+      loadRegisteredComingSoonLevels(supabase, user.id),
     ]);
 
   const foundational = getLearnTrack("foundational")!;
@@ -222,12 +224,14 @@ export default async function LearnPage() {
           href={courseDetailPath("intermediate")}
           status="Next after Beginner"
           comingSoon
+          interestRegistered={registeredInterest.has("intermediate")}
         />
         <LearnCourseRow
           level="advanced"
           href={courseDetailPath("advanced")}
           status="Next after Intermediate"
           comingSoon
+          interestRegistered={registeredInterest.has("advanced")}
         />
       </div>
 

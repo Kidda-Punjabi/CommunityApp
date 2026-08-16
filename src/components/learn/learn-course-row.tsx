@@ -14,6 +14,7 @@ type LearnCourseRowProps = {
   percent?: number | null;
   comingSoon?: boolean;
   tourId?: string;
+  interestRegistered?: boolean;
 };
 
 export function LearnCourseRow({
@@ -23,6 +24,7 @@ export function LearnCourseRow({
   percent = null,
   comingSoon = false,
   tourId,
+  interestRegistered = false,
 }: LearnCourseRowProps) {
   const theme = LEARN_COURSE_LEVELS[level];
   const Icon = theme.Icon;
@@ -59,13 +61,16 @@ export function LearnCourseRow({
         </p>
       </div>
     );
-    const cta = (
-      <RegisterInterestButton
-        courseTitle={theme.title}
-        compact
-        className={theme.ctaClass}
-      />
-    );
+    const cta =
+      level === "intermediate" || level === "advanced" ? (
+        <RegisterInterestButton
+          courseTitle={theme.title}
+          courseLevel={level}
+          compact
+          initiallyRegistered={interestRegistered}
+          className={theme.ctaClass}
+        />
+      ) : null;
 
     return (
       <div

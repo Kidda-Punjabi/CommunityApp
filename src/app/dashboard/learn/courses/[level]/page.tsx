@@ -5,6 +5,7 @@ import {
   isComingSoonLevel,
   type LearnCourseLevelId,
 } from "@/lib/learn/course-levels";
+import { loadRegisteredComingSoonLevels } from "@/lib/learn/course-interest";
 import { learnTrackPath } from "@/lib/learning/learn-catalog";
 import { cn, ui } from "@/lib/ui/styles";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
@@ -41,6 +42,7 @@ export default async function LearnCourseDetailPage({
 
   const theme = LEARN_COURSE_LEVELS[rawLevel];
   const Icon = theme.Icon;
+  const registered = await loadRegisteredComingSoonLevels(session.supabase, session.user.id);
 
   return (
     <div className={ui.page}>
@@ -76,6 +78,8 @@ export default async function LearnCourseDetailPage({
       <div className="mt-8">
         <RegisterInterestButton
           courseTitle={theme.title}
+          courseLevel={rawLevel}
+          initiallyRegistered={registered.has(rawLevel)}
           className={cn("w-full py-3 text-sm", theme.ctaClass)}
         />
       </div>

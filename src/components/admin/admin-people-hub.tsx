@@ -71,6 +71,12 @@ export function AdminPeopleHub() {
       title: "Staff & tutors",
       description: descriptions.staff ?? (loadingStats ? "Loading…" : "—"),
     },
+    {
+      href: "/admin/content/people/interest",
+      icon: "✋",
+      title: "Course interest",
+      description: "Coming-soon Intermediate and Advanced waitlist",
+    },
   ];
 
   return (
