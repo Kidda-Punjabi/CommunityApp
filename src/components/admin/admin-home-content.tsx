@@ -101,6 +101,11 @@ export function AdminHomeContent() {
             description="Approve or decline student requests to join an alternate group session"
           />
           <AdminNavListRow
+            href="/admin/webhook-grants"
+            title="Stripe webhook grants"
+            description="Track and retry payment webhooks that haven't resulted in complete access grants"
+          />
+          <AdminNavListRow
             href="/admin/sales-calls"
             title="Sales calls"
             description="Create and edit sales call log entries synced with Notion"
