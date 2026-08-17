@@ -2,6 +2,7 @@ import type { LearnTrackId } from "@/lib/learning/learn-catalog";
 import type { PaidCourseTier } from "@/lib/membership/access";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
+import { COHORT_SWITCH_CUTOFF_MS } from "@/lib/calendar/constants";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { loadCommunityLeads } from "@/lib/tutoring/load-course-staff";
@@ -228,6 +229,14 @@ export async function loadStudentPackages(
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
     const next = packageSessions[0] ?? null;
+    const isGroup =
+      enrollment?.delivery_mode === "group" || catalog.deliveryMode === "group";
+    const cutoffMs = Date.now() + COHORT_SWITCH_CUTOFF_MS;
+    const eligibleGroupSession =
+      packageSessions.find(
+        (session) =>
+          Boolean(session.cohort_id) && new Date(session.starts_at).getTime() >= cutoffMs
+      ) ?? packageSessions.find((session) => Boolean(session.cohort_id)) ?? null;
 
     const tutorName = enrollment?.tutor_id ? (tutorById.get(enrollment.tutor_id) ?? null) : null;
     const tutorAvatarUrl = enrollment?.tutor_id
@@ -269,10 +278,7 @@ export async function loadStudentPackages(
           }
         : null,
       upcomingSessionCount: packageSessions.length,
-      groupRescheduleSession:
-        (enrollment?.delivery_mode === "group" || catalog.deliveryMode === "group") && next?.cohort_id
-          ? next
-          : null,
+      groupRescheduleSession: isGroup ? eligibleGroupSession : null,
     });
   }
 
