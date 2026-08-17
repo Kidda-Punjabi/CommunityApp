@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   NOTION_LESSONS_LOG_DATA_SOURCE_ID,
+  NotionApiError,
   dateStart,
   notionJson,
   peopleIds,
@@ -450,10 +451,524 @@ async function resolvePackageNotionPageId(
   return { ok: false, error: "Choose a cohort or package instance." };
 }
 
+type LessonLogPackageTarget = Extract<
+  Awaited<ReturnType<typeof resolvePackageNotionPageId>>,
+  { ok: true }
+>;
+
+type ExistingCohortLessonLogRow = {
+  id: string;
+  notion_page_id: string;
+  lesson_title: string | null;
+  source: string | null;
+  status_source: string | null;
+  notes_source: string | null;
+  status: string | null;
+  notes: string | null;
+  recording_url: string | null;
+  slides_url: string | null;
+  flashcards_url: string | null;
+  logged_by: string | null;
+  notion_tutor_user_id: string | null;
+  dismissed_at: string | null;
+};
+
+type LessonLogWriteResult =
+  | { ok: true; entryId: string; notionPageId: string }
+  | { ok: false; error: string };
+
+const lessonLogWriteTails = new Map<string, Promise<unknown>>();
+
+async function withLessonLogWriteLock<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const previous = lessonLogWriteTails.get(key) ?? Promise.resolve();
+  const run = previous.catch(() => undefined).then(work);
+  lessonLogWriteTails.set(key, run);
+  try {
+    return await run;
+  } finally {
+    if (lessonLogWriteTails.get(key) === run) {
+      lessonLogWriteTails.delete(key);
+    }
+  }
+}
+
+function isUniqueViolation(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === "23505") return true;
+  const message = error.message ?? "";
+  return (
+    message.includes("cohort_lesson_log_entries_cohort_date_unique") ||
+    message.toLowerCase().includes("duplicate key")
+  );
+}
+
+function isMissingNotionPage(error: unknown): boolean {
+  if (!(error instanceof NotionApiError)) return false;
+  if (error.status === 404) return true;
+  return error.status === 400 && /could not find page|page not found/i.test(error.body);
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+async function findExistingCohortLessonLogEntry(
+  supabase: SupabaseClient,
+  cohortId: string,
+  lessonDate: string
+): Promise<ExistingCohortLessonLogRow | null> {
+  const { data, error } = await supabase
+    .from("cohort_lesson_log_entries")
+    .select(
+      "id, notion_page_id, lesson_title, source, status_source, notes_source, status, notes, recording_url, slides_url, flashcards_url, logged_by, notion_tutor_user_id, dismissed_at"
+    )
+    .eq("cohort_id", cohortId)
+    .eq("lesson_date", lessonDate)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as ExistingCohortLessonLogRow | null) ?? null;
+}
+
+function buildLessonLogNotionProperties(options: {
+  title?: string | null;
+  lessonDate: string;
+  packageNotionPageId: string;
+  status?: string | null;
+  includeReviewed?: boolean;
+  notes?: string | null;
+  recordingUrl?: string | null;
+  slidesUrl?: string | null;
+  flashcardsUrl?: string | null;
+  notionTutorUserId?: string | null;
+}): Record<string, unknown> {
+  const properties: Record<string, unknown> = {
+    "Lesson Date": { date: { start: options.lessonDate } },
+    "New Package DB": { relation: [{ id: options.packageNotionPageId }] },
+  };
+  if (options.title?.trim()) {
+    properties.Lesson = {
+      title: [{ type: "text", text: { content: options.title.trim().slice(0, 2000) } }],
+    };
+  }
+  if (options.status) {
+    properties.Status = { select: { name: options.status } };
+  }
+  if (options.includeReviewed) {
+    properties.Reviewed = { checkbox: false };
+  }
+  if (options.notes?.trim()) {
+    properties.notes = {
+      rich_text: [{ type: "text", text: { content: options.notes.trim().slice(0, 2000) } }],
+    };
+  }
+  if (options.recordingUrl?.trim()) {
+    properties["Recording Link"] = { url: options.recordingUrl.trim() };
+  }
+  if (options.slidesUrl?.trim()) {
+    properties.Slides = { url: options.slidesUrl.trim() };
+  }
+  if (options.flashcardsUrl?.trim()) {
+    properties.Flashcards = { url: options.flashcardsUrl.trim() };
+  }
+  if (options.notionTutorUserId?.trim()) {
+    properties["Actual Tutor (New)"] = {
+      people: [{ id: options.notionTutorUserId.trim() }],
+    };
+  }
+  return properties;
+}
+
+async function createLessonLogNotionPage(properties: Record<string, unknown>): Promise<string> {
+  const created = await notionJson<{ id: string }>("/pages", {
+    method: "POST",
+    body: JSON.stringify({
+      parent: { database_id: NOTION_LESSONS_LOG_DATA_SOURCE_ID },
+      properties,
+    }),
+  });
+  return created.id;
+}
+
+async function patchLessonLogNotionPage(
+  pageId: string,
+  properties: Record<string, unknown>
+): Promise<void> {
+  await notionJson(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ archived: false, properties }),
+  });
+}
+
+async function archiveLessonLogNotionPage(pageId: string): Promise<void> {
+  try {
+    await notionJson(`/pages/${pageId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true }),
+    });
+  } catch {
+    // Best-effort: local row is the source of truth after a create race.
+  }
+}
+
+async function pushLessonLogToExistingNotionPage(
+  existing: ExistingCohortLessonLogRow,
+  patchProperties: Record<string, unknown>,
+  createProperties: Record<string, unknown>
+): Promise<string> {
+  try {
+    await patchLessonLogNotionPage(existing.notion_page_id, patchProperties);
+    return existing.notion_page_id;
+  } catch (error) {
+    if (!isMissingNotionPage(error)) throw error;
+    return createLessonLogNotionPage(createProperties);
+  }
+}
+
+function buildLessonLogRowPayload(options: {
+  input: CreateLessonLogInput;
+  existing: ExistingCohortLessonLogRow | null;
+  notionPageId: string;
+  cohortId: string | null;
+  packageInstanceId: string | null;
+  title: string;
+  lessonDate: string;
+  status: "Scheduled" | "Completed" | "Cancelled";
+}): Record<string, unknown> {
+  const { input, existing } = options;
+  const now = new Date().toISOString();
+  const notes = firstNonEmpty(input.notes, existing?.notes);
+  const recordingUrl = firstNonEmpty(input.recordingUrl, existing?.recording_url);
+  const slidesUrl = firstNonEmpty(input.slidesUrl, existing?.slides_url);
+  const flashcardsUrl = firstNonEmpty(input.flashcardsUrl, existing?.flashcards_url);
+  const loggedBy = firstNonEmpty(input.loggedBy, existing?.logged_by);
+  const notionTutorUserId = firstNonEmpty(input.notionTutorUserId, existing?.notion_tutor_user_id);
+  const statusLocked = existing?.status_source === "manual";
+  const notesLocked = existing?.notes_source === "manual";
+  const status = statusLocked
+    ? ((existing?.status as typeof options.status | null) ?? options.status)
+    : options.status;
+
+  const payload: Record<string, unknown> = {
+    notion_page_id: options.notionPageId,
+    cohort_id: options.cohortId,
+    package_instance_id: options.packageInstanceId,
+    lesson_date: options.lessonDate,
+    recording_url: recordingUrl,
+    slides_url: slidesUrl,
+    flashcards_url: flashcardsUrl,
+    logged_by: loggedBy,
+    notion_tutor_user_id: notionTutorUserId,
+    notion_sync_status: "synced",
+    notion_sync_error: null,
+    notion_synced_at: now,
+    notion_last_edited_at: now,
+  };
+
+  if (!existing) {
+    payload.lesson_title = options.title.trim();
+    payload.source = "app";
+    payload.reviewed = false;
+    payload.reviewed_source = "notion";
+  }
+
+  if (!statusLocked) {
+    payload.status = status;
+    payload.status_source = "notion";
+  }
+  if (!notesLocked) {
+    payload.notes = notes;
+    if (!existing || input.notes?.trim()) {
+      payload.notes_source = "notion";
+    }
+  }
+
+  const effectiveStatus =
+    (payload.status as string | undefined) ?? existing?.status ?? null;
+  if (effectiveStatus === "Cancelled") {
+    payload.dismissed_at = existing?.dismissed_at ?? now;
+    payload.dismissed_by = loggedBy;
+  } else if (existing?.status === "Cancelled") {
+    payload.dismissed_at = null;
+    payload.dismissed_by = null;
+  }
+
+  return payload;
+}
+
+async function runLessonLogPostSaveSideEffects(
+  supabase: SupabaseClient,
+  options: { cohortId: string | null; entryId: string; loggedBy: string | null }
+): Promise<void> {
+  if (!options.cohortId) return;
+
+  const { syncCohortLessonLogLessonIds } = await import(
+    "@/lib/lessons/lesson-log-lesson-link"
+  );
+  await syncCohortLessonLogLessonIds(supabase, options.cohortId);
+
+  const { data: linked } = await supabase
+    .from("cohort_lesson_log_entries")
+    .select("lesson_id, recording_url")
+    .eq("id", options.entryId)
+    .maybeSingle();
+
+  if (linked?.lesson_id && linked.recording_url) {
+    const { syncCohortLessonRecordingFromLog } = await import(
+      "@/lib/tutoring/sync-cohort-recording-from-log"
+    );
+    await syncCohortLessonRecordingFromLog(supabase, {
+      cohortId: options.cohortId,
+      lessonId: linked.lesson_id,
+      recordingUrl: linked.recording_url,
+      uploadedBy: options.loggedBy,
+    });
+  }
+
+  const { maybeAutoUnlockAfterLessonLog } = await import(
+    "@/lib/lessons/cohort-lesson-unlock"
+  );
+  await maybeAutoUnlockAfterLessonLog(supabase, {
+    cohortId: options.cohortId,
+    entryId: options.entryId,
+    unlockedBy: options.loggedBy,
+  });
+}
+
+async function insertCohortLessonLogEntry(
+  supabase: SupabaseClient,
+  payload: Record<string, unknown>
+): Promise<
+  | { ok: true; id: string }
+  | { ok: false; conflict: true }
+  | { ok: false; conflict: false; error: string }
+> {
+  // INSERT ... ON CONFLICT (cohort_id, lesson_date) DO UPDATE cannot go through
+  // PostgREST upsert: that would overwrite notion_page_id with a racing create.
+  // After cohort_lesson_log_entries_cohort_date_unique exists, a racing INSERT
+  // returns 23505 and the caller merges onto the existing row instead.
+  const inserted = await supabase
+    .from("cohort_lesson_log_entries")
+    .insert(payload)
+    .select("id")
+    .single();
+
+  if (!inserted.error && inserted.data?.id) {
+    return { ok: true, id: inserted.data.id as string };
+  }
+  if (isUniqueViolation(inserted.error)) {
+    return { ok: false, conflict: true };
+  }
+  return {
+    ok: false,
+    conflict: false,
+    error:
+      inserted.error?.message ??
+      "Notion page was created, but saving the local log row failed. It should appear after the next sync.",
+  };
+}
+
+async function updateExistingLessonLogFromApp(options: {
+  supabase: SupabaseClient;
+  input: CreateLessonLogInput;
+  target: LessonLogPackageTarget;
+  existing: ExistingCohortLessonLogRow;
+  lessonDate: string;
+  status: "Scheduled" | "Completed" | "Cancelled";
+  title: string;
+}): Promise<LessonLogWriteResult> {
+  const { supabase, input, target, existing, lessonDate, status, title } = options;
+  const statusLocked = existing.status_source === "manual";
+  const notesLocked = existing.notes_source === "manual";
+  const patchProperties = buildLessonLogNotionProperties({
+    lessonDate,
+    packageNotionPageId: target.packageNotionPageId,
+    status: statusLocked ? null : status,
+    notes: notesLocked ? null : input.notes,
+    recordingUrl: input.recordingUrl,
+    slidesUrl: input.slidesUrl,
+    flashcardsUrl: input.flashcardsUrl,
+    notionTutorUserId: input.notionTutorUserId,
+  });
+  const createProperties = buildLessonLogNotionProperties({
+    title: existing.lesson_title?.trim() || title,
+    lessonDate,
+    packageNotionPageId: target.packageNotionPageId,
+    status: statusLocked ? existing.status : status,
+    includeReviewed: true,
+    notes: notesLocked ? existing.notes : firstNonEmpty(input.notes, existing.notes),
+    recordingUrl: firstNonEmpty(input.recordingUrl, existing.recording_url),
+    slidesUrl: firstNonEmpty(input.slidesUrl, existing.slides_url),
+    flashcardsUrl: firstNonEmpty(input.flashcardsUrl, existing.flashcards_url),
+    notionTutorUserId: firstNonEmpty(input.notionTutorUserId, existing.notion_tutor_user_id),
+  });
+
+  let notionPageId: string;
+  try {
+    notionPageId = await pushLessonLogToExistingNotionPage(
+      existing,
+      patchProperties,
+      createProperties
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed to update Notion Lessons Log page.",
+    };
+  }
+
+  const payload = buildLessonLogRowPayload({
+    input,
+    existing,
+    notionPageId,
+    cohortId: target.cohortId,
+    packageInstanceId: target.packageInstanceId,
+    title,
+    lessonDate,
+    status,
+  });
+
+  const { error } = await supabase
+    .from("cohort_lesson_log_entries")
+    .update(payload)
+    .eq("id", existing.id);
+  if (error) return { ok: false, error: error.message };
+
+  await runLessonLogPostSaveSideEffects(supabase, {
+    cohortId: target.cohortId,
+    entryId: existing.id,
+    loggedBy: firstNonEmpty(input.loggedBy, existing.logged_by),
+  });
+
+  return { ok: true, entryId: existing.id, notionPageId };
+}
+
+async function createOrUpdateLessonLogInNotionAndSupabase(
+  supabase: SupabaseClient,
+  input: CreateLessonLogInput,
+  target: LessonLogPackageTarget,
+  lessonDate: string
+): Promise<LessonLogWriteResult> {
+  const status = input.status ?? "Completed";
+  const title = `${target.name}  - ${lessonDate} `;
+  let existing: ExistingCohortLessonLogRow | null = null;
+  if (target.cohortId) {
+    try {
+      existing = await findExistingCohortLessonLogEntry(
+        supabase,
+        target.cohortId,
+        lessonDate
+      );
+    } catch (error) {
+      return {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to look up existing lesson log.",
+      };
+    }
+  }
+
+  if (existing) {
+    return updateExistingLessonLogFromApp({
+      supabase,
+      input,
+      target,
+      existing,
+      lessonDate,
+      status,
+      title,
+    });
+  }
+
+  const properties = buildLessonLogNotionProperties({
+    title,
+    lessonDate,
+    packageNotionPageId: target.packageNotionPageId,
+    status,
+    includeReviewed: true,
+    notes: input.notes,
+    recordingUrl: input.recordingUrl,
+    slidesUrl: input.slidesUrl,
+    flashcardsUrl: input.flashcardsUrl,
+    notionTutorUserId: input.notionTutorUserId,
+  });
+
+  let notionPageId: string;
+  try {
+    notionPageId = await createLessonLogNotionPage(properties);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed to create Notion Lessons Log page.",
+    };
+  }
+
+  const payload = buildLessonLogRowPayload({
+    input,
+    existing: null,
+    notionPageId,
+    cohortId: target.cohortId,
+    packageInstanceId: target.packageInstanceId,
+    title,
+    lessonDate,
+    status,
+  });
+
+  const inserted = await insertCohortLessonLogEntry(supabase, payload);
+  if (!inserted.ok) {
+    if (inserted.conflict && target.cohortId) {
+      await archiveLessonLogNotionPage(notionPageId);
+      const winner = await findExistingCohortLessonLogEntry(
+        supabase,
+        target.cohortId,
+        lessonDate
+      );
+      if (!winner) {
+        return {
+          ok: false,
+          error:
+            "A lesson log for this cohort and date already exists, but it could not be loaded.",
+        };
+      }
+      return updateExistingLessonLogFromApp({
+        supabase,
+        input,
+        target,
+        existing: winner,
+        lessonDate,
+        status,
+        title,
+      });
+    }
+    if (inserted.conflict) {
+      return {
+        ok: false,
+        error: "A lesson log for this date already exists.",
+      };
+    }
+    return { ok: false, error: inserted.error };
+  }
+
+  await runLessonLogPostSaveSideEffects(supabase, {
+    cohortId: target.cohortId,
+    entryId: inserted.id,
+    loggedBy: input.loggedBy?.trim() || null,
+  });
+
+  return { ok: true, entryId: inserted.id, notionPageId };
+}
+
 export async function createLessonLogInNotionAndSupabase(
   supabase: SupabaseClient,
   input: CreateLessonLogInput
-): Promise<{ ok: true; entryId: string; notionPageId: string } | { ok: false; error: string }> {
+): Promise<LessonLogWriteResult> {
   const lessonDate = calendarDateOnly(input.lessonDate);
   if (!lessonDate) {
     return { ok: false, error: "Lesson date is required." };
@@ -462,135 +977,13 @@ export async function createLessonLogInNotionAndSupabase(
   const target = await resolvePackageNotionPageId(supabase, input);
   if (!target.ok) return target;
 
-  const status = input.status ?? "Completed";
-  const title = `${target.name}  - ${lessonDate} `;
-  const properties: Record<string, unknown> = {
-    Lesson: {
-      title: [{ type: "text", text: { content: title.slice(0, 2000) } }],
-    },
-    "Lesson Date": {
-      date: { start: lessonDate },
-    },
-    "New Package DB": {
-      relation: [{ id: target.packageNotionPageId }],
-    },
-    Status: { select: { name: status } },
-    Reviewed: { checkbox: false },
-  };
+  const lockKey = target.cohortId
+    ? `cohort:${target.cohortId}:${lessonDate}`
+    : `instance:${target.packageInstanceId}:${lessonDate}`;
 
-  if (input.notes?.trim()) {
-    properties.notes = {
-      rich_text: [{ type: "text", text: { content: input.notes.trim().slice(0, 2000) } }],
-    };
-  }
-  if (input.recordingUrl?.trim()) {
-    properties["Recording Link"] = { url: input.recordingUrl.trim() };
-  }
-  if (input.slidesUrl?.trim()) {
-    properties.Slides = { url: input.slidesUrl.trim() };
-  }
-  if (input.flashcardsUrl?.trim()) {
-    properties.Flashcards = { url: input.flashcardsUrl.trim() };
-  }
-  if (input.notionTutorUserId?.trim()) {
-    properties["Actual Tutor (New)"] = {
-      people: [{ id: input.notionTutorUserId.trim() }],
-    };
-  }
-
-  let notionPageId: string;
-  try {
-    const created = await notionJson<{ id: string }>("/pages", {
-      method: "POST",
-      body: JSON.stringify({
-        parent: { database_id: NOTION_LESSONS_LOG_DATA_SOURCE_ID },
-        properties,
-      }),
-    });
-    notionPageId = created.id;
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Failed to create Notion Lessons Log page.",
-    };
-  }
-
-  const now = new Date().toISOString();
-  const { data: inserted, error: insertError } = await supabase
-    .from("cohort_lesson_log_entries")
-    .insert({
-      notion_page_id: notionPageId,
-      cohort_id: target.cohortId,
-      package_instance_id: target.packageInstanceId,
-      lesson_title: title.trim(),
-      lesson_date: lessonDate,
-      recording_url: input.recordingUrl?.trim() || null,
-      slides_url: input.slidesUrl?.trim() || null,
-      flashcards_url: input.flashcardsUrl?.trim() || null,
-      notes: input.notes?.trim() || null,
-      notes_source: "notion",
-      notion_tutor_user_id: input.notionTutorUserId?.trim() || null,
-      logged_by: input.loggedBy?.trim() || null,
-      source: "app",
-      status,
-      status_source: "notion",
-      reviewed: false,
-      reviewed_source: "notion",
-      notion_sync_status: "synced",
-      notion_sync_error: null,
-      notion_synced_at: now,
-      notion_last_edited_at: now,
-      ...(status === "Cancelled"
-        ? { dismissed_at: now, dismissed_by: input.loggedBy?.trim() || null }
-        : {}),
-    })
-    .select("id")
-    .single();
-
-  if (insertError || !inserted) {
-    return {
-      ok: false,
-      error:
-        insertError?.message ??
-        "Notion page was created, but saving the local log row failed. It should appear after the next sync.",
-    };
-  }
-
-  if (target.cohortId) {
-    const { syncCohortLessonLogLessonIds } = await import(
-      "@/lib/lessons/lesson-log-lesson-link"
-    );
-    await syncCohortLessonLogLessonIds(supabase, target.cohortId);
-
-    const { data: linked } = await supabase
-      .from("cohort_lesson_log_entries")
-      .select("lesson_id, recording_url")
-      .eq("id", inserted.id)
-      .maybeSingle();
-
-    if (linked?.lesson_id && linked.recording_url) {
-      const { syncCohortLessonRecordingFromLog } = await import(
-        "@/lib/tutoring/sync-cohort-recording-from-log"
-      );
-      await syncCohortLessonRecordingFromLog(supabase, {
-        cohortId: target.cohortId,
-        lessonId: linked.lesson_id,
-        recordingUrl: linked.recording_url,
-        uploadedBy: input.loggedBy?.trim() || null,
-      });
-    }
-
-    const { maybeAutoUnlockAfterLessonLog } = await import(
-      "@/lib/lessons/cohort-lesson-unlock"
-    );
-    await maybeAutoUnlockAfterLessonLog(supabase, {
-      cohortId: target.cohortId,
-      entryId: inserted.id,
-      unlockedBy: input.loggedBy?.trim() || null,
-    });
-  }
-
-  return { ok: true, entryId: inserted.id, notionPageId };
+  return withLessonLogWriteLock(lockKey, () =>
+    createOrUpdateLessonLogInNotionAndSupabase(supabase, input, target, lessonDate)
+  );
 }
 
 export type UpdateLessonLogManualFieldsInput = {

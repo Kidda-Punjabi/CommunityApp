@@ -3,7 +3,7 @@
 import { logCohortLessonAction } from "@/app/dashboard/tutor/log-lesson-actions";
 import { ui } from "@/lib/ui/styles";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 export type LogLessonCohortOption = {
   cohortId: string;
@@ -29,6 +29,7 @@ export function TutorLogLessonForm({ cohorts, defaultCohortId }: TutorLogLessonF
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   if (cohorts.length === 0) {
     return (
@@ -42,16 +43,22 @@ export function TutorLogLessonForm({ cohorts, defaultCohortId }: TutorLogLessonF
   }
 
   function handleSubmit(formData: FormData) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setError(null);
     setSuccess(null);
     startTransition(async () => {
-      const result = await logCohortLessonAction(formData);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await logCohortLessonAction(formData);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setSuccess(result.success ?? "Lesson logged.");
+        router.refresh();
+      } finally {
+        submittingRef.current = false;
       }
-      setSuccess(result.success ?? "Lesson logged.");
-      router.refresh();
     });
   }
 

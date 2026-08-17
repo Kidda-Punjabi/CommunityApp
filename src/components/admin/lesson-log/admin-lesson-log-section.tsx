@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   createAdminLessonLogEntry,
   dismissAdminLessonLogAttention,
@@ -66,6 +66,7 @@ export function AdminLessonLogSection() {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const createSubmittingRef = useRef(false);
   const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof fetchAdminLessonLog>> | null>(
     null
   );
@@ -346,40 +347,46 @@ export function AdminLessonLogSection() {
             disabled={pending || !createDraft.runId || !createDraft.lessonDate}
             className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
             onClick={() => {
+              if (createSubmittingRef.current) return;
               const pkg = snapshot?.filters.createTargets.find((p) => p.id === createDraft.runId);
               if (!pkg) {
                 setError("Choose a cohort or package.");
                 return;
               }
+              createSubmittingRef.current = true;
               startTransition(async () => {
-                setMessage(null);
-                setError(null);
-                const result = await createAdminLessonLogEntry({
-                  kind: pkg.kind,
-                  runId: pkg.id,
-                  lessonDate: createDraft.lessonDate,
-                  notes: createDraft.notes,
-                  recordingUrl: createDraft.recordingUrl,
-                  status: createDraft.status,
-                });
-                if (result.error) {
-                  setError(result.error);
-                  return;
+                try {
+                  setMessage(null);
+                  setError(null);
+                  const result = await createAdminLessonLogEntry({
+                    kind: pkg.kind,
+                    runId: pkg.id,
+                    lessonDate: createDraft.lessonDate,
+                    notes: createDraft.notes,
+                    recordingUrl: createDraft.recordingUrl,
+                    status: createDraft.status,
+                  });
+                  if (result.error) {
+                    setError(result.error);
+                    return;
+                  }
+                  setMessage(
+                    `${result.success ?? "Created."}${
+                      result.notionPageId ? ` Notion page ${result.notionPageId}` : ""
+                    }`
+                  );
+                  setShowCreate(false);
+                  setCreateDraft({
+                    runId: "",
+                    lessonDate: todayDateInput(),
+                    notes: "",
+                    recordingUrl: "",
+                    status: "Completed",
+                  });
+                  reload();
+                } finally {
+                  createSubmittingRef.current = false;
                 }
-                setMessage(
-                  `${result.success ?? "Created."}${
-                    result.notionPageId ? ` Notion page ${result.notionPageId}` : ""
-                  }`
-                );
-                setShowCreate(false);
-                setCreateDraft({
-                  runId: "",
-                  lessonDate: todayDateInput(),
-                  notes: "",
-                  recordingUrl: "",
-                  status: "Completed",
-                });
-                reload();
               });
             }}
           >
