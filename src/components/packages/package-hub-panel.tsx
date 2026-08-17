@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { CourseCohortStats } from "@/components/learn/course-cohort-stats";
+import { GroupCohortRescheduleControl } from "@/components/schedule/group-cohort-reschedule-control";
 import type { StudentPackage } from "@/lib/packages/load-student-packages";
 import type { StudentCohortCourseStats } from "@/lib/lessons/load-student-cohort-course-stats";
 import { ui } from "@/lib/ui/styles";
@@ -108,6 +109,14 @@ export function PackageHubPanel({
         <p className="text-xs text-zinc-500">
           Your tutor is being assigned — you can browse lessons meanwhile.
         </p>
+      ) : null}
+
+      {pkg.deliveryMode === "group" ? (
+        <GroupCohortRescheduleControl
+          session={pkg.groupRescheduleSession}
+          forceShow
+          className="pt-1"
+        />
       ) : null}
 
     </>

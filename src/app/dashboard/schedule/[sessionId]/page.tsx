@@ -1,10 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  CohortSwitchRequestForm,
-  RescheduleRequestForm,
-} from "@/components/schedule/upcoming-lessons-list";
-import { CancelCohortSwitchRequestControl } from "@/components/schedule/cancel-cohort-switch-request-control";
+import { RescheduleRequestForm } from "@/components/schedule/reschedule-request-form";
+import { GroupCohortRescheduleControl } from "@/components/schedule/group-cohort-reschedule-control";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import { createClient } from "@/lib/supabase/server";
@@ -73,13 +70,6 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
         </p>
       ) : null}
 
-      {session.cohortSwitchRequest?.status === "pending" ? (
-        <CancelCohortSwitchRequestControl
-          request={session.cohortSwitchRequest}
-          className="mt-6"
-        />
-      ) : null}
-
       {session.canRequestReschedule ? (
         <section className="mt-8">
           <h2 className="text-lg font-semibold text-zinc-900">Request to reschedule</h2>
@@ -102,22 +92,14 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
         </section>
       ) : null}
 
-      {session.canRequestCohortSwitch ? (
+      {isGroup ? (
         <section className="mt-8">
-          <h2 className="text-lg font-semibold text-zinc-900">Request alternate cohort</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">Request to reschedule</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Group lessons can&apos;t be rescheduled to a new time — you can ask to join another cohort
-            for this week instead.
+            Group lessons can&apos;t be moved to a new time — you can ask to join another session of
+            this course instead.
           </p>
-          <CohortSwitchRequestForm session={session} />
-        </section>
-      ) : isGroup && session.cohortSwitchLockedReason && !session.cohortSwitchRequest ? (
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold text-zinc-900">Request alternate cohort</h2>
-          <button type="button" disabled className={`${ui.btnGhost} mt-3 cursor-not-allowed opacity-60`}>
-            Request alternate cohort
-          </button>
-          <p className="mt-3 text-sm text-zinc-500">{session.cohortSwitchLockedReason}</p>
+          <GroupCohortRescheduleControl session={session} className="mt-3" />
         </section>
       ) : null}
     </div>

@@ -3,6 +3,7 @@ import type { PaidCourseTier } from "@/lib/membership/access";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
+import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { loadCommunityLeads } from "@/lib/tutoring/load-course-staff";
 import {
   packageSlugForEnrollment,
@@ -45,6 +46,8 @@ export type StudentPackage = {
   cohortName: string | null;
   nextSession: StudentPackageSession | null;
   upcomingSessionCount: number;
+  /** Next upcoming group session, used for the course-card reschedule control. */
+  groupRescheduleSession: StudentScheduledSession | null;
 };
 
 type EnrollmentRow = {
@@ -266,6 +269,10 @@ export async function loadStudentPackages(
           }
         : null,
       upcomingSessionCount: packageSessions.length,
+      groupRescheduleSession:
+        (enrollment?.delivery_mode === "group" || catalog.deliveryMode === "group") && next?.cohort_id
+          ? next
+          : null,
     });
   }
 

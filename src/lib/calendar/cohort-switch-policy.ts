@@ -37,7 +37,7 @@ export function getCohortSwitchEligibility(
   if (alternateCohortCount === 0) {
     return {
       canRequest: false,
-      lockedReason: "No other group cohorts are available for this lesson.",
+      lockedReason: "No alternative sessions currently available",
     };
   }
 

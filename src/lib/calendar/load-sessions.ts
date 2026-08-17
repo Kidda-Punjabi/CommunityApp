@@ -17,7 +17,7 @@ import type {
 } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isCalendarSchemaMissingError } from "@/lib/calendar/schema";
-import { isValidCohortSwitchCandidateSession } from "@/lib/calendar/cohort-switch-candidates";
+import { loadAlternateCohortSessions } from "@/lib/calendar/load-alternate-cohort-sessions";
 import { isStoredSessionExcluded, type CalendarExclusionRow } from "@/lib/calendar/exclusions";
 import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
 import { filterStudentScheduleSessions } from "@/lib/calendar/filter-student-schedule-sessions";
@@ -311,7 +311,6 @@ export async function loadStudentUpcomingSessions(
   const cohortMetaById = new Map((sessionCohorts ?? []).map((cohort) => [cohort.id, cohort]));
 
   const labelled = await attachLessonLabelsToSessions(supabase, scheduleSessions);
-  const labelledById = new Map(labelled.map((session) => [session.id, session]));
   let beginnersRescheduleLimit;
   try {
     beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, studentId);
@@ -323,60 +322,7 @@ export async function loadStudentUpcomingSessions(
   const groupSessions = labelled.filter(
     (session) => Boolean(session.cohort_id) && Boolean(session.course_id)
   );
-  const alternateSessionBySourceId = new Map<string, Array<(typeof labelled)[number]>>();
-
-  if (groupSessions.length > 0) {
-    const courseIdsForAlternates = [
-      ...new Set(groupSessions.map((session) => session.course_id).filter((id): id is string => Boolean(id))),
-    ];
-    const fromIso = new Date(
-      Math.min(...groupSessions.map((session) => new Date(session.starts_at).getTime()))
-    ).toISOString();
-    const toIso = new Date(
-      Math.max(...groupSessions.map((session) => new Date(session.starts_at).getTime())) +
-        10 * 24 * 60 * 60 * 1000
-    ).toISOString();
-
-    const { data: alternateRows, error: alternateError } =
-      courseIdsForAlternates.length > 0
-        ? await supabase
-            .from("tutor_scheduled_sessions")
-            .select("*")
-            .in("course_id", courseIdsForAlternates)
-            .not("cohort_id", "is", null)
-            .eq("status", "scheduled")
-            .neq("match_method", "unmatched")
-            .neq("match_method", "title_name")
-            .gte("starts_at", fromIso)
-            .lte("starts_at", toIso)
-            .order("starts_at", { ascending: true })
-        : { data: [], error: null };
-
-    if (alternateError) throw alternateError;
-
-    const alternateLabelled = await attachLessonLabelsToSessions(
-      supabase,
-      ((alternateRows ?? []) as ScheduledSessionRow[]).filter((session) => {
-        if (labelledById.has(session.id)) return false;
-        return isValidCohortSwitchCandidateSession(session);
-      })
-    );
-
-    for (const source of groupSessions) {
-      const matches = alternateLabelled.filter((candidate) => {
-        if (!source.cohort_id || !candidate.cohort_id || !source.course_id || !source.lessonNumber) {
-          return false;
-        }
-        if (candidate.cohort_id === source.cohort_id) return false;
-        if (candidate.course_id !== source.course_id) return false;
-        if (candidate.lessonNumber !== source.lessonNumber) return false;
-        const sourceMs = new Date(source.starts_at).getTime();
-        const candidateMs = new Date(candidate.starts_at).getTime();
-        return candidateMs >= sourceMs && candidateMs <= sourceMs + 10 * 24 * 60 * 60 * 1000;
-      });
-      alternateSessionBySourceId.set(source.id, matches);
-    }
-  }
+  const alternateSessionBySourceId = await loadAlternateCohortSessions(supabase, groupSessions);
 
   return {
     schemaReady: true,
@@ -392,15 +338,7 @@ export async function loadStudentUpcomingSessions(
         rescheduleLimitLockedReason,
       });
       const cohortSwitchRequest = cohortSwitchBySession.get(session.id) ?? null;
-      const alternateCohorts = (alternateSessionBySourceId.get(session.id) ?? []).map((candidate) => ({
-        id: candidate.id,
-        cohortId: candidate.cohort_id as string,
-        name: cohortMetaById.get(candidate.cohort_id as string)?.name ?? candidate.title ?? "Alternate cohort",
-        tutorName: tutorNameById.get(candidate.tutor_id) ?? "Tutor",
-        startsAt: candidate.starts_at,
-        endsAt: candidate.ends_at,
-        lessonLabel: candidate.lessonLabel,
-      }));
+      const alternateCohorts = alternateSessionBySourceId.get(session.id) ?? [];
       const cohortSwitchEligibility = getCohortSwitchEligibility(
         session,
         cohortSwitchRequest,

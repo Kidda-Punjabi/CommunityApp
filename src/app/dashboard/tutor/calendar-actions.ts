@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { COHORT_SWITCH_CUTOFF_MS } from "@/lib/calendar/constants";
-import { isValidCohortSwitchCandidateSession } from "@/lib/calendar/cohort-switch-candidates";
+import { isActiveCohortSwitchStatus, isAlternateCohortSwitchSession } from "@/lib/calendar/cohort-switch-candidates";
 import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy";
 import { getRescheduleEligibility, GROUP_LESSON_NO_RESCHEDULE_REASON, formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import {
@@ -10,6 +9,7 @@ import {
   getBeginnersRescheduleLockedReason,
   loadBeginnersRescheduleLimitStatus,
 } from "@/lib/calendar/reschedule-limit";
+import { loadAlternateCohortSessionsForSource } from "@/lib/calendar/load-alternate-cohort-sessions";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -274,22 +274,10 @@ export async function requestCohortSwitch(
   if (sessionError || !session) return { error: "Lesson not found." };
   if (!session.cohort_id) return { error: "This is not a group lesson." };
 
-  const msUntilStart = new Date(session.starts_at).getTime() - Date.now();
-  if (msUntilStart < COHORT_SWITCH_CUTOFF_MS) {
-    return {
-      error: "You need to let us know at least 3 days before the lesson to request a different cohort.",
-    };
-  }
+  const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
+  if (!adminClient) return { error: adminError };
 
-  const { data: currentCohort, error: currentCohortError } = await supabase
-    .from("cohorts")
-    .select("id, tutor_id, course_id, active")
-    .eq("id", session.cohort_id)
-    .maybeSingle();
-
-  if (currentCohortError || !currentCohort) return { error: "Cohort not found." };
-
-  const { data: targetSession, error: targetSessionError } = await supabase
+  const { data: targetSession, error: targetSessionError } = await adminClient
     .from("tutor_scheduled_sessions")
     .select("*")
     .eq("id", toSessionId)
@@ -298,8 +286,22 @@ export async function requestCohortSwitch(
   if (targetSessionError || !targetSession || !targetSession.cohort_id) {
     return { error: "Alternate session not found." };
   }
-  if (!isValidCohortSwitchCandidateSession(targetSession)) {
-    return { error: "This alternate session is not a valid student lesson." };
+
+  if (
+    !isAlternateCohortSwitchSession(session, targetSession) ||
+    targetSession.cohort_id === session.cohort_id
+  ) {
+    return { error: "Invalid alternate session for this lesson." };
+  }
+
+  const { data: targetCohort } = await adminClient
+    .from("cohorts")
+    .select("id, active, status")
+    .eq("id", targetSession.cohort_id)
+    .maybeSingle();
+
+  if (!targetCohort?.active || !isActiveCohortSwitchStatus(targetCohort.status)) {
+    return { error: "That cohort is not currently available." };
   }
 
   const { data: existing } = await supabase
@@ -309,48 +311,10 @@ export async function requestCohortSwitch(
     .eq("student_id", user.id)
     .maybeSingle();
 
-  const { attachLessonLabelsToSessions } = await import("@/lib/calendar/session-lesson-labels");
-  const sourceStartsMs = new Date(session.starts_at).getTime();
-  const { data: alternateSessions } = await supabase
-    .from("tutor_scheduled_sessions")
-    .select("*")
-    .eq("course_id", currentCohort.course_id)
-    .not("cohort_id", "is", null)
-    .eq("status", "scheduled")
-    .gte("starts_at", session.starts_at)
-    .lte("starts_at", new Date(sourceStartsMs + 10 * 24 * 60 * 60 * 1000).toISOString());
-
-  const labelled = await attachLessonLabelsToSessions(supabase, [
-    session,
-    ...((alternateSessions ?? []).filter((row) => row.id !== session.id)),
-  ]);
-  const sourceLesson = labelled.find((row) => row.id === session.id);
-  const targetStartsMs = new Date(targetSession.starts_at).getTime();
-
-  const alternateCandidates = labelled.filter((row) => {
-    if (row.id === session.id) return false;
-    if (!isValidCohortSwitchCandidateSession(row)) return false;
-    if (!row.cohort_id || row.cohort_id === session.cohort_id) return false;
-    if (row.course_id !== currentCohort.course_id) return false;
-    if (!row.lessonNumber || row.lessonNumber !== sourceLesson?.lessonNumber) return false;
-    const candidateStartsMs = new Date(row.starts_at).getTime();
-    return (
-      candidateStartsMs >= sourceStartsMs &&
-      candidateStartsMs <= sourceStartsMs + 10 * 24 * 60 * 60 * 1000
-    );
-  });
-
-  if (
-    targetSession.cohort_id === currentCohort.id ||
-    targetSession.course_id !== currentCohort.course_id ||
-    targetSession.status !== "scheduled" ||
-    !alternateCandidates.some((row) => row.id === targetSession.id) ||
-    targetStartsMs < sourceStartsMs ||
-    targetStartsMs > sourceStartsMs + 10 * 24 * 60 * 60 * 1000
-  ) {
+  const alternateOptions = await loadAlternateCohortSessionsForSource(supabase, session);
+  if (!alternateOptions.some((option) => option.id === targetSession.id)) {
     return { error: "Invalid alternate session for this lesson." };
   }
-  const alternateCount = alternateCandidates.length;
 
   const beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, user.id);
   const rescheduleLimitLockedReason = appliesBeginnersRescheduleLimit(
@@ -363,15 +327,12 @@ export async function requestCohortSwitch(
   const eligibility = getCohortSwitchEligibility(
     session,
     existing ?? null,
-    alternateCount,
+    alternateOptions.length,
     { rescheduleLimitLockedReason }
   );
   if (!eligibility.canRequest) {
-    return { error: eligibility.lockedReason ?? "Cannot request alternate cohort." };
+    return { error: eligibility.lockedReason ?? "Cannot request to reschedule." };
   }
-
-  const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
-  if (!adminClient) return { error: adminError };
 
   const payload = {
     session_id: sessionId,
@@ -409,7 +370,7 @@ export async function requestCohortSwitch(
   revalidatePath("/dashboard/learn");
   revalidatePath("/admin/content");
   revalidatePath("/admin/cohort-switch-requests");
-  return { success: "Alternate cohort request sent to the Kidda team." };
+  return { success: "Reschedule request sent to the Kidda team." };
 }
 
 export async function cancelCohortSwitchRequest(requestId: string): Promise<CalendarActionResult> {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LessonInlineAudioRow } from "@/components/lesson-inline-audio-row";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import { RescheduleRequestForm } from "@/components/schedule/reschedule-request-form";
-import { CohortSwitchRequestForm } from "@/components/schedule/upcoming-lessons-list";
+import { GroupCohortRescheduleControl } from "@/components/schedule/group-cohort-reschedule-control";
 import { CancelCohortSwitchRequestControl } from "@/components/schedule/cancel-cohort-switch-request-control";
 import { LessonPdfViewer } from "@/components/lesson-pdf-viewer";
 import { deckPracticeHref } from "@/lib/flashcards/utils";
@@ -605,31 +605,10 @@ function LessonScheduleRequestSection({
     );
   }
 
-  if (scheduleSession.canRequestCohortSwitch) {
+  if (isGroup) {
     return (
       <div className="mt-4 border-t border-zinc-100 pt-4">
-        <p className="text-xs text-zinc-500">
-          Can&apos;t make this group? Request a matching alternate cohort session here.
-        </p>
-        <CohortSwitchRequestForm session={scheduleSession} />
-      </div>
-    );
-  }
-
-  if (isGroup && scheduleSession.cohortSwitchLockedReason && !scheduleSession.cohortSwitchRequest) {
-    return (
-      <div className="mt-4 border-t border-zinc-100 pt-4">
-        <button
-          type="button"
-          disabled
-          className={cn(
-            lessonContentRowButtonClass,
-            "cursor-not-allowed opacity-60 hover:bg-white"
-          )}
-        >
-          Request alternate cohort
-        </button>
-        <p className="mt-2 text-xs text-zinc-500">{scheduleSession.cohortSwitchLockedReason}</p>
+        <GroupCohortRescheduleControl session={scheduleSession} showPending={false} />
       </div>
     );
   }
