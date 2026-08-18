@@ -9,10 +9,14 @@ import {
   parseTopicTagsFromForm,
 } from "@/lib/group-games/content-filters";
 import { ensureBuzzInInitialized } from "@/lib/buzz-in/load-buzz-in";
+import { buildBuzzInRounds } from "@/lib/buzz-in/build-questions";
 import { ensureJeopardyInitialized } from "@/lib/jeopardy/load-jeopardy";
+import { buildJeopardyBoard } from "@/lib/jeopardy/build-board";
 import { ensureLadderInitialized } from "@/lib/chado-pauri-group/load-ladder";
 import { ensureSentenceBuilderInitialized } from "@/lib/sentence-builder-group/load-sentence";
+import { pickSessionSentences } from "@/lib/sentence-builder-group/pick-sentences";
 import { ensurePointRaceInitialized } from "@/lib/point-race/load-race";
+import { loadFlashcardPool } from "@/lib/point-race/build-questions";
 import { loadGameRoom } from "@/lib/game-rooms/load-room";
 import { rejectIfKidCommunityBlocked } from "@/lib/kids/guards";
 import { createClient } from "@/lib/supabase/server";
@@ -103,6 +107,24 @@ export async function setHostPlaying(
 export async function startGameRoom(roomId: string): Promise<GroupGameActionResult> {
   const supabase = await createClient();
   const room = await loadGameRoom(supabase, roomId);
+  const questionCount =
+    typeof room?.settings?.question_count === "number" ? room.settings.question_count : DEFAULT_QUESTION_COUNT;
+
+  try {
+    if (room?.game_type === "buzz_in") {
+      await buildBuzzInRounds(supabase, questionCount, room.settings);
+    } else if (room?.game_type === "jeopardy") {
+      await buildJeopardyBoard(supabase, room.settings);
+    } else if (room?.game_type === "sentence_builder_group") {
+      await pickSessionSentences(supabase, questionCount, room.settings);
+    } else if (room?.game_type === "point_race") {
+      await loadFlashcardPool(supabase, room.settings);
+    }
+  } catch (preflightError) {
+    const message =
+      preflightError instanceof Error ? preflightError.message : "Not enough questions for this topic.";
+    return { error: message };
+  }
 
   const { error } = await supabase.rpc("start_game_room", {
     p_room_id: roomId,
