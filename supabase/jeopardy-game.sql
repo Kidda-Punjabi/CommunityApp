@@ -500,3 +500,6 @@ BEGIN
 END $$;
 
 NOTIFY pgrst, 'reload schema';
+
+-- Stuck-tile recovery (server sweep + host recover) lives in
+-- supabase/jeopardy-stuck-tile-recovery.sql and must be applied after this file.

@@ -10,6 +10,7 @@ type UseJeopardyRealtimeOptions = {
   onRoomChange: (room: GameRoomRow) => void;
   onTileChange: (tile: JeopardyTileRow) => void;
   onParticipantsChange: () => void;
+  onResync?: () => void;
 };
 
 /** In-game Jeopardy channel — callback refs avoid remount churn. */
@@ -18,10 +19,12 @@ export function useJeopardyRealtime({
   onRoomChange,
   onTileChange,
   onParticipantsChange,
+  onResync,
 }: UseJeopardyRealtimeOptions) {
   const onRoomChangeRef = useRef(onRoomChange);
   const onTileChangeRef = useRef(onTileChange);
   const onParticipantsChangeRef = useRef(onParticipantsChange);
+  const onResyncRef = useRef(onResync);
 
   useEffect(() => {
     onRoomChangeRef.current = onRoomChange;
@@ -34,6 +37,10 @@ export function useJeopardyRealtime({
   useEffect(() => {
     onParticipantsChangeRef.current = onParticipantsChange;
   }, [onParticipantsChange]);
+
+  useEffect(() => {
+    onResyncRef.current = onResync;
+  }, [onResync]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -74,7 +81,11 @@ export function useJeopardyRealtime({
         },
         () => onParticipantsChangeRef.current()
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          onResyncRef.current?.();
+        }
+      });
 
     return () => {
       void supabase.removeChannel(channel);
