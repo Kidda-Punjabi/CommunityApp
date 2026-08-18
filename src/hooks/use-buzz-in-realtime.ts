@@ -10,6 +10,7 @@ type UseBuzzInRealtimeOptions = {
   onRoomChange: (room: GameRoomRow) => void;
   onRoundChange: (round: BuzzInRoundRow) => void;
   onParticipantsChange: () => void;
+  onResync?: () => void;
 };
 
 /** In-game buzz-in channel — callback refs avoid remount churn. */
@@ -18,10 +19,12 @@ export function useBuzzInRealtime({
   onRoomChange,
   onRoundChange,
   onParticipantsChange,
+  onResync,
 }: UseBuzzInRealtimeOptions) {
   const onRoomChangeRef = useRef(onRoomChange);
   const onRoundChangeRef = useRef(onRoundChange);
   const onParticipantsChangeRef = useRef(onParticipantsChange);
+  const onResyncRef = useRef(onResync);
 
   useEffect(() => {
     onRoomChangeRef.current = onRoomChange;
@@ -34,6 +37,10 @@ export function useBuzzInRealtime({
   useEffect(() => {
     onParticipantsChangeRef.current = onParticipantsChange;
   }, [onParticipantsChange]);
+
+  useEffect(() => {
+    onResyncRef.current = onResync;
+  }, [onResync]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -80,7 +87,11 @@ export function useBuzzInRealtime({
           onParticipantsChangeRef.current();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          onResyncRef.current?.();
+        }
+      });
 
     return () => {
       void supabase.removeChannel(channel);
