@@ -457,6 +457,8 @@ GRANT EXECUTE ON FUNCTION public.buzz_in_initialize_rounds(UUID, JSONB) TO authe
 GRANT EXECUTE ON FUNCTION public.buzz_in(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.submit_buzz_answer(UUID, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.resolve_buzz_in_timeout(UUID) TO authenticated;
+-- Server-side stuck-round sweep + host recover: also run buzz-in-round-recovery.sql.
+-- Server-side stuck-round sweep + host recover: run buzz-in-round-recovery.sql after this file.
 
 -- Realtime
 DO $$
