@@ -22,6 +22,10 @@ assert.equal(itemMatchesTopicTags(["Food", "Basics"], ["food"]), true);
 assert.equal(itemMatchesTopicTags(["travel"], ["food"]), false);
 assert.equal(itemMatchesTopicTags(["travel"], []), true);
 
+assert.equal(itemMatchesTopicTags(["week_2", "aux_verb"], ["aux_verb"]), true);
+assert.equal(itemMatchesTopicTags(["week_6", "question_word"], ["week_6"]), true);
+assert.equal(itemMatchesTopicTags(["week_6", "question_word"], ["aux_verb"]), false);
+
 assert.equal(itemMatchesDifficulty(3, 2, 4), true);
 assert.equal(itemMatchesDifficulty(1, 2, 4), false);
 assert.equal(itemMatchesDifficulty(null, 2, 4), false);
@@ -45,6 +49,30 @@ assert.deepEqual(
   ["a", "b"]
 );
 assert.equal(topicOnly.usedFallback, false);
+
+const laterTag = filterByContentFilters(
+  [
+    { id: "w", topic_tags: ["week_2", "aux_verb"], difficulty: 1 },
+    { id: "x", topic_tags: ["week_6", "verb"], difficulty: 1 },
+  ],
+  { topicTags: ["aux_verb"], difficultyMin: null, difficultyMax: null },
+  (c) => c.topic_tags,
+  (c) => c.difficulty
+);
+assert.deepEqual(
+  laterTag.matched.map((c) => c.id),
+  ["w"]
+);
+assert.equal(laterTag.usedFallback, false);
+
+const noMatch = filterByContentFilters(
+  cards,
+  { topicTags: ["aux_verb"], difficultyMin: null, difficultyMax: null },
+  (c) => c.topic_tags,
+  (c) => c.difficulty
+);
+assert.deepEqual(noMatch.matched, []);
+assert.equal(noMatch.usedFallback, false);
 
 const settings = buildRoomContentSettings({
   questionCount: 12,

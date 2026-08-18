@@ -3,6 +3,7 @@ import { pickRandomItems } from "@/lib/flashcards/utils";
 import type { BuzzInQuestionPayload } from "@/lib/buzz-in/types";
 import {
   filterByContentFilters,
+  noQuestionsForTopicError,
   topicFiltersFromSettings,
   type GroupGameContentFilters,
 } from "@/lib/group-games/content-filters";
@@ -39,7 +40,10 @@ export async function buildBuzzInRounds(
   const { rows, error } = await loadScopedFlashcardPoolRows<FlashcardPoolRow>(
     supabase,
     user.id,
-    "id, front_text, back_text, romanised, category, difficulty, topic_tags, lesson_id"
+    "id, front_text, back_text, romanised, category, difficulty, topic_tags, lesson_id",
+    filters.topicTags.length > 0
+      ? { overlaps: { topic_tags: filters.topicTags } }
+      : undefined
   );
 
   if (error) throw new Error(error);
@@ -55,24 +59,22 @@ export async function buildBuzzInRounds(
     })
     .filter((card): card is NonNullable<typeof card> => card !== null);
 
-  if (cards.length < 4) {
-    throw new Error("Not enough flashcards to build buzz-in questions (need at least 4).");
-  }
-
-  const { matched, usedFallback } = filterByContentFilters(
+  const { matched } = filterByContentFilters(
     cards,
     filters,
     (card) => card.topic_tags,
     (card) => card.difficulty
   );
 
-  const pool = matched.length >= 4 ? matched : cards;
-  if (matched.length < 4 && filters.topicTags.length > 0) {
-    console.warn(
-      "[buzz_in] Narrow content filter yielded too few cards; falling back to broader pool.",
-      { filters, matched: matched.length, usedFallback }
-    );
+  if (filters.topicTags.length > 0 && matched.length < 4) {
+    throw noQuestionsForTopicError(filters.topicTags);
   }
+
+  if (matched.length < 4) {
+    throw new Error("Not enough flashcards to build buzz-in questions (need at least 4).");
+  }
+
+  const pool = matched;
 
   const picked = pickRandomItems(pool, Math.min(questionCount, pool.length));
 

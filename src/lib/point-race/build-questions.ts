@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { pickRandomItems } from "@/lib/flashcards/utils";
 import {
   filterByContentFilters,
+  noQuestionsForTopicError,
   topicFiltersFromSettings,
   type GroupGameContentFilters,
 } from "@/lib/group-games/content-filters";
@@ -60,7 +61,10 @@ export async function loadFlashcardPool(
     supabase,
     user.id,
     "id, front_text, back_text, romanised, category, difficulty, topic_tags, lesson_id",
-    { scope }
+    {
+      scope,
+      ...(filters.topicTags.length > 0 ? { overlaps: { topic_tags: filters.topicTags } } : {}),
+    }
   );
 
   if (error) throw new Error(error);
@@ -76,26 +80,22 @@ export async function loadFlashcardPool(
     })
     .filter((card): card is FlashcardPoolCard => card !== null);
 
-  if (cards.length < 4) {
-    throw new Error("Not enough flashcards to build point race questions (need at least 4).");
-  }
-
-  const { matched, usedFallback } = filterByContentFilters(
+  const { matched } = filterByContentFilters(
     cards,
     filters,
     (card) => card.topic_tags,
     (card) => card.difficulty
   );
 
-  const pool = matched.length >= 4 ? matched : cards;
-  if (matched.length < 4 && filters.topicTags.length > 0) {
-    console.warn(
-      "[point_race] Narrow content filter yielded too few cards; falling back to broader pool.",
-      { filters, matched: matched.length, usedFallback }
-    );
+  if (filters.topicTags.length > 0 && matched.length < 4) {
+    throw noQuestionsForTopicError(filters.topicTags);
   }
 
-  return pool;
+  if (matched.length < 4) {
+    throw new Error("Not enough flashcards to build point race questions (need at least 4).");
+  }
+
+  return matched;
 }
 
 export async function getFlashcardPool(

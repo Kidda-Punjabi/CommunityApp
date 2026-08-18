@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   contentFiltersFromSettings,
   itemMatchesTopicTags,
+  noQuestionsForTopicError,
 } from "@/lib/group-games/content-filters";
 import {
   buildMcqPayload,
@@ -97,7 +98,10 @@ export async function buildJeopardyBoard(
   }>(
     supabase,
     user.id,
-    "id, front_text, back_text, romanised, category, difficulty, topic_tags, lesson_id"
+    "id, front_text, back_text, romanised, category, difficulty, topic_tags, lesson_id",
+    filters.topicTags.length > 0
+      ? { overlaps: { topic_tags: filters.topicTags } }
+      : undefined
   );
 
   if (error) throw new Error(error);
@@ -118,14 +122,11 @@ export async function buildJeopardyBoard(
       ? allCards
       : allCards.filter((card) => itemMatchesTopicTags(card.topic_tags, filters.topicTags));
 
-  // Prefer topic-filtered pool; if empty, fall back so the board can still build.
-  const cards = topicScoped.length > 0 ? topicScoped : allCards;
   if (filters.topicTags.length > 0 && topicScoped.length === 0) {
-    console.warn(
-      "[jeopardy] Topic filter matched no flashcards; falling back to full pool.",
-      { topicTags: filters.topicTags }
-    );
+    throw noQuestionsForTopicError(filters.topicTags);
   }
+
+  const cards = topicScoped;
 
   const usedIds = new Set<string>();
   const tiles: JeopardyTileInsert[] = [];
