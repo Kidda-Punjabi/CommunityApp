@@ -1,3 +1,8 @@
+import type {
+  RecommendedMedia,
+  RecommendedRecipe,
+} from "@/lib/community/recommendation-types";
+
 export type Course = {
   id: string;
   name: string;
@@ -95,6 +100,8 @@ export type Event = {
   recurrence_freq: string | null;
   recurrence_until: string | null;
 };
+
+export type { RecommendedMedia, RecommendedRecipe };
 
 export type GenderedNoun = {
   id: string;
@@ -234,6 +241,8 @@ export type AdminData = {
   setCourseLinks: SetCourseLink[];
   flashcards: Flashcard[];
   events: Event[];
+  recommendedMedia: RecommendedMedia[];
+  recommendedRecipes: RecommendedRecipe[];
   grammarSentences: GrammarSentence[];
   verbConjugations: VerbConjugationRow[];
   genderedNouns: GenderedNoun[];
@@ -249,6 +258,8 @@ export type AdminData = {
     setCourseLinks?: string;
     flashcards?: string;
     events?: string;
+    recommendedMedia?: string;
+    recommendedRecipes?: string;
     grammarSentences?: string;
     verbConjugations?: string;
     genderedNouns?: string;

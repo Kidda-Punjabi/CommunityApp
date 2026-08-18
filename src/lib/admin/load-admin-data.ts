@@ -158,23 +158,40 @@ export async function loadAdminCurriculumData(): Promise<AdminLoadResult> {
   return { ok: true, data, branding };
 }
 
-/** Site tab — events only. */
+/** Site tab — events and community recommendations. */
 export async function loadAdminSiteData(): Promise<AdminLoadResult> {
   const clientResult = getAdminClient();
   if (!clientResult.ok) {
     return { ok: false, error: clientResult.error };
   }
 
-  const { data: events, error: eventsError } = await clientResult.client
-    .from("events")
-    .select("*")
-    .order("starts_at", { ascending: false });
+  const [
+    { data: events, error: eventsError },
+    { data: recommendedMedia, error: mediaError },
+    { data: recommendedRecipes, error: recipesError },
+  ] = await Promise.all([
+    clientResult.client.from("events").select("*").order("starts_at", { ascending: false }),
+    clientResult.client
+      .from("recommended_media")
+      .select("*")
+      .order("display_order")
+      .order("title"),
+    clientResult.client
+      .from("recommended_recipes")
+      .select("*")
+      .order("display_order")
+      .order("title"),
+  ]);
 
   const data: AdminData = {
     ...EMPTY_ADMIN_DATA,
     events: events ?? [],
+    recommendedMedia: (recommendedMedia ?? []) as AdminData["recommendedMedia"],
+    recommendedRecipes: (recommendedRecipes ?? []) as AdminData["recommendedRecipes"],
     errors: {
       events: eventsError?.message,
+      recommendedMedia: mediaError?.message,
+      recommendedRecipes: recipesError?.message,
     },
   };
 
@@ -200,6 +217,8 @@ export async function loadAdminData(): Promise<AdminLoadResult> {
     cohorts: core.data.cohorts,
     staffMembers: core.data.staffMembers,
     events: site.data.events,
+    recommendedMedia: site.data.recommendedMedia,
+    recommendedRecipes: site.data.recommendedRecipes,
     errors: {
       ...curriculum.data.errors,
       ...core.data.errors,
