@@ -6,9 +6,14 @@ import {
   linkSessionToPackage,
   resolveRescheduleRequest,
   setSessionReschedulingAllowed,
+  tagCalendarSession,
   updateTutorSessionLog,
   type CalendarActionResult,
 } from "@/app/dashboard/tutor/calendar-actions";
+import {
+  KIDDA_WORK_CATEGORIES,
+  KIDDA_WORK_CATEGORY_LABELS,
+} from "@/lib/calendar/event-tags";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type { TutorScheduledSession } from "@/lib/calendar/types";
 import { LessonsViewToggle, type LessonsViewMode } from "@/components/schedule/lessons-view-toggle";
@@ -274,6 +279,27 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
         >
           Not a lesson
         </button>
+        {session.match_method === "unmatched"
+          ? KIDDA_WORK_CATEGORIES.map((category) => (
+              <button
+                key={category}
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setPending(true);
+                  setMessage(null);
+                  void tagCalendarSession(session.id, category, "event").then((result) => {
+                    setMessage(result.success ?? result.error ?? null);
+                    setPending(false);
+                    if (result.success) window.location.reload();
+                  });
+                }}
+                className={ui.btnGhost}
+              >
+                {KIDDA_WORK_CATEGORY_LABELS[category]}
+              </button>
+            ))
+          : null}
         {session.suggestedPackageId && !session.linkedPackageId ? (
           <button
             type="button"
@@ -294,6 +320,27 @@ function TutorSessionCard({ session }: { session: TutorScheduledSession }) {
             >
               Not a lesson (whole series)
             </button>
+            {session.match_method === "unmatched"
+              ? KIDDA_WORK_CATEGORIES.map((category) => (
+                  <button
+                    key={`${category}-series`}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      setPending(true);
+                      setMessage(null);
+                      void tagCalendarSession(session.id, category, "series").then((result) => {
+                        setMessage(result.success ?? result.error ?? null);
+                        setPending(false);
+                        if (result.success) window.location.reload();
+                      });
+                    }}
+                    className={ui.btnGhost}
+                  >
+                    {KIDDA_WORK_CATEGORY_LABELS[category]} (whole series)
+                  </button>
+                ))
+              : null}
             {session.suggestedPackageId && !session.linkedPackageId ? (
               <button
                 type="button"

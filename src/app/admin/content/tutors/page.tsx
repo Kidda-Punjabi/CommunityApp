@@ -22,6 +22,9 @@ export default function AdminTutorOverviewPage() {
         <Link href="/admin/content/calendar" className="text-sm font-medium text-violet-600 hover:text-violet-500">
           Open calendar view →
         </Link>
+        <Link href="/admin/tutor-hours" className="text-sm font-medium text-violet-600 hover:text-violet-500">
+          Tutor hours →
+        </Link>
       </div>
 
       <AdminTutorOverviewPanel />

@@ -120,6 +120,11 @@ export function AdminHomeContent() {
             }
           />
           <AdminNavListRow
+            href="/admin/tutor-hours"
+            title="Tutor hours"
+            description="Lesson hours plus tagged Kidda meeting, admin, and prep — informational only"
+          />
+          <AdminNavListRow
             href="/admin/content/kids-stories"
             title="Kids bedtime stories"
             description="Author Premium kids stories (empty until content is approved)"

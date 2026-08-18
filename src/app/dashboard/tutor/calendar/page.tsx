@@ -4,6 +4,7 @@ import { TutorAvailabilitySection } from "@/components/tutor/tutor-availability-
 import { TutorCalendarAutoSync } from "@/components/tutor/tutor-calendar-auto-sync";
 import { TutorCalendarSyncButton } from "@/components/tutor/tutor-calendar-sync-button";
 import { TutorCalendarView } from "@/components/tutor/tutor-calendar-view";
+import { UnmatchedCalendarEventsSection } from "@/components/tutor/unmatched-calendar-events-section";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
 import { disconnectGoogleCalendar } from "@/app/dashboard/tutor/calendar-actions";
 import { loadTutorSelfCalendarSessions } from "@/lib/calendar/load-tutor-self-calendar";
@@ -120,6 +121,12 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
       {schemaReady ? (
         <div className="mb-8">
           <TutorCalendarView sessions={sessions} />
+        </div>
+      ) : null}
+
+      {schemaReady ? (
+        <div className="mb-8">
+          <UnmatchedCalendarEventsSection sessions={sessions} />
         </div>
       ) : null}
 

@@ -1,5 +1,10 @@
 import { isCalendarEventExcluded } from "@/lib/calendar/exclusions";
 import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
+import {
+  findCalendarEventTag,
+  type CalendarEventTagRow,
+  type KiddaWorkCategory,
+} from "@/lib/calendar/event-tags";
 import { calendarSyncRangeStart } from "@/lib/calendar/constants";
 import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
@@ -14,7 +19,11 @@ export type TutorSelfCalendarSession = {
   studentName: string | null;
   cohortName: string | null;
   matchMethod: ScheduledSessionRow["match_method"];
+  googleEventId: string;
+  googleRecurringEventId: string | null;
   excludedByTutor: boolean;
+  kiddaTag: KiddaWorkCategory | null;
+  kiddaTagScope: "event" | "series" | null;
   pendingRescheduleCount: number;
 };
 
@@ -24,7 +33,7 @@ export async function loadTutorSelfCalendarSessions(
 ): Promise<{ sessions: TutorSelfCalendarSession[]; schemaReady: boolean }> {
   const rangeStart = calendarSyncRangeStart();
 
-  const [{ data: sessions, error }, { data: exclusions }] = await Promise.all([
+  const [{ data: sessions, error }, { data: exclusions }, tagsResult] = await Promise.all([
     supabase
       .from("tutor_scheduled_sessions")
       .select("*")
@@ -37,6 +46,10 @@ export async function loadTutorSelfCalendarSessions(
       .from("tutor_calendar_event_exclusions")
       .select("google_event_id, google_recurring_event_id, scope")
       .eq("tutor_id", tutorId),
+    supabase
+      .from("tutor_calendar_event_tags")
+      .select("google_event_id, google_recurring_event_id, scope, category")
+      .eq("tutor_id", tutorId),
   ]);
 
   if (error) {
@@ -47,6 +60,12 @@ export async function loadTutorSelfCalendarSessions(
   }
 
   const exclusionRows = (exclusions ?? []) as CalendarExclusionRow[];
+  const tagRows = (
+    tagsResult.error?.code === "PGRST205" ||
+    tagsResult.error?.message?.includes("tutor_calendar_event_tags")
+      ? []
+      : (tagsResult.data ?? [])
+  ) as CalendarEventTagRow[];
   const rows = (sessions ?? []) as ScheduledSessionRow[];
 
   const studentIds = [...new Set(rows.map((r) => r.student_id).filter(Boolean))] as string[];
@@ -81,20 +100,28 @@ export async function loadTutorSelfCalendarSessions(
 
   return {
     schemaReady: true,
-    sessions: rows.map((session) => ({
-      id: session.id,
-      title: session.title,
-      starts_at: session.starts_at,
-      ends_at: session.ends_at,
-      meet_link: session.meet_link,
-      studentName: session.student_id ? (studentNameById.get(session.student_id) ?? null) : null,
-      cohortName: session.cohort_id ? (cohortNameById.get(session.cohort_id) ?? null) : null,
-      matchMethod: session.match_method,
-      excludedByTutor: isCalendarEventExcluded(
-        { id: session.google_event_id, recurringEventId: session.google_recurring_event_id },
-        exclusionRows
-      ),
-      pendingRescheduleCount: pendingCountBySession.get(session.id) ?? 0,
-    })),
+    sessions: rows.map((session) => {
+      const eventRef = {
+        id: session.google_event_id,
+        recurringEventId: session.google_recurring_event_id,
+      };
+      const tag = findCalendarEventTag(eventRef, tagRows);
+      return {
+        id: session.id,
+        title: session.title,
+        starts_at: session.starts_at,
+        ends_at: session.ends_at,
+        meet_link: session.meet_link,
+        studentName: session.student_id ? (studentNameById.get(session.student_id) ?? null) : null,
+        cohortName: session.cohort_id ? (cohortNameById.get(session.cohort_id) ?? null) : null,
+        matchMethod: session.match_method,
+        googleEventId: session.google_event_id,
+        googleRecurringEventId: session.google_recurring_event_id,
+        excludedByTutor: isCalendarEventExcluded(eventRef, exclusionRows),
+        kiddaTag: tag?.category ?? null,
+        kiddaTagScope: tag?.scope ?? null,
+        pendingRescheduleCount: pendingCountBySession.get(session.id) ?? 0,
+      };
+    }),
   };
 }

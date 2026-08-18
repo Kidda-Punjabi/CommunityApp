@@ -2,6 +2,9 @@
 
 import { ScheduleViewToggle, type ScheduleViewMode } from "@/components/schedule/schedule-view-toggle";
 import { TimeGridCalendar } from "@/components/schedule/time-grid-calendar";
+import {
+  KIDDA_WORK_CATEGORY_LABELS,
+} from "@/lib/calendar/event-tags";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type { TimeGridSession } from "@/lib/calendar/time-grid-calendar";
 import type { TutorSelfCalendarSession } from "@/lib/calendar/load-tutor-self-calendar";
@@ -10,6 +13,7 @@ import { useMemo, useState } from "react";
 
 function sessionSubtitle(session: TutorSelfCalendarSession): string {
   if (session.excludedByTutor) return "Personal";
+  if (session.kiddaTag) return KIDDA_WORK_CATEGORY_LABELS[session.kiddaTag];
   if (session.cohortName) return `Group · ${session.cohortName}`;
   if (session.studentName) return `1-to-1 · ${session.studentName}`;
   if (session.matchMethod === "unmatched") return "Unmatched";
@@ -45,7 +49,7 @@ export function TutorCalendarView({ sessions }: TutorCalendarViewProps) {
         <h2 className={ui.sectionTitle}>Your calendar</h2>
         <p className="text-xs text-zinc-500">
           {sessions.length} synced event{sessions.length === 1 ? "" : "s"} · faded events are
-          marked personal
+          marked personal · unmatched events need a Kidda tag to count in hours
         </p>
       </div>
 

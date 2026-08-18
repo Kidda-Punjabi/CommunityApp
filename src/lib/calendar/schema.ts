@@ -13,6 +13,7 @@ export function isCalendarSchemaMissingError(error: PostgrestLikeError): boolean
     message.includes("cohort_switch_requests") ||
     message.includes("tutor_google_calendar_connections") ||
     message.includes("tutor_calendar_event_exclusions") ||
+    message.includes("tutor_calendar_event_tags") ||
     message.includes("get_tutor_calendar_connection_status")
   );
 }

@@ -11,10 +11,67 @@ import {
 } from "@/lib/calendar/reschedule-limit";
 import { loadAlternateCohortSessionsForSource } from "@/lib/calendar/load-alternate-cohort-sessions";
 import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
+import {
+  KIDDA_WORK_CATEGORIES,
+  KIDDA_WORK_CATEGORY_LABELS,
+  type KiddaWorkCategory,
+} from "@/lib/calendar/event-tags";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type CalendarActionResult = { error?: string; success?: string };
+
+function revalidateTutorCalendarPaths() {
+  revalidatePath("/dashboard/tutor/calendar");
+  revalidatePath("/dashboard/schedule");
+  revalidatePath("/admin/content/calendar");
+  revalidatePath("/admin/tutor-hours");
+}
+
+async function deleteMatchingExclusions(
+  adminClient: SupabaseClient,
+  tutorId: string,
+  googleEventId: string | null,
+  googleRecurringEventId: string | null
+) {
+  if (googleEventId) {
+    await adminClient
+      .from("tutor_calendar_event_exclusions")
+      .delete()
+      .eq("tutor_id", tutorId)
+      .eq("google_event_id", googleEventId);
+  }
+  if (googleRecurringEventId) {
+    await adminClient
+      .from("tutor_calendar_event_exclusions")
+      .delete()
+      .eq("tutor_id", tutorId)
+      .eq("google_recurring_event_id", googleRecurringEventId);
+  }
+}
+
+async function deleteMatchingTags(
+  adminClient: SupabaseClient,
+  tutorId: string,
+  googleEventId: string | null,
+  googleRecurringEventId: string | null
+) {
+  if (googleEventId) {
+    await adminClient
+      .from("tutor_calendar_event_tags")
+      .delete()
+      .eq("tutor_id", tutorId)
+      .eq("google_event_id", googleEventId);
+  }
+  if (googleRecurringEventId) {
+    await adminClient
+      .from("tutor_calendar_event_tags")
+      .delete()
+      .eq("tutor_id", tutorId)
+      .eq("google_recurring_event_id", googleRecurringEventId);
+  }
+}
 
 export async function disconnectGoogleCalendar(): Promise<void> {
   const supabase = await createClient();
@@ -481,6 +538,17 @@ export async function excludeCalendarSession(
   const { client: adminClient, error: configError } = tryCreateServiceRoleClient();
   if (!adminClient) return { error: configError };
 
+  const googleEventId = scope === "series" ? null : session.google_event_id;
+  const googleRecurringEventId =
+    scope === "series" ? session.google_recurring_event_id : null;
+
+  await deleteMatchingTags(
+    adminClient,
+    user.id,
+    googleEventId ?? session.google_event_id,
+    googleRecurringEventId ?? session.google_recurring_event_id
+  );
+
   let exclusionError: { code?: string; message: string } | null = null;
 
   if (scope === "series" && session.google_recurring_event_id) {
@@ -522,14 +590,133 @@ export async function excludeCalendarSession(
     return { error: exclusionError.message };
   }
 
-  revalidatePath("/dashboard/tutor/calendar");
-  revalidatePath("/dashboard/schedule");
-  revalidatePath("/admin/content/calendar");
+  revalidateTutorCalendarPaths();
   return {
     success:
       scope === "series"
-        ? "Recurring series hidden from lesson views — still visible in admin calendar."
-        : "Hidden from lesson views — still visible in admin calendar.",
+        ? "Recurring series marked personal — not counted in Kidda hours."
+        : "Marked personal — not counted in Kidda hours.",
+  };
+}
+
+export async function clearCalendarSessionClassification(
+  sessionId: string
+): Promise<CalendarActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: session, error: sessionError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, tutor_id, google_event_id, google_recurring_event_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (sessionError || !session) return { error: "Event not found." };
+  if (session.tutor_id !== user.id) return { error: "Not allowed." };
+
+  const { client: adminClient, error: configError } = tryCreateServiceRoleClient();
+  if (!adminClient) return { error: configError };
+
+  await deleteMatchingExclusions(
+    adminClient,
+    user.id,
+    session.google_event_id,
+    session.google_recurring_event_id
+  );
+  await deleteMatchingTags(
+    adminClient,
+    user.id,
+    session.google_event_id,
+    session.google_recurring_event_id
+  );
+
+  revalidateTutorCalendarPaths();
+  return { success: "Cleared — this event will not count until you tag it." };
+}
+
+export async function tagCalendarSession(
+  sessionId: string,
+  category: KiddaWorkCategory,
+  scope: "event" | "series"
+): Promise<CalendarActionResult> {
+  if (!KIDDA_WORK_CATEGORIES.includes(category)) {
+    return { error: "Choose Kidda meeting, admin, or prep." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: session, error: sessionError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, tutor_id, google_event_id, google_recurring_event_id, title, match_method")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (sessionError || !session) return { error: "Event not found." };
+  if (session.tutor_id !== user.id) return { error: "Not allowed." };
+
+  if (
+    session.match_method === "attendee_email" ||
+    session.match_method === "title_name" ||
+    session.match_method === "manual"
+  ) {
+    return { error: "Matched lessons already count as lesson hours. Tag unmatched events only." };
+  }
+
+  if (scope === "series" && !session.google_recurring_event_id) {
+    return { error: "This is not a recurring event. Tag this event only." };
+  }
+
+  const { client: adminClient, error: configError } = tryCreateServiceRoleClient();
+  if (!adminClient) return { error: configError };
+
+  const googleEventId = scope === "series" ? null : session.google_event_id;
+  const googleRecurringEventId =
+    scope === "series" ? session.google_recurring_event_id : null;
+
+  await deleteMatchingExclusions(
+    adminClient,
+    user.id,
+    googleEventId ?? session.google_event_id,
+    googleRecurringEventId ?? session.google_recurring_event_id
+  );
+  await deleteMatchingTags(
+    adminClient,
+    user.id,
+    googleEventId ?? session.google_event_id,
+    googleRecurringEventId ?? session.google_recurring_event_id
+  );
+
+  const { error } = await adminClient.from("tutor_calendar_event_tags").insert({
+    tutor_id: user.id,
+    google_event_id: googleEventId,
+    google_recurring_event_id: googleRecurringEventId,
+    title: session.title,
+    scope,
+    category,
+    tagged_by: user.id,
+  });
+
+  if (error) {
+    if (error.code === "PGRST205" || error.message?.includes("tutor_calendar_event_tags")) {
+      return { error: "Calendar tags are not set up yet. Run the latest SQL migration." };
+    }
+    return { error: error.message };
+  }
+
+  revalidateTutorCalendarPaths();
+  const label = KIDDA_WORK_CATEGORY_LABELS[category];
+  return {
+    success:
+      scope === "series"
+        ? `${label} — whole series will count in meeting/admin hours.`
+        : `${label} — this event will count in meeting/admin hours.`,
   };
 }
 
