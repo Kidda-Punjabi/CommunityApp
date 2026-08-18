@@ -134,6 +134,20 @@ export function itemMatchesDifficulty(
   return true;
 }
 
+export function describeSelectedTopics(topicTags: string[]): string {
+  if (topicTags.length === 0) return "the selected topic";
+  const labels = topicTags.map(formatTopicTagLabel);
+  if (labels.length === 1) return labels[0] ?? "the selected topic";
+  if (labels.length === 2) return `${labels[0]} or ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, or ${labels[labels.length - 1]}`;
+}
+
+export function noQuestionsForTopicError(topicTags: string[]): Error {
+  return new Error(
+    `No questions for ${describeSelectedTopics(topicTags)}. Pick another topic, or leave topics unselected for a mixed pool.`
+  );
+}
+
 export function filterByContentFilters<T>(
   items: T[],
   filters: GroupGameContentFilters,
@@ -144,6 +158,10 @@ export function filterByContentFilters<T>(
     filters.topicTags.length === 0
       ? items
       : items.filter((item) => itemMatchesTopicTags(getTags(item), filters.topicTags));
+
+  if (filters.topicTags.length > 0 && topicFiltered.length === 0) {
+    return { matched: [], usedFallback: false };
+  }
 
   const difficultyFiltered =
     filters.difficultyMin === null && filters.difficultyMax === null
@@ -156,12 +174,12 @@ export function filterByContentFilters<T>(
     return { matched: difficultyFiltered, usedFallback: false };
   }
 
-  // Graceful fallback: if the host filter is too narrow, use the broader pool.
+  // Difficulty is a known content gap — if topics matched, keep the topic pool.
   if (topicFiltered.length > 0 && topicFiltered !== difficultyFiltered) {
     return { matched: topicFiltered, usedFallback: true };
   }
 
-  return { matched: items, usedFallback: items.length > 0 && filters.topicTags.length > 0 };
+  return { matched: topicFiltered, usedFallback: false };
 }
 
 export function collectDistinctTopicTags(

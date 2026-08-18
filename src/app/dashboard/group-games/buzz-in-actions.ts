@@ -8,6 +8,7 @@ export type BuzzInActionResult = {
   claimed?: boolean;
   buzzedBy?: string | null;
   resolved?: boolean;
+  tooEarly?: boolean;
   answerCorrect?: boolean;
   correctAnswer?: string;
   gameCompleted?: boolean;
@@ -62,19 +63,7 @@ export async function submitBuzzInAnswer(
   };
 }
 
-export async function resolveBuzzInTimeout(roundId: string): Promise<BuzzInActionResult> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("resolve_buzz_in_timeout", {
-    p_round_id: roundId,
-  });
-
-  if (error) {
-    if (error.message.includes("has not elapsed")) {
-      return { error: undefined };
-    }
-    return { error: error.message };
-  }
-
+function parseResolvePayload(data: unknown): BuzzInActionResult {
   const payload = data as {
     already_resolved?: boolean;
     resolved?: boolean;
@@ -93,6 +82,38 @@ export async function resolveBuzzInTimeout(roundId: string): Promise<BuzzInActio
     correctAnswer: payload.correct_answer,
     gameCompleted: payload.advance?.game_completed,
   };
+}
+
+export async function resolveBuzzInTimeout(roundId: string): Promise<BuzzInActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("resolve_buzz_in_timeout", {
+    p_round_id: roundId,
+  });
+
+  if (error) {
+    if (error.message.includes("has not elapsed")) {
+      return { tooEarly: true };
+    }
+    return { error: error.message };
+  }
+
+  return parseResolvePayload(data);
+}
+
+export async function recoverStuckBuzzInRound(roundId: string): Promise<BuzzInActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("recover_stuck_buzz_in_round", {
+    p_round_id: roundId,
+  });
+
+  if (error) {
+    if (error.message.includes("has not elapsed")) {
+      return { tooEarly: true, error: "This round is still within the buzz/answer window." };
+    }
+    return { error: error.message };
+  }
+
+  return parseResolvePayload(data);
 }
 
 export async function refreshBuzzInPath(roomId: string): Promise<void> {

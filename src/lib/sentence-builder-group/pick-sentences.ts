@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { pickRandomItems } from "@/lib/flashcards/utils";
 import {
   filterByContentFilters,
+  noQuestionsForTopicError,
   topicFiltersFromSettings,
 } from "@/lib/group-games/content-filters";
 import {
@@ -21,18 +22,32 @@ export type GrammarSentenceRow = {
 };
 
 export async function loadGrammarSentencesForGroup(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  topicTags: string[] = []
 ): Promise<GrammarSentenceRow[]> {
-  const { data, error } = await supabase
-    .from("grammar_sentences")
-    .select("id, punjabi_sentence, english_translation, word_tiles, difficulty, topic_tags");
+  const PAGE_SIZE = 1000;
+  const rows: GrammarSentenceRow[] = [];
+  let from = 0;
 
-  if (error) throw error;
+  while (true) {
+    let query = supabase
+      .from("grammar_sentences")
+      .select("id, punjabi_sentence, english_translation, word_tiles, difficulty, topic_tags");
+    if (topicTags.length > 0) {
+      query = query.overlaps("topic_tags", topicTags);
+    }
+    const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = (data ?? []) as GrammarSentenceRow[];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
 
-  return (data ?? []).filter((row) => {
+  return rows.filter((row) => {
     const tiles = parseGrammarWordTiles(row.word_tiles);
     return tiles.length > 0;
-  }) as GrammarSentenceRow[];
+  });
 }
 
 export function parseSentenceWordTiles(row: GrammarSentenceRow): GrammarWordTile[] {
@@ -49,26 +64,27 @@ export async function pickSessionSentences(
   roundCount: number,
   settings?: GameRoomSettings | null
 ): Promise<PickedSentenceSession> {
-  const all = await loadGrammarSentencesForGroup(supabase);
+  const filters = topicFiltersFromSettings(settings);
+  const all = await loadGrammarSentencesForGroup(supabase, filters.topicTags);
   if (all.length === 0) {
+    if (filters.topicTags.length > 0) {
+      throw noQuestionsForTopicError(filters.topicTags);
+    }
     throw new Error("No grammar sentences with word tiles available.");
   }
 
-  const filters = topicFiltersFromSettings(settings);
-  const { matched, usedFallback } = filterByContentFilters(
+  const { matched } = filterByContentFilters(
     all,
     filters,
     (row) => row.topic_tags,
     (row) => row.difficulty
   );
 
-  const pool = matched.length > 0 ? matched : all;
-  if (matched.length === 0 && filters.topicTags.length > 0) {
-    console.warn(
-      "[sentence_builder_group] Narrow content filter matched nothing; falling back to full pool.",
-      { filters, usedFallback }
-    );
+  if (filters.topicTags.length > 0 && matched.length === 0) {
+    throw noQuestionsForTopicError(filters.topicTags);
   }
+
+  const pool = matched;
 
   const picked = pickRandomItems(pool, Math.min(roundCount, pool.length));
   return {

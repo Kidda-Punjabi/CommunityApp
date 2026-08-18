@@ -5,6 +5,7 @@ import {
 } from "@/lib/group-games/content-filters";
 import type { GroupGameType } from "@/lib/game-rooms/types";
 import { loadScopedFlashcardPoolRows } from "@/lib/games/load-scoped-flashcards";
+import { loadGrammarSentencesForGroup } from "@/lib/sentence-builder-group/pick-sentences";
 
 export type TopicOption = {
   id: string;
@@ -34,9 +35,8 @@ export async function loadFlashcardTopicOptions(
 export async function loadGrammarSentenceTopicOptions(
   supabase: SupabaseClient
 ): Promise<TopicOption[]> {
-  const { data, error } = await supabase.from("grammar_sentences").select("topic_tags");
-  if (error) throw error;
-  return collectDistinctTopicTags(data ?? []).map((tag) => ({
+  const rows = await loadGrammarSentencesForGroup(supabase);
+  return collectDistinctTopicTags(rows).map((tag) => ({
     id: tag,
     label: formatTopicTagLabel(tag),
   }));
