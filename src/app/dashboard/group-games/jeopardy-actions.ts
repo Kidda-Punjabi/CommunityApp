@@ -7,6 +7,7 @@ export type JeopardyActionResult = {
   claimed?: boolean;
   buzzedBy?: string | null;
   resolved?: boolean;
+  tooEarly?: boolean;
   answerCorrect?: boolean;
   correctAnswer?: string;
   gameCompleted?: boolean;
@@ -64,7 +65,38 @@ export async function resolveJeopardyTimeout(tileId: string): Promise<JeopardyAc
   });
 
   if (error) {
-    if (error.message.includes("has not elapsed")) return {};
+    if (error.message.includes("has not elapsed")) return { tooEarly: true };
+    return { error: error.message };
+  }
+
+  const payload = data as {
+    already_resolved?: boolean;
+    resolved?: boolean;
+    answer_correct?: boolean;
+    correct_answer?: string;
+    complete?: { game_completed?: boolean };
+  };
+
+  if (payload.already_resolved) return { resolved: true };
+
+  return {
+    resolved: payload.resolved,
+    answerCorrect: payload.answer_correct,
+    correctAnswer: payload.correct_answer,
+    gameCompleted: payload.complete?.game_completed,
+  };
+}
+
+export async function recoverStuckJeopardyTile(tileId: string): Promise<JeopardyActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("recover_stuck_jeopardy_tile", {
+    p_tile_id: tileId,
+  });
+
+  if (error) {
+    if (error.message.includes("has not elapsed")) {
+      return { tooEarly: true, error: "This tile is still within the buzz/answer window." };
+    }
     return { error: error.message };
   }
 

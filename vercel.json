@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/sweep-buzz-in-rounds",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/sweep-jeopardy-tiles",
+      "schedule": "* * * * *"
     }
   ]
 }

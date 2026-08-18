@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   claimJeopardyBuzz,
+  recoverStuckJeopardyTile,
   resolveJeopardyTimeout,
   selectJeopardyTile,
   submitJeopardyAnswer,
@@ -14,7 +15,7 @@ import { GroupGameLeaderboard } from "@/components/group-games/group-game-leader
 import { GroupGameScoreboard } from "@/components/group-games/group-game-scoreboard";
 import { useBuzzRaceTimeout } from "@/hooks/use-buzz-race-timeout";
 import { useJeopardyRealtime } from "@/hooks/use-jeopardy-realtime";
-import { BUZZ_RACE_RESULT_DELAY_MS } from "@/lib/group-games/buzz-race-constants";
+import { BUZZ_RACE_ANSWER_WINDOW_MS, BUZZ_RACE_BUZZ_WINDOW_MS, BUZZ_RACE_RESULT_DELAY_MS } from "@/lib/group-games/buzz-race-constants";
 import { deriveBuzzRacePhase } from "@/lib/group-games/buzz-race-types";
 import {
   JEOPARDY_CATEGORIES,
@@ -43,6 +44,18 @@ function deriveViewMode(
   return "question";
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function tileWindowElapsed(tile: JeopardyTileRow): boolean {
+  if (!tile.opened_at || tile.resolved_at || tile.status !== "active") return false;
+  if (tile.buzzed_by && tile.buzzed_at) {
+    return Date.now() >= new Date(tile.buzzed_at).getTime() + BUZZ_RACE_ANSWER_WINDOW_MS;
+  }
+  return Date.now() >= new Date(tile.opened_at).getTime() + BUZZ_RACE_BUZZ_WINDOW_MS;
+}
+
 export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps) {
   const router = useRouter();
   const [room, setRoom] = useState(initialRoom);
@@ -53,7 +66,12 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
   const [buzzerName, setBuzzerName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [stuckVisible, setStuckVisible] = useState(false);
   const resultTimerRef = useRef<number | null>(null);
+  const resultTileIdRef = useRef<string | null>(null);
+  const activeTileRef = useRef<JeopardyTileRow | null>(initialState.activeTile);
+  const loadBoardRef = useRef<() => Promise<void>>(async () => undefined);
+  activeTileRef.current = activeTile;
 
   const { currentUserId, isPlaying, currentPickerId } = {
     ...state,
@@ -120,6 +138,11 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
       setTiles((prev) => prev.map((t) => (t.id === next.id ? next : t)));
 
       if (next.status === "active") {
+        if (resultTimerRef.current) {
+          window.clearTimeout(resultTimerRef.current);
+          resultTimerRef.current = null;
+          resultTileIdRef.current = null;
+        }
         setActiveTile(next);
         setShowResult(false);
         if (next.buzzed_by) void loadBuzzerName(next.buzzed_by);
@@ -131,7 +154,11 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
         setShowResult(true);
         void refreshScoreboard();
         if (resultTimerRef.current) window.clearTimeout(resultTimerRef.current);
+        resultTileIdRef.current = next.id;
         resultTimerRef.current = window.setTimeout(() => {
+          resultTimerRef.current = null;
+          if (resultTileIdRef.current !== next.id) return;
+          resultTileIdRef.current = null;
           setActiveTile(null);
           setShowResult(false);
         }, BUZZ_RACE_RESULT_DELAY_MS);
@@ -166,16 +193,58 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
     [applyTile]
   );
 
+  const loadBoardFromServer = useCallback(async () => {
+    const supabase = createClient();
+    const [{ data: roomRow }, { data: tileRows }] = await Promise.all([
+      supabase.from("game_rooms").select("*").eq("id", room.id).maybeSingle(),
+      supabase.from("game_room_jeopardy_tiles").select("*").eq("room_id", room.id),
+    ]);
+
+    if (roomRow) handleRoomChange(roomRow as GameRoomRow);
+    if (!tileRows?.length) return;
+
+    const nextTiles = tileRows as JeopardyTileRow[];
+    setTiles(nextTiles);
+    const active = nextTiles.find((t) => t.status === "active") ?? null;
+    if (active) {
+      applyTile(active);
+      return;
+    }
+    if (!resultTileIdRef.current) {
+      setActiveTile(null);
+      setShowResult(false);
+    }
+  }, [applyTile, handleRoomChange, room.id]);
+  loadBoardRef.current = loadBoardFromServer;
+
+  const handleTimeout = useCallback(async (tileId: string) => {
+    const started = Date.now();
+    while (Date.now() - started < 20_000) {
+      const result = await resolveJeopardyTimeout(tileId);
+      if (result.tooEarly) {
+        await sleep(400);
+        continue;
+      }
+      if (result.error) {
+        await sleep(800);
+        continue;
+      }
+      return;
+    }
+  }, []);
+
+  const handleResync = useCallback(() => {
+    if (resultTileIdRef.current) return;
+    void loadBoardFromServer();
+  }, [loadBoardFromServer]);
+
   useJeopardyRealtime({
     roomId: room.id,
     onRoomChange: handleRoomChange,
     onTileChange: handleTileChange,
     onParticipantsChange: refreshScoreboard,
+    onResync: handleResync,
   });
-
-  const handleTimeout = useCallback(async (tileId: string) => {
-    await resolveJeopardyTimeout(tileId);
-  }, []);
 
   useBuzzRaceTimeout({
     itemId: activeTile?.id ?? null,
@@ -183,9 +252,45 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
     buzzedAt: activeTile?.buzzed_at ?? null,
     buzzedBy: activeTile?.buzzed_by ?? null,
     resolvedAt: activeTile?.resolved_at ?? null,
-    enabled: viewMode === "question" && Boolean(activeTile) && !activeTile?.resolved_at,
+    enabled:
+      room.status === "in_progress" &&
+      activeTile?.status === "active" &&
+      !activeTile.resolved_at,
     onTimeout: handleTimeout,
   });
+
+  useEffect(() => {
+    if (room.status !== "in_progress") return;
+    const tick = () => {
+      void loadBoardRef.current();
+      const current = activeTileRef.current;
+      if (current && tileWindowElapsed(current)) {
+        void resolveJeopardyTimeout(current.id);
+      }
+    };
+    tick();
+    const timer = window.setInterval(tick, 2000);
+    return () => window.clearInterval(timer);
+  }, [room.id, room.status]);
+
+  useEffect(() => {
+    const current = activeTile;
+    if (!current?.opened_at || current.resolved_at || current.status !== "active") {
+      setStuckVisible(false);
+      return;
+    }
+    const check = () => setStuckVisible(tileWindowElapsed(current));
+    check();
+    const timer = window.setInterval(check, 1000);
+    return () => window.clearInterval(timer);
+  }, [
+    activeTile?.id,
+    activeTile?.opened_at,
+    activeTile?.buzzed_at,
+    activeTile?.buzzed_by,
+    activeTile?.resolved_at,
+    activeTile?.status,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -196,6 +301,16 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
   useEffect(() => {
     if (activeTile?.buzzed_by) void loadBuzzerName(activeTile.buzzed_by);
   }, [activeTile?.buzzed_by, loadBuzzerName]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadBoardFromServer();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [loadBoardFromServer]);
 
   const handleSelectTile = (tileId: string) => {
     if (!isPicker || pending) return;
@@ -222,6 +337,17 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
     startTransition(async () => {
       const result = await submitJeopardyAnswer(activeTile.id, answer);
       if (result.error) setError(result.error);
+    });
+  };
+
+  const handleRecoverStuckTile = () => {
+    if (!activeTile || !isHost || pending) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await recoverStuckJeopardyTile(activeTile.id);
+      if (result.tooEarly) setError(result.error ?? "Tile is still in progress.");
+      else if (result.error) setError(result.error);
+      else void loadBoardFromServer();
     });
   };
 
@@ -344,6 +470,19 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
               onBuzz={handleBuzz}
               onAnswer={handleAnswer}
             />
+          ) : null}
+
+          {isHost && stuckVisible && activeTile ? (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleRecoverStuckTile}
+                disabled={pending}
+                className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 disabled:opacity-60"
+              >
+                Recover stuck tile
+              </button>
+            </div>
           ) : null}
 
           {error ? <p className="text-sm text-rose-600">{error}</p> : null}
