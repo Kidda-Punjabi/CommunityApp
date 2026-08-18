@@ -5,11 +5,11 @@ import {
   type CalendarEventTagRow,
 } from "@/lib/calendar/event-tags";
 import { getDisplayName } from "@/lib/profile/display-name";
-import type { AppRole } from "@/lib/auth/admin-access";
 import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const MASTER_ADMIN_EMAILS = new Set(["hello@kidda.app"]);
+/** Only the hello@ account is excluded — tutors who also hold master_admin stay in the list. */
+const EXCLUDED_TUTOR_HOURS_EMAILS = new Set(["hello@kidda.app"]);
 
 export type TutorHoursWeekRow = {
   tutorId: string;
@@ -92,7 +92,8 @@ export async function loadAdminTutorHours(
 
   const { data: roleRows, error: rolesError } = await supabase
     .from("profile_roles")
-    .select("user_id, role");
+    .select("user_id, role")
+    .eq("role", "tutor");
 
   if (rolesError) {
     return {
@@ -105,22 +106,7 @@ export async function loadAdminTutorHours(
     };
   }
 
-  const rolesByUser = new Map<string, AppRole[]>();
-  for (const row of roleRows ?? []) {
-    const list = rolesByUser.get(row.user_id) ?? [];
-    list.push(row.role as AppRole);
-    rolesByUser.set(row.user_id, list);
-  }
-
-  const masterAdminIds = new Set(
-    [...rolesByUser.entries()]
-      .filter(([, roles]) => roles.includes("master_admin"))
-      .map(([userId]) => userId)
-  );
-
-  const tutorIds = [...rolesByUser.entries()]
-    .filter(([userId, roles]) => roles.includes("tutor") && !masterAdminIds.has(userId))
-    .map(([userId]) => userId);
+  const tutorIds = [...new Set((roleRows ?? []).map((row) => row.user_id))];
 
   if (tutorIds.length === 0) {
     return {
@@ -154,7 +140,7 @@ export async function loadAdminTutorHours(
 
   const visibleTutorIds = tutorIds.filter((tutorId) => {
     const email = emailById.get(tutorId);
-    return !email || !MASTER_ADMIN_EMAILS.has(email);
+    return !email || !EXCLUDED_TUTOR_HOURS_EMAILS.has(email);
   });
 
   const tutorsBase = visibleTutorIds
