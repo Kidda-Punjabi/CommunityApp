@@ -9,6 +9,8 @@ export const EMPTY_ADMIN_DATA: AdminData = {
   setCourseLinks: [],
   flashcards: [],
   events: [],
+  recommendedMedia: [],
+  recommendedRecipes: [],
   grammarSentences: [],
   verbConjugations: [],
   genderedNouns: [],

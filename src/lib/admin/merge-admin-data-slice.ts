@@ -59,9 +59,13 @@ export function mergeAdminDataSlice(
     return {
       ...prev,
       events: next.events,
+      recommendedMedia: next.recommendedMedia,
+      recommendedRecipes: next.recommendedRecipes,
       errors: {
         ...prev.errors,
         events: next.errors?.events,
+        recommendedMedia: next.errors?.recommendedMedia,
+        recommendedRecipes: next.errors?.recommendedRecipes,
       },
     };
   }
