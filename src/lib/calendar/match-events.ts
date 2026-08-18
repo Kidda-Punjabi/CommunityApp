@@ -27,7 +27,7 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function titleContainsName(title: string, displayName: string): boolean {
+export function titleContainsName(title: string, displayName: string): boolean {
   const normalizedTitle = title.toLowerCase();
   const normalizedName = displayName.trim().toLowerCase();
   if (normalizedName.length < 2) return false;

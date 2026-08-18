@@ -8,7 +8,7 @@ import {
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
-async function requireMasterAdmin() {
+export async function requireMasterAdminContext() {
   const authClient = await createClient();
   const {
     data: { user },
@@ -18,14 +18,14 @@ async function requireMasterAdmin() {
     throw new Error("Unauthorized");
   }
 
-  return createServiceRoleClient();
+  return { supabase: createServiceRoleClient(), userId: user.id };
 }
 
 export async function fetchAdminTutorHours(
   weekStart?: string | null
 ): Promise<TutorHoursWeekResult> {
   try {
-    const supabase = await requireMasterAdmin();
+    const { supabase } = await requireMasterAdminContext();
     return await loadAdminTutorHours(supabase, weekStart);
   } catch (e) {
     return {

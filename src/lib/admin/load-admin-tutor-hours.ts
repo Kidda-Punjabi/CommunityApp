@@ -11,6 +11,40 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /** Only the hello@ account is excluded — tutors who also hold master_admin stay in the list. */
 const EXCLUDED_TUTOR_HOURS_EMAILS = new Set(["hello@kidda.app"]);
 
+export async function loadTutorHoursTutorIds(supabase: SupabaseClient): Promise<{
+  tutorIds: string[];
+  emailById: Map<string, string | null>;
+  error?: string;
+}> {
+  const { data: roleRows, error: rolesError } = await supabase
+    .from("profile_roles")
+    .select("user_id, role")
+    .eq("role", "tutor");
+
+  if (rolesError) return { tutorIds: [], emailById: new Map(), error: rolesError.message };
+
+  const tutorIds = [...new Set((roleRows ?? []).map((row) => row.user_id))];
+  if (tutorIds.length === 0) return { tutorIds: [], emailById: new Map() };
+
+  const { data: authData, error: authError } = await supabase.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  if (authError) return { tutorIds: [], emailById: new Map(), error: authError.message };
+
+  const emailById = new Map(
+    (authData?.users ?? []).map((user) => [user.id, user.email?.toLowerCase() ?? null] as const)
+  );
+
+  return {
+    tutorIds: tutorIds.filter((tutorId) => {
+      const email = emailById.get(tutorId);
+      return !email || !EXCLUDED_TUTOR_HOURS_EMAILS.has(email);
+    }),
+    emailById,
+  };
+}
+
 export type TutorHoursWeekRow = {
   tutorId: string;
   displayName: string;
@@ -90,23 +124,17 @@ export async function loadAdminTutorHours(
   const weekStartIso = weekStart.toISOString();
   const weekEndIso = weekEnd.toISOString();
 
-  const { data: roleRows, error: rolesError } = await supabase
-    .from("profile_roles")
-    .select("user_id, role")
-    .eq("role", "tutor");
-
-  if (rolesError) {
+  const { tutorIds, emailById, error: tutorIdsError } = await loadTutorHoursTutorIds(supabase);
+  if (tutorIdsError) {
     return {
       weekStart: formatWeekStartParam(weekStart),
       weekEnd: formatWeekStartParam(addDays(weekStart, 6)),
       isPastWeek,
       historicalNote: null,
       tutors: [],
-      error: rolesError.message,
+      error: tutorIdsError,
     };
   }
-
-  const tutorIds = [...new Set((roleRows ?? []).map((row) => row.user_id))];
 
   if (tutorIds.length === 0) {
     return {
@@ -120,30 +148,18 @@ export async function loadAdminTutorHours(
     };
   }
 
-  const [{ data: authData, error: authError }, { data: profiles, error: profilesError }] =
-    await Promise.all([
-      supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-      supabase.from("profiles").select("id, full_name, preferred_name").in("id", tutorIds),
-    ]);
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id, full_name, preferred_name")
+    .in("id", tutorIds);
 
-  if (authError) {
-    return emptyResult(weekStart, isPastWeek, authError.message);
-  }
   if (profilesError) {
     return emptyResult(weekStart, isPastWeek, profilesError.message);
   }
 
-  const emailById = new Map(
-    (authData?.users ?? []).map((user) => [user.id, user.email?.toLowerCase() ?? null] as const)
-  );
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile] as const));
 
-  const visibleTutorIds = tutorIds.filter((tutorId) => {
-    const email = emailById.get(tutorId);
-    return !email || !EXCLUDED_TUTOR_HOURS_EMAILS.has(email);
-  });
-
-  const tutorsBase = visibleTutorIds
+  const tutorsBase = tutorIds
     .map((tutorId) => {
       const profile = profileById.get(tutorId) ?? null;
       const email = emailById.get(tutorId) ?? null;
@@ -155,14 +171,13 @@ export async function loadAdminTutorHours(
     })
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-  if (isPastWeek || visibleTutorIds.length === 0) {
+  if (isPastWeek) {
     return {
       weekStart: formatWeekStartParam(weekStart),
       weekEnd: formatWeekStartParam(addDays(weekStart, 6)),
-      isPastWeek,
-      historicalNote: isPastWeek
-        ? "Historical weeks are not available. Tutor hours are going-forward only from when event tagging shipped — past unmatched events were never tagged."
-        : null,
+      isPastWeek: true,
+      historicalNote:
+        "Historical weeks are not available. Tutor hours are going-forward only from when event tagging shipped — past unmatched events were never tagged.",
       tutors: tutorsBase.map((tutor) => ({
         ...tutor,
         lessonHours: 0,
@@ -179,14 +194,14 @@ export async function loadAdminTutorHours(
         .select(
           "tutor_id, starts_at, ends_at, google_event_id, google_recurring_event_id, match_method, status"
         )
-        .in("tutor_id", visibleTutorIds)
+        .in("tutor_id", tutorIds)
         .eq("status", "scheduled")
         .gte("starts_at", weekStartIso)
         .lt("starts_at", weekEndIso),
       supabase
         .from("tutor_calendar_event_tags")
         .select("tutor_id, google_event_id, google_recurring_event_id, scope, category")
-        .in("tutor_id", visibleTutorIds),
+        .in("tutor_id", tutorIds),
     ]);
 
   if (sessionsError) {

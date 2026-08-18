@@ -73,12 +73,17 @@ export function AdminTutorHoursSection() {
         ← Back to Admin home
       </Link>
 
-      <div className="mb-6 mt-4">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Tutor hours</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Informational view of upcoming lesson time plus tutor-tagged Kidda meeting, admin, and
-          prep. This is not an official pay record.
-        </p>
+      <div className="mb-6 mt-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Tutor hours</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Informational view of upcoming lesson time plus tutor-tagged Kidda meeting, admin, and
+            prep. This is not an official pay record.
+          </p>
+        </div>
+        <Link href="/admin/tutor-hours/review" className="text-sm font-medium text-violet-600 hover:text-violet-500">
+          Review unmatched events →
+        </Link>
       </div>
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
