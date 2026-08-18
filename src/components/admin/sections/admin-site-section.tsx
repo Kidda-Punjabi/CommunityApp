@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
 import { EventsTab } from "@/app/admin/content/components/events-tab";
+import { RecommendationsTab } from "@/app/admin/content/components/recommendations-tab";
 import { AnnouncementsTab } from "@/app/admin/content/components/announcements-tab";
 import { BrandingTab } from "@/app/admin/content/components/branding-tab";
 import { StreakDebugTab } from "@/app/admin/content/components/streak-debug-tab";
@@ -14,6 +15,7 @@ import { ui } from "@/lib/ui/styles";
 
 const tabs = [
   { id: "events", label: "Events" },
+  { id: "recommendations", label: "Recommendations" },
   { id: "announcements", label: "Announcements" },
   { id: "forum", label: "Forum moderation" },
   { id: "branding", label: "Branding" },
@@ -35,7 +37,7 @@ export function AdminSiteSection({ forumReports }: AdminSiteSectionProps) {
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Site & comms</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Community events, announcements, branding, and debug tools.
+          Community events, recommendations, announcements, branding, and debug tools.
         </p>
       </div>
 
@@ -44,6 +46,7 @@ export function AdminSiteSection({ forumReports }: AdminSiteSectionProps) {
 
       <div className="mt-6">
         {activeTab === "events" && <EventsTab data={data} />}
+        {activeTab === "recommendations" && <RecommendationsTab data={data} />}
         {activeTab === "announcements" && <AnnouncementsTab />}
         {activeTab === "forum" && <ForumModerationTab reports={forumReports} />}
         {activeTab === "branding" && <BrandingTab initialBranding={branding} />}
