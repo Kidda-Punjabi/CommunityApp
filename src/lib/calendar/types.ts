@@ -26,6 +26,8 @@ export type ScheduledSessionRow = {
   match_method: "attendee_email" | "title_name" | "manual" | "unmatched" | null;
   rescheduling_allowed: boolean;
   status: ScheduledSessionStatus;
+  /** Curriculum week (lessons.lesson_number sequence) for cohort class sessions. */
+  week_number?: number | null;
 };
 
 export type RescheduleRequestStatus = "pending" | "approved" | "denied" | "cancelled";
@@ -89,6 +91,8 @@ export type StudentScheduledSession = ScheduledSessionRow & {
   cohortSwitchRequest: CohortSwitchRequestRow | null;
   canRequestCohortSwitch: boolean;
   cohortSwitchLockedReason: string | null;
+  /** Within COHORT_SWITCH_CUTOFF_MS of start — request allowed with a warning. */
+  isShortNoticeCohortSwitch: boolean;
   alternateCohorts: AlternateCohortOption[];
 };
 

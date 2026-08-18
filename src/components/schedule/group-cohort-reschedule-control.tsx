@@ -2,10 +2,11 @@
 
 import { CancelCohortSwitchRequestControl } from "@/components/schedule/cancel-cohort-switch-request-control";
 import { CohortSwitchRequestForm } from "@/components/schedule/cohort-switch-request-form";
+import { NO_MATCHING_ALTERNATE_SESSION_COPY } from "@/lib/calendar/constants";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { cn, ui } from "@/lib/ui/styles";
 
-export const NO_ALTERNATIVE_SESSIONS_COPY = "No alternative sessions currently available";
+export const NO_ALTERNATIVE_SESSIONS_COPY = NO_MATCHING_ALTERNATE_SESSION_COPY;
 
 type GroupCohortRescheduleControlProps = {
   session?: StudentScheduledSession | null;

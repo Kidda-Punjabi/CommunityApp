@@ -10,6 +10,7 @@ import {
   loadBeginnersRescheduleLimitStatus,
 } from "@/lib/calendar/reschedule-limit";
 import { loadAlternateCohortSessionsForSource } from "@/lib/calendar/load-alternate-cohort-sessions";
+import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -287,8 +288,16 @@ export async function requestCohortSwitch(
     return { error: "Alternate session not found." };
   }
 
+  let sourceForAlternates = session;
+  if (session.week_number == null && session.cohort_id) {
+    const [labelled] = await attachLessonLabelsToSessions(adminClient, [session]);
+    if (labelled) {
+      sourceForAlternates = { ...session, lessonNumber: labelled.lessonNumber };
+    }
+  }
+
   if (
-    !isAlternateCohortSwitchSession(session, targetSession) ||
+    !isAlternateCohortSwitchSession(sourceForAlternates, targetSession) ||
     targetSession.cohort_id === session.cohort_id
   ) {
     return { error: "Invalid alternate session for this lesson." };
@@ -311,7 +320,10 @@ export async function requestCohortSwitch(
     .eq("student_id", user.id)
     .maybeSingle();
 
-  const alternateOptions = await loadAlternateCohortSessionsForSource(supabase, session);
+  const alternateOptions = await loadAlternateCohortSessionsForSource(
+    supabase,
+    sourceForAlternates
+  );
   if (!alternateOptions.some((option) => option.id === targetSession.id)) {
     return { error: "Invalid alternate session for this lesson." };
   }

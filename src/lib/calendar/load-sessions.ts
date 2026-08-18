@@ -361,6 +361,7 @@ export async function loadStudentUpcomingSessions(
         cohortSwitchRequest,
         canRequestCohortSwitch: cohortSwitchEligibility.canRequest,
         cohortSwitchLockedReason: cohortSwitchEligibility.lockedReason,
+        isShortNoticeCohortSwitch: Boolean(cohortSwitchEligibility.isShortNotice),
         alternateCohorts,
       };
     }),

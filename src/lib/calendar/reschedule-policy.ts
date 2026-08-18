@@ -10,7 +10,7 @@ export type RescheduleEligibility = {
 };
 
 export const GROUP_LESSON_NO_RESCHEDULE_REASON =
-  "Group lessons can't be rescheduled. If you can't attend, request to join a different cohort at least 3 days before the lesson.";
+  "Group lessons can't be rescheduled. If you can't attend, request a matching alternate session — short-notice requests may not be accommodated.";
 
 export function getRescheduleEligibility(
   session: Pick<

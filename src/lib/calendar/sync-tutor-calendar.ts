@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listGoogleCalendarEvents } from "@/lib/calendar/google-calendar-api";
+import { refreshCohortSessionWeekNumbers } from "@/lib/calendar/cohort-session-week-number";
 import { getValidTutorAccessToken } from "@/lib/calendar/tutor-access-token";
 import { loadTutorMatchCandidates } from "@/lib/calendar/load-match-candidates";
 import { matchEventToStudents } from "@/lib/calendar/match-events";
@@ -171,6 +172,7 @@ export async function syncTutorGoogleCalendar(
   const updatedAt = new Date().toISOString();
   const toUpsert: SessionUpsertRow[] = [];
   const manualUpdates: Array<{ id: string; payload: Record<string, unknown> }> = [];
+  const cohortIdsToRefresh = new Set<string>();
   const seenGoogleEventIds = new Set<string>();
   let synced = 0;
   const skipped = 0;
@@ -190,6 +192,8 @@ export async function syncTutorGoogleCalendar(
     const match = matchEventToStudents(event, students, cohorts);
     const existing = existingByGoogleEventId.get(event.id);
     const row = buildSessionRow(tutorId, event, match, updatedAt, existing);
+
+    if (row.cohort_id) cohortIdsToRefresh.add(row.cohort_id);
 
     await removeReplacedRecurringInstance(adminClient, tutorId, event, match);
 
@@ -244,6 +248,17 @@ export async function syncTutorGoogleCalendar(
       })
     );
   });
+
+  if (cohortIdsToRefresh.size > 0) {
+    try {
+      await refreshCohortSessionWeekNumbers(adminClient, [...cohortIdsToRefresh]);
+    } catch (weekNumberError) {
+      console.error(
+        `[calendar sync] week_number refresh failed tutor=${tutorId}:`,
+        weekNumberError instanceof Error ? weekNumberError.message : weekNumberError
+      );
+    }
+  }
 
   // Mark sync complete as soon as session writes succeed so UI can't stay stuck
   // on "syncing" if reconcile (or sync_token write) fails afterwards.

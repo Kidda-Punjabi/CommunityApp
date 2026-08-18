@@ -3,17 +3,20 @@ import "server-only";
 import {
   isActiveCohortSwitchStatus,
   isAlternateCohortSwitchSession,
+  resolveCohortSwitchWeekNumber,
 } from "@/lib/calendar/cohort-switch-candidates";
+import { NO_MATCHING_ALTERNATE_SESSION_COPY } from "@/lib/calendar/constants";
 import type { AlternateCohortOption, ScheduledSessionRow } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const NO_ALTERNATES_COPY = "No alternative sessions currently available";
+export const NO_ALTERNATIVE_SESSIONS_REASON = NO_MATCHING_ALTERNATE_SESSION_COPY;
 
-export const NO_ALTERNATIVE_SESSIONS_REASON = NO_ALTERNATES_COPY;
-
-type SourceSession = Pick<ScheduledSessionRow, "id" | "course_id" | "tutor_id" | "cohort_id">;
+type SourceSession = Pick<
+  ScheduledSessionRow,
+  "id" | "course_id" | "tutor_id" | "cohort_id" | "week_number"
+> & { lessonNumber?: number | null };
 
 type CohortMeta = {
   id: string;
@@ -35,7 +38,7 @@ export async function loadAlternateCohortSessions(
 ): Promise<Map<string, AlternateCohortOption[]>> {
   const result = new Map<string, AlternateCohortOption[]>();
   const groupSources = sources.filter(
-    (session) => Boolean(session.cohort_id) && Boolean(session.course_id) && Boolean(session.tutor_id)
+    (session) => Boolean(session.cohort_id) && Boolean(session.course_id)
   );
   for (const source of groupSources) {
     result.set(source.id, []);
@@ -51,7 +54,6 @@ export async function loadAlternateCohortSessions(
   const nowMs = options?.nowMs ?? Date.now();
   const nowIso = new Date(nowMs).toISOString();
   const courseIds = [...new Set(groupSources.map((session) => session.course_id as string))];
-  const tutorIds = [...new Set(groupSources.map((session) => session.tutor_id))];
 
   const [{ data: cohortRows, error: cohortError }, { data: sessionRows, error: sessionError }] =
     await Promise.all([
@@ -64,7 +66,6 @@ export async function loadAlternateCohortSessions(
         .from("tutor_scheduled_sessions")
         .select("*")
         .in("course_id", courseIds)
-        .in("tutor_id", tutorIds)
         .not("cohort_id", "is", null)
         .eq("status", "scheduled")
         .gte("starts_at", nowIso)
@@ -85,7 +86,14 @@ export async function loadAlternateCohortSessions(
   );
   const cohortById = new Map(activeCohorts.map((cohort) => [cohort.id, cohort]));
 
-  const tutorIdsToName = [...new Set(activeCohorts.map((cohort) => cohort.tutor_id).filter(Boolean))] as string[];
+  const tutorIdsToName = [
+    ...new Set(
+      [
+        ...activeCohorts.map((cohort) => cohort.tutor_id),
+        ...((sessionRows ?? []) as ScheduledSessionRow[]).map((session) => session.tutor_id),
+      ].filter(Boolean)
+    ),
+  ] as string[];
   const { data: tutors } =
     tutorIdsToName.length > 0
       ? await admin.from("profiles").select("id, full_name, preferred_name").in("id", tutorIdsToName)
@@ -103,6 +111,12 @@ export async function loadAlternateCohortSessions(
   });
 
   for (const source of groupSources) {
+    const sourceWeek = resolveCohortSwitchWeekNumber(source);
+    if (sourceWeek == null) {
+      result.set(source.id, []);
+      continue;
+    }
+
     const matches = candidates.filter((candidate) =>
       isAlternateCohortSwitchSession(source, candidate, { nowMs })
     );

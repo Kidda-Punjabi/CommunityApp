@@ -35,10 +35,23 @@ export function isValidCohortSwitchCandidateSession(
   return looksLikeClass || hasExternalAttendee;
 }
 
-/** Alternate session for a group reschedule: same course + tutor, other active cohort. */
+export function resolveCohortSwitchWeekNumber(
+  session: Pick<ScheduledSessionRow, "week_number"> & { lessonNumber?: number | null }
+): number | null {
+  if (session.week_number != null) return session.week_number;
+  if (session.lessonNumber != null) return session.lessonNumber;
+  return null;
+}
+
+/** Alternate session for a group reschedule: same course + week, any tutor, other active cohort. */
 export function isAlternateCohortSwitchSession(
-  source: Pick<ScheduledSessionRow, "id" | "course_id" | "tutor_id" | "cohort_id">,
-  candidate: Pick<ScheduledSessionRow, "id" | "course_id" | "tutor_id" | "cohort_id" | "status" | "starts_at">,
+  source: Pick<ScheduledSessionRow, "id" | "course_id" | "cohort_id" | "week_number"> & {
+    lessonNumber?: number | null;
+  },
+  candidate: Pick<
+    ScheduledSessionRow,
+    "id" | "course_id" | "cohort_id" | "status" | "starts_at" | "week_number"
+  >,
   options?: { nowMs?: number }
 ): boolean {
   const nowMs = options?.nowMs ?? Date.now();
@@ -48,7 +61,13 @@ export function isAlternateCohortSwitchSession(
   if (candidate.id === source.id) return false;
   if (candidate.cohort_id === source.cohort_id) return false;
   if (candidate.course_id !== source.course_id) return false;
-  if (candidate.tutor_id !== source.tutor_id) return false;
   if (candidate.status !== "scheduled") return false;
-  return new Date(candidate.starts_at).getTime() >= nowMs;
+  if (new Date(candidate.starts_at).getTime() < nowMs) return false;
+
+  const sourceWeek = resolveCohortSwitchWeekNumber(source);
+  const candidateWeek = candidate.week_number ?? null;
+  if (sourceWeek == null || candidateWeek == null) return false;
+  if (sourceWeek !== candidateWeek) return false;
+
+  return true;
 }

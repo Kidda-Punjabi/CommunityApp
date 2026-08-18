@@ -1,7 +1,10 @@
 export const RESCHEDULE_CUTOFF_MS = 24 * 60 * 60 * 1000;
 
-/** Group lessons: alternate cohort requests must be at least 3 days before the session. */
+/** Group lessons: alternate cohort requests within this window show a short-notice warning. */
 export const COHORT_SWITCH_CUTOFF_MS = 3 * 24 * 60 * 60 * 1000;
+
+export const NO_MATCHING_ALTERNATE_SESSION_COPY =
+  "No matching alternate session available for this week";
 
 export const GOOGLE_CALENDAR_SCOPES = [
   /** Read/write events (required for adding cohort students as attendees). Tutors must reconnect after this scope change. */
