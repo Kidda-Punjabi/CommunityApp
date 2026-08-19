@@ -17,6 +17,7 @@ import { ensureSentenceBuilderInitialized } from "@/lib/sentence-builder-group/l
 import { pickSessionSentences } from "@/lib/sentence-builder-group/pick-sentences";
 import { ensurePointRaceInitialized } from "@/lib/point-race/load-race";
 import { loadFlashcardPool } from "@/lib/point-race/build-questions";
+import { loadChadoPauriFlashcards } from "@/lib/games/chado-pauri/load-flashcards";
 import { loadGameRoom } from "@/lib/game-rooms/load-room";
 import { rejectIfKidCommunityBlocked } from "@/lib/kids/guards";
 import { createClient } from "@/lib/supabase/server";
@@ -119,6 +120,12 @@ export async function startGameRoom(roomId: string): Promise<GroupGameActionResu
       await pickSessionSentences(supabase, questionCount, room.settings);
     } else if (room?.game_type === "point_race") {
       await loadFlashcardPool(supabase, room.settings);
+    } else if (room?.game_type === "chado_pauri_group") {
+      const { cards, loadError } = await loadChadoPauriFlashcards(supabase, room.settings);
+      if (loadError) throw new Error(loadError);
+      if (cards.length < 4) {
+        throw new Error("Not enough flashcards to start Chado Pauri group (need at least 4).");
+      }
     }
   } catch (preflightError) {
     const message =
