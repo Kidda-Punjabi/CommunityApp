@@ -9,6 +9,7 @@ export type GroupGameContentFilters = {
 export const GROUP_GAMES_WITH_TOPIC_FILTER: ReadonlySet<GroupGameType> = new Set([
   "buzz_in",
   "jeopardy",
+  "chado_pauri_group",
   "sentence_builder_group",
   "point_race",
 ]);

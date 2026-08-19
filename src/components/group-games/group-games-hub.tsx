@@ -212,9 +212,9 @@ export function GroupGamesHub({
         ) : null}
 
         {activeGameType === "chado_pauri_group" ? (
-          <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
-            Chaṛo Pauṛī uses the full flashcard pool. Difficulty steps up with each rung, so
-            topic/difficulty filters are not applied here yet.
+          <p className="text-sm text-zinc-500">
+            Chaṛo Pauṛī steps up difficulty with each rung. Topics narrow which flashcards fill the
+            ladder.
           </p>
         ) : null}
 

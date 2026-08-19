@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadChadoPauriFlashcards } from "@/lib/games/chado-pauri/load-flashcards";
 import { buildLadderQuestion } from "@/lib/chado-pauri-group/ladder-questions";
+import { loadGameRoom } from "@/lib/game-rooms/load-room";
 import type {
   LadderGameState,
   LadderQuestionRow,
@@ -64,7 +65,7 @@ export async function ensureLadderInitialized(
   const existing = await loadLadderRuns(supabase, room.id);
   if (existing.length > 0) return;
 
-  const { cards, loadError } = await loadChadoPauriFlashcards(supabase);
+  const { cards, loadError } = await loadChadoPauriFlashcards(supabase, room.settings);
   if (loadError) throw new Error(loadError);
   if (cards.length < 4) {
     throw new Error("Not enough flashcards to start Chado Pauri group (need at least 4).");
@@ -92,7 +93,15 @@ export async function addLadderQuestionIfNeeded(
   if (existing.some((q) => q.rung === rung && !q.resolved_at)) return;
   if (existing.some((q) => q.rung === rung)) return;
 
-  const { cards, loadError } = await loadChadoPauriFlashcards(supabase);
+  const { data: runRow, error: runError } = await supabase
+    .from("game_room_ladder_runs")
+    .select("room_id")
+    .eq("id", runId)
+    .maybeSingle();
+  if (runError) throw runError;
+
+  const room = runRow?.room_id ? await loadGameRoom(supabase, runRow.room_id) : null;
+  const { cards, loadError } = await loadChadoPauriFlashcards(supabase, room?.settings);
   if (loadError) throw new Error(loadError);
 
   const usedIds = new Set(

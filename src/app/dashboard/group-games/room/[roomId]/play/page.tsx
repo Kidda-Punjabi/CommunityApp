@@ -75,7 +75,7 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
     const ladderState = await loadLadderGameState(supabase, room, user.id);
     if (!ladderState) notFound();
 
-    const { cards } = await loadChadoPauriFlashcards(supabase);
+    const { cards } = await loadChadoPauriFlashcards(supabase, room.settings);
     const optionRomanisedByBackText = buildBackTextRomanisedMap(cards);
 
     return (

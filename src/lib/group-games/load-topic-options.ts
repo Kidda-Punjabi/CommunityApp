@@ -52,6 +52,7 @@ export async function loadTopicOptionsForGroupGame(
   if (
     gameType === "buzz_in" ||
     gameType === "jeopardy" ||
+    gameType === "chado_pauri_group" ||
     gameType === "point_race"
   ) {
     return loadFlashcardTopicOptions(supabase);
