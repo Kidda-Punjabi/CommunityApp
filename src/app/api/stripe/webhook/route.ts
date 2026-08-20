@@ -1,6 +1,7 @@
 import { syncBookingCreditFromStripeEvent } from "@/lib/stripe/sync-booking-credit";
 import { syncMembershipFromStripeEvent } from "@/lib/stripe/sync-membership";
 import { handlePremiumWebhookEvent } from "@/lib/stripe/sync-premium-membership";
+import { handleSessionRebookWebhookEvent } from "@/lib/stripe/sync-session-rebooking";
 import {
   logStripeWebhookReceived,
   logStripeWebhookResult,
@@ -37,6 +38,13 @@ export async function POST(request: Request) {
   await logStripeWebhookReceived(event);
 
   try {
+    // Session Rebook (£35) is isolated from enrollment / 1-to-1 credit grant paths.
+    const rebookHandled = await handleSessionRebookWebhookEvent(event);
+    if (rebookHandled) {
+      await logStripeWebhookResult(event.id, "processed");
+      return NextResponse.json({ received: true, handler: "session-rebook" });
+    }
+
     const bookingResult = await syncBookingCreditFromStripeEvent(event);
     const premiumHandled = await handlePremiumWebhookEvent(event);
 

@@ -8,9 +8,13 @@ export type CheckoutKey =
   | "beginners-one-to-one"
   | "beginners-kids-group"
   | "one-to-one-session"
+  | "session-rebook"
+  | "cohort-switch-fee"
   | "community";
 
 export const ONE_TO_ONE_SESSION_CHECKOUT_KEY = "one-to-one-session" as const;
+export const SESSION_REBOOK_CHECKOUT_KEY = "session-rebook" as const;
+export const COHORT_SWITCH_FEE_CHECKOUT_KEY = "cohort-switch-fee" as const;
 
 export type CheckoutConfig = {
   key: CheckoutKey;
@@ -79,6 +83,22 @@ export const CHECKOUT_CONFIGS: CheckoutConfig[] = [
     productSlug: "beginners",
   },
   {
+    key: "session-rebook",
+    priceIdEnv: "STRIPE_CHECKOUT_PRICE_SESSION_REBOOK",
+    paymentLinkEnv: "STRIPE_PAYMENT_LINK_SESSION_REBOOK",
+    mode: "payment",
+    label: "Session rebook fee (£35)",
+    productSlug: "beginners",
+  },
+  {
+    key: "cohort-switch-fee",
+    priceIdEnv: "STRIPE_CHECKOUT_PRICE_COHORT_SWITCH_FEE",
+    paymentLinkEnv: "STRIPE_PAYMENT_LINK_COHORT_SWITCH_FEE",
+    mode: "payment",
+    label: "Cohort switch fee (£50)",
+    productSlug: "beginners",
+  },
+  {
     key: "community",
     priceIdEnv: "STRIPE_CHECKOUT_PRICE_COMMUNITY",
     paymentLinkEnv: "STRIPE_PAYMENT_LINK_COMMUNITY",
@@ -132,6 +152,12 @@ export function resolvePaymentLinkForCheckout(key: string): string | null {
   }
   if (key === ONE_TO_ONE_SESSION_CHECKOUT_KEY) {
     return "https://buy.stripe.com/8x2cN62KV3oeeBncA34ZG0C";
+  }
+  if (key === SESSION_REBOOK_CHECKOUT_KEY) {
+    return "https://buy.stripe.com/00wfZigBLgb0dxjeIb4ZG0O";
+  }
+  if (key === COHORT_SWITCH_FEE_CHECKOUT_KEY) {
+    return "https://buy.stripe.com/eVqeVe71b4sidxjarV4ZG0N";
   }
   return null;
 }
