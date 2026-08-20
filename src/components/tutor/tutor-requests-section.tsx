@@ -145,7 +145,7 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
           )
         ) : (
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Late cancel (within 24 hours). Confirming unlocks this lesson with Session catch-up
+            Late cancel (within 48 hours). Confirming unlocks this lesson with Session catch-up
             instead of a recording.
           </p>
         )}

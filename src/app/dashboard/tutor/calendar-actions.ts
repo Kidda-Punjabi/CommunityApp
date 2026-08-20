@@ -30,9 +30,33 @@ export async function requestLessonReschedule(
 ): Promise<CalendarActionResult> {
   const sessionId = String(formData.get("session_id") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
-  const requestedStartsAt = String(formData.get("requested_starts_at") ?? "").trim();
-  const requestedEndsAt = String(formData.get("requested_ends_at") ?? "").trim();
   const lateCancel = String(formData.get("late_cancel") ?? "").trim() === "1";
+  const requestedSlotsRaw = String(formData.get("requested_slots") ?? "").trim();
+  const legacyStarts = String(formData.get("requested_starts_at") ?? "").trim();
+  const legacyEnds = String(formData.get("requested_ends_at") ?? "").trim();
+
+  type PreferredSlot = { startsAt: string; endsAt: string };
+  let preferredSlots: PreferredSlot[] = [];
+  if (requestedSlotsRaw) {
+    try {
+      const parsed = JSON.parse(requestedSlotsRaw) as unknown;
+      if (Array.isArray(parsed)) {
+        preferredSlots = parsed
+          .map((row) => {
+            if (!row || typeof row !== "object") return null;
+            const startsAt = String((row as { startsAt?: unknown }).startsAt ?? "").trim();
+            const endsAt = String((row as { endsAt?: unknown }).endsAt ?? "").trim();
+            if (!startsAt || !endsAt) return null;
+            return { startsAt, endsAt };
+          })
+          .filter((row): row is PreferredSlot => row !== null);
+      }
+    } catch {
+      return { error: "Invalid preferred times. Please pick again." };
+    }
+  } else if (legacyStarts && legacyEnds) {
+    preferredSlots = [{ startsAt: legacyStarts, endsAt: legacyEnds }];
+  }
 
   if (!sessionId) return { error: "Missing lesson." };
   if (!message) return { error: "Please explain why you need to cancel." };
@@ -78,36 +102,43 @@ export async function requestLessonReschedule(
   }
 
   const isLateCancel = Boolean(eligibility.isLateCancel) || lateCancel;
+  const REQUIRED_PREFERRED_SLOTS = 3;
 
   if (!isLateCancel) {
-    if (!requestedStartsAt || !requestedEndsAt) {
-      return { error: "Choose a new time from your tutor's availability." };
+    if (preferredSlots.length !== REQUIRED_PREFERRED_SLOTS) {
+      return {
+        error: `Choose exactly ${REQUIRED_PREFERRED_SLOTS} preferred times from your tutor's availability.`,
+      };
+    }
+    const uniqueKeys = new Set(preferredSlots.map((s) => `${s.startsAt}|${s.endsAt}`));
+    if (uniqueKeys.size !== preferredSlots.length) {
+      return { error: "Preferred times must be distinct. Please pick again." };
     }
     const { assertValidRescheduleSlot } = await import("@/lib/calendar/reschedule-slots");
-    const slotCheck = await assertValidRescheduleSlot(
-      supabase,
-      session,
-      user.id,
-      requestedStartsAt,
-      requestedEndsAt
-    );
-    if (!slotCheck.ok) return { error: slotCheck.error };
+    for (const slot of preferredSlots) {
+      const slotCheck = await assertValidRescheduleSlot(
+        supabase,
+        session,
+        user.id,
+        slot.startsAt,
+        slot.endsAt
+      );
+      if (!slotCheck.ok) return { error: slotCheck.error };
+    }
   }
 
-  const preferredTimes =
-    !isLateCancel && requestedStartsAt && requestedEndsAt
-      ? formatSessionWhen(requestedStartsAt, requestedEndsAt)
-      : isLateCancel
-        ? "Late cancel (within 24 hours)"
-        : null;
+  const firstPreferred = preferredSlots[0] ?? null;
+  const preferredTimes = isLateCancel
+    ? "Late cancel (within 48 hours)"
+    : preferredSlots.map((slot) => formatSessionWhen(slot.startsAt, slot.endsAt)).join(" · ");
 
   const payload = {
     session_id: sessionId,
     student_id: user.id,
     message,
     preferred_times: preferredTimes,
-    requested_starts_at: isLateCancel ? null : requestedStartsAt || null,
-    requested_ends_at: isLateCancel ? null : requestedEndsAt || null,
+    requested_starts_at: isLateCancel ? null : firstPreferred?.startsAt ?? null,
+    requested_ends_at: isLateCancel ? null : firstPreferred?.endsAt ?? null,
     status: "pending" as const,
     tutor_response: null,
     resolved_at: null,

@@ -114,7 +114,7 @@ export const TUTOR_HELP: HelpContent = {
           id: "student-requests",
           question: "How do I handle reschedule or cohort switch requests?",
           answer:
-            "1-to-1 students can request reschedules (24 hours notice). Group cohort students cannot reschedule — they can only request to join a different cohort, and only if they give at least 3 days notice. Open Calendar or Requests to approve or decline pending items.",
+            "1-to-1 students can request reschedules (48 hours notice). Group cohort students cannot reschedule — they can only request to join a different cohort, and only if they give at least 3 days notice. Open Calendar or Requests to approve or decline pending items.",
           links: [
             { label: "Calendar", href: "/dashboard/tutor/calendar" },
             { label: "Requests", href: "/dashboard/tutor/requests" },

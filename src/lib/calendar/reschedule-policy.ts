@@ -5,7 +5,7 @@ import type { RescheduleRequestRow, ScheduledSessionRow } from "@/lib/calendar/t
 export type RescheduleEligibility = {
   canRequest: boolean;
   lockedReason: string | null;
-  /** Within 24h of start — student can only send a late-cancel notice (no new slot). */
+  /** Within the reschedule cutoff of start — late cancel / fee path (no free slot pick). */
   isLateCancel?: boolean;
 };
 

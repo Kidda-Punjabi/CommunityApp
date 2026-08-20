@@ -125,7 +125,7 @@ export function CohortSwitchRequestForm({
         </div>
       ) : (
         <p className="text-xs text-zinc-500">
-          Beginners group students get up to 2 alternate cohort requests for the course — please
+          Beginners group students get up to 4 alternate cohort requests for the course — please
           only request a different class if it is genuinely necessary.
         </p>
       )}

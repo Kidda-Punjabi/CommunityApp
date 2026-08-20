@@ -18,6 +18,7 @@ import {
   inputClass,
   labelClass,
 } from "@/app/admin/content/components/ui";
+import { BEGINNERS_RESCHEDULE_LIMIT } from "@/lib/calendar/reschedule-limit";
 
 type MemberDetailViewProps = {
   userId: string;
@@ -309,13 +310,15 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
                 <>
                   Group alternate-cohort requests: used{" "}
                   {detail.beginnersEnrollment.groupReschedule.used} of{" "}
-                  {detail.beginnersEnrollment.groupReschedule.totalAllowed} (default limit is 2).
+                  {detail.beginnersEnrollment.groupReschedule.totalAllowed} (default limit is{" "}
+                  {BEGINNERS_RESCHEDULE_LIMIT}).
                   Pending and approved requests count toward this total.
                 </>
               ) : (
                 <>
                   1-to-1 reschedules: used {detail.beginnersEnrollment.oneToOneReschedule.used} of{" "}
-                  {detail.beginnersEnrollment.oneToOneReschedule.totalAllowed} (default limit is 2).
+                  {detail.beginnersEnrollment.oneToOneReschedule.totalAllowed} (default limit is{" "}
+                  {BEGINNERS_RESCHEDULE_LIMIT}).
                   Pending and approved requests count toward this total.
                 </>
               )}
@@ -340,7 +343,7 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
                 {detail.beginnersEnrollment.deliveryMode === "group"
                   ? "alternate cohort requests"
                   : "1-to-1 reschedules"}{" "}
-                beyond the default 2 if you need to allow another change.
+                beyond the default {BEGINNERS_RESCHEDULE_LIMIT} if you need to allow another change.
               </p>
             </div>
             <button

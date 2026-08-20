@@ -34,9 +34,9 @@ If you know you can’t attend a scheduled group session, please give us at leas
 
 ## 1–1 lessons
 
-You can reschedule a 1–1 lesson with **24 hours’ notice**.
+You can reschedule a 1–1 lesson with **48 hours’ notice**.
 
-If you cancel within 24 hours of your lesson, that session is **non-refundable** and counts as used.
+If you cancel within 48 hours of your lesson, that session is **non-refundable** and counts as used. You can take Session catch-up instead of a live move, or pay a rebooking fee when that option is available.
 
 ## Late or failed payments
 

@@ -74,8 +74,9 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
         <section className="mt-8">
           <h2 className="text-lg font-semibold text-zinc-900">Request to reschedule</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Tell your tutor why you need a different time. They&apos;ll pick an available slot and
-            update your calendar invite.
+            {session.isLateCancelReschedule
+              ? "This lesson is inside the 48-hour window. You can send a late cancel so Session catch-up can unlock."
+              : "With at least 48 hours’ notice, pick three preferred times from your tutor’s open slots. They’ll confirm one and update your calendar invite."}
           </p>
           <RescheduleRequestForm
             sessionId={session.id}

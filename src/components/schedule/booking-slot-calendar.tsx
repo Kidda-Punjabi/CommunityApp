@@ -16,9 +16,14 @@ const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 type BookingSlotCalendarProps = {
   slots: BookableSlot[];
-  selectedSlot: BookableSlot | null;
-  onSelectSlot: (slot: BookableSlot) => void;
+  /** Single-select mode (booking / admin). */
+  selectedSlot?: BookableSlot | null;
+  onSelectSlot?: (slot: BookableSlot) => void;
   onClearSlot?: () => void;
+  /** Multi-select mode (reschedule preferred times). */
+  selectedSlots?: BookableSlot[];
+  onChangeSelectedSlots?: (slots: BookableSlot[]) => void;
+  maxSelections?: number;
 };
 
 function formatTimeOnly(startsAt: string, endsAt: string): string {
@@ -35,12 +40,23 @@ function formatTimeOnly(startsAt: string, endsAt: string): string {
   return `${startLabel} – ${endLabel}`;
 }
 
+function slotKey(slot: BookableSlot): string {
+  return `${slot.startsAt}|${slot.endsAt}`;
+}
+
 export function BookingSlotCalendar({
   slots,
-  selectedSlot,
+  selectedSlot = null,
   onSelectSlot,
   onClearSlot,
+  selectedSlots,
+  onChangeSelectedSlots,
+  maxSelections,
 }: BookingSlotCalendarProps) {
+  const multi = typeof maxSelections === "number" && maxSelections > 1;
+  const selectedList = multi ? (selectedSlots ?? []) : selectedSlot ? [selectedSlot] : [];
+  const selectedKeys = new Set(selectedList.map(slotKey));
+
   const slotsByDate = useMemo(() => {
     const map = new Map<string, BookableSlot[]>();
     for (const slot of slots) {
@@ -95,6 +111,21 @@ export function BookingSlotCalendar({
     setVisibleMonth(next.getMonth());
   };
 
+  const handlePickSlot = (slot: BookableSlot) => {
+    if (multi && onChangeSelectedSlots) {
+      const key = slotKey(slot);
+      const exists = selectedList.some((s) => slotKey(s) === key);
+      if (exists) {
+        onChangeSelectedSlots(selectedList.filter((s) => slotKey(s) !== key));
+        return;
+      }
+      if (selectedList.length >= (maxSelections ?? 1)) return;
+      onChangeSelectedSlots([...selectedList, slot]);
+      return;
+    }
+    onSelectSlot?.(slot);
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-zinc-200 bg-white p-3">
@@ -144,7 +175,11 @@ export function BookingSlotCalendar({
                     hasSlots={hasSlots}
                     onSelect={(key) => {
                       setSelectedDateKey(key);
-                      if (selectedSlot && toLocalDateKey(selectedSlot.startsAt) !== key) {
+                      if (
+                        !multi &&
+                        selectedSlot &&
+                        toLocalDateKey(selectedSlot.startsAt) !== key
+                      ) {
                         onClearSlot?.();
                       }
                     }}
@@ -165,21 +200,31 @@ export function BookingSlotCalendar({
             <p className="text-sm text-zinc-500">No available times on this day.</p>
           ) : (
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {daySlots.map((slot) => (
-                <button
-                  key={slot.startsAt}
-                  type="button"
-                  onClick={() => onSelectSlot(slot)}
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-left text-sm transition-colors",
-                    selectedSlot?.startsAt === slot.startsAt
-                      ? "border-violet-400 bg-violet-50 text-violet-900"
-                      : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                  )}
-                >
-                  {formatTimeOnly(slot.startsAt, slot.endsAt)}
-                </button>
-              ))}
+              {daySlots.map((slot) => {
+                const isSelected = selectedKeys.has(slotKey(slot));
+                const atMax = multi && !isSelected && selectedList.length >= (maxSelections ?? 1);
+                return (
+                  <button
+                    key={slot.startsAt}
+                    type="button"
+                    disabled={atMax}
+                    onClick={() => handlePickSlot(slot)}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                      isSelected
+                        ? "border-violet-400 bg-violet-50 text-violet-900"
+                        : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                    )}
+                  >
+                    {formatTimeOnly(slot.startsAt, slot.endsAt)}
+                    {isSelected && multi ? (
+                      <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                        Preferred
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

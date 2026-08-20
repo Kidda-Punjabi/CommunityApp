@@ -4,10 +4,14 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { requestLessonReschedule, type CalendarActionResult } from "@/app/dashboard/tutor/calendar-actions";
 import { fetchRescheduleSlotsForSession } from "@/app/dashboard/schedule/reschedule-actions";
 import { BookingSlotCalendar } from "@/components/schedule/booking-slot-calendar";
+import { RESCHEDULE_CUTOFF_MS } from "@/lib/calendar/constants";
+import { BEGINNERS_RESCHEDULE_LIMIT } from "@/lib/calendar/reschedule-limit";
 import type { BookableSlot } from "@/lib/tutoring/availability/types";
 import { ui } from "@/lib/ui/styles";
 
 const initial: CalendarActionResult = {};
+const PREFERRED_SLOT_COUNT = 3;
+const cutoffHours = RESCHEDULE_CUTOFF_MS / (60 * 60 * 1000);
 
 export function RescheduleRequestForm({
   sessionId,
@@ -22,7 +26,7 @@ export function RescheduleRequestForm({
   const [open, setOpen] = useState(false);
   const [slots, setSlots] = useState<BookableSlot[]>([]);
   const [slotsError, setSlotsError] = useState<string | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<BookableSlot[]>([]);
   const [loadingSlots, startLoadSlots] = useTransition();
 
   useEffect(() => {
@@ -31,7 +35,7 @@ export function RescheduleRequestForm({
       const result = await fetchRescheduleSlotsForSession(sessionId);
       setSlots(result.slots);
       setSlotsError(result.error ?? null);
-      setSelectedSlot(null);
+      setSelectedSlots([]);
     });
   }, [open, sessionId, isLateCancel]);
 
@@ -49,24 +53,37 @@ export function RescheduleRequestForm({
     );
   }
 
+  const canSubmitFreeReschedule = selectedSlots.length === PREFERRED_SLOT_COUNT;
+
   return (
     <form action={action} className="mt-3 space-y-4 border-t border-zinc-100 pt-3">
       <input type="hidden" name="session_id" value={sessionId} />
       <input type="hidden" name="late_cancel" value={isLateCancel ? "1" : "0"} />
-      <input type="hidden" name="requested_starts_at" value={selectedSlot?.startsAt ?? ""} />
-      <input type="hidden" name="requested_ends_at" value={selectedSlot?.endsAt ?? ""} />
+      <input
+        type="hidden"
+        name="requested_slots"
+        value={JSON.stringify(
+          selectedSlots.map((slot) => ({
+            startsAt: slot.startsAt,
+            endsAt: slot.endsAt,
+          }))
+        )}
+      />
 
       {isLateCancel ? (
         <div className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          This lesson starts within 24 hours, so it can&apos;t be moved. Tell your tutor you
-          can&apos;t attend — if they confirm, Session catch-up unlocks for this lesson instead of
-          a recording.
+          This lesson starts within {cutoffHours} hours, so it can&apos;t be moved for free. Tell
+          your tutor you can&apos;t attend — if they confirm, Session catch-up unlocks for this
+          lesson instead of a recording.
         </div>
       ) : (
         <div>
-          <p className="text-sm font-medium text-zinc-900">Choose a new time</p>
+          <p className="text-sm font-medium text-zinc-900">
+            Choose {PREFERRED_SLOT_COUNT} preferred times
+          </p>
           <p className="mt-1 text-xs text-zinc-500">
-            Pick a slot from your tutor&apos;s availability — at least 24 hours ahead.
+            Pick {PREFERRED_SLOT_COUNT} open slots from your tutor&apos;s calendar — each must be
+            at least {cutoffHours} hours ahead. Your tutor confirms one within 24 hours.
           </p>
           {loadingSlots ? (
             <p className="mt-3 text-sm text-zinc-500">Loading available times…</p>
@@ -75,13 +92,16 @@ export function RescheduleRequestForm({
           ) : slots.length === 0 ? (
             <p className="mt-3 text-sm text-zinc-500">No available slots in the next few weeks.</p>
           ) : (
-            <div className="mt-3">
+            <div className="mt-3 space-y-3">
               <BookingSlotCalendar
                 slots={slots}
-                selectedSlot={selectedSlot}
-                onSelectSlot={setSelectedSlot}
-                onClearSlot={() => setSelectedSlot(null)}
+                selectedSlots={selectedSlots}
+                maxSelections={PREFERRED_SLOT_COUNT}
+                onChangeSelectedSlots={setSelectedSlots}
               />
+              <p className="text-xs text-zinc-500">
+                {selectedSlots.length} of {PREFERRED_SLOT_COUNT} preferred times selected
+              </p>
             </div>
           )}
         </div>
@@ -103,7 +123,7 @@ export function RescheduleRequestForm({
       <p className="text-xs text-zinc-500">
         {isLateCancel
           ? "Your tutor will review this. If they can't move the lesson, Week content unlocks with Session catch-up in place of the recording."
-          : "Your tutor will review this request. If they approve, your calendar invite will be updated to the new time. Beginners 1-to-1 students get up to 2 reschedules for the course."}
+          : `Your tutor will review this request and confirm one of your preferred times. Beginners students get up to ${BEGINNERS_RESCHEDULE_LIMIT} reschedules/cancellations for the course.`}
       </p>
 
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
@@ -111,7 +131,7 @@ export function RescheduleRequestForm({
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={pending || (!isLateCancel && !selectedSlot)}
+          disabled={pending || (!isLateCancel && !canSubmitFreeReschedule)}
           className={ui.btnPrimary}
         >
           {pending ? "Sending…" : isLateCancel ? "Send late cancel" : "Send request"}
@@ -120,7 +140,7 @@ export function RescheduleRequestForm({
           type="button"
           onClick={() => {
             setOpen(false);
-            setSelectedSlot(null);
+            setSelectedSlots([]);
             onDone?.();
           }}
           className={ui.btnGhost}

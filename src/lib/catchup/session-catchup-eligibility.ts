@@ -143,7 +143,7 @@ export async function unlockLessonForStudentAfterLateDeniedReschedule(
 
   if (!request) return { unlockedLessonId: null };
 
-  // Only late attempts (requested within 24h of start) unlock Session catch-up.
+  // Only late attempts (requested within the reschedule cutoff of start) unlock Session catch-up.
   if (!isLateRescheduleRequest(session.starts_at, request.created_at)) {
     return { unlockedLessonId: null };
   }

@@ -1,7 +1,8 @@
 import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const BEGINNERS_RESCHEDULE_LIMIT = 2;
+/** Default cancellations/reschedules per Beginners course enrollment (1-to-1 or group pool). */
+export const BEGINNERS_RESCHEDULE_LIMIT = 4;
 
 /** Pending and approved count toward the allowance; cancelled/denied do not. */
 const COUNTABLE_STATUSES = ["pending", "approved"] as const;

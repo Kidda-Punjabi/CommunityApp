@@ -99,7 +99,7 @@ export const STUDENT_HELP: HelpContent = {
           id: "group-lesson-changes",
           question: "Can I reschedule a group lesson?",
           answer:
-            "Group cohort sessions can’t be moved to a different time, and once your cohort has started you can’t permanently switch to another cohort. If you can’t attend a scheduled group session, give at least 7 days’ notice so we can try to offer an alternative that same week when available. Missed group sessions aren’t refundable. 1–1 lessons can be rescheduled with at least 24 hours’ notice.",
+            "Group cohort sessions can’t be moved to a different time, and once your cohort has started you can’t permanently switch to another cohort. If you can’t attend a scheduled group session, give at least 7 days’ notice so we can try to offer an alternative that same week when available. Missed group sessions aren’t refundable. 1–1 lessons can be rescheduled with at least 48 hours’ notice.",
           links: [
             { label: "Upcoming lessons", href: "/dashboard/schedule" },
             { label: "Cancellations & Refunds", href: "/dashboard/profile/help/cancellations-refunds" },

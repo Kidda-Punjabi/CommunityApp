@@ -119,9 +119,10 @@ export async function assertValidRescheduleSlot(
 
   const slotStart = new Date(startsAt).getTime();
   if (slotStart < Date.now() + RESCHEDULE_CUTOFF_MS) {
+    const hours = RESCHEDULE_CUTOFF_MS / (60 * 60 * 1000);
     return {
       ok: false,
-      error: "Choose a time at least 24 hours before the lesson would start.",
+      error: `Choose a time at least ${hours} hours before the lesson would start.`,
     };
   }
 

@@ -1,4 +1,5 @@
-export const RESCHEDULE_CUTOFF_MS = 24 * 60 * 60 * 1000;
+/** Free reschedule requires this much notice before session start; under this → late cancel / fee path. */
+export const RESCHEDULE_CUTOFF_MS = 48 * 60 * 60 * 1000;
 
 /** Group lessons: alternate cohort requests within this window show a short-notice warning. */
 export const COHORT_SWITCH_CUTOFF_MS = 3 * 24 * 60 * 60 * 1000;
