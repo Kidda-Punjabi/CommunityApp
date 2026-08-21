@@ -1,8 +1,14 @@
-import { LearnCertificatesButton } from "@/components/learn/learn-certificates-button";
+import { HomeGreetingHeader } from "@/components/home-greeting-header";
+import {
+  HomeStreakBanner,
+  HomeStreakProvider,
+} from "@/components/home-streak-stats";
+import { LearnCertificatesRow } from "@/components/learn/learn-certificates-row";
 import { LearnCourseRow } from "@/components/learn/learn-course-row";
 import { LearnCourseTiles, type LearnHubTile } from "@/components/learn/learn-course-tiles";
 import { LearnKidsProgressLink } from "@/components/learn/learn-kids-progress-link";
 import { LearnSecondaryTiles } from "@/components/learn/learn-secondary-tiles";
+import { getHomeTabData } from "@/lib/cache/tab-page-cache";
 import { fetchLearnContent } from "@/lib/learning/load-learn-content";
 import {
   canAccessLessonInContext,
@@ -56,22 +62,52 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
-  const [access, allLessons, completionMap, actor, kidsCourses, kidProfileCount, registeredInterest] =
-    await Promise.all([
-      getCachedCourseAccess(supabase, user),
-      lessonsPromise,
-      lessonsPromise.then((lessons) =>
-        fetchLessonCompletionMap(supabase, user.id, lessons)
-      ),
-      resolveCourseActor(supabase, user.id),
-      fetchAccessibleKidsCourses(supabase, user.id),
-      supabase
-        .from("kid_profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("parent_user_id", user.id)
-        .then(({ count }) => count ?? 0),
-      loadRegisteredComingSoonLevels(supabase, user.id),
-    ]);
+  const [
+    homeTab,
+    access,
+    allLessons,
+    completionMap,
+    actor,
+    kidsCourses,
+    kidProfileCount,
+    registeredInterest,
+  ] = await Promise.all([
+    getHomeTabData(user.id),
+    getCachedCourseAccess(supabase, user),
+    lessonsPromise,
+    lessonsPromise.then((lessons) =>
+      fetchLessonCompletionMap(supabase, user.id, lessons)
+    ),
+    resolveCourseActor(supabase, user.id),
+    fetchAccessibleKidsCourses(supabase, user.id),
+    supabase
+      .from("kid_profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("parent_user_id", user.id)
+      .then(({ count }) => count ?? 0),
+    loadRegisteredComingSoonLevels(supabase, user.id),
+  ]);
+
+  const { dashboard, profile, onboarding, unreadNotificationCount } = homeTab;
+
+  const greeting = (
+    <>
+      <HomeGreetingHeader
+        displayName={dashboard.displayName}
+        profile={{
+          full_name: profile?.full_name ?? null,
+          preferred_name: profile?.preferred_name ?? null,
+          avatar_url: profile?.avatar_url ?? null,
+        }}
+        kidAvatarIcon={dashboard.kidAvatarIcon}
+        learnerLevel={dashboard.kidAvatarIcon ? null : onboarding.learnerLevel}
+        unreadNotificationCount={unreadNotificationCount}
+        weeklyPoints={dashboard.headerPoints}
+        profileHref={dashboard.profileHref}
+      />
+      <HomeStreakBanner />
+    </>
+  );
 
   const foundational = getLearnTrack("foundational")!;
   const beginners = getLearnTrack("beginners")!;
@@ -159,80 +195,94 @@ export default async function LearnPage() {
 
     return (
       <div className={ui.page}>
-        <div className="mb-5 flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
-            <p className="mt-1 text-sm text-zinc-500">Courses and tools in one place.</p>
+        <HomeStreakProvider
+          initial={{
+            streak: dashboard.stats.streak,
+            longestStreak: dashboard.stats.longestStreak,
+            redemptionAvailable: dashboard.stats.redemptionAvailable,
+            streakAtRisk: dashboard.stats.streakAtRisk,
+            streakWarning: dashboard.stats.streakWarning,
+            rescueStreak: dashboard.stats.rescueStreak,
+          }}
+        >
+          {greeting}
+          <LearnCourseTiles tiles={tiles} />
+          <div className="mt-3">
+            <LearnCertificatesRow />
           </div>
-          <LearnCertificatesButton />
-        </div>
-        <LearnCourseTiles tiles={tiles} />
+        </HomeStreakProvider>
       </div>
     );
   }
 
   return (
     <div className={ui.page}>
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Learn</h1>
-          <p className="mt-1 text-sm text-zinc-500">Courses and tools in one place.</p>
+      <HomeStreakProvider
+        initial={{
+          streak: dashboard.stats.streak,
+          longestStreak: dashboard.stats.longestStreak,
+          redemptionAvailable: dashboard.stats.redemptionAvailable,
+          streakAtRisk: dashboard.stats.streakAtRisk,
+          streakWarning: dashboard.stats.streakWarning,
+          rescueStreak: dashboard.stats.rescueStreak,
+        }}
+      >
+        {greeting}
+
+        {kidsTiles.length > 0 ? (
+          <div className="mb-5">
+            <LearnCourseTiles tiles={kidsTiles} />
+          </div>
+        ) : null}
+
+        <div className="space-y-3">
+          <LearnCourseRow
+            level="foundational"
+            tourId="learn-tile-foundational"
+            href={
+              foundationalLocked
+                ? foundational.unlockUrl ?? "/courses/foundational"
+                : learnTrackPath("foundational")
+            }
+            status={foundationalStatus}
+            percent={foundationalLocked ? null : foundationalPercent}
+          />
+          <LearnCourseRow
+            level="beginners"
+            tourId="learn-tile-beginners"
+            href={
+              beginnersLocked
+                ? beginners.unlockUrl ?? "/courses/beginners"
+                : learnTrackPath("beginners")
+            }
+            status={beginnersStatus}
+          />
+          <LearnCourseRow
+            level="intermediate"
+            href={courseDetailPath("intermediate")}
+            status="Next after Beginner"
+            comingSoon
+            interestRegistered={registeredInterest.has("intermediate")}
+          />
+          <LearnCourseRow
+            level="advanced"
+            href={courseDetailPath("advanced")}
+            status="Next after Intermediate"
+            comingSoon
+            interestRegistered={registeredInterest.has("advanced")}
+          />
+          <LearnCertificatesRow />
         </div>
-        <LearnCertificatesButton />
-      </div>
 
-      {kidsTiles.length > 0 ? (
-        <div className="mb-5">
-          <LearnCourseTiles tiles={kidsTiles} />
+        <div className="mt-6 space-y-3">
+          {kidProfileCount > 0 ? <LearnKidsProgressLink /> : null}
+          <LearnSecondaryTiles
+            communityHref={communityHref}
+            communityStatus={communityStatus}
+            communityLocked={communityLocked}
+          />
         </div>
-      ) : null}
-
-      <div className="space-y-3">
-        <LearnCourseRow
-          level="foundational"
-          tourId="learn-tile-foundational"
-          href={
-            foundationalLocked
-              ? foundational.unlockUrl ?? "/courses/foundational"
-              : learnTrackPath("foundational")
-          }
-          status={foundationalStatus}
-          percent={foundationalLocked ? null : foundationalPercent}
-        />
-        <LearnCourseRow
-          level="beginners"
-          tourId="learn-tile-beginners"
-          href={
-            beginnersLocked
-              ? beginners.unlockUrl ?? "/courses/beginners"
-              : learnTrackPath("beginners")
-          }
-          status={beginnersStatus}
-        />
-        <LearnCourseRow
-          level="intermediate"
-          href={courseDetailPath("intermediate")}
-          status="Next after Beginner"
-          comingSoon
-          interestRegistered={registeredInterest.has("intermediate")}
-        />
-        <LearnCourseRow
-          level="advanced"
-          href={courseDetailPath("advanced")}
-          status="Next after Intermediate"
-          comingSoon
-          interestRegistered={registeredInterest.has("advanced")}
-        />
-      </div>
-
-      <div className="mt-6 space-y-3">
-        {kidProfileCount > 0 ? <LearnKidsProgressLink /> : null}
-        <LearnSecondaryTiles
-          communityHref={communityHref}
-          communityStatus={communityStatus}
-          communityLocked={communityLocked}
-        />
-      </div>
+      </HomeStreakProvider>
     </div>
   );
 }
