@@ -342,7 +342,7 @@ export function LiveTranslateSession({ initialUsage }: LiveTranslateSessionProps
       <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-6">
           <div>
-            <BackLink fallbackHref="/dashboard/home">← Back</BackLink>
+            <BackLink fallbackHref="/dashboard/learn">← Back</BackLink>
             <h1 className="mt-4 text-2xl font-bold text-zinc-900">Live Translate</h1>
             <p className="mt-2 text-sm text-zinc-500">
               Hold English or Punjabi while someone speaks that language. Nothing is saved — end

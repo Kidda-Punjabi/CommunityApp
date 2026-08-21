@@ -118,11 +118,11 @@ export function ProductLanding({
     <div className="min-h-dvh bg-gradient-to-b from-violet-50 via-white to-zinc-50">
       <header className="border-b border-violet-100/80 bg-white/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-5 py-4">
-          <Link href={isLoggedIn ? "/dashboard/home" : "/"} className="flex items-center gap-2">
+          <Link href={isLoggedIn ? "/dashboard/learn" : "/"} className="flex items-center gap-2">
             <KiddaLogo variant="logo" size="sm" />
           </Link>
           {isLoggedIn ? (
-            <Link href="/dashboard/home" className="text-sm font-medium text-violet-600">
+            <Link href="/dashboard/learn" className="text-sm font-medium text-violet-600">
               Dashboard
             </Link>
           ) : (

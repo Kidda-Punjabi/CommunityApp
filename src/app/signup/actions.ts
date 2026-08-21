@@ -37,7 +37,7 @@ export async function signup(
         full_name: fullName,
         ...(referralCode ? { referral_code: referralCode } : {}),
       },
-      emailRedirectTo: `${getPublicAppUrl()}/auth/callback?next=/dashboard/home`,
+      emailRedirectTo: `${getPublicAppUrl()}/auth/callback?next=/dashboard/learn`,
     },
   });
 
@@ -84,7 +84,7 @@ export async function signup(
 
     await persistLastUser(supabase);
 
-    redirect("/dashboard/home");
+    redirect("/dashboard/learn");
   }
 
   if (referralCode) {

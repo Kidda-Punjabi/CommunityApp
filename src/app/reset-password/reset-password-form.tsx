@@ -132,7 +132,7 @@ export function ResetPasswordForm() {
 
     setStatus("done");
     setSuccessMessage("Password updated. Taking you to your dashboard…");
-    router.replace("/dashboard/home");
+    router.replace("/dashboard/learn");
   }
 
   if (status === "verifying") {

@@ -30,7 +30,7 @@ export default async function PremiumMembershipPage({
 
   return (
     <div className={ui.page}>
-      <BackLink fallbackHref="/dashboard/home" className="text-sm font-medium text-violet-600">
+      <BackLink fallbackHref="/dashboard/learn" className="text-sm font-medium text-violet-600">
         ← Back
       </BackLink>
 

@@ -43,7 +43,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
   // Already signed in — skip the marketing "Continue as…" gate entirely.
   if (continueAs?.sessionActive) {
-    redirect("/dashboard/home");
+    redirect("/dashboard/learn");
   }
 
   return <MarketingLanding continueAs={continueAs} />;

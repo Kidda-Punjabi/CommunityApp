@@ -40,7 +40,7 @@ export function ContinueAsUserCard({
   variant = "auth",
   showSwitchLink = true,
 }: ContinueAsUserCardProps) {
-  const continueHref = user.sessionActive ? "/dashboard/home" : `/login?email=${encodeURIComponent(user.email)}`;
+  const continueHref = user.sessionActive ? "/dashboard/learn" : `/login?email=${encodeURIComponent(user.email)}`;
 
   if (variant === "home") {
     return (
@@ -100,7 +100,7 @@ export function ContinueAsUserCard({
 
       {user.sessionActive ? (
         <Link
-          href="/dashboard/home"
+          href="/dashboard/learn"
           className="block w-full rounded-lg bg-violet-600 px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-violet-500"
         >
           Continue

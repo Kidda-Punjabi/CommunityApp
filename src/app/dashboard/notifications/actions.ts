@@ -14,6 +14,7 @@ export async function markNotificationRead(notificationId: string): Promise<Acti
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/notifications");
+  revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/home");
   return { success: "Marked as read." };
 }
@@ -25,6 +26,7 @@ export async function markAllNotificationsRead(): Promise<ActionResult> {
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/notifications");
+  revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/home");
   return { success: "All caught up!" };
 }
@@ -38,6 +40,7 @@ export async function sendKudos(notificationId: string): Promise<ActionResult> {
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/notifications");
+  revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/home");
   return { success: "Kudos sent!" };
 }

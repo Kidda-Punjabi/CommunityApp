@@ -204,7 +204,7 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
     <div className={`${ui.page} ${ui.stackLoose}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <BackLink fallbackHref="/dashboard/home">← Back</BackLink>
+          <BackLink fallbackHref="/dashboard/learn">← Back</BackLink>
           <h1 className="mt-3 text-2xl font-bold text-zinc-900">Notifications</h1>
         </div>
         {notifications.some((n) => !isRead(n)) && (

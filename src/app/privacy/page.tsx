@@ -19,11 +19,11 @@ export default async function PrivacyPage() {
     <div className="min-h-dvh bg-gradient-to-b from-violet-50 via-white to-zinc-50">
       <header className="border-b border-violet-100/80 bg-white/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-5 py-4">
-          <Link href={user ? "/dashboard/home" : "/"} className="flex items-center gap-2">
+          <Link href={user ? "/dashboard/learn" : "/"} className="flex items-center gap-2">
             <KiddaLogo variant="logo" size="sm" />
           </Link>
           {user ? (
-            <Link href="/dashboard/home" className="text-sm font-medium text-violet-600">
+            <Link href="/dashboard/learn" className="text-sm font-medium text-violet-600">
               Dashboard
             </Link>
           ) : (
@@ -36,7 +36,7 @@ export default async function PrivacyPage() {
 
       <main className={`mx-auto max-w-2xl ${ui.page} pb-16`}>
         <Link
-          href={user ? "/dashboard/home" : "/"}
+          href={user ? "/dashboard/learn" : "/"}
           className="text-sm font-medium text-violet-600 hover:text-violet-500"
         >
           ← Back

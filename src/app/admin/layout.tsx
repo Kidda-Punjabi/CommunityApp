@@ -16,7 +16,7 @@ export default async function AdminLayout({
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
-  if (!(await canAccessAdminPanel(user, supabase))) redirect("/dashboard/home");
+  if (!(await canAccessAdminPanel(user, supabase))) redirect("/dashboard/learn");
 
   const result = await loadAdminCoreData();
   if (!result.ok) {

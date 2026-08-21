@@ -36,7 +36,7 @@ export default async function CoursesIndexPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const backHref = user ? "/dashboard/home" : "/";
+  const backHref = user ? "/dashboard/learn" : "/";
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-violet-50 via-white to-zinc-50">

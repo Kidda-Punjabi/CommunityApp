@@ -41,7 +41,7 @@ export function ChallengePostGameBanner({
           when they play and we&apos;ll show who won.
         </p>
         <Link
-          href="/dashboard/home"
+          href="/dashboard/learn"
           className="mt-3 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
         >
           Back to home

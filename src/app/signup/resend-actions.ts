@@ -22,7 +22,7 @@ export async function resendConfirmationEmail(
     type: "signup",
     email,
     options: {
-      emailRedirectTo: `${getPublicAppUrl()}/auth/callback?next=/dashboard/home`,
+      emailRedirectTo: `${getPublicAppUrl()}/auth/callback?next=/dashboard/learn`,
     },
   });
 

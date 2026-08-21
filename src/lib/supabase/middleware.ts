@@ -21,7 +21,7 @@ import { KID_PROFILE_COOKIE } from "@/lib/kids/constants";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const POST_AUTH_PATH = "/dashboard/home";
+const POST_AUTH_PATH = "/dashboard/learn";
 
 export async function updateSession(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);

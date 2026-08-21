@@ -29,7 +29,7 @@ export function AdminShell({ data, branding, dataSlice = "full", children }: Adm
             </div>
           </div>
           <Link
-            href="/dashboard/home"
+            href="/dashboard/learn"
             className="text-sm font-medium text-zinc-500 hover:text-violet-600"
           >
             App →

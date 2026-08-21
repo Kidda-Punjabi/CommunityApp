@@ -8,7 +8,7 @@ type HowItWorksPageProps = {
 };
 
 export function HowItWorksPage({ isLoggedIn }: HowItWorksPageProps) {
-  const homeHref = isLoggedIn ? "/dashboard/home" : "/";
+  const homeHref = isLoggedIn ? "/dashboard/learn" : "/";
 
   return (
     <div className="how-it-works min-h-dvh text-zinc-900">
@@ -16,7 +16,7 @@ export function HowItWorksPage({ isLoggedIn }: HowItWorksPageProps) {
         <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4">
           <KiddaLogo variant="logo" size="sm" href={homeHref} />
           {isLoggedIn ? (
-            <Link href="/dashboard/home" className="text-sm font-semibold text-violet-700">
+            <Link href="/dashboard/learn" className="text-sm font-semibold text-violet-700">
               Dashboard
             </Link>
           ) : (

@@ -68,6 +68,7 @@ export async function updateProfile(
 
   revalidatePath("/dashboard/profile");
   revalidatePath("/dashboard/profile/edit");
+  revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/home");
 
   return {
@@ -112,6 +113,7 @@ export async function updateAvatarUrl(avatarUrl: string): Promise<ProfileActionS
 
   revalidatePath("/dashboard/profile");
   revalidatePath("/dashboard/profile/edit");
+  revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/home");
 
   return { success: true };

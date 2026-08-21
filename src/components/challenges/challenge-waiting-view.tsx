@@ -14,7 +14,7 @@ export function ChallengeWaitingView({ challenge }: ChallengeWaitingViewProps) {
 
   return (
     <div className={`${ui.page} ${ui.stackLoose}`}>
-      <BackLink fallbackHref="/dashboard/home" className="text-sm font-medium text-violet-600">← Back</BackLink>
+      <BackLink fallbackHref="/dashboard/learn" className="text-sm font-medium text-violet-600">← Back</BackLink>
       <div className={ui.card}>
         <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
           Challenge sent
@@ -25,7 +25,7 @@ export function ChallengeWaitingView({ challenge }: ChallengeWaitingViewProps) {
           <span className="font-semibold text-zinc-900">{challenge.challengerScore ?? 0}</span>.
           We&apos;ll notify you when they play.
         </p>
-        <Link href="/dashboard/home" className={`mt-4 inline-block ${ui.btnPrimary}`}>
+        <Link href="/dashboard/learn" className={`mt-4 inline-block ${ui.btnPrimary}`}>
           Back to home
         </Link>
       </div>

@@ -38,6 +38,7 @@ export async function completeOnboarding(input: CompleteOnboardingInput) {
 
   if (error) return { error: error.message };
 
+  revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/home");
   revalidatePath("/dashboard/profile");
 

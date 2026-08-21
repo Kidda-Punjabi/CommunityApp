@@ -735,7 +735,7 @@ export function BattleArena({
           ) : null}
         </div>
         <p className="mt-4 text-center text-sm text-zinc-400">Waiting for someone to join…</p>
-        <BackLink fallbackHref="/dashboard/home" className={`mt-6 inline-block ${ui.btnGhost}`}>
+        <BackLink fallbackHref="/dashboard/learn" className={`mt-6 inline-block ${ui.btnGhost}`}>
           ← Back
         </BackLink>
       </div>
@@ -798,7 +798,7 @@ export function BattleArena({
           <Link href="/dashboard/battle" className={`mt-6 inline-block ${ui.btnPrimary}`}>
             Battle again
           </Link>
-          <BackLink fallbackHref="/dashboard/home" className={`mt-3 block ${ui.btnGhost}`}>
+          <BackLink fallbackHref="/dashboard/learn" className={`mt-3 block ${ui.btnGhost}`}>
             ← Back
           </BackLink>
         </div>

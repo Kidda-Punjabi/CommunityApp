@@ -39,7 +39,7 @@ export function ChallengeResultView({ challenge, currentUserId }: ChallengeResul
 
   return (
     <div className={`${ui.page} ${ui.stackLoose}`}>
-      <BackLink fallbackHref="/dashboard/home" className="text-sm font-medium text-violet-600">← Back</BackLink>
+      <BackLink fallbackHref="/dashboard/learn" className="text-sm font-medium text-violet-600">← Back</BackLink>
 
       <div className={`${ui.card} text-center`}>
         <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
