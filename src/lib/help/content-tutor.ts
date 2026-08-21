@@ -64,7 +64,7 @@ export const TUTOR_HELP: HelpContent = {
           id: "homework-tips",
           question: "What should I tell students about homework?",
           answer:
-            "Students submit from Learn → open the lesson → Homework section → Record → Submit. They can only submit once per lesson, so remind them to check audio before sending.",
+            "Students submit from Home → open the lesson → Homework section → Record → Submit. They can only submit once per lesson, so remind them to check audio before sending.",
           links: [{ label: "Lessons (see student view)", href: "/dashboard/tutor/lessons" }],
         },
       ],
@@ -77,14 +77,14 @@ export const TUTOR_HELP: HelpContent = {
           id: "unlock-cohort",
           question: "How do I unlock lessons for a group cohort?",
           answer:
-            "Lessons → open the cohort → use lesson controls to unlock the next lesson for everyone. Students see new content in Learn immediately after unlock.",
+            "Lessons → open the cohort → use lesson controls to unlock the next lesson for everyone. Students see new content in Home immediately after unlock.",
           links: [{ label: "Lessons", href: "/dashboard/tutor/lessons" }],
         },
         {
           id: "unlock-1to1",
           question: "How do I unlock lessons for a 1-to-1 student?",
           answer:
-            "Lessons → open the student → unlock lessons individually based on their pace. Their Learn tab only shows lessons you've unlocked for them.",
+            "Lessons → open the student → unlock lessons individually based on their pace. Their Home tab only shows lessons you've unlocked for them.",
           links: [{ label: "Lessons", href: "/dashboard/tutor/lessons" }],
         },
         {

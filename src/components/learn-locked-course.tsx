@@ -17,7 +17,7 @@ export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps
 
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
-      <BackLink fallbackHref="/dashboard/learn" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Learn</BackLink>
+      <BackLink fallbackHref="/dashboard/learn" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Home</BackLink>
 
       <div className="mt-8 flex flex-1 flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white px-6 py-12 text-center shadow-sm">
         <span className="text-5xl" role="img" aria-hidden="true">

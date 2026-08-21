@@ -10,7 +10,7 @@ export default async function LearnResourcesPage() {
 
   return (
     <div className={ui.page}>
-      <BackLink fallbackHref="/dashboard/learn">← Back to Learn</BackLink>
+      <BackLink fallbackHref="/dashboard/learn">← Back to Home</BackLink>
       <div className="mb-6 mt-4">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Resources</h1>
         <p className="mt-1 text-sm text-zinc-500">

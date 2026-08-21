@@ -165,7 +165,7 @@ export function CatchupPlayer({
       <div className={ui.emptyState}>
         <p className="text-sm text-zinc-600">No catch-up segments are configured for this lesson yet.</p>
         <Link href="/dashboard/learn" className={`${ui.btnSecondary} mt-4`}>
-          Back to Learn
+          Back to Home
         </Link>
       </div>
     );
@@ -177,7 +177,7 @@ export function CatchupPlayer({
     <div className={ui.stackLoose}>
       <div>
         <Link href="/dashboard/learn" className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Back to Learn
+          ← Back to Home
         </Link>
         <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-violet-600">
           {lesson.courseName} · Lesson {lesson.lessonNumber}

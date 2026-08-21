@@ -86,7 +86,7 @@ export default async function MembershipPage() {
                     href="/dashboard/learn"
                     className="text-sm font-semibold text-violet-600 hover:text-violet-500"
                   >
-                    Open Learn →
+                    Open Home →
                   </Link>
                 </div>
               ) : (

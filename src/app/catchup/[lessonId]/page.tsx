@@ -50,7 +50,7 @@ export default async function CatchupLessonPage({ params, searchParams }: PagePr
             to review before your next live session.
           </p>
           <Link href="/dashboard/learn" className={`${ui.btnSecondary} mt-4`}>
-            Back to Learn
+            Back to Home
           </Link>
         </div>
       </div>

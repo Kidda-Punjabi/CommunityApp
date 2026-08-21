@@ -14,19 +14,19 @@ export const STUDENT_HELP: HelpContent = {
           id: "nav",
           question: "How do I find my way around the app?",
           answer:
-            "Use the bottom navigation: Home for your dashboard, Learn for course lessons, Games for practice, Community for the leaderboard and live sessions, and Profile for account settings. Your Home screen shows what to do next based on your courses.",
+            "Use the bottom navigation: Home for course lessons, Practise for your path and unlockables, Games for practice games, Community for the leaderboard and live sessions, and Profile for account settings.",
           links: [
-            { label: "Go to Home", href: "/dashboard/home" },
-            { label: "Open Learn", href: "/dashboard/learn" },
+            { label: "Go to Home", href: "/dashboard/learn" },
+            { label: "Open Practise", href: "/dashboard/home" },
           ],
         },
         {
           id: "courses",
           question: "How do I access my course after buying?",
           answer:
-            "After purchase, your course unlocks automatically within a few minutes. Open Learn and pick your course track. If something is still locked, check Profile → Billing & purchases or contact the team.",
+            "After purchase, your course unlocks automatically within a few minutes. Open Home and pick your course track. If something is still locked, check Profile → Billing & purchases or contact the team.",
           links: [
-            { label: "Open Learn", href: "/dashboard/learn" },
+            { label: "Open Home", href: "/dashboard/learn" },
             { label: "Billing & purchases", href: "/dashboard/profile/billing" },
             { label: "Browse courses", href: "/courses" },
           ],
@@ -36,7 +36,7 @@ export const STUDENT_HELP: HelpContent = {
           question: "Why is a lesson locked?",
           answer:
             "For live courses (Foundational and Beginners), your tutor unlocks lessons as you progress. Group cohort lessons unlock for the whole class when your tutor is ready. Community content follows the schedule on the Community tab.",
-          links: [{ label: "Open Learn", href: "/dashboard/learn" }],
+          links: [{ label: "Open Home", href: "/dashboard/learn" }],
         },
       ],
     },
@@ -48,9 +48,9 @@ export const STUDENT_HELP: HelpContent = {
           id: "submit-homework",
           question: "How do I submit homework?",
           answer:
-            "Open Learn, choose your course, then open the lesson for this week. Scroll to the Homework section, tap Record, speak your answer, and tap Submit. You need microphone permission. You can only submit once per lesson — review before sending.",
+            "Open Home, choose your course, then open the lesson for this week. Scroll to the Homework section, tap Record, speak your answer, and tap Submit. You need microphone permission. You can only submit once per lesson — review before sending.",
           links: [
-            { label: "Go to Learn", href: "/dashboard/learn" },
+            { label: "Go to Home", href: "/dashboard/learn" },
             { label: "Foundational lessons", href: "/dashboard/learn/foundational" },
             { label: "Beginners lessons", href: "/dashboard/learn/beginners" },
           ],
@@ -59,7 +59,7 @@ export const STUDENT_HELP: HelpContent = {
           id: "homework-feedback",
           question: "How do I see homework feedback?",
           answer:
-            "Your tutor reviews recordings and you'll get a notification when feedback is ready. Open the same lesson in Learn to see whether your homework was approved and read any comments.",
+            "Your tutor reviews recordings and you'll get a notification when feedback is ready. Open the same lesson in Home to see whether your homework was approved and read any comments.",
           links: [
             { label: "Notifications", href: "/dashboard/notifications" },
             { label: "Notification settings", href: "/dashboard/profile/notifications" },
@@ -69,8 +69,8 @@ export const STUDENT_HELP: HelpContent = {
           id: "lesson-materials",
           question: "Where are lesson audio, PDFs, and recordings?",
           answer:
-            "Inside each lesson in Learn you'll find audio, downloadable PDFs where available, and session recordings after live classes. Tap a lesson card to expand materials.",
-          links: [{ label: "Open Learn", href: "/dashboard/learn" }],
+            "Inside each lesson in Home you'll find audio, downloadable PDFs where available, and session recordings after live classes. Tap a lesson card to expand materials.",
+          links: [{ label: "Open Home", href: "/dashboard/learn" }],
         },
         {
           id: "quizzes-flashcards",
@@ -92,7 +92,7 @@ export const STUDENT_HELP: HelpContent = {
           id: "upcoming-lessons",
           question: "Where do I see my upcoming live lessons?",
           answer:
-            "Open Schedule (from Home or your course) to see upcoming sessions with your tutor. Join links appear when it's time for class. Add sessions to your own calendar when prompted.",
+            "Open Schedule (from Practise or your course) to see upcoming sessions with your tutor. Join links appear when it's time for class. Add sessions to your own calendar when prompted.",
           links: [{ label: "Upcoming lessons", href: "/dashboard/schedule" }],
         },
         {
@@ -117,8 +117,8 @@ export const STUDENT_HELP: HelpContent = {
           id: "miss-class",
           question: "What if I miss a live class?",
           answer:
-            "Session recordings are posted on the lesson when available. Catch up in Learn, complete homework, and message your cohort or tutor if you need help.",
-          links: [{ label: "Open Learn", href: "/dashboard/learn" }],
+            "Session recordings are posted on the lesson when available. Catch up in Home, complete homework, and message your cohort or tutor if you need help.",
+          links: [{ label: "Open Home", href: "/dashboard/learn" }],
         },
       ],
     },

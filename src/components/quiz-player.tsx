@@ -181,7 +181,7 @@ export function QuizPlayer({
             href="/dashboard/learn"
             className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
           >
-            Back to Learn
+            Back to Home
           </Link>
         </div>
       </div>

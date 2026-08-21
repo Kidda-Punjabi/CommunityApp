@@ -89,7 +89,7 @@ export default async function ProfileBillingPage() {
             href="/dashboard/learn"
             className="mt-3 inline-block text-sm font-semibold text-violet-600 hover:text-violet-500"
           >
-            Go to Learn →
+            Go to Home →
           </Link>
         </div>
 

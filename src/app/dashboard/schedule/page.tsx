@@ -73,7 +73,7 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
             .
           </p>
           <Link href="/dashboard/learn" className="mt-2 inline-block font-semibold underline">
-            Go to Learn and submit homework →
+            Go to Home and submit homework →
           </Link>
         </div>
       ) : null}

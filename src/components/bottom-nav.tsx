@@ -115,8 +115,9 @@ function ProfileIcon({ active }: { active: boolean }) {
 }
 
 const navItems: (NavItem & { tourId: string })[] = [
-  { href: "/dashboard/home", label: "Home", tourId: "nav-home" },
-  { href: "/dashboard/learn", label: "Learn", tourId: "nav-learn" },
+  // Order + labels only: courses stay at /dashboard/learn, practice path at /dashboard/home.
+  { href: "/dashboard/learn", label: "Home", tourId: "nav-learn" },
+  { href: "/dashboard/home", label: "Practise", tourId: "nav-home" },
   { href: "/dashboard/community", label: "Community", tourId: "nav-community" },
   { href: "/dashboard/games", label: "Games", tourId: "nav-games" },
   { href: "/dashboard/profile", label: "Profile", tourId: "nav-profile" },

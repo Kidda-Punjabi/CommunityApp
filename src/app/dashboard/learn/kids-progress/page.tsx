@@ -22,7 +22,7 @@ export default async function KidsProgressPage() {
 
   return (
     <div className={ui.page}>
-      <BackLink href="/dashboard/learn">← Back to Learn</BackLink>
+      <BackLink href="/dashboard/learn">← Back to Home</BackLink>
       <div className="mb-6 mt-4">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">How your kids are doing</h1>
         <p className="mt-1 text-sm text-zinc-500">

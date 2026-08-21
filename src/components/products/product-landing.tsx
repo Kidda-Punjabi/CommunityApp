@@ -158,7 +158,7 @@ export function ProductLanding({
             <div className="mt-8 rounded-3xl border border-green-200 bg-green-50 px-6 py-5">
               <p className="font-semibold text-green-800">You already have access</p>
               <Link href="/dashboard/learn" className={`mt-4 ${ui.btnPrimary}`}>
-                Go to Learn →
+                Go to Home →
               </Link>
             </div>
           ) : content.slug !== "beginners" ? (

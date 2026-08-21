@@ -105,7 +105,7 @@ export default async function CheckoutSuccessPage({
           href="/dashboard/learn"
           className="mt-6 inline-block rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
         >
-          Go to Learn
+          Go to Home
         </Link>
       </div>
     </div>

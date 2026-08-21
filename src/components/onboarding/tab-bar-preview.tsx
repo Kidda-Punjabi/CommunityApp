@@ -1,6 +1,6 @@
 const TABS = [
-  { label: "Home", description: "Your dashboard — streak, next steps, and today's focus" },
-  { label: "Learn", description: "Weekly courses and lessons at your own pace" },
+  { label: "Home", description: "Weekly courses and lessons at your own pace" },
+  { label: "Practise", description: "Your path — streak, unlockables, and today's focus" },
   { label: "Games", description: "Vocabulary and grammar practice — tap ? in any game for how to play" },
   { label: "Community", description: "Leaderboard, events, forum, and friends" },
   { label: "Profile", description: "Progress, streak, level, and settings" },

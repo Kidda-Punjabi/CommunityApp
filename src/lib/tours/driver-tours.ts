@@ -47,21 +47,21 @@ const baseConfig: Config = {
 
 export const APP_TOUR_STEPS: DriveStep[] = [
   {
-    element: '[data-tour="nav-home"]',
+    element: '[data-tour="nav-learn"]',
     popover: {
       title: "Home",
       description:
-        "Your streak and today’s focus live here — a quick check-in for what to do next.",
+        "Courses and weekly lessons. Open a track to work through your resources.",
       side: "top",
       align: "center",
     },
   },
   {
-    element: '[data-tour="nav-learn"]',
+    element: '[data-tour="nav-home"]',
     popover: {
-      title: "Learn",
+      title: "Practise",
       description:
-        "Courses and weekly lessons. Open a track to work through your resources.",
+        "Your streak and today’s focus live here — a quick check-in for what to do next.",
       side: "top",
       align: "center",
     },

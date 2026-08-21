@@ -15,7 +15,7 @@ export default async function PlacementResultPage() {
 
   return (
     <div className={ui.page}>
-      <BackLink href="/dashboard/learn">← Back to Learn</BackLink>
+      <BackLink href="/dashboard/learn">← Back to Home</BackLink>
       <div className="mb-6 mt-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
           Placement result

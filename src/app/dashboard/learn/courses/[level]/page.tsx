@@ -46,7 +46,7 @@ export default async function LearnCourseDetailPage({
 
   return (
     <div className={ui.page}>
-      <BackLink href="/dashboard/learn">← Back to Learn</BackLink>
+      <BackLink href="/dashboard/learn">← Back to Home</BackLink>
 
       <div className={cn("mt-4 rounded-3xl p-5", theme.rowBg)}>
         <span
