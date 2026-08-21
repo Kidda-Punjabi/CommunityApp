@@ -125,9 +125,10 @@ const navItems: (NavItem & { tourId: string })[] = [
 
 function NavIcon({ href, active }: { href: string; active: boolean }) {
   switch (href) {
-    case "/dashboard/home":
-      return <HomeIcon active={active} />;
+    // Labels: /learn = Home, /home = Practise — icons match labels, not routes.
     case "/dashboard/learn":
+      return <HomeIcon active={active} />;
+    case "/dashboard/home":
       return <LearnIcon active={active} />;
     case "/dashboard/games":
       return <PracticeIcon active={active} />;
