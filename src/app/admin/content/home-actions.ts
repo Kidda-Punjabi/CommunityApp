@@ -20,7 +20,8 @@ export type AdminAttentionItem = {
     | "notion_cohort_writeback"
     | "notion_lead_link"
     | "cohort_switch_pending"
-    | "unmatched_kids_checkout";
+    | "unmatched_kids_checkout"
+    | "unmatched_webhook_grants";
   title: string;
   detail: string;
   href: string;
@@ -65,6 +66,20 @@ export async function fetchAdminHomeAttention(): Promise<{
 
   const cohortSwitchPending = await countPendingCohortSwitchRequests(supabase);
 
+  // Check for unmatched webhook grants
+  let unmatchedWebhooks = 0;
+  try {
+    const { findUnmatchedWebhookGrants } = await import("@/lib/stripe/verify-webhook-grant");
+    const webhookEvents = await findUnmatchedWebhookGrants(supabase, {
+      minAgeMinutes: 5,
+      maxRetries: 10,
+      limit: 100,
+    });
+    unmatchedWebhooks = webhookEvents.length;
+  } catch (webhookError) {
+    console.error("[admin attention] failed to check webhook grants:", webhookError);
+  }
+
   const errors = [
     onboarding.error,
     tutorOverview.error,
@@ -86,6 +101,21 @@ export async function fetchAdminHomeAttention(): Promise<{
       detail: "Approve or decline alternate group session requests",
       href: "/admin/cohort-switch-requests",
       urgent: true,
+    });
+  }
+
+  if (unmatchedWebhooks > 0) {
+    const label =
+      unmatchedWebhooks === 1
+        ? "1 payment webhook hasn't resulted in complete access grant"
+        : `${unmatchedWebhooks} payment webhooks haven't resulted in complete access grants`;
+    items.push({
+      id: "unmatched-webhook-grants",
+      kind: "unmatched_webhook_grants",
+      title: label,
+      detail: "Payment succeeded but user may not have signed up yet, or Notion lead missing App User ID",
+      href: "/admin/webhook-grants",
+      urgent: unmatchedWebhooks > 5,
     });
   }
 

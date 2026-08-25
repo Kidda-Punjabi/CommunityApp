@@ -511,6 +511,38 @@ export async function maybeGrantAccessAfterLeadLink(
       }
     }
 
+    // Update any pending webhook events for this profile/email
+    // This links signup-triggered grants back to the original payment webhook
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", profileId)
+        .maybeSingle();
+
+      if (profile?.email) {
+        const { logStripeWebhookGrantAttempt } = await import("@/lib/stripe/webhook-event-log");
+        await logStripeWebhookGrantAttempt({
+          eventId: "", // Will match by email
+          email: profile.email,
+          profileId,
+          status: result.granted > 0 ? "completed" : result.queued > 0 ? "needs_retry" : "failed",
+          error: result.errors.length > 0 ? result.errors.join("; ") : undefined,
+        });
+
+        // Also try to retry any other pending webhooks for this email
+        // This handles the "payment before signup" case
+        const { retryWebhookGrantsForProfile } = await import("@/lib/stripe/retry-webhook-grants");
+        await retryWebhookGrantsForProfile(supabase, profileId, profile.email);
+      }
+    } catch (webhookUpdateError) {
+      // Don't fail the grant if webhook update fails
+      console.error(
+        `[lead purchase grant] failed to update webhook status requestId=${requestId}:`,
+        webhookUpdateError instanceof Error ? webhookUpdateError.message : webhookUpdateError
+      );
+    }
+
     console.info(
       `[lead purchase grant] complete requestId=${requestId} profile=${profileId} granted=${result.granted} queued=${result.queued} errors=${result.errors.length}`
     );

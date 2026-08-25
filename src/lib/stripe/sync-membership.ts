@@ -95,8 +95,22 @@ export async function syncMembershipFromCheckoutSession(sessionId: string) {
 
   const isKidsPurchase = await resolveIsKidsCoursePurchase(session);
   const userId = await resolveUserIdFromSession(session, isKidsPurchase);
+  const email = session.customer_details?.email ?? session.customer_email ?? null;
+
   if (isKidsPurchase) {
     const result = await grantKidsCoursePurchaseFromSession(session, userId);
+    
+    // Log grant attempt for kids purchase
+    const { logStripeWebhookGrantAttempt } = await import("./webhook-event-log");
+    await logStripeWebhookGrantAttempt({
+      eventId: "", // Will match by sessionId
+      sessionId: session.id,
+      profileId: userId ?? undefined,
+      email: email ?? undefined,
+      status: result.granted ? "completed" : result.queued ? "needs_retry" : "failed",
+      error: result.error ?? undefined,
+    });
+
     if (result.error && !result.queued) {
       throw new Error(result.error);
     }
@@ -104,6 +118,15 @@ export async function syncMembershipFromCheckoutSession(sessionId: string) {
   }
 
   if (!userId) {
+    // Log that we couldn't match - this is the "payment before signup" case
+    const { logStripeWebhookGrantAttempt } = await import("./webhook-event-log");
+    await logStripeWebhookGrantAttempt({
+      eventId: "", // Will match by sessionId
+      sessionId: session.id,
+      email: email ?? undefined,
+      status: "pending",
+      error: "No user profile matched yet - awaiting signup",
+    });
     throw new Error("Could not match checkout session to an app user by email.");
   }
 
@@ -119,47 +142,85 @@ export async function syncMembershipFromCheckoutSession(sessionId: string) {
       ? session.customer
       : session.customer?.id ?? null;
 
-  const grantResult = await grantCoursesToUser(userId, purchasedTiers, customerId);
-  const packageSync = await syncStudentPackagesFromPurchases(userId, purchases);
-  if (packageSync.errors.length) {
-    console.error(
-      "Student package sync errors:",
-      packageSync.errors.join("; "),
-      "session=",
-      session.id
-    );
-  }
+  let grantError: string | null = null;
+  let grantCompleted = false;
 
-  if (session.metadata?.cohort_id) {
-    const admin = createServiceRoleClient();
-    const groupResult = await completeGroupPurchaseFromCheckoutSession(
-      admin,
-      userId,
-      session.id
-    );
-    if (groupResult.error) {
+  try {
+    const grantResult = await grantCoursesToUser(userId, purchasedTiers, customerId);
+    const packageSync = await syncStudentPackagesFromPurchases(userId, purchases);
+    if (packageSync.errors.length) {
+      grantError = packageSync.errors.join("; ");
       console.error(
-        "Group purchase completion error:",
-        groupResult.error,
+        "Student package sync errors:",
+        packageSync.errors.join("; "),
         "session=",
-        session.id,
-        "user=",
-        userId
-      );
-    } else if (!groupResult.completed && !groupResult.placementPending) {
-      console.error(
-        "Group purchase completion did not run or returned incomplete:",
-        "session=",
-        session.id,
-        "user=",
-        userId,
-        "cohort_id=",
-        session.metadata?.cohort_id ?? null
+        session.id
       );
     }
-  }
 
-  return grantResult;
+    if (session.metadata?.cohort_id) {
+      const admin = createServiceRoleClient();
+      const groupResult = await completeGroupPurchaseFromCheckoutSession(
+        admin,
+        userId,
+        session.id
+      );
+      if (groupResult.error) {
+        grantError = groupResult.error;
+        console.error(
+          "Group purchase completion error:",
+          groupResult.error,
+          "session=",
+          session.id,
+          "user=",
+          userId
+        );
+      } else if (!groupResult.completed && !groupResult.placementPending) {
+        grantError = "Group purchase completion did not run or returned incomplete";
+        console.error(
+          "Group purchase completion did not run or returned incomplete:",
+          "session=",
+          session.id,
+          "user=",
+          userId,
+          "cohort_id=",
+          session.metadata?.cohort_id ?? null
+        );
+      } else if (groupResult.completed) {
+        grantCompleted = true;
+      }
+    } else if (grantResult.updated) {
+      grantCompleted = true;
+    }
+
+    // Log grant attempt
+    const { logStripeWebhookGrantAttempt } = await import("./webhook-event-log");
+    await logStripeWebhookGrantAttempt({
+      eventId: "", // Will match by sessionId
+      sessionId: session.id,
+      profileId: userId,
+      email: email ?? undefined,
+      status: grantCompleted ? "completed" : grantError ? "failed" : "needs_retry",
+      error: grantError ?? undefined,
+    });
+
+    return grantResult;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Log failed grant attempt
+    const { logStripeWebhookGrantAttempt } = await import("./webhook-event-log");
+    await logStripeWebhookGrantAttempt({
+      eventId: "", // Will match by sessionId
+      sessionId: session.id,
+      profileId: userId,
+      email: email ?? undefined,
+      status: "failed",
+      error: errorMessage,
+    });
+
+    throw error;
+  }
 }
 
 export async function syncMembershipFromStripeEvent(event: Stripe.Event) {
