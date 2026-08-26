@@ -54,7 +54,7 @@ BEGIN
   SELECT v_master_deck_id, v.front, v.back, v.roman, 'vocab', 'Vocabulary - Master List', ARRAY['week_10', 'imperative']::text[]
   FROM (VALUES
     ('Sit.', 'ਬੈਠੋ', 'baitho'),
-    ('Stand.', 'ਖੱਲੋ', 'khallo'),
+    ('Stand.', 'ਖੜੋ', 'kharo'),
     ('Come.', 'ਆਉ', 'aao'),
     ('Go.', 'ਜਾਉ', 'jao'),
     ('Listen.', 'ਸੁਣੋ', 'suno'),
@@ -71,7 +71,7 @@ BEGIN
         f.front_text = v.front
         OR f.romanised = v.roman
         OR (v.front = 'Sit.' AND (f.front_text ILIKE 'sit.%' OR f.romanised = 'baitho'))
-        OR (v.front = 'Stand.' AND (f.front_text ILIKE 'stand.%' OR f.romanised IN ('khallo', 'khade ho')))
+        OR (v.front = 'Stand.' AND (f.front_text ILIKE 'stand.%' OR f.romanised IN ('kharo', 'khade ho')))
         OR (v.front = 'Come.' AND (f.front_text ILIKE 'come.%' OR f.romanised = 'aao'))
         OR (v.front = 'Go.' AND (f.front_text ILIKE 'go.%' OR f.romanised = 'jao'))
         OR (v.front = 'Listen.' AND (f.front_text ILIKE 'listen.%' OR f.romanised = 'suno'))
@@ -196,7 +196,7 @@ BEGIN
 
   INSERT INTO public.translate_questions (segment_id, question_number, prompt_english, answer_gurmukhi, answer_romanised) VALUES
     (v_seg, 1, 'Sit down.', 'ਬੈਠ ਜਾਓ', 'Baith jao'),
-    (v_seg, 2, 'Stand up.', 'ਖੱਲੋ', 'Khallo'),
+    (v_seg, 2, 'Stand up.', 'ਖੜੋ', 'Kharo'),
     (v_seg, 3, 'Come here.', 'ਇੱਥੇ ਆਉ', 'Ithe aao'),
     (v_seg, 4, 'Go home.', 'ਘਰ ਜਾਉ', 'Ghar jao'),
     (v_seg, 5, 'Read the book.', 'ਕਿਤਾਬ ਪੜ੍ਹੋ', 'Kitaab parho'),
