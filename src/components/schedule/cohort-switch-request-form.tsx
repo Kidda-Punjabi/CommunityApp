@@ -5,10 +5,12 @@ import {
   requestCohortSwitch,
   type CalendarActionResult,
 } from "@/app/dashboard/tutor/calendar-actions";
+import { formatYourWeekClassLabel } from "@/lib/calendar/cohort-switch-candidates";
 import {
   COHORT_SWITCH_SHORT_NOTICE_WARNING,
   COHORT_SWITCH_WARNING,
 } from "@/lib/calendar/cohort-switch-policy";
+import { SESSION_SWITCH_LIMIT } from "@/lib/calendar/constants";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { ui } from "@/lib/ui/styles";
 
@@ -33,12 +35,13 @@ export function CohortSwitchRequestForm({
   const requiresShortNoticeAck = session.isShortNoticeCohortSwitch;
   const canSubmit =
     Boolean(selectedSessionId) && (!requiresShortNoticeAck || shortNoticeAcknowledged);
+  const weekLabel = formatYourWeekClassLabel(session);
 
   if (!open) {
     return (
       <div className="mt-3">
         <button type="button" onClick={() => setOpen(true)} className={ui.btnPrimary}>
-          Request to reschedule
+          Switch this session
         </button>
       </div>
     );
@@ -48,13 +51,19 @@ export function CohortSwitchRequestForm({
     <form action={action} className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
       <input type="hidden" name="session_id" value={session.id} />
       <input type="hidden" name="to_session_id" value={selectedSessionId} />
+      {weekLabel ? (
+        <p className="text-sm font-medium text-zinc-800">
+          {weekLabel}
+          {session.cohortName ? ` · ${session.cohortName}` : ""}
+        </p>
+      ) : null}
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-700">
-          Which matching session would you like to join instead?
+          Which class would you like to attend this week instead?
         </label>
         {session.alternateCohorts.length === 0 ? (
           <p className="mt-1.5 text-sm text-zinc-500">
-            No matching alternate session available for this week.
+            No other cohort is running a matching class around this date.
           </p>
         ) : (
           <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
@@ -99,14 +108,14 @@ export function CohortSwitchRequestForm({
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-700">
-          Why do you need a different group?
+          Why can&apos;t you make your usual class?
         </label>
         <textarea
           name="message"
           required
           rows={3}
           className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm"
-          placeholder="Brief explanation for your tutor"
+          placeholder="Brief explanation for the Kidda team"
         />
       </div>
       <p className="rounded-2xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{COHORT_SWITCH_WARNING}</p>
@@ -125,8 +134,8 @@ export function CohortSwitchRequestForm({
         </div>
       ) : (
         <p className="text-xs text-zinc-500">
-          Beginners group students get up to 2 alternate cohort requests for the course — please
-          only request a different class if it is genuinely necessary.
+          You can switch a session up to {SESSION_SWITCH_LIMIT} times on this course — only request
+          if you genuinely cannot attend.
         </p>
       )}
       {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}

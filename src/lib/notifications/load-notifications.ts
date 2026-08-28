@@ -293,12 +293,12 @@ export function notificationSummary(item: NotificationItem): string {
       const when = formatNotificationWhen(item.payload.starts_at);
       if (item.payload.status === "approved") {
         return when
-          ? `Alternate cohort approved for ${sessionTitle} (${when})`
-          : `Alternate cohort approved for ${sessionTitle}`;
+          ? `Session switch approved for ${sessionTitle} (${when})`
+          : `Session switch approved for ${sessionTitle}`;
       }
       return when
-        ? `Alternate cohort request declined for ${sessionTitle} (${when})`
-        : `Alternate cohort request declined for ${sessionTitle}`;
+        ? `Session switch request declined for ${sessionTitle} (${when})`
+        : `Session switch request declined for ${sessionTitle}`;
     }
     case "lesson_reschedule_requested": {
       const studentName = String(item.payload.student_name ?? name);

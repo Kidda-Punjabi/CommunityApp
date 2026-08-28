@@ -177,14 +177,13 @@ export async function getGoogleCalendarEvent(
  * sendUpdates=all triggers Google's invite email.
  *
  * Known v1 limitation: detached recurring instances are not updated — see cohort-calendar-invite.ts.
- * TODO: Removing attendees when a student withdraws is not implemented.
  */
 export async function addAttendeeToGoogleCalendarEvent(
   accessToken: string,
   calendarId: string,
   eventId: string,
   attendeeEmail: string
-): Promise<void> {
+): Promise<PatchAttendeesResult> {
   const normalized = attendeeEmail.trim().toLowerCase();
   if (!normalized) {
     throw new Error("Student email is required for a calendar invite.");
@@ -193,10 +192,33 @@ export async function addAttendeeToGoogleCalendarEvent(
   const event = await getGoogleCalendarEvent(accessToken, calendarId, eventId);
   const existing = event.attendees ?? [];
   if (existing.some((a) => a.email?.trim().toLowerCase() === normalized)) {
-    return;
+    const attendeeEmails = existing
+      .map((a) => a.email?.trim().toLowerCase())
+      .filter((email): email is string => Boolean(email));
+    return { attendeeEmails, changed: false };
   }
 
-  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
+  const attendeeEmails = await patchGoogleCalendarEventAttendees(
+    accessToken,
+    calendarId,
+    eventId,
+    [...existing, { email: normalized }]
+  );
+  return { attendeeEmails, changed: true };
+}
+
+export type PatchAttendeesResult = {
+  attendeeEmails: string[];
+  changed: boolean;
+};
+
+async function patchGoogleCalendarEventAttendees(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  attendees: GoogleApiAttendee[]
+): Promise<string[]> {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all&fields=id,attendees(email,responseStatus)`;
 
   const res = await fetch(url, {
     method: "PATCH",
@@ -204,15 +226,52 @@ export async function addAttendeeToGoogleCalendarEvent(
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      attendees: [...existing, { email: normalized }],
-    }),
+    body: JSON.stringify({ attendees }),
   });
 
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Google Calendar patch event failed: ${text}`);
   }
+
+  const patched = (await res.json()) as GoogleApiEventDetail;
+  return (patched.attendees ?? [])
+    .map((a) => a.email?.trim().toLowerCase())
+    .filter((email): email is string => Boolean(email));
+}
+
+/**
+ * Removes an attendee from a calendar event instance.
+ * sendUpdates=all notifies the student. No-op (changed=false) if they were not listed.
+ */
+export async function removeAttendeeFromGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  attendeeEmail: string
+): Promise<PatchAttendeesResult> {
+  const normalized = attendeeEmail.trim().toLowerCase();
+  if (!normalized) {
+    throw new Error("Student email is required to update the calendar invite.");
+  }
+
+  const event = await getGoogleCalendarEvent(accessToken, calendarId, eventId);
+  const existing = event.attendees ?? [];
+  const next = existing.filter((a) => a.email?.trim().toLowerCase() !== normalized);
+  if (next.length === existing.length) {
+    const attendeeEmails = existing
+      .map((a) => a.email?.trim().toLowerCase())
+      .filter((email): email is string => Boolean(email));
+    return { attendeeEmails, changed: false };
+  }
+
+  const attendeeEmails = await patchGoogleCalendarEventAttendees(
+    accessToken,
+    calendarId,
+    eventId,
+    next
+  );
+  return { attendeeEmails, changed: true };
 }
 
 export type CreateGoogleCalendarEventParams = {

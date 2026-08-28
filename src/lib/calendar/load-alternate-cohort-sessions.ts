@@ -2,10 +2,9 @@ import "server-only";
 
 import {
   isActiveCohortSwitchStatus,
-  isAlternateCohortSwitchSession,
-  resolveCohortSwitchWeekNumber,
+  isSessionSwitchCandidate,
 } from "@/lib/calendar/cohort-switch-candidates";
-import { NO_MATCHING_ALTERNATE_SESSION_COPY } from "@/lib/calendar/constants";
+import { KIDDA_CLASS_TITLE_NEEDLE, NO_MATCHING_ALTERNATE_SESSION_COPY, SESSION_SWITCH_WINDOW_DAYS } from "@/lib/calendar/constants";
 import type { AlternateCohortOption, ScheduledSessionRow } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -15,8 +14,8 @@ export const NO_ALTERNATIVE_SESSIONS_REASON = NO_MATCHING_ALTERNATE_SESSION_COPY
 
 type SourceSession = Pick<
   ScheduledSessionRow,
-  "id" | "course_id" | "tutor_id" | "cohort_id" | "week_number"
-> & { lessonNumber?: number | null };
+  "id" | "course_id" | "tutor_id" | "cohort_id" | "starts_at"
+>;
 
 type CohortMeta = {
   id: string;
@@ -27,9 +26,25 @@ type CohortMeta = {
   status: string | null;
 };
 
+function windowBoundsIso(sources: SourceSession[]): { minIso: string; maxIso: string } | null {
+  if (sources.length === 0) return null;
+  const dayMs = SESSION_SWITCH_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  let minMs = Number.POSITIVE_INFINITY;
+  let maxMs = Number.NEGATIVE_INFINITY;
+  for (const source of sources) {
+    const refMs = new Date(source.starts_at).getTime();
+    if (Number.isNaN(refMs)) continue;
+    minMs = Math.min(minMs, refMs - dayMs);
+    maxMs = Math.max(maxMs, refMs + dayMs);
+  }
+  if (!Number.isFinite(minMs) || !Number.isFinite(maxMs)) return null;
+  return { minIso: new Date(minMs).toISOString(), maxIso: new Date(maxMs).toISOString() };
+}
+
 /**
- * Load alternate group sessions a student can request to join.
+ * Load other cohorts' Kidda Class sessions a student can switch into for one week.
  * Uses the service role because students cannot RLS-read other cohorts' sessions.
+ * Matches on date proximity to the source session (not week_number).
  */
 export async function loadAlternateCohortSessions(
   _supabase: SupabaseClient,
@@ -54,6 +69,10 @@ export async function loadAlternateCohortSessions(
   const nowMs = options?.nowMs ?? Date.now();
   const nowIso = new Date(nowMs).toISOString();
   const courseIds = [...new Set(groupSources.map((session) => session.course_id as string))];
+  const bounds = windowBoundsIso(groupSources);
+  if (!bounds) return result;
+
+  const rangeStart = bounds.minIso < nowIso ? nowIso : bounds.minIso;
 
   const [{ data: cohortRows, error: cohortError }, { data: sessionRows, error: sessionError }] =
     await Promise.all([
@@ -68,7 +87,9 @@ export async function loadAlternateCohortSessions(
         .in("course_id", courseIds)
         .not("cohort_id", "is", null)
         .eq("status", "scheduled")
-        .gte("starts_at", nowIso)
+        .ilike("title", `%${KIDDA_CLASS_TITLE_NEEDLE}%`)
+        .gte("starts_at", rangeStart)
+        .lte("starts_at", bounds.maxIso)
         .order("starts_at", { ascending: true }),
     ]);
 
@@ -104,21 +125,12 @@ export async function loadAlternateCohortSessions(
 
   const candidates = ((sessionRows ?? []) as ScheduledSessionRow[]).filter((session) => {
     if (!session.cohort_id) return false;
-    const cohort = cohortById.get(session.cohort_id);
-    if (!cohort) return false;
-    const title = session.title.trim().toLowerCase();
-    return !title.includes("meeting");
+    return Boolean(cohortById.get(session.cohort_id));
   });
 
   for (const source of groupSources) {
-    const sourceWeek = resolveCohortSwitchWeekNumber(source);
-    if (sourceWeek == null) {
-      result.set(source.id, []);
-      continue;
-    }
-
     const matches = candidates.filter((candidate) =>
-      isAlternateCohortSwitchSession(source, candidate, { nowMs })
+      isSessionSwitchCandidate(source, candidate, { nowMs })
     );
     const seenCohorts = new Set<string>();
     const optionsForSource: AlternateCohortOption[] = [];
@@ -130,7 +142,7 @@ export async function loadAlternateCohortSessions(
       optionsForSource.push({
         id: candidate.id,
         cohortId,
-        name: cohort?.name ?? candidate.title ?? "Alternate session",
+        name: cohort?.name ?? candidate.title ?? "Other class",
         tutorName: tutorNameById.get(candidate.tutor_id) ?? "Tutor",
         startsAt: candidate.starts_at,
         endsAt: candidate.ends_at,

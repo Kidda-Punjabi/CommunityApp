@@ -5,14 +5,17 @@ import {
   countPendingCohortSwitchRequests,
   loadAdminCohortSwitchRequests,
 } from "@/lib/admin/load-admin-cohort-switch-requests";
-import { addAttendeeToGoogleCalendarEvent } from "@/lib/calendar/google-calendar-api";
-import {
-  getValidTutorAccessToken,
-  type TutorCalendarConnectionRow,
-} from "@/lib/calendar/tutor-access-token";
+import { enactSessionSwitchApproval } from "@/lib/calendar/enact-session-switch";
 import { revalidatePath } from "next/cache";
 
 const PATH = "/admin/cohort-switch-requests";
+
+function revalidateSessionSwitchPaths() {
+  revalidatePath(PATH);
+  revalidatePath("/admin/content");
+  revalidatePath("/dashboard/schedule");
+  revalidatePath("/dashboard/learn");
+}
 
 export async function fetchAdminCohortSwitchRequests() {
   try {
@@ -21,7 +24,7 @@ export async function fetchAdminCohortSwitchRequests() {
   } catch (e) {
     return {
       rows: [],
-      error: e instanceof Error ? e.message : "Failed to load cohort change requests.",
+      error: e instanceof Error ? e.message : "Failed to load session switch requests.",
     };
   }
 }
@@ -36,79 +39,7 @@ export async function fetchPendingCohortSwitchCount(): Promise<{
   } catch (e) {
     return {
       count: 0,
-      error: e instanceof Error ? e.message : "Failed to count cohort change requests.",
-    };
-  }
-}
-
-async function tryInviteStudentToTargetSession(
-  supabase: Awaited<ReturnType<typeof requireAdminFromActions>>,
-  params: { toSessionId: string | null; studentId: string }
-): Promise<{ invited: boolean; warning?: string }> {
-  if (!params.toSessionId) {
-    return {
-      invited: false,
-      warning: "Approved, but no target session was stored — add the student to the calendar invite manually.",
-    };
-  }
-
-  const { data: session, error: sessionError } = await supabase
-    .from("tutor_scheduled_sessions")
-    .select("id, tutor_id, google_event_id")
-    .eq("id", params.toSessionId)
-    .maybeSingle();
-
-  if (sessionError || !session?.google_event_id) {
-    return {
-      invited: false,
-      warning: "Approved, but the target calendar event was not found — invite the student manually.",
-    };
-  }
-
-  const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(
-    params.studentId
-  );
-  const studentEmail = authUser.user?.email?.trim();
-  if (authError || !studentEmail) {
-    return {
-      invited: false,
-      warning: "Approved, but the student has no email for a calendar invite.",
-    };
-  }
-
-  const { data: connection, error: connectionError } = await supabase
-    .from("tutor_google_calendar_connections")
-    .select(
-      "tutor_id, google_account_email, calendar_id, access_token, refresh_token, token_expires_at"
-    )
-    .eq("tutor_id", session.tutor_id)
-    .maybeSingle();
-
-  if (connectionError || !connection) {
-    return {
-      invited: false,
-      warning:
-        "Approved, but the destination tutor has no Google Calendar connection — invite the student manually.",
-    };
-  }
-
-  try {
-    const accessToken = await getValidTutorAccessToken(
-      supabase,
-      connection as TutorCalendarConnectionRow
-    );
-    await addAttendeeToGoogleCalendarEvent(
-      accessToken,
-      connection.calendar_id as string,
-      session.google_event_id as string,
-      studentEmail
-    );
-    return { invited: true };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Calendar invite failed.";
-    return {
-      invited: false,
-      warning: `Approved, but calendar invite failed: ${message}`,
+      error: e instanceof Error ? e.message : "Failed to count session switch requests.",
     };
   }
 }
@@ -136,49 +67,92 @@ export async function resolveAdminCohortSwitchRequest(input: {
     if (requestError || !request) return { error: "Request not found." };
     if (request.status !== "pending") return { error: "Already resolved." };
 
-    let calendarWarning: string | undefined;
-    if (input.decision === "approved") {
-      const invite = await tryInviteStudentToTargetSession(supabase, {
-        toSessionId: (request.to_session_id as string | null) ?? null,
-        studentId: request.student_id as string,
-      });
-      calendarWarning = invite.warning;
+    if (input.decision === "approved" && !request.to_session_id) {
+      return {
+        error:
+          "This request has no target class stored, so it cannot be approved. Ask the student to submit a new session switch.",
+      };
     }
 
     const responseNote =
       input.adminResponse?.trim() ||
       (input.decision === "approved"
-        ? "Your alternate cohort request was approved. Check your calendar for the updated invite."
+        ? "Your session switch was approved. We're updating your calendar invite."
         : null);
 
-    const { error } = await supabase
+    const resolvedAt = input.decision === "denied" ? new Date().toISOString() : null;
+
+    const { data: updated, error } = await supabase
       .from("cohort_switch_requests")
       .update({
         status: input.decision,
         tutor_response: responseNote,
-        resolved_at: new Date().toISOString(),
+        resolved_at: resolvedAt,
         resolved_by: adminUser.id,
+        sync_error: null,
       })
       .eq("id", input.requestId)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
 
     if (error) return { error: error.message };
+    if (!updated) {
+      return { error: "Request was not updated. It may already have been resolved." };
+    }
 
-    revalidatePath(PATH);
-    revalidatePath("/admin/content");
-    revalidatePath("/dashboard/schedule");
-    revalidatePath("/dashboard/learn");
+    if (input.decision === "denied") {
+      revalidateSessionSwitchPaths();
+      return { success: "Request declined." };
+    }
 
-    if (input.decision === "approved") {
+    const enact = await enactSessionSwitchApproval(input.requestId, supabase);
+    revalidateSessionSwitchPaths();
+
+    if (!enact.ok) {
       return {
-        success: calendarWarning
-          ? calendarWarning
-          : "Approved — student invited to the alternate session calendar.",
+        error: `Approved, but calendar sync failed: ${enact.error} Retry from this page — the request is not fully confirmed until both calendar updates succeed.`,
       };
     }
 
-    return { success: "Request declined." };
+    return {
+      success: enact.alreadySynced
+        ? "Approved — calendar was already updated."
+        : "Approved — student removed from the original class and added to the target class calendar.",
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to resolve request." };
+  }
+}
+
+export async function retryAdminSessionSwitchCalendar(requestId: string): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+    const { data: request, error: requestError } = await supabase
+      .from("cohort_switch_requests")
+      .select("id, status, calendar_synced_at")
+      .eq("id", requestId)
+      .maybeSingle();
+
+    if (requestError || !request) return { error: "Request not found." };
+    if (request.status !== "approved") {
+      return { error: "Only approved session switches can retry calendar sync." };
+    }
+    if (request.calendar_synced_at) {
+      return { success: "Calendar was already updated for this switch." };
+    }
+
+    const enact = await enactSessionSwitchApproval(requestId, supabase);
+    revalidateSessionSwitchPaths();
+
+    if (!enact.ok) {
+      return { error: enact.error ?? "Calendar sync failed." };
+    }
+
+    return {
+      success: "Calendar updated — student removed from the original class and added to the target class.",
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to retry calendar sync." };
   }
 }

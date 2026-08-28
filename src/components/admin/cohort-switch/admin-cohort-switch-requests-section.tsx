@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   fetchAdminCohortSwitchRequests,
   resolveAdminCohortSwitchRequest,
+  retryAdminSessionSwitchCalendar,
 } from "@/app/admin/cohort-switch-requests/actions";
 import { AdminFilterPill, AdminStatusPill } from "@/components/admin/admin-filter-pills";
 import type { AdminCohortSwitchRequestRow } from "@/lib/admin/load-admin-cohort-switch-requests";
@@ -34,12 +35,11 @@ export function AdminCohortSwitchRequestsSection() {
   return (
     <div className={ui.page}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
-          Cohort change requests
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Session switch requests</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Students ask to join a matching alternate group session when they can&apos;t make their
-          usual class. Approve or decline here — tutors do not resolve these.
+          Students who will miss one class can swap into another cohort&apos;s equivalent session
+          for that week only. This is not a permanent cohort move. Approving updates both Google
+          Calendar invites.
         </p>
       </div>
 
@@ -64,13 +64,13 @@ export function AdminCohortSwitchRequestsSection() {
         <div className={ui.emptyState}>
           <p className="text-lg font-semibold text-zinc-900">No requests</p>
           <p className="mt-2 text-sm text-zinc-500">
-            When students request an alternate cohort from Learn or Schedule, they appear here.
+            When students request a session switch from Learn or Schedule, they appear here.
           </p>
         </div>
       ) : (
         <ul className="space-y-4">
           {visible.map((row) => (
-            <AdminCohortSwitchCard key={row.id} row={row} onResolved={() => void reload()} />
+            <AdminSessionSwitchCard key={row.id} row={row} onResolved={() => void reload()} />
           ))}
         </ul>
       )}
@@ -78,7 +78,7 @@ export function AdminCohortSwitchRequestsSection() {
   );
 }
 
-function AdminCohortSwitchCard({
+function AdminSessionSwitchCard({
   row,
   onResolved,
 }: {
@@ -97,9 +97,19 @@ function AdminCohortSwitchCard({
         adminResponse: note || undefined,
       });
       setMessage(result.success ?? result.error ?? null);
-      if (result.success) onResolved();
+      if (result.success || result.error) onResolved();
     });
   }
+
+  function retryCalendar() {
+    startTransition(async () => {
+      const result = await retryAdminSessionSwitchCalendar(row.id);
+      setMessage(result.success ?? result.error ?? null);
+      onResolved();
+    });
+  }
+
+  const approvedUnsynced = row.status === "approved" && !row.calendarSyncedAt;
 
   return (
     <li className={`${ui.cardBordered} space-y-3`}>
@@ -110,17 +120,23 @@ function AdminCohortSwitchCard({
         </div>
         <AdminStatusPill
           tone={
-            row.status === "pending" ? "amber" : row.status === "approved" ? "green" : "zinc"
+            row.status === "pending"
+              ? "amber"
+              : row.status === "approved" && row.calendarSyncedAt
+                ? "green"
+                : row.status === "approved"
+                  ? "amber"
+                  : "zinc"
           }
         >
-          {row.status}
+          {row.status === "approved" && !row.calendarSyncedAt ? "approved — calendar pending" : row.status}
         </AdminStatusPill>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-zinc-50 px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Current
+            Their class
           </p>
           <p className="mt-1 text-sm font-medium text-zinc-900">{row.fromCohortName}</p>
           {row.fromTutorName ? (
@@ -130,7 +146,7 @@ function AdminCohortSwitchCard({
         </div>
         <div className="rounded-2xl bg-violet-50 px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-            Requested
+            Switch into
           </p>
           <p className="mt-1 text-sm font-medium text-zinc-900">{row.toCohortName}</p>
           {row.toTutorName ? (
@@ -145,6 +161,12 @@ function AdminCohortSwitchCard({
       <p className="text-sm text-zinc-700">{row.sessionTitle}</p>
       {row.message ? <p className="text-sm text-zinc-600">{row.message}</p> : null}
 
+      {row.syncError ? (
+        <p className="rounded-2xl bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          Calendar sync error: {row.syncError}
+        </p>
+      ) : null}
+
       {row.status === "pending" ? (
         <div className="space-y-3 border-t border-zinc-100 pt-3">
           <label className="block text-sm text-zinc-700">
@@ -156,7 +178,8 @@ function AdminCohortSwitchCard({
             />
           </label>
           <p className="text-xs text-zinc-500">
-            Approving invites the student to the alternate session calendar when possible.
+            Approving removes them from their class calendar and adds them to the requested class.
+            If either Calendar update fails, the error is stored on this request.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -178,9 +201,27 @@ function AdminCohortSwitchCard({
           </div>
           {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
         </div>
-      ) : row.tutorResponse ? (
-        <p className="text-sm text-zinc-500">Response: {row.tutorResponse}</p>
-      ) : null}
+      ) : (
+        <div className="space-y-2 border-t border-zinc-100 pt-3">
+          {row.tutorResponse ? (
+            <p className="text-sm text-zinc-500">Response: {row.tutorResponse}</p>
+          ) : null}
+          {row.calendarSyncedAt ? (
+            <p className="text-sm text-emerald-700">Calendar updated.</p>
+          ) : null}
+          {approvedUnsynced ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={retryCalendar}
+              className={ui.btnPrimary}
+            >
+              {pending ? "Retrying…" : "Retry calendar sync"}
+            </button>
+          ) : null}
+          {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
+        </div>
+      )}
     </li>
   );
 }

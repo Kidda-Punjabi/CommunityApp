@@ -94,10 +94,10 @@ export default async function StudentLessonDetailPage({ params }: PageProps) {
 
       {isGroup ? (
         <section className="mt-8">
-          <h2 className="text-lg font-semibold text-zinc-900">Request to reschedule</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">Switch this session</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Group lessons can&apos;t be moved to a new time — you can ask to join another session of
-            this course instead.
+            Group lessons can&apos;t be moved to a new time — if you&apos;ll miss this class, you
+            can ask to join another cohort&apos;s equivalent session for this week only.
           </p>
           <GroupCohortRescheduleControl session={session} className="mt-3" />
         </section>

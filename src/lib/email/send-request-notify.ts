@@ -83,10 +83,10 @@ export function buildRequestNotifyEmail(payload: NotifyRequestPayload): {
   html: string;
 } {
   const isSwitch = payload.type === "cohort_switch";
-  const requestType = isSwitch ? "Cohort Switch Request" : "Session Reschedule Request";
+  const requestType = isSwitch ? "Session Switch Request" : "Session Reschedule Request";
   const adminPath = isSwitch ? "/admin/cohort-switch-requests" : "/admin/reschedule-requests";
   const adminUrl = `${getPublicAppUrl()}${adminPath}`;
-  const subject = `${isSwitch ? "Cohort switch request" : "Session reschedule request"} — ${payload.student_name}`;
+  const subject = `${isSwitch ? "Session switch request" : "Session reschedule request"} — ${payload.student_name}`;
 
   const lines = [
     requestType,

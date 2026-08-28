@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isActiveCohortSwitchStatus, isAlternateCohortSwitchSession } from "@/lib/calendar/cohort-switch-candidates";
-import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy";
+import { isActiveCohortSwitchStatus, isSessionSwitchCandidate } from "@/lib/calendar/cohort-switch-candidates";
+import { getCohortSwitchEligibility, getSessionSwitchCapError } from "@/lib/calendar/cohort-switch-policy";
 import { getRescheduleEligibility, GROUP_LESSON_NO_RESCHEDULE_REASON, formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import {
   appliesBeginnersRescheduleLimit,
@@ -10,7 +10,6 @@ import {
   loadBeginnersRescheduleLimitStatus,
 } from "@/lib/calendar/reschedule-limit";
 import { loadAlternateCohortSessionsForSource } from "@/lib/calendar/load-alternate-cohort-sessions";
-import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -258,7 +257,7 @@ export async function requestCohortSwitch(
   const toSessionId = String(formData.get("to_session_id") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
 
-  if (!sessionId || !toSessionId) return { error: "Missing lesson or alternate session." };
+  if (!sessionId || !toSessionId) return { error: "Missing your class or the class you want to switch into." };
 
   const supabase = await createClient();
   const {
@@ -285,22 +284,18 @@ export async function requestCohortSwitch(
     .maybeSingle();
 
   if (targetSessionError || !targetSession || !targetSession.cohort_id) {
-    return { error: "Alternate session not found." };
+    return { error: "That class was not found." };
   }
 
-  let sourceForAlternates = session;
-  if (session.week_number == null && session.cohort_id) {
-    const [labelled] = await attachLessonLabelsToSessions(adminClient, [session]);
-    if (labelled) {
-      sourceForAlternates = { ...session, lessonNumber: labelled.lessonNumber };
-    }
+  if (targetSession.cohort_id === session.cohort_id) {
+    return { error: "Pick a class from a different cohort." };
   }
 
-  if (
-    !isAlternateCohortSwitchSession(sourceForAlternates, targetSession) ||
-    targetSession.cohort_id === session.cohort_id
-  ) {
-    return { error: "Invalid alternate session for this lesson." };
+  if (!isSessionSwitchCandidate(session, targetSession)) {
+    return {
+      error:
+        "That class is no longer a valid switch — it may have been cancelled, started, or is outside the date window around your class.",
+    };
   }
 
   const { data: targetCohort } = await adminClient
@@ -320,30 +315,69 @@ export async function requestCohortSwitch(
     .eq("student_id", user.id)
     .maybeSingle();
 
-  const alternateOptions = await loadAlternateCohortSessionsForSource(
-    supabase,
-    sourceForAlternates
-  );
-  if (!alternateOptions.some((option) => option.id === targetSession.id)) {
-    return { error: "Invalid alternate session for this lesson." };
+  if (existing?.status === "pending" || existing?.status === "approved") {
+    return { error: "You already have a session switch request for this class." };
   }
 
-  const beginnersRescheduleLimit = await loadBeginnersRescheduleLimitStatus(supabase, user.id);
-  const rescheduleLimitLockedReason = appliesBeginnersRescheduleLimit(
-    session,
-    beginnersRescheduleLimit
-  )
-    ? getBeginnersRescheduleLockedReason(session, beginnersRescheduleLimit)
-    : null;
+  const { data: alreadyAway } = await adminClient
+    .from("cohort_switch_requests")
+    .select("id, status")
+    .eq("student_id", user.id)
+    .eq("session_id", sessionId)
+    .in("status", ["pending", "approved"])
+    .maybeSingle();
 
-  const eligibility = getCohortSwitchEligibility(
-    session,
-    existing ?? null,
-    alternateOptions.length,
-    { rescheduleLimitLockedReason }
+  if (alreadyAway) {
+    return { error: "You already have a session switch request for this class." };
+  }
+
+  const alternateOptions = await loadAlternateCohortSessionsForSource(supabase, session);
+  if (!alternateOptions.some((option) => option.id === targetSession.id)) {
+    return {
+      error:
+        "That class is no longer a valid switch — it may have been cancelled, started, or is outside the date window around your class.",
+    };
+  }
+
+  const courseId = session.course_id as string | null;
+  if (!courseId) {
+    return { error: "This class is not linked to a course, so a session switch cannot be requested." };
+  }
+
+  const { data: enrollment, error: enrollmentError } = await adminClient
+    .from("course_enrollments")
+    .select("id, session_switches_used")
+    .eq("user_id", user.id)
+    .eq("course_id", courseId)
+    .maybeSingle();
+
+  if (enrollmentError) {
+    return { error: enrollmentError.message };
+  }
+  if (!enrollment) {
+    return { error: "No course enrollment found for this class, so a session switch cannot be requested." };
+  }
+
+  const { data: pendingRows, error: pendingError } = await adminClient
+    .from("cohort_switch_requests")
+    .select("id, tutor_scheduled_sessions!session_id!inner(course_id)")
+    .eq("student_id", user.id)
+    .eq("status", "pending")
+    .eq("tutor_scheduled_sessions.course_id", courseId);
+
+  if (pendingError) {
+    return { error: pendingError.message };
+  }
+
+  const capReason = getSessionSwitchCapError(
+    Number(enrollment.session_switches_used ?? 0),
+    pendingRows?.length ?? 0
   );
+  const eligibility = getCohortSwitchEligibility(session, existing ?? null, alternateOptions.length, {
+    sessionSwitchCapReason: capReason,
+  });
   if (!eligibility.canRequest) {
-    return { error: eligibility.lockedReason ?? "Cannot request to reschedule." };
+    return { error: eligibility.lockedReason ?? "Cannot request a session switch." };
   }
 
   const payload = {
@@ -357,24 +391,17 @@ export async function requestCohortSwitch(
     tutor_response: null,
     resolved_at: null,
     resolved_by: null,
+    sync_error: null,
+    calendar_synced_at: null,
   };
 
   // One row per session/student — reactivate cancelled/denied instead of inserting again.
   const { error } =
     existing && (existing.status === "cancelled" || existing.status === "denied")
-      ? await adminClient
-          .from("cohort_switch_requests")
-          .update(payload)
-          .eq("id", existing.id)
+      ? await adminClient.from("cohort_switch_requests").update(payload).eq("id", existing.id)
       : await adminClient.from("cohort_switch_requests").insert(payload);
 
   if (error) {
-    if (error.message.includes("to_session_id")) {
-      return {
-        error:
-          "The target-session database column is not applied in production yet. Apply supabase/cohort-switch-target-session.sql first.",
-      };
-    }
     return { error: error.message };
   }
 
@@ -382,7 +409,7 @@ export async function requestCohortSwitch(
   revalidatePath("/dashboard/learn");
   revalidatePath("/admin/content");
   revalidatePath("/admin/cohort-switch-requests");
-  return { success: "Reschedule request sent to the Kidda team." };
+  return { success: "Session switch request sent. Request pending admin approval." };
 }
 
 export async function cancelCohortSwitchRequest(requestId: string): Promise<CalendarActionResult> {
@@ -412,7 +439,7 @@ export async function cancelCohortSwitchRequest(requestId: string): Promise<Cale
   revalidatePath("/admin/content");
   return {
     success:
-      "Request cancelled. It doesn’t count toward your alternate cohort allowance, so you can request again if you still need to.",
+      "Request cancelled. It does not count toward your session switch allowance, so you can request again if you still need to.",
   };
 }
 
@@ -422,7 +449,7 @@ export async function resolveCohortSwitchRequest(
 ): Promise<CalendarActionResult> {
   return {
     error:
-      "Alternate cohort requests are reviewed by Kidda admins, not tutors. Ask an admin to resolve this in Admin → Cohort change requests.",
+      "Session switch requests are reviewed by Kidda admins, not tutors. Ask an admin to resolve this in Admin → Session switch requests.",
   };
 }
 
@@ -439,7 +466,7 @@ export async function setSessionReschedulingAllowed(
 
   if (sessionError || !session) return { error: "Lesson not found." };
   if (session.cohort_id) {
-    return { error: "Group lessons can't be rescheduled — students can only request a different cohort." };
+    return { error: "Group lessons can't be rescheduled — students can request a session switch instead." };
   }
 
   const { error } = await supabase

@@ -129,7 +129,7 @@ const navItems: NavItem[] = [
   },
   {
     href: "/admin/cohort-switch-requests",
-    label: "Cohorts",
+    label: "Session switch",
     match: (pathname) => pathname.startsWith("/admin/cohort-switch-requests"),
   },
   {

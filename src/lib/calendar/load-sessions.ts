@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCohortSwitchEligibility } from "@/lib/calendar/cohort-switch-policy";
+import {
+  getCohortSwitchEligibility,
+  getSessionSwitchCapError,
+} from "@/lib/calendar/cohort-switch-policy";
 import { getRescheduleEligibility } from "@/lib/calendar/reschedule-policy";
 import {
   appliesBeginnersRescheduleLimit,
@@ -119,10 +122,32 @@ export async function loadStudentUpcomingSessions(
 
   const actor = await resolveCourseActor(supabase, studentId);
   const filter = actorFilter(actor);
-  const { data: enrollments, error: enrollmentsError } = await supabase
-    .from("course_enrollments")
-    .select("tutor_id, cohort_id, delivery_mode, course_id")
-    .eq(filter.column, filter.value);
+  type EnrollmentLoadRow = {
+    tutor_id: string | null;
+    cohort_id: string | null;
+    delivery_mode: string | null;
+    course_id: string;
+    session_switches_used?: number | null;
+  };
+  let enrollments: EnrollmentLoadRow[] | null = null;
+  let enrollmentsError: { message?: string } | null = null;
+  {
+    const first = await supabase
+      .from("course_enrollments")
+      .select("tutor_id, cohort_id, delivery_mode, course_id, session_switches_used")
+      .eq(filter.column, filter.value);
+    enrollments = first.data as EnrollmentLoadRow[] | null;
+    enrollmentsError = first.error;
+  }
+
+  if (enrollmentsError && enrollmentsError.message?.includes("session_switches_used")) {
+    const fallback = await supabase
+      .from("course_enrollments")
+      .select("tutor_id, cohort_id, delivery_mode, course_id")
+      .eq(filter.column, filter.value);
+    enrollments = fallback.data as EnrollmentLoadRow[] | null;
+    enrollmentsError = fallback.error;
+  }
 
   if (enrollmentsError) {
     if (isCalendarSchemaMissingError(enrollmentsError)) {
@@ -132,7 +157,11 @@ export async function loadStudentUpcomingSessions(
   }
 
   const tutorIds = [
-    ...new Set((enrollments ?? []).map((enrollment) => enrollment.tutor_id).filter(Boolean)),
+    ...new Set(
+      (enrollments ?? [])
+        .map((enrollment) => enrollment.tutor_id)
+        .filter((id): id is string => Boolean(id))
+    ),
   ];
 
   if (tutorIds.length === 0) {
@@ -170,12 +199,26 @@ export async function loadStudentUpcomingSessions(
     exclusionsByTutor
   );
 
-  const enrollmentContext: StudentEnrollmentContext[] = (enrollments ?? []).map((enrollment) => ({
-    tutorId: enrollment.tutor_id,
-    cohortId: enrollment.cohort_id,
-    deliveryMode: enrollment.delivery_mode as StudentEnrollmentContext["deliveryMode"],
-    courseId: enrollment.course_id as string,
-  }));
+  const enrollmentContext: StudentEnrollmentContext[] = (enrollments ?? [])
+    .filter((enrollment): enrollment is EnrollmentLoadRow & { tutor_id: string } =>
+      Boolean(enrollment.tutor_id)
+    )
+    .map((enrollment) => ({
+      tutorId: enrollment.tutor_id,
+      cohortId: enrollment.cohort_id,
+      deliveryMode: enrollment.delivery_mode as StudentEnrollmentContext["deliveryMode"],
+      courseId: enrollment.course_id as string,
+    }));
+  const sessionSwitchesUsedByCourseId = new Map<string, number>();
+  for (const enrollment of enrollments ?? []) {
+    const courseId = enrollment.course_id as string | null;
+    if (!courseId) continue;
+    const used = Number(enrollment.session_switches_used ?? 0);
+    sessionSwitchesUsedByCourseId.set(
+      courseId,
+      Math.max(sessionSwitchesUsedByCourseId.get(courseId) ?? 0, Number.isFinite(used) ? used : 0)
+    );
+  }
 
   const normalizedEmail = studentEmail?.trim().toLowerCase() ?? "";
   const visible = withoutExcluded.filter((session) =>
@@ -339,11 +382,24 @@ export async function loadStudentUpcomingSessions(
       });
       const cohortSwitchRequest = cohortSwitchBySession.get(session.id) ?? null;
       const alternateCohorts = alternateSessionBySourceId.get(session.id) ?? [];
+      const pendingForCourse = session.course_id
+        ? rawCohortSwitchRequests.filter((row) => {
+            if (row.status !== "pending") return false;
+            const fromSession = labelled.find((s) => s.id === row.session_id);
+            return fromSession?.course_id === session.course_id;
+          }).length
+        : 0;
+      const usedForCourse = session.course_id
+        ? (sessionSwitchesUsedByCourseId.get(session.course_id) ?? 0)
+        : 0;
+      const sessionSwitchCapReason = session.cohort_id
+        ? getSessionSwitchCapError(usedForCourse, pendingForCourse)
+        : null;
       const cohortSwitchEligibility = getCohortSwitchEligibility(
         session,
         cohortSwitchRequest,
         alternateCohorts.length,
-        { rescheduleLimitLockedReason }
+        { sessionSwitchCapReason }
       );
 
       return {

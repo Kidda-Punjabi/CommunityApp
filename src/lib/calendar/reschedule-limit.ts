@@ -113,26 +113,6 @@ async function countRescheduleRequestsForCourse(
   return data?.length ?? 0;
 }
 
-async function countCohortSwitchRequestsForCourse(
-  supabase: SupabaseClient,
-  studentId: string,
-  courseId: string
-): Promise<number> {
-  // Disambiguate: cohort_switch_requests has both session_id and to_session_id FKs.
-  const { data, error } = await supabase
-    .from("cohort_switch_requests")
-    .select("id, tutor_scheduled_sessions!session_id!inner(course_id)")
-    .eq("student_id", studentId)
-    .in("status", [...COUNTABLE_STATUSES])
-    .eq("tutor_scheduled_sessions.course_id", courseId);
-
-  if (error) {
-    console.error("countCohortSwitchRequestsForCourse:", error.message || error);
-    return 0;
-  }
-  return data?.length ?? 0;
-}
-
 export async function loadBeginnersRescheduleLimitStatus(
   supabase: SupabaseClient,
   studentId: string
@@ -148,7 +128,7 @@ export async function loadBeginnersRescheduleLimitStatus(
     return buildBeginnersRescheduleLimitStatus(null, 0, 0, 0, 0);
   }
 
-  const [enrollmentResult, rescheduleCount, cohortSwitchCount] = await Promise.all([
+  const [enrollmentResult, rescheduleCount] = await Promise.all([
     supabase
       .from("course_enrollments")
       .select("extra_reschedule_allowance, delivery_mode")
@@ -156,7 +136,6 @@ export async function loadBeginnersRescheduleLimitStatus(
       .eq("course_id", beginnersCourse.id)
       .maybeSingle(),
     countRescheduleRequestsForCourse(supabase, studentId, beginnersCourse.id),
-    countCohortSwitchRequestsForCourse(supabase, studentId, beginnersCourse.id),
   ]);
 
   let extraAllowance = 0;
@@ -183,7 +162,7 @@ export async function loadBeginnersRescheduleLimitStatus(
   return buildBeginnersRescheduleLimitStatus(
     beginnersCourse.id,
     rescheduleCount,
-    cohortSwitchCount,
+    0,
     extraOneToOne,
     extraGroup
   );

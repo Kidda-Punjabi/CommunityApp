@@ -97,8 +97,8 @@ export function AdminHomeContent() {
         <HubCard className="divide-y divide-zinc-100 px-6 py-0">
           <AdminNavListRow
             href="/admin/cohort-switch-requests"
-            title="Cohort change requests"
-            description="Approve or decline student requests to join an alternate group session"
+            title="Session switch requests"
+            description="Approve or decline one-off class swaps into another cohort"
           />
           <AdminNavListRow
             href="/admin/sales-calls"

@@ -60,6 +60,8 @@ export type CohortSwitchRequestRow = {
   tutor_response: string | null;
   resolved_at: string | null;
   created_at: string;
+  sync_error?: string | null;
+  calendar_synced_at?: string | null;
   /** Enriched for student UI when to_session_id is set. */
   toSessionStartsAt?: string | null;
   toSessionEndsAt?: string | null;

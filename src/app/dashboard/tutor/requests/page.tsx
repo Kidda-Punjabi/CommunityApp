@@ -37,7 +37,7 @@ export default async function TutorRequestsPage() {
     <div className={ui.page}>
       <TutorPageHeader
         title="Student requests"
-        subtitle="Review reschedule requests and cover assignments. Cohort change requests are handled by admins."
+        subtitle="Review reschedule requests and cover assignments. Session switch requests are handled by admins."
       />
 
       {loadError ? (

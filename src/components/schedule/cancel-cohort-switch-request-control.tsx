@@ -48,17 +48,17 @@ export function CancelCohortSwitchRequestControl({
   return (
     <div className={cn("rounded-2xl bg-violet-50 px-3 py-2 text-sm text-violet-900", className)}>
       <p>
-        Alternate cohort request pending
+        Request pending admin approval.
         {requestedLabel ? (
           <>
             {" "}
-            for <span className="font-semibold">{requestedLabel}</span>
+            Requested: <span className="font-semibold">{requestedLabel}</span>
           </>
         ) : null}
-        {compact ? "." : " — the Kidda team will respond soon."}
+        {compact ? "" : " Your usual class stays yours until this is approved."}
       </p>
       <p className={cn("text-xs text-violet-800/80", compact ? "mt-1" : "mt-1.5")}>
-        Cancel before it&apos;s approved and it won&apos;t count toward your alternate cohort
+        Cancel before it&apos;s approved and it won&apos;t count toward your session switch
         allowance.
       </p>
       <button

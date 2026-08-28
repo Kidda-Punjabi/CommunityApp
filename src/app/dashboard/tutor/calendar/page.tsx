@@ -113,7 +113,7 @@ export default async function TutorCalendarPage({ searchParams }: TutorCalendarP
             {pendingRequests.total} student request{pendingRequests.total === 1 ? "" : "s"} waiting
           </span>
           {" — "}
-          Review reschedules and alternate cohort requests →
+          Review reschedules. Session switch requests are handled by admins.
         </Link>
       ) : null}
 

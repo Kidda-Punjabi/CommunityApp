@@ -1,10 +1,17 @@
 export const RESCHEDULE_CUTOFF_MS = 24 * 60 * 60 * 1000;
 
-/** Group lessons: alternate cohort requests within this window show a short-notice warning. */
+/** Group lessons: session switch requests within this window show a short-notice warning. */
 export const COHORT_SWITCH_CUTOFF_MS = 3 * 24 * 60 * 60 * 1000;
 
 export const NO_MATCHING_ALTERNATE_SESSION_COPY =
-  "No matching alternate session available for this week";
+  "No matching class is running in another cohort around this date.";
+
+/** How far either side of the student's own class to search for a one-off session switch. */
+export const SESSION_SWITCH_WINDOW_DAYS = 6;
+
+export const SESSION_SWITCH_LIMIT = 2;
+
+export const KIDDA_CLASS_TITLE_NEEDLE = "kidda class";
 
 export const GOOGLE_CALENDAR_SCOPES = [
   /** Read/write events (required for adding cohort students as attendees). Tutors must reconnect after this scope change. */

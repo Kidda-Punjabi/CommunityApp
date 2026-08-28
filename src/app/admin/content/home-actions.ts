@@ -77,13 +77,13 @@ export async function fetchAdminHomeAttention(): Promise<{
   if (cohortSwitchPending.count > 0) {
     const label =
       cohortSwitchPending.count === 1
-        ? "1 cohort change request waiting for review"
-        : `${cohortSwitchPending.count} cohort change requests waiting for review`;
+        ? "1 session switch request waiting for review"
+        : `${cohortSwitchPending.count} session switch requests waiting for review`;
     items.push({
       id: "cohort-switch-pending",
       kind: "cohort_switch_pending",
       title: label,
-      detail: "Approve or decline alternate group session requests",
+      detail: "Approve or decline one-off class swaps into another cohort",
       href: "/admin/cohort-switch-requests",
       urgent: true,
     });

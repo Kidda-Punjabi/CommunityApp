@@ -30,6 +30,8 @@ export type AdminCohortSwitchRequestRow = {
   toSessionWhen: string | null;
   fromTutorName: string | null;
   toTutorName: string | null;
+  syncError: string | null;
+  calendarSyncedAt: string | null;
 };
 
 export async function loadAdminCohortSwitchRequests(
@@ -39,7 +41,7 @@ export async function loadAdminCohortSwitchRequests(
     const { data, error } = await supabase
       .from("cohort_switch_requests")
       .select(
-        "id, status, message, created_at, tutor_response, resolved_at, student_id, session_id, from_cohort_id, to_cohort_id, to_session_id, tutor_scheduled_sessions!session_id(id, title, starts_at, ends_at, tutor_id)"
+        "id, status, message, created_at, tutor_response, resolved_at, student_id, session_id, from_cohort_id, to_cohort_id, to_session_id, sync_error, calendar_synced_at, tutor_scheduled_sessions!session_id(id, title, starts_at, ends_at, tutor_id)"
       )
       .order("created_at", { ascending: false })
       .limit(200);
@@ -179,6 +181,8 @@ export async function loadAdminCohortSwitchRequests(
             : null,
         fromTutorName: getDisplayName(fromTutor ?? null),
         toTutorName: getDisplayName(toTutor ?? null),
+        syncError: (row.sync_error as string | null) ?? null,
+        calendarSyncedAt: (row.calendar_synced_at as string | null) ?? null,
       });
     }
 
@@ -193,7 +197,7 @@ export async function loadAdminCohortSwitchRequests(
   } catch (e) {
     return {
       rows: [],
-      error: e instanceof Error ? e.message : "Failed to load cohort change requests.",
+      error: e instanceof Error ? e.message : "Failed to load session switch requests.",
     };
   }
 }
@@ -212,7 +216,7 @@ export async function countPendingCohortSwitchRequests(
   } catch (e) {
     return {
       count: 0,
-      error: e instanceof Error ? e.message : "Failed to count cohort change requests.",
+      error: e instanceof Error ? e.message : "Failed to count session switch requests.",
     };
   }
 }

@@ -98,7 +98,7 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
           ) : null}
           {cohortSwitchLocked ? (
             <p className="mt-2 text-xs font-medium text-amber-700">
-              Starts in {Math.max(1, Math.round(hoursLeft))}h — alternate cohort requests are
+              Starts in {Math.max(1, Math.round(hoursLeft))}h — session switch requests are
               closed (need 3 days notice)
             </p>
           ) : null}
@@ -145,7 +145,16 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
         </p>
       ) : null}
 
-      {session.cohortSwitchRequest?.status === "pending" ? (
+      {session.cohortSwitchRequest?.status === "approved" &&
+      session.cohortSwitchRequest.calendar_synced_at ? (
+        <p className="mt-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Session switch confirmed
+          {session.cohortSwitchRequest.toCohortName
+            ? ` — you're in ${session.cohortSwitchRequest.toCohortName} for this class.`
+            : "."}{" "}
+          Check your calendar invite.
+        </p>
+      ) : session.cohortSwitchRequest?.status === "pending" ? (
         <CancelCohortSwitchRequestControl
           request={session.cohortSwitchRequest}
           className="mt-3"

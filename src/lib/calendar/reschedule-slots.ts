@@ -71,7 +71,7 @@ export async function loadRescheduleSlotsForStudentSession(
 
   if (error) return { slots: [], error: error.message };
   if (!session) return { slots: [], error: "Lesson not found." };
-  if (session.cohort_id) return { slots: [], error: "Group lessons use alternate cohort requests." };
+  if (session.cohort_id) return { slots: [], error: "Group lessons use session switch requests." };
   if (session.student_id !== studentId) return { slots: [], error: "This lesson is not on your schedule." };
   if (session.status !== "scheduled") {
     return { slots: [], error: "This lesson is no longer scheduled." };

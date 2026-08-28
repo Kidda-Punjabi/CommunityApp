@@ -356,6 +356,7 @@ function getScheduleDisplay(
 
   if (
     switchRequest?.status === "approved" &&
+    switchRequest.calendar_synced_at &&
     switchRequest.toSessionStartsAt &&
     switchRequest.toSessionEndsAt
   ) {
@@ -364,8 +365,8 @@ function getScheduleDisplay(
       startsAt: switchRequest.toSessionStartsAt,
       endsAt: switchRequest.toSessionEndsAt,
       cohortOrTutorLine: switchRequest.toCohortName
-        ? `${switchRequest.toCohortName} (alternate cohort)`
-        : `Alternate session with ${scheduleSession.tutorName}`,
+        ? `${switchRequest.toCohortName} (this week only)`
+        : `Switched session with ${scheduleSession.tutorName}`,
     };
   }
 
@@ -556,8 +557,15 @@ function LessonScheduleBlock({
         />
       ) : null}
 
-      {scheduleSession.cohortSwitchRequest?.status === "approved" ||
-      scheduleSession.rescheduleRequest?.status === "approved" ? (
+      {scheduleSession.cohortSwitchRequest?.status === "approved" &&
+      scheduleSession.cohortSwitchRequest.calendar_synced_at ? (
+        <p className="mt-3 text-teal-900">
+          Session switch confirmed
+          {scheduleSession.cohortSwitchRequest.toCohortName
+            ? ` — you're in ${scheduleSession.cohortSwitchRequest.toCohortName} for this class.`
+            : "."}
+        </p>
+      ) : scheduleSession.rescheduleRequest?.status === "approved" ? (
         <p className="mt-3 text-teal-900">This lesson has been rescheduled.</p>
       ) : null}
     </div>
