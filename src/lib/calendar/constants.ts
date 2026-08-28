@@ -4,10 +4,14 @@ export const RESCHEDULE_CUTOFF_MS = 24 * 60 * 60 * 1000;
 export const COHORT_SWITCH_CUTOFF_MS = 3 * 24 * 60 * 60 * 1000;
 
 export const NO_MATCHING_ALTERNATE_SESSION_COPY =
-  "No matching class is running in another cohort around this date.";
+  "No equivalent session available in this window.";
 
-/** How far either side of the student's own class to search for a one-off session switch. */
-export const SESSION_SWITCH_WINDOW_DAYS = 6;
+/**
+ * Outer sanity cap around the student's own class. Sequence is bounded by their
+ * previous/next Kidda Class; this cap still applies when one side has no neighbour.
+ * Default assumption: 14 days — confirm if a different outer cap (or none) is wanted.
+ */
+export const SESSION_SWITCH_OUTER_CAP_DAYS = 14;
 
 export const SESSION_SWITCH_LIMIT = 2;
 

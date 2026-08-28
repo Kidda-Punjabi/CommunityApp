@@ -2,6 +2,7 @@
 
 import { CancelCohortSwitchRequestControl } from "@/components/schedule/cancel-cohort-switch-request-control";
 import { CohortSwitchRequestForm } from "@/components/schedule/cohort-switch-request-form";
+import { SessionSwitchEmptyState } from "@/components/schedule/session-switch-empty-state";
 import { NO_MATCHING_ALTERNATE_SESSION_COPY } from "@/lib/calendar/constants";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { cn, ui } from "@/lib/ui/styles";
@@ -77,6 +78,10 @@ export function GroupCohortRescheduleControl({
         <CohortSwitchRequestForm session={session} />
       </div>
     );
+  }
+
+  if (session?.noEquivalentSession) {
+    return <SessionSwitchEmptyState session={session} className={className} />;
   }
 
   const reason = session?.cohortSwitchLockedReason ?? NO_ALTERNATIVE_SESSIONS_COPY;

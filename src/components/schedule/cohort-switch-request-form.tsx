@@ -10,7 +10,7 @@ import {
   COHORT_SWITCH_SHORT_NOTICE_WARNING,
   COHORT_SWITCH_WARNING,
 } from "@/lib/calendar/cohort-switch-policy";
-import { SESSION_SWITCH_LIMIT } from "@/lib/calendar/constants";
+import { NO_MATCHING_ALTERNATE_SESSION_COPY, SESSION_SWITCH_LIMIT } from "@/lib/calendar/constants";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { ui } from "@/lib/ui/styles";
 
@@ -62,9 +62,11 @@ export function CohortSwitchRequestForm({
           Which class would you like to attend this week instead?
         </label>
         {session.alternateCohorts.length === 0 ? (
-          <p className="mt-1.5 text-sm text-zinc-500">
-            No other cohort is running a matching class around this date.
-          </p>
+          <div className="mt-1.5 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+            <p className="text-sm font-medium text-zinc-900">
+              {NO_MATCHING_ALTERNATE_SESSION_COPY}
+            </p>
+          </div>
         ) : (
           <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
             {session.alternateCohorts.map((cohort) => {

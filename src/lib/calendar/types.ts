@@ -95,6 +95,8 @@ export type StudentScheduledSession = ScheduledSessionRow & {
   cohortSwitchLockedReason: string | null;
   /** Within COHORT_SWITCH_CUTOFF_MS of start — request allowed with a warning. */
   isShortNoticeCohortSwitch: boolean;
+  /** True when the session is switchable in principle but no same-week class sits in sequence. */
+  noEquivalentSession: boolean;
   alternateCohorts: AlternateCohortOption[];
 };
 

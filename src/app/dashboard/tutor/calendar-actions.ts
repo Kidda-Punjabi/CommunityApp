@@ -9,7 +9,11 @@ import {
   getBeginnersRescheduleLockedReason,
   loadBeginnersRescheduleLimitStatus,
 } from "@/lib/calendar/reschedule-limit";
-import { loadAlternateCohortSessionsForSource } from "@/lib/calendar/load-alternate-cohort-sessions";
+import {
+  loadAlternateCohortSessionsForSource,
+  loadOwnCohortNeighborBounds,
+} from "@/lib/calendar/load-alternate-cohort-sessions";
+import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -291,10 +295,24 @@ export async function requestCohortSwitch(
     return { error: "Pick a class from a different cohort." };
   }
 
-  if (!isSessionSwitchCandidate(session, targetSession)) {
+  let sourceForMatch = session;
+  if (session.week_number == null && session.cohort_id) {
+    const [labelled] = await attachLessonLabelsToSessions(adminClient, [session]);
+    if (labelled) {
+      sourceForMatch = { ...session, lessonNumber: labelled.lessonNumber };
+    }
+  }
+
+  const neighborBySourceId = await loadOwnCohortNeighborBounds(adminClient, [sourceForMatch]);
+  const neighbors = neighborBySourceId.get(sourceForMatch.id) ?? {
+    previousStartsAt: null,
+    nextStartsAt: null,
+  };
+
+  if (!isSessionSwitchCandidate(sourceForMatch, targetSession, neighbors)) {
     return {
       error:
-        "That class is no longer a valid switch — it may have been cancelled, started, or is outside the date window around your class.",
+        "That class is no longer a valid switch — it may have been cancelled, started, is a different week of material, or would put you out of sequence with your own class.",
     };
   }
 
@@ -331,11 +349,11 @@ export async function requestCohortSwitch(
     return { error: "You already have a session switch request for this class." };
   }
 
-  const alternateOptions = await loadAlternateCohortSessionsForSource(supabase, session);
+  const alternateOptions = await loadAlternateCohortSessionsForSource(supabase, sourceForMatch);
   if (!alternateOptions.some((option) => option.id === targetSession.id)) {
     return {
       error:
-        "That class is no longer a valid switch — it may have been cancelled, started, or is outside the date window around your class.",
+        "That class is no longer a valid switch — it may have been cancelled, started, is a different week of material, or would put you out of sequence with your own class.",
     };
   }
 

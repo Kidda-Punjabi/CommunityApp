@@ -3,8 +3,15 @@ import "server-only";
 import {
   isActiveCohortSwitchStatus,
   isSessionSwitchCandidate,
+  resolveCohortSwitchWeekNumber,
+  resolveOwnCohortNeighborBounds,
+  type SessionSwitchNeighborBounds,
 } from "@/lib/calendar/cohort-switch-candidates";
-import { KIDDA_CLASS_TITLE_NEEDLE, NO_MATCHING_ALTERNATE_SESSION_COPY, SESSION_SWITCH_WINDOW_DAYS } from "@/lib/calendar/constants";
+import {
+  KIDDA_CLASS_TITLE_NEEDLE,
+  NO_MATCHING_ALTERNATE_SESSION_COPY,
+  SESSION_SWITCH_OUTER_CAP_DAYS,
+} from "@/lib/calendar/constants";
 import type { AlternateCohortOption, ScheduledSessionRow } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -14,8 +21,8 @@ export const NO_ALTERNATIVE_SESSIONS_REASON = NO_MATCHING_ALTERNATE_SESSION_COPY
 
 type SourceSession = Pick<
   ScheduledSessionRow,
-  "id" | "course_id" | "tutor_id" | "cohort_id" | "starts_at"
->;
+  "id" | "course_id" | "tutor_id" | "cohort_id" | "starts_at" | "week_number"
+> & { lessonNumber?: number | null };
 
 type CohortMeta = {
   id: string;
@@ -26,9 +33,14 @@ type CohortMeta = {
   status: string | null;
 };
 
-function windowBoundsIso(sources: SourceSession[]): { minIso: string; maxIso: string } | null {
+type NeighborQueryRow = Pick<
+  ScheduledSessionRow,
+  "id" | "course_id" | "cohort_id" | "week_number" | "starts_at" | "title"
+>;
+
+function outerCapBoundsIso(sources: SourceSession[]): { minIso: string; maxIso: string } | null {
   if (sources.length === 0) return null;
-  const dayMs = SESSION_SWITCH_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const dayMs = SESSION_SWITCH_OUTER_CAP_DAYS * 24 * 60 * 60 * 1000;
   let minMs = Number.POSITIVE_INFINITY;
   let maxMs = Number.NEGATIVE_INFINITY;
   for (const source of sources) {
@@ -41,10 +53,57 @@ function windowBoundsIso(sources: SourceSession[]): { minIso: string; maxIso: st
   return { minIso: new Date(minMs).toISOString(), maxIso: new Date(maxMs).toISOString() };
 }
 
+export async function loadOwnCohortNeighborBounds(
+  admin: SupabaseClient,
+  sources: SourceSession[]
+): Promise<Map<string, SessionSwitchNeighborBounds>> {
+  const result = new Map<string, SessionSwitchNeighborBounds>();
+  const empty: SessionSwitchNeighborBounds = { previousStartsAt: null, nextStartsAt: null };
+  for (const source of sources) {
+    result.set(source.id, empty);
+  }
+
+  const groupSources = sources.filter((session) => Boolean(session.cohort_id) && Boolean(session.course_id));
+  if (groupSources.length === 0) return result;
+
+  const courseIds = [...new Set(groupSources.map((session) => session.course_id as string))];
+  const cohortIds = [...new Set(groupSources.map((session) => session.cohort_id as string))];
+  const neighborWeeks = [
+    ...new Set(
+      groupSources.flatMap((session) => {
+        const week = resolveCohortSwitchWeekNumber(session);
+        if (week == null) return [];
+        return [week - 1, week + 1];
+      })
+    ),
+  ];
+  if (neighborWeeks.length === 0) return result;
+
+  const { data: neighborRows, error } = await admin
+    .from("tutor_scheduled_sessions")
+    .select("id, course_id, cohort_id, week_number, starts_at, title")
+    .in("course_id", courseIds)
+    .in("cohort_id", cohortIds)
+    .ilike("title", `%${KIDDA_CLASS_TITLE_NEEDLE}%`)
+    .in("week_number", neighborWeeks);
+
+  if (error) {
+    console.error("loadOwnCohortNeighborBounds:", error.message);
+    return result;
+  }
+
+  const rows = (neighborRows ?? []) as NeighborQueryRow[];
+  for (const source of groupSources) {
+    result.set(source.id, resolveOwnCohortNeighborBounds(source, rows));
+  }
+  return result;
+}
+
 /**
  * Load other cohorts' Kidda Class sessions a student can switch into for one week.
  * Uses the service role because students cannot RLS-read other cohorts' sessions.
- * Matches on date proximity to the source session (not week_number).
+ * Requires the same week_number, a start strictly between the student's own previous
+ * and next class (when those exist), and the ±14 day outer cap around source starts_at.
  */
 export async function loadAlternateCohortSessions(
   _supabase: SupabaseClient,
@@ -69,29 +128,41 @@ export async function loadAlternateCohortSessions(
   const nowMs = options?.nowMs ?? Date.now();
   const nowIso = new Date(nowMs).toISOString();
   const courseIds = [...new Set(groupSources.map((session) => session.course_id as string))];
-  const bounds = windowBoundsIso(groupSources);
-  if (!bounds) return result;
+  const weekNumbers = [
+    ...new Set(
+      groupSources
+        .map((session) => resolveCohortSwitchWeekNumber(session))
+        .filter((week): week is number => week != null)
+    ),
+  ];
+  const bounds = outerCapBoundsIso(groupSources);
+  if (!bounds || weekNumbers.length === 0) return result;
 
   const rangeStart = bounds.minIso < nowIso ? nowIso : bounds.minIso;
 
-  const [{ data: cohortRows, error: cohortError }, { data: sessionRows, error: sessionError }] =
-    await Promise.all([
-      admin
-        .from("cohorts")
-        .select("id, name, tutor_id, course_id, active, status")
-        .in("course_id", courseIds)
-        .eq("active", true),
-      admin
-        .from("tutor_scheduled_sessions")
-        .select("*")
-        .in("course_id", courseIds)
-        .not("cohort_id", "is", null)
-        .eq("status", "scheduled")
-        .ilike("title", `%${KIDDA_CLASS_TITLE_NEEDLE}%`)
-        .gte("starts_at", rangeStart)
-        .lte("starts_at", bounds.maxIso)
-        .order("starts_at", { ascending: true }),
-    ]);
+  const [
+    { data: cohortRows, error: cohortError },
+    { data: sessionRows, error: sessionError },
+    neighborBySourceId,
+  ] = await Promise.all([
+    admin
+      .from("cohorts")
+      .select("id, name, tutor_id, course_id, active, status")
+      .in("course_id", courseIds)
+      .eq("active", true),
+    admin
+      .from("tutor_scheduled_sessions")
+      .select("*")
+      .in("course_id", courseIds)
+      .not("cohort_id", "is", null)
+      .eq("status", "scheduled")
+      .ilike("title", `%${KIDDA_CLASS_TITLE_NEEDLE}%`)
+      .in("week_number", weekNumbers)
+      .gte("starts_at", rangeStart)
+      .lte("starts_at", bounds.maxIso)
+      .order("starts_at", { ascending: true }),
+    loadOwnCohortNeighborBounds(admin, groupSources),
+  ]);
 
   if (cohortError) {
     console.error("loadAlternateCohortSessions cohorts:", cohortError.message);
@@ -129,8 +200,12 @@ export async function loadAlternateCohortSessions(
   });
 
   for (const source of groupSources) {
+    const neighbors = neighborBySourceId.get(source.id) ?? {
+      previousStartsAt: null,
+      nextStartsAt: null,
+    };
     const matches = candidates.filter((candidate) =>
-      isSessionSwitchCandidate(source, candidate, { nowMs })
+      isSessionSwitchCandidate(source, candidate, { nowMs, ...neighbors })
     );
     const seenCohorts = new Set<string>();
     const optionsForSource: AlternateCohortOption[] = [];

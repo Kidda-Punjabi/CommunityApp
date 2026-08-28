@@ -74,7 +74,10 @@ async function main() {
         .gte("starts_at", new Date().toISOString());
 
       const matches = (candidates ?? []).filter((candidate) =>
-        isAlternateCohortSwitchSession(source, candidate)
+        isAlternateCohortSwitchSession(source, candidate, {
+          previousStartsAt: null,
+          nextStartsAt: null,
+        })
       );
 
       console.log(`Matching alternate sessions (same week, any tutor): ${matches.length}`);

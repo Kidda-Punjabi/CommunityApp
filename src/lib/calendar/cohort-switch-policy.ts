@@ -6,6 +6,8 @@ export type CohortSwitchEligibility = {
   lockedReason: string | null;
   /** Within COHORT_SWITCH_CUTOFF_MS of start — allowed, but student sees a short-notice warning. */
   isShortNotice?: boolean;
+  /** Same-week equivalent class exists between the student's previous/next class? Distinct from other locks. */
+  noEquivalentSession?: boolean;
 };
 
 export const COHORT_SWITCH_SHORT_NOTICE_WARNING =
@@ -50,13 +52,6 @@ export function getCohortSwitchEligibility(
 
   const isShortNotice = msUntilStart < COHORT_SWITCH_CUTOFF_MS;
 
-  if (alternateCohortCount === 0) {
-    return {
-      canRequest: false,
-      lockedReason: NO_MATCHING_ALTERNATE_SESSION_COPY,
-    };
-  }
-
   if (existingRequest?.status === "pending") {
     return {
       canRequest: false,
@@ -83,6 +78,15 @@ export function getCohortSwitchEligibility(
     };
   }
 
+  if (alternateCohortCount === 0) {
+    return {
+      canRequest: false,
+      lockedReason: NO_MATCHING_ALTERNATE_SESSION_COPY,
+      noEquivalentSession: true,
+      isShortNotice,
+    };
+  }
+
   return { canRequest: true, lockedReason: null, isShortNotice };
 }
 
@@ -90,4 +94,4 @@ export const COHORT_SWITCH_WARNING =
   "This swaps you into another cohort's class for this week only — it is not a permanent cohort move. The Kidda team reviews these requests. Please only ask if you genuinely cannot attend.";
 
 export const GROUP_LESSON_POLICY_NOTE =
-  "Group sessions can't be rescheduled. If you'll miss this class, you can switch into another cohort's equivalent session when one is running around the same date.";
+  "Group sessions can't be rescheduled. If you'll miss this class, you can switch into another cohort's equivalent session (same week of material) when one is running in this window.";
