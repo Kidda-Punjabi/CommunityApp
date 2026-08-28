@@ -2,6 +2,11 @@
 -- Reuses cohort_switch_requests (not a permanent cohort move).
 -- Trigger fires on pending → approved and POSTs to the internal calendar-sync route.
 -- Secret is read from vault.secrets name = internal_session_switch_webhook_secret.
+--
+-- Follow-up production migration `session_switch_enrollment_counter_update`:
+-- enforce_course_enrollment_rules returns early on UPDATE when assignment columns
+-- are unchanged, so session_switches_used can increment without re-checking
+-- cohort_members (needed for counter updates on existing enrollments).
 
 ALTER TABLE public.course_enrollments
   ADD COLUMN IF NOT EXISTS session_switches_used INTEGER NOT NULL DEFAULT 0;
