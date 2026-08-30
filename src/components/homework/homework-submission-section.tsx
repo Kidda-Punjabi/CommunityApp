@@ -157,6 +157,15 @@ function HomeworkRecorderBody({
         setActionSuccess(result.success ?? "Homework submitted!");
         recorder.discardRecording();
         router.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (/body exceeded|413|too large/i.test(message)) {
+          setActionError(
+            "That recording is too large to upload. Please try a shorter clip."
+          );
+        } else {
+          setActionError(message.trim() || "Failed to submit homework. Please try again.");
+        }
       } finally {
         submitLockRef.current = false;
       }

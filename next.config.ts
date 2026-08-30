@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
       dynamic: 30,
       static: 180,
     },
+    serverActions: {
+      // Default is 1MB. Homework voice notes (and student-discount evidence)
+      // are sent as Server Action FormData and were 413ing before Supabase.
+      bodySizeLimit: "10mb",
+    },
   },
 };
 
