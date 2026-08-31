@@ -132,6 +132,17 @@ export function PackageSessionLogSection({
             onChange={(e) => setLessonDate(e.target.value)}
             className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
           />
+          {entries.some((entry) => entry.lessonDate === lessonDate) ? (
+            <p className="text-xs text-emerald-800">
+              Already logged for this session ✓ — saving will update the existing entry instead of
+              creating a duplicate Notion page.
+            </p>
+          ) : (
+            <p className="text-xs text-zinc-500">
+              If this date already exists in Notion, the existing page is updated rather than
+              duplicated.
+            </p>
+          )}
           <input
             value={recordingUrl}
             onChange={(e) => setRecordingUrl(e.target.value)}
@@ -173,7 +184,11 @@ export function PackageSessionLogSection({
               });
             }}
           >
-            Create in app + Notion
+            {pending
+              ? "Saving…"
+              : entries.some((entry) => entry.lessonDate === lessonDate)
+                ? "Update existing log"
+                : "Create in app + Notion"}
           </button>
         </div>
       ) : null}

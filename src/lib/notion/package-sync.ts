@@ -153,6 +153,91 @@ export function tutorIdFromNotionPackagePage(
   return mapped.tutorId;
 }
 
+/**
+ * When a late notion_tutor_map row is added, incremental package pull will not
+ * revisit unedited Notion pages — so tutor_id can stay NULL. Re-read those pages
+ * and fill tutor_id when the map now resolves.
+ */
+export async function backfillUnmappedTutorsFromNotionMap(
+  supabase: SupabaseClient
+): Promise<{ updatedInstances: number; updatedCohorts: number; errors: string[] }> {
+  const { byNotionUserId } = await loadNotionTutorMap(supabase);
+  const errors: string[] = [];
+  let updatedInstances = 0;
+  let updatedCohorts = 0;
+
+  const [{ data: instances, error: instanceError }, { data: cohorts, error: cohortError }] =
+    await Promise.all([
+      supabase
+        .from("package_instances")
+        .select("id, notion_page_id, tutor_id_source")
+        .is("tutor_id", null)
+        .not("notion_page_id", "is", null),
+      supabase
+        .from("cohorts")
+        .select("id, notion_page_id, tutor_id_source")
+        .is("tutor_id", null)
+        .not("notion_page_id", "is", null),
+    ]);
+
+  if (instanceError) errors.push(`package_instances: ${instanceError.message}`);
+  if (cohortError) errors.push(`cohorts: ${cohortError.message}`);
+
+  const rows = [
+    ...(instances ?? []).map((row) => ({
+      kind: "package_instances" as const,
+      id: row.id as string,
+      notionPageId: row.notion_page_id as string | null,
+      tutorIdSource: row.tutor_id_source as string | null,
+    })),
+    ...(cohorts ?? []).map((row) => ({
+      kind: "cohorts" as const,
+      id: row.id as string,
+      notionPageId: row.notion_page_id as string | null,
+      tutorIdSource: row.tutor_id_source as string | null,
+    })),
+  ].filter((row) => row.notionPageId && !isManualTutorSource(row.tutorIdSource));
+
+  for (const row of rows) {
+    try {
+      const pageRaw = await notionJson<{
+        id: string;
+        last_edited_time: string;
+        properties: Record<string, unknown>;
+      }>(`/pages/${row.notionPageId}`);
+      const page = parseNotionPackagePage(pageRaw);
+      const mapped = tutorIdFromNotionPackagePage(page, byNotionUserId);
+      if (!mapped) continue;
+
+      const { error } = await supabase
+        .from(row.kind)
+        .update({ tutor_id: mapped, tutor_id_source: "notion" })
+        .eq("id", row.id)
+        .is("tutor_id", null);
+      if (error) {
+        errors.push(`${row.kind}:${row.id}: ${error.message}`);
+        continue;
+      }
+      if (row.kind === "package_instances") updatedInstances += 1;
+      else updatedCohorts += 1;
+    } catch (error) {
+      errors.push(
+        `${row.kind}:${row.id}: ${error instanceof Error ? error.message : "Notion fetch failed"}`
+      );
+    }
+  }
+
+  if (updatedInstances + updatedCohorts > 0 || errors.length > 0) {
+    console.info("[notion package sync] tutor map backfill", {
+      updatedInstances,
+      updatedCohorts,
+      errors: errors.slice(0, 5),
+    });
+  }
+
+  return { updatedInstances, updatedCohorts, errors };
+}
+
 export function cohortPullPatchFromNotionPage(
   page: ParsedNotionPackagePage,
   byNotionUserId: Map<string, { tutorId: string; notionUserName: string | null }>
@@ -490,6 +575,9 @@ export async function pullPackageInstancesFromNotion(
   let skipped = 0;
   const errors: string[] = [];
   let maxEdited = cursor;
+
+  const tutorBackfill = await backfillUnmappedTutorsFromNotionMap(supabase);
+  errors.push(...tutorBackfill.errors.map((message) => `tutor backfill: ${message}`));
 
   const { byNotionUserId } = await loadNotionTutorMap(supabase);
   const catalog = await loadPackageCatalog(supabase);

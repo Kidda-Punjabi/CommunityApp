@@ -291,8 +291,8 @@ export function AdminLessonLogSection() {
             Log a lesson from the app ({`source = 'app'`})
           </p>
           <p className="text-xs text-zinc-600">
-            Creates a Notion Lessons Log page with the correct New Package DB relation, then stores
-            the Notion page id on the Supabase row.
+            Writes to the Notion Lessons Log. If this package + date already exists, the existing
+            page is updated instead of creating a duplicate.
           </p>
           <div className="flex flex-wrap gap-2">
             <select
@@ -329,6 +329,15 @@ export function AdminLessonLogSection() {
               <option value="Cancelled">Cancelled</option>
             </select>
           </div>
+          {snapshot?.groups.some(
+            (group) =>
+              group.runId === createDraft.runId &&
+              group.entries.some((entry) => entry.lessonDate === createDraft.lessonDate)
+          ) ? (
+            <p className="text-xs text-emerald-800">
+              Already logged for this session ✓ — saving will update the existing entry.
+            </p>
+          ) : null}
           <input
             value={createDraft.recordingUrl}
             onChange={(e) => setCreateDraft((d) => ({ ...d, recordingUrl: e.target.value }))}

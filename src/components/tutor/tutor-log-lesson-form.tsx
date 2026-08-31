@@ -3,7 +3,7 @@
 import { logCohortLessonAction } from "@/app/dashboard/tutor/log-lesson-actions";
 import { ui } from "@/lib/ui/styles";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 
 export type LogLessonCohortOption = {
   cohortId: string;
@@ -11,8 +11,15 @@ export type LogLessonCohortOption = {
   courseName: string;
 };
 
+export type LogLessonExistingEntry = {
+  cohortId: string;
+  lessonDate: string;
+  status: string | null;
+};
+
 type TutorLogLessonFormProps = {
   cohorts: LogLessonCohortOption[];
+  existingLogs: LogLessonExistingEntry[];
   defaultCohortId?: string | null;
 };
 
@@ -24,12 +31,38 @@ function todayInputValue(): string {
   return `${y}-${m}-${d}`;
 }
 
-export function TutorLogLessonForm({ cohorts, defaultCohortId }: TutorLogLessonFormProps) {
+function formatLogDate(isoDate: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(new Date(`${isoDate}T12:00:00`));
+}
+
+export function TutorLogLessonForm({
+  cohorts,
+  existingLogs,
+  defaultCohortId,
+}: TutorLogLessonFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [cohortId, setCohortId] = useState(defaultCohortId ?? cohorts[0]?.cohortId ?? "");
+  const [lessonDate, setLessonDate] = useState(todayInputValue());
   const submittingRef = useRef(false);
+
+  const logsForCohort = useMemo(
+    () =>
+      existingLogs
+        .filter((entry) => entry.cohortId === cohortId)
+        .slice()
+        .sort((a, b) => b.lessonDate.localeCompare(a.lessonDate)),
+    [existingLogs, cohortId]
+  );
+
+  const alreadyLogged = logsForCohort.find((entry) => entry.lessonDate === lessonDate) ?? null;
+  const recentLogs = logsForCohort.slice(0, 5);
 
   if (cohorts.length === 0) {
     return (
@@ -64,6 +97,10 @@ export function TutorLogLessonForm({ cohorts, defaultCohortId }: TutorLogLessonF
 
   return (
     <form action={handleSubmit} className={`${ui.cardBordered} space-y-4`}>
+      <p className="text-sm text-zinc-500">
+        Logging here writes the Lessons Log in Notion. If this date is already logged (in the app
+        or in Notion), we update that entry instead of creating a second page.
+      </p>
       <div>
         <label htmlFor="cohort_id" className="text-sm font-medium text-zinc-700">
           Cohort
@@ -72,7 +109,8 @@ export function TutorLogLessonForm({ cohorts, defaultCohortId }: TutorLogLessonF
           id="cohort_id"
           name="cohort_id"
           required
-          defaultValue={defaultCohortId ?? cohorts[0]?.cohortId}
+          value={cohortId}
+          onChange={(event) => setCohortId(event.target.value)}
           className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm"
         >
           {cohorts.map((cohort) => (
@@ -92,10 +130,33 @@ export function TutorLogLessonForm({ cohorts, defaultCohortId }: TutorLogLessonF
           name="lesson_date"
           type="date"
           required
-          defaultValue={todayInputValue()}
+          value={lessonDate}
+          onChange={(event) => setLessonDate(event.target.value)}
           className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm"
         />
       </div>
+
+      {alreadyLogged ? (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Already logged for this session
+          {alreadyLogged.status ? ` (${alreadyLogged.status})` : ""} ✓ — submitting will update
+          the existing entry rather than create a duplicate in Notion.
+        </p>
+      ) : null}
+
+      {recentLogs.length > 0 ? (
+        <p className="text-xs text-zinc-500">
+          Recent logs for this cohort:{" "}
+          {recentLogs
+            .map(
+              (entry) =>
+                `${formatLogDate(entry.lessonDate)}${
+                  entry.status ? ` · ${entry.status}` : ""
+                }`
+            )
+            .join("; ")}
+        </p>
+      ) : null}
 
       <div>
         <label htmlFor="recording_url" className="text-sm font-medium text-zinc-700">
@@ -127,7 +188,11 @@ export function TutorLogLessonForm({ cohorts, defaultCohortId }: TutorLogLessonF
       {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
 
       <button type="submit" disabled={pending} className={ui.btnPrimary}>
-        {pending ? "Logging…" : "Log this lesson"}
+        {pending
+          ? "Saving…"
+          : alreadyLogged
+            ? "Update existing log"
+            : "Log this lesson"}
       </button>
     </form>
   );

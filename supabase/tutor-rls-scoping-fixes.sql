@@ -32,6 +32,14 @@ AS $$
       FROM public.course_enrollments ce
       WHERE ce.cohort_id = p_cohort_id
         AND ce.tutor_id = auth.uid()
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM public.tutor_cover_requests cr
+      JOIN public.tutor_scheduled_sessions s ON s.id = cr.session_id
+      WHERE s.cohort_id = p_cohort_id
+        AND cr.assigned_tutor_id = auth.uid()
+        AND cr.status IN ('assigned', 'confirmed')
     );
 $$;
 

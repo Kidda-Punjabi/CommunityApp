@@ -27,13 +27,35 @@ export default async function TutorLogLessonPage({ searchParams }: TutorLogLesso
       ? params.cohortId
       : null;
 
+  const cohortIds = cohorts.map((cohort) => cohort.cohortId);
+  const { data: logRows } =
+    cohortIds.length > 0
+      ? await supabase
+          .from("cohort_lesson_log_entries")
+          .select("cohort_id, lesson_date, status")
+          .in("cohort_id", cohortIds)
+          .order("lesson_date", { ascending: false })
+      : { data: [] };
+
+  const existingLogs = (logRows ?? [])
+    .filter((row) => row.cohort_id && row.lesson_date)
+    .map((row) => ({
+      cohortId: row.cohort_id as string,
+      lessonDate: row.lesson_date as string,
+      status: (row.status as string | null) ?? null,
+    }));
+
   return (
     <div className={ui.page}>
       <TutorPageHeader
         title="Log a lesson"
-        subtitle="Record a group session after it happens. This creates a Lessons Log entry in Notion and updates progress in the app."
+        subtitle="Record a group session after it happens. This updates the Lessons Log in Notion and progress in the app. You do not need to also log the same date in Notion."
       />
-      <TutorLogLessonForm cohorts={cohorts} defaultCohortId={defaultCohortId} />
+      <TutorLogLessonForm
+        cohorts={cohorts}
+        existingLogs={existingLogs}
+        defaultCohortId={defaultCohortId}
+      />
     </div>
   );
 }

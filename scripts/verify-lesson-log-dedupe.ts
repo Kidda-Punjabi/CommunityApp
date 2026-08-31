@@ -46,6 +46,8 @@ async function main() {
   let entryId: string | null = null;
   let notionPageId: string | null = null;
   let lessonId: string | null = null;
+  let adoptEntryId: string | null = null;
+  let adoptPageId: string | null = null;
 
   try {
     console.log("1) First create (empty date, like a new Notion-synced slot)…");
@@ -98,6 +100,9 @@ async function main() {
     }
     if (updated.notionPageId !== notionPageId) {
       throw new Error("FAIL: second write created a different Notion page");
+    }
+    if (!updated.reusedExisting) {
+      throw new Error("FAIL: second write did not report reusedExisting");
     }
     if (rowsAfterUpdate?.[0]?.recording_url !== MARKER) {
       throw new Error("FAIL: recording_url not saved on existing row");
@@ -152,14 +157,66 @@ async function main() {
       .maybeSingle();
     lessonId = (linked?.lesson_id as string | null) ?? null;
 
+    console.log("4) Notion-first page (tutor logged in Notion) is adopted, not duplicated…");
+    const ADOPT_DATE = "2029-06-16";
+    const { data: existingAdopt } = await supabase
+      .from("cohort_lesson_log_entries")
+      .select("id")
+      .eq("cohort_id", COHORT_ID)
+      .eq("lesson_date", ADOPT_DATE);
+    if ((existingAdopt ?? []).length > 0) {
+      throw new Error(`Refusing adopt test: ${existingAdopt?.length} row(s) already exist for ${ADOPT_DATE}`);
+    }
+    const { data: cohort } = await supabase
+      .from("cohorts")
+      .select("name, notion_page_id")
+      .eq("id", COHORT_ID)
+      .maybeSingle();
+    if (!cohort?.notion_page_id) throw new Error("Cohort missing notion_page_id");
+    const { NOTION_LESSONS_LOG_DATA_SOURCE_ID } = await import("../src/lib/notion/client.ts");
+    const createdPage = await notionJson<{ id: string }>("/pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { database_id: NOTION_LESSONS_LOG_DATA_SOURCE_ID },
+        properties: {
+          Lesson: {
+            title: [{ type: "text", text: { content: `${cohort.name}  - ${ADOPT_DATE} ` } }],
+          },
+          "Lesson Date": { date: { start: ADOPT_DATE } },
+          "New Package DB": { relation: [{ id: cohort.notion_page_id }] },
+          Status: { select: { name: "Scheduled" } },
+        },
+      }),
+    });
+    adoptPageId = createdPage.id;
+    const adopted = await createLessonLogInNotionAndSupabase(supabase, {
+      cohortId: COHORT_ID,
+      lessonDate: ADOPT_DATE,
+      notes: "dedupe-verify adopt",
+      status: "Completed",
+    });
+    if (!adopted.ok) throw new Error(`adopt: ${adopted.error}`);
+    adoptEntryId = adopted.entryId;
+    if (adopted.notionPageId !== createdPage.id) {
+      throw new Error("FAIL: Notion-first page was not reused");
+    }
+    if (!adopted.reusedExisting) {
+      throw new Error("FAIL: Notion-first write did not report reusedExisting");
+    }
+    console.log("   adopted entry", adoptEntryId, "page", adopted.notionPageId);
+
     console.log("PASS: existing Notion page updated; no duplicate row/page.");
   } finally {
     if (entryId) {
       await supabase.from("cohort_lesson_log_entries").delete().eq("id", entryId);
     }
-    if (notionPageId) {
+    if (adoptEntryId) {
+      await supabase.from("cohort_lesson_log_entries").delete().eq("id", adoptEntryId);
+    }
+    for (const pageId of [notionPageId, adoptPageId]) {
+      if (!pageId) continue;
       try {
-        await notionJson(`/pages/${notionPageId}`, {
+        await notionJson(`/pages/${pageId}`, {
           method: "PATCH",
           body: JSON.stringify({ archived: true }),
         });

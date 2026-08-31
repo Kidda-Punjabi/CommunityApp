@@ -77,6 +77,7 @@ export async function loadTutorDashboard(
     { data: profiles },
     { data: cohortRows },
     { data: assignedCohortRows },
+    { data: coverCohortIdRows, error: coverCohortIdsError },
     { data: memberRows },
   ] = await Promise.all([
     studentIds.length > 0
@@ -91,6 +92,7 @@ export async function loadTutorDashboard(
       ? supabase.from("cohorts").select("id, name, course_id").in("id", cohortIds)
       : Promise.resolve({ data: [] as { id: string; name: string; course_id: string }[] }),
     supabase.from("cohorts").select("id, name, course_id").eq("tutor_id", tutorId),
+    supabase.rpc("tutor_cover_cohort_ids"),
     cohortIds.length > 0
       ? supabase
           .from("cohort_members")
@@ -100,10 +102,40 @@ export async function loadTutorDashboard(
       : Promise.resolve({ data: [] as { cohort_id: string; user_id: string }[] }),
   ]);
 
+  const coverCohortIds = [
+    ...new Set(
+      (Array.isArray(coverCohortIdRows) ? coverCohortIdRows : [])
+        .map((id) => (typeof id === "string" ? id : null))
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  if (coverCohortIdsError && !coverCohortIdsError.message.includes("tutor_cover_cohort_ids")) {
+    console.error("[tutor-dashboard] tutor_cover_cohort_ids failed", coverCohortIdsError.message);
+  }
+
+  const knownCohortIds = new Set([
+    ...cohortIds,
+    ...(assignedCohortRows ?? []).map((row) => row.id),
+  ]);
+  const missingCoverIds = coverCohortIds.filter((id) => !knownCohortIds.has(id));
+  const { data: coverCohortRows } =
+    missingCoverIds.length > 0
+      ? await supabase
+          .from("cohorts")
+          .select("id, name, course_id, courses(name)")
+          .in("id", missingCoverIds)
+      : { data: [] as Array<{
+          id: string;
+          name: string;
+          course_id: string;
+          courses: { name: string } | { name: string }[] | null;
+        }> };
+
   const allCohortIds = [
     ...new Set([
       ...cohortIds,
       ...(assignedCohortRows ?? []).map((row) => row.id),
+      ...coverCohortIds,
     ]),
   ];
 
@@ -143,9 +175,11 @@ export async function loadTutorDashboard(
   }
 
   const cohortNameById = new Map(
-    [...(cohortRows ?? []), ...(assignedCohortRows ?? [])].map(
-      (c) => [c.id, c.name] as const
-    )
+    [
+      ...(cohortRows ?? []),
+      ...(assignedCohortRows ?? []),
+      ...(coverCohortRows ?? []),
+    ].map((c) => [c.id, c.name] as const)
   );
   const membersByCohort = new Map<string, string[]>();
   for (const member of membersByCohortFromDb) {
@@ -211,6 +245,20 @@ export async function loadTutorDashboard(
       cohortName: cohort.name,
       courseId: cohort.course_id,
       courseName: courseFromJoin?.name ?? "Beginners",
+      memberCount: members.length,
+      studentNames: members,
+    });
+  }
+
+  for (const cohort of coverCohortRows ?? []) {
+    if (beginnersGroupsMap.has(cohort.id)) continue;
+    const members = membersByCohort.get(cohort.id) ?? [];
+    const courseJoin = Array.isArray(cohort.courses) ? cohort.courses[0] : cohort.courses;
+    beginnersGroupsMap.set(cohort.id, {
+      cohortId: cohort.id,
+      cohortName: cohort.name,
+      courseId: cohort.course_id,
+      courseName: courseJoin?.name ?? "Beginners",
       memberCount: members.length,
       studentNames: members,
     });

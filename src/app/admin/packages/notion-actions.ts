@@ -230,8 +230,18 @@ export async function saveNotionTutorMapping(
     );
 
     if (error) return { error: error.message };
+
+    const { backfillUnmappedTutorsFromNotionMap } = await import(
+      "@/lib/notion/package-sync"
+    );
+    const backfill = await backfillUnmappedTutorsFromNotionMap(supabase);
+    const backfillNote =
+      backfill.updatedInstances + backfill.updatedCohorts > 0
+        ? ` Filled ${backfill.updatedInstances + backfill.updatedCohorts} package/cohort tutor assignment(s) that were waiting on this mapping.`
+        : "";
+
     revalidateNotionSync();
-    return { success: "Tutor mapping saved." };
+    return { success: `Tutor mapping saved.${backfillNote}` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to save tutor mapping." };
   }

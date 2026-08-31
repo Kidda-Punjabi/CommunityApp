@@ -116,7 +116,9 @@ export async function createAdminLessonLogEntry(input: {
       revalidatePath(`/admin/packages/${input.runId}`);
     }
     return {
-      success: "Lesson logged in the app and Notion.",
+      success: result.reusedExisting
+        ? "This lesson was already logged — updated the existing entry in the app and Notion."
+        : "Lesson logged in the app and Notion.",
       entryId: result.entryId,
       notionPageId: result.notionPageId,
     };

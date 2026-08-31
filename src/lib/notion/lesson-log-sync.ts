@@ -11,6 +11,10 @@ import {
   relationIds,
 } from "@/lib/notion/client";
 import { omitLessonLogManualFieldsFromPullPatch } from "@/lib/notion/lesson-log-field-source";
+import {
+  formatLessonLogWriteError,
+  logLessonLogWriteFailure,
+} from "@/lib/lessons/lesson-log-write-error";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type NotionQueryResponse = {
@@ -474,8 +478,11 @@ type ExistingCohortLessonLogRow = {
 };
 
 type LessonLogWriteResult =
-  | { ok: true; entryId: string; notionPageId: string }
+  | { ok: true; entryId: string; notionPageId: string; reusedExisting: boolean }
   | { ok: false; error: string };
+
+const LESSON_LOG_EXISTING_SELECT =
+  "id, notion_page_id, lesson_title, source, status_source, notes_source, status, notes, recording_url, slides_url, flashcards_url, logged_by, notion_tutor_user_id, dismissed_at";
 
 const lessonLogWriteTails = new Map<string, Promise<unknown>>();
 
@@ -516,23 +523,73 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string | nu
   return null;
 }
 
-async function findExistingCohortLessonLogEntry(
+async function loadOldestLessonLogRow(
   supabase: SupabaseClient,
-  cohortId: string,
-  lessonDate: string
+  filters: { column: "cohort_id" | "package_instance_id" | "notion_page_id"; value: string },
+  lessonDate?: string
 ): Promise<ExistingCohortLessonLogRow | null> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("cohort_lesson_log_entries")
-    .select(
-      "id, notion_page_id, lesson_title, source, status_source, notes_source, status, notes, recording_url, slides_url, flashcards_url, logged_by, notion_tutor_user_id, dismissed_at"
-    )
-    .eq("cohort_id", cohortId)
-    .eq("lesson_date", lessonDate)
+    .select(LESSON_LOG_EXISTING_SELECT)
+    .eq(filters.column, filters.value)
     .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  if (lessonDate) query = query.eq("lesson_date", lessonDate);
+  const { data, error } = await query.maybeSingle();
   if (error) throw new Error(error.message);
   return (data as ExistingCohortLessonLogRow | null) ?? null;
+}
+
+async function findExistingLessonLogEntry(
+  supabase: SupabaseClient,
+  options: {
+    cohortId: string | null;
+    packageInstanceId: string | null;
+    lessonDate: string;
+  }
+): Promise<ExistingCohortLessonLogRow | null> {
+  if (options.cohortId) {
+    const row = await loadOldestLessonLogRow(
+      supabase,
+      { column: "cohort_id", value: options.cohortId },
+      options.lessonDate
+    );
+    if (row) return row;
+  }
+  if (options.packageInstanceId) {
+    return loadOldestLessonLogRow(
+      supabase,
+      { column: "package_instance_id", value: options.packageInstanceId },
+      options.lessonDate
+    );
+  }
+  return null;
+}
+
+async function findNotionLessonLogPageIdForPackageDate(
+  packageNotionPageId: string,
+  lessonDate: string
+): Promise<string | null> {
+  const data = await notionJson<NotionQueryResponse>(
+    `/databases/${NOTION_LESSONS_LOG_DATA_SOURCE_ID}/query`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        page_size: 5,
+        filter: {
+          and: [
+            { property: "Lesson Date", date: { equals: lessonDate } },
+            {
+              property: "New Package DB",
+              relation: { contains: packageNotionPageId },
+            },
+          ],
+        },
+        sorts: [{ timestamp: "created_time", direction: "ascending" }],
+      }),
+    }
+  );
+  return data.results[0]?.id ?? null;
 }
 
 function buildLessonLogNotionProperties(options: {
@@ -764,12 +821,37 @@ async function insertCohortLessonLogEntry(
   if (isUniqueViolation(inserted.error)) {
     return { ok: false, conflict: true };
   }
+  if (inserted.error?.code === "PGRST116") {
+    logLessonLogWriteFailure(
+      "insert cohort_lesson_log_entries returned no row",
+      inserted.error,
+      {
+        cohortId: payload.cohort_id ?? null,
+        packageInstanceId: payload.package_instance_id ?? null,
+        lessonDate: payload.lesson_date ?? null,
+      }
+    );
+    return {
+      ok: false,
+      conflict: false,
+      error: formatLessonLogWriteError(
+        { code: "42501", message: inserted.error.message },
+        "The lesson could not be saved in the app. Nothing was logged."
+      ),
+    };
+  }
+  logLessonLogWriteFailure("insert cohort_lesson_log_entries rejected", inserted.error, {
+    cohortId: payload.cohort_id ?? null,
+    packageInstanceId: payload.package_instance_id ?? null,
+    lessonDate: payload.lesson_date ?? null,
+  });
   return {
     ok: false,
     conflict: false,
-    error:
-      inserted.error?.message ??
-      "Notion page was created, but saving the local log row failed. It should appear after the next sync.",
+    error: formatLessonLogWriteError(
+      inserted.error,
+      "The lesson could not be saved in the app. Nothing was logged."
+    ),
   };
 }
 
@@ -837,7 +919,14 @@ async function updateExistingLessonLogFromApp(options: {
     .from("cohort_lesson_log_entries")
     .update(payload)
     .eq("id", existing.id);
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    logLessonLogWriteFailure("update cohort_lesson_log_entries rejected", error, {
+      entryId: existing.id,
+      cohortId: target.cohortId,
+      packageInstanceId: target.packageInstanceId,
+    });
+    return { ok: false, error: formatLessonLogWriteError(error) };
+  }
 
   await runLessonLogPostSaveSideEffects(supabase, {
     cohortId: target.cohortId,
@@ -845,7 +934,7 @@ async function updateExistingLessonLogFromApp(options: {
     loggedBy: firstNonEmpty(input.loggedBy, existing.logged_by),
   });
 
-  return { ok: true, entryId: existing.id, notionPageId };
+  return { ok: true, entryId: existing.id, notionPageId, reusedExisting: true };
 }
 
 async function createOrUpdateLessonLogInNotionAndSupabase(
@@ -857,25 +946,58 @@ async function createOrUpdateLessonLogInNotionAndSupabase(
   const status = input.status ?? "Completed";
   const title = `${target.name}  - ${lessonDate} `;
   let existing: ExistingCohortLessonLogRow | null = null;
-  if (target.cohortId) {
+  try {
+    existing = await findExistingLessonLogEntry(supabase, {
+      cohortId: target.cohortId,
+      packageInstanceId: target.packageInstanceId,
+      lessonDate,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to look up existing lesson log.",
+    };
+  }
+
+  if (!existing) {
     try {
-      existing = await findExistingCohortLessonLogEntry(
-        supabase,
-        target.cohortId,
+      const notionPageId = await findNotionLessonLogPageIdForPackageDate(
+        target.packageNotionPageId,
         lessonDate
       );
+      if (notionPageId) {
+        existing = await loadOldestLessonLogRow(supabase, {
+          column: "notion_page_id",
+          value: notionPageId,
+        });
+        if (!existing) {
+          existing = {
+            id: "",
+            notion_page_id: notionPageId,
+            lesson_title: title,
+            source: "notion",
+            status_source: null,
+            notes_source: null,
+            status: null,
+            notes: null,
+            recording_url: null,
+            slides_url: null,
+            flashcards_url: null,
+            logged_by: null,
+            notion_tutor_user_id: null,
+            dismissed_at: null,
+          };
+        }
+      }
     } catch (error) {
-      return {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to look up existing lesson log.",
-      };
+      console.error("[lesson-log] Notion duplicate lookup failed", error);
     }
   }
 
-  if (existing) {
+  if (existing?.id) {
     return updateExistingLessonLogFromApp({
       supabase,
       input,
@@ -901,18 +1023,50 @@ async function createOrUpdateLessonLogInNotionAndSupabase(
   });
 
   let notionPageId: string;
-  try {
-    notionPageId = await createLessonLogNotionPage(properties);
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Failed to create Notion Lessons Log page.",
-    };
+  let createdNewNotionPage = false;
+  if (existing?.notion_page_id) {
+    notionPageId = existing.notion_page_id;
+    try {
+      await patchLessonLogNotionPage(notionPageId, properties);
+    } catch (error) {
+      if (!isMissingNotionPage(error)) {
+        return {
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to update the existing Notion Lessons Log page.",
+        };
+      }
+      try {
+        notionPageId = await createLessonLogNotionPage(properties);
+        createdNewNotionPage = true;
+      } catch (createError) {
+        return {
+          ok: false,
+          error:
+            createError instanceof Error
+              ? createError.message
+              : "Failed to create Notion Lessons Log page.",
+        };
+      }
+    }
+  } else {
+    try {
+      notionPageId = await createLessonLogNotionPage(properties);
+      createdNewNotionPage = true;
+    } catch (error) {
+      return {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "Failed to create Notion Lessons Log page.",
+      };
+    }
   }
 
   const payload = buildLessonLogRowPayload({
     input,
-    existing: null,
+    existing: existing?.id ? existing : null,
     notionPageId,
     cohortId: target.cohortId,
     packageInstanceId: target.packageInstanceId,
@@ -920,21 +1074,25 @@ async function createOrUpdateLessonLogInNotionAndSupabase(
     lessonDate,
     status,
   });
+  if (!existing?.id && existing?.source === "notion") {
+    payload.source = "notion";
+  }
 
   const inserted = await insertCohortLessonLogEntry(supabase, payload);
   if (!inserted.ok) {
-    if (inserted.conflict && target.cohortId) {
-      await archiveLessonLogNotionPage(notionPageId);
-      const winner = await findExistingCohortLessonLogEntry(
-        supabase,
-        target.cohortId,
-        lessonDate
-      );
+    if (inserted.conflict) {
+      if (createdNewNotionPage) {
+        await archiveLessonLogNotionPage(notionPageId);
+      }
+      const winner = await findExistingLessonLogEntry(supabase, {
+        cohortId: target.cohortId,
+        packageInstanceId: target.packageInstanceId,
+        lessonDate,
+      });
       if (!winner) {
         return {
           ok: false,
-          error:
-            "A lesson log for this cohort and date already exists, but it could not be loaded.",
+          error: "A lesson log for this date already exists, but it could not be loaded.",
         };
       }
       return updateExistingLessonLogFromApp({
@@ -947,11 +1105,8 @@ async function createOrUpdateLessonLogInNotionAndSupabase(
         title,
       });
     }
-    if (inserted.conflict) {
-      return {
-        ok: false,
-        error: "A lesson log for this date already exists.",
-      };
+    if (createdNewNotionPage) {
+      await archiveLessonLogNotionPage(notionPageId);
     }
     return { ok: false, error: inserted.error };
   }
@@ -962,7 +1117,12 @@ async function createOrUpdateLessonLogInNotionAndSupabase(
     loggedBy: input.loggedBy?.trim() || null,
   });
 
-  return { ok: true, entryId: inserted.id, notionPageId };
+  return {
+    ok: true,
+    entryId: inserted.id,
+    notionPageId,
+    reusedExisting: Boolean(existing?.notion_page_id) && !createdNewNotionPage,
+  };
 }
 
 export async function createLessonLogInNotionAndSupabase(

@@ -30,6 +30,18 @@ export async function canManageCohort(
   userId: string,
   cohortId: string
 ): Promise<boolean> {
+  const { data, error } = await supabase.rpc("tutor_can_manage_cohort", {
+    p_cohort_id: cohortId,
+  });
+  if (!error) return Boolean(data);
+
+  console.error("[tutor-access] tutor_can_manage_cohort rpc failed", {
+    message: error.message,
+    cohortId,
+    userId,
+  });
+
+  // Fallback if the RPC is unavailable — assigned tutor / enrollment only.
   const roles = await loadCurrentUserAppRoles(supabase, userId);
   if (roles.includes("master_admin")) return true;
 

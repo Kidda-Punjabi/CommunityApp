@@ -33,7 +33,17 @@ export async function logCohortLessonAction(
   if (!lessonDate) return { error: "Choose the lesson date." };
 
   const canManage = await canManageCohort(supabase, user.id, cohortId);
-  if (!canManage) return { error: "You are not the tutor for this cohort." };
+  if (!canManage) {
+    console.error("[lesson-log] tutor blocked before insert", {
+      userId: user.id,
+      cohortId,
+      lessonDate,
+    });
+    return {
+      error:
+        "You don't have permission to log this lesson. You need to be the assigned tutor for this class, or covering it via an accepted cover request.",
+    };
+  }
 
   const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
 
@@ -56,7 +66,15 @@ export async function logCohortLessonAction(
     notionTutorUserId,
   });
 
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) {
+    console.error("[lesson-log] tutor log write failed", {
+      userId: user.id,
+      cohortId,
+      lessonDate,
+      error: result.error,
+    });
+    return { error: result.error };
+  }
 
   revalidatePath("/dashboard/tutor");
   revalidatePath("/dashboard/tutor/log-lesson");
@@ -64,5 +82,9 @@ export async function logCohortLessonAction(
   revalidatePath("/admin/packages");
   revalidatePath("/dashboard/learn");
 
-  return { success: "Lesson logged — saved in the app and Notion." };
+  return {
+    success: result.reusedExisting
+      ? "This lesson was already logged — updated the existing entry in the app and Notion."
+      : "Lesson logged — saved in the app and Notion.",
+  };
 }
