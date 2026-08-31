@@ -114,6 +114,13 @@ export const STUDENT_HELP: HelpContent = {
           links: [{ label: "Community", href: "/dashboard/community" }],
         },
         {
+          id: "community-class-feedback",
+          question: "How do I leave feedback for a Kidda Community Class?",
+          answer:
+            "Open the Community tab and scroll to Class feedback. You'll see recent open Community Classes from the last 14 days. Tap a class to rate it. You can submit once per class.",
+          links: [{ label: "Community", href: "/dashboard/community" }],
+        },
+        {
           id: "miss-class",
           question: "What if I miss a live class?",
           answer:

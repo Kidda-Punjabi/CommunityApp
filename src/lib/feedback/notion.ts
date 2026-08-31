@@ -49,7 +49,10 @@ export function buildNotionFeedbackProperties(
       select: { name: context.course },
     },
     Lesson: {
-      select: { name: context.lessonLabel },
+      select: {
+        name:
+          payload.formVariant === "community" ? "Community" : context.lessonLabel,
+      },
     },
     "Feedback Date": {
       date: { start: submittedAt.toISOString() },

@@ -5,6 +5,27 @@ import {
 import type { FeedbackContext, FeedbackSubmitPayload } from "@/lib/feedback/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export const COMMUNITY_FEEDBACK_ALREADY_SUBMITTED =
+  "You've already submitted feedback for this class.";
+
+export class FeedbackAlreadySubmittedError extends Error {
+  constructor() {
+    super(COMMUNITY_FEEDBACK_ALREADY_SUBMITTED);
+    this.name = "FeedbackAlreadySubmittedError";
+  }
+}
+
+function isDuplicateCommunitySessionError(error: { code?: string; message?: string }): boolean {
+  if (error.code === "23505") {
+    const message = (error.message ?? "").toLowerCase();
+    return (
+      message.includes("feedback_submissions_user_session_unique") ||
+      (message.includes("session_id") && message.includes("user_id"))
+    );
+  }
+  return false;
+}
+
 export async function saveFeedbackSubmission(
   supabase: SupabaseClient,
   userId: string,
@@ -16,12 +37,20 @@ export async function saveFeedbackSubmission(
   notionError?: string;
 }> {
   const submittedAt = new Date();
+  const isCommunity = payload.formVariant === "community";
+  const sessionId = isCommunity ? (payload.sessionId ?? context.sessionId) : null;
+  const lessonId = isCommunity ? null : context.lessonId;
+
+  if (isCommunity && !sessionId) {
+    throw new Error("A class session is required.");
+  }
 
   const { data: row, error: insertError } = await supabase
     .from("feedback_submissions")
     .insert({
       user_id: userId,
-      lesson_id: context.lessonId,
+      lesson_id: lessonId,
+      session_id: sessionId,
       form_variant: payload.formVariant,
       full_name: context.fullName,
       email: context.email,
@@ -53,6 +82,9 @@ export async function saveFeedbackSubmission(
     .single();
 
   if (insertError || !row) {
+    if (insertError && isDuplicateCommunitySessionError(insertError)) {
+      throw new FeedbackAlreadySubmittedError();
+    }
     throw new Error(insertError?.message ?? "Failed to save feedback.");
   }
 

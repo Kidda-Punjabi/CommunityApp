@@ -22,6 +22,7 @@ function emptyRatings(isWeek12: boolean): RatingsState {
 type LessonFeedbackFormProps = {
   context: FeedbackContext;
   lessonId?: string | null;
+  sessionId?: string | null;
   onSubmitted?: () => void;
   compact?: boolean;
 };
@@ -29,10 +30,12 @@ type LessonFeedbackFormProps = {
 export function LessonFeedbackForm({
   context,
   lessonId,
+  sessionId,
   onSubmitted,
   compact = false,
 }: LessonFeedbackFormProps) {
   const isWeek12 = context.formVariant === "week12";
+  const isCommunity = context.formVariant === "community";
   const ratingFields = isWeek12
     ? [...STANDARD_RATING_FIELDS, ...WEEK12_EXTRA_RATING_FIELDS]
     : STANDARD_RATING_FIELDS;
@@ -74,6 +77,7 @@ export function LessonFeedbackForm({
       const body: Record<string, unknown> = {
         formVariant: context.formVariant,
         lessonId: lessonId ?? context.lessonId,
+        sessionId: sessionId ?? context.sessionId,
         comments,
         ...ratings,
       };
@@ -144,7 +148,9 @@ export function LessonFeedbackForm({
             <dd>{context.course}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-400">Lesson</dt>
+            <dt className="text-xs uppercase tracking-wide text-zinc-400">
+              {isCommunity ? "Session" : "Lesson"}
+            </dt>
             <dd>{context.lessonLabel}</dd>
           </div>
           <div>
@@ -194,7 +200,9 @@ export function LessonFeedbackForm({
           placeholder={
             isWeek12
               ? "How did you find the course overall?"
-              : "How was this lesson for you?"
+              : isCommunity
+                ? "How was this Community Class?"
+                : "How was this lesson for you?"
           }
         />
       </div>

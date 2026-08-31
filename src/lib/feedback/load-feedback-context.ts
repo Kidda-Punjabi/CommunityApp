@@ -230,6 +230,7 @@ export async function loadFeedbackContext(
     notionTutor,
     tutorUnmatched,
     lessonId,
+    sessionId: null,
     formVariant,
   };
 }

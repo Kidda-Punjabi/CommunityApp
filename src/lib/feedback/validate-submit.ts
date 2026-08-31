@@ -15,7 +15,12 @@ export function parseFeedbackSubmitBody(
   }
 
   const raw = body as Record<string, unknown>;
-  const formVariant = raw.formVariant === "week12" ? "week12" : "standard";
+  const formVariant =
+    raw.formVariant === "week12"
+      ? "week12"
+      : raw.formVariant === "community"
+        ? "community"
+        : "standard";
 
   const standardRatings: Partial<Record<string, number>> = {};
   for (const field of STANDARD_RATING_FIELDS) {
@@ -28,8 +33,28 @@ export function parseFeedbackSubmitBody(
 
   const lessonId =
     typeof raw.lessonId === "string" && raw.lessonId.trim() ? raw.lessonId.trim() : null;
+  const sessionId =
+    typeof raw.sessionId === "string" && raw.sessionId.trim() ? raw.sessionId.trim() : null;
 
   const comments = typeof raw.comments === "string" ? raw.comments.trim() : "";
+
+  if (formVariant === "community") {
+    if (!sessionId) {
+      return { ok: false, error: "A class session is required." };
+    }
+    return {
+      ok: true,
+      payload: {
+        formVariant: "community",
+        lessonId: null,
+        sessionId,
+        learningRelevance: standardRatings.learningRelevance!,
+        tutorEffectiveness: standardRatings.tutorEffectiveness!,
+        confidence: standardRatings.confidence!,
+        comments,
+      },
+    };
+  }
 
   if (formVariant === "standard") {
     return {

@@ -49,7 +49,13 @@ export type StandardRatingFieldKey = (typeof STANDARD_RATING_FIELDS)[number]["ke
 export type Week12ExtraRatingFieldKey = (typeof WEEK12_EXTRA_RATING_FIELDS)[number]["key"];
 export type RatingFieldKey = StandardRatingFieldKey | Week12ExtraRatingFieldKey;
 
-export type FeedbackFormVariant = "standard" | "week12";
+export type FeedbackFormVariant = "standard" | "week12" | "community";
+
+/** Calendar title match for open Kidda Community Class sessions. */
+export const COMMUNITY_CLASS_TITLE_NEEDLE = "Kidda Community Class";
+
+/** How far back a started Community Class can still receive feedback. */
+export const COMMUNITY_CLASS_FEEDBACK_LOOKBACK_DAYS = 14;
 
 export function isWeek12FeedbackForm(
   course: NotionCourseOption,

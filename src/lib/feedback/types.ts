@@ -18,12 +18,14 @@ export type FeedbackContext = {
   notionTutor: string | null;
   tutorUnmatched: boolean;
   lessonId: string | null;
+  sessionId: string | null;
   formVariant: FeedbackFormVariant;
 };
 
 export type FeedbackSubmitPayload = {
   formVariant: FeedbackFormVariant;
   lessonId?: string | null;
+  sessionId?: string | null;
   learningRelevance: number;
   tutorEffectiveness: number;
   confidence: number;

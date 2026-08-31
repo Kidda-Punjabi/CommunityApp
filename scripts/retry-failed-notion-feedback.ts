@@ -43,7 +43,8 @@ const patchTutors = process.argv.includes("--patch-tutors");
 type FeedbackRow = {
   id: string;
   lesson_id: string | null;
-  form_variant: "standard" | "week12";
+  session_id: string | null;
+  form_variant: "standard" | "week12" | "community";
   full_name: string;
   email: string;
   phone: string | null;
@@ -86,6 +87,7 @@ function rowToContext(row: FeedbackRow): FeedbackContext {
     notionTutor,
     tutorUnmatched,
     lessonId: row.lesson_id,
+    sessionId: row.session_id ?? null,
     formVariant: row.form_variant,
   };
 }
@@ -94,6 +96,7 @@ function rowToPayload(row: FeedbackRow): FeedbackSubmitPayload {
   return {
     formVariant: row.form_variant,
     lessonId: row.lesson_id,
+    sessionId: row.session_id,
     learningRelevance: row.learning_relevance,
     tutorEffectiveness: row.tutor_effectiveness,
     confidence: row.confidence,
