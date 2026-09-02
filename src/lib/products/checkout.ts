@@ -3,6 +3,7 @@ import type { ProductSlug } from "./content";
 export type CheckoutKey =
   | "foundational-refresher"
   | "foundational-full"
+  | "foundational-group"
   | "beginners"
   | "beginners-group"
   | "beginners-one-to-one"
@@ -36,6 +37,14 @@ export const CHECKOUT_CONFIGS: CheckoutConfig[] = [
     paymentLinkEnv: "STRIPE_PAYMENT_LINK_FOUNDATIONAL_FULL",
     mode: "payment",
     label: "Full Foundational Course",
+    productSlug: "foundational",
+  },
+  {
+    key: "foundational-group",
+    priceIdEnv: "STRIPE_CHECKOUT_PRICE_FOUNDATIONAL_GROUP",
+    paymentLinkEnv: "STRIPE_PAYMENT_LINK_FOUNDATIONAL_GROUP",
+    mode: "payment",
+    label: "Foundational Course (Group)",
     productSlug: "foundational",
   },
   {

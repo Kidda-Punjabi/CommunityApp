@@ -806,8 +806,14 @@ export async function createPackageRun(input: {
         .maybeSingle();
 
       const isKidsCourse = course?.content_track === "kids";
-      if (course?.required_tier !== "beginners" && !isKidsCourse) {
-        return { error: "Group cohorts are only supported for Beginners and kids courses." };
+      if (
+        course?.required_tier !== "beginners" &&
+        course?.required_tier !== "foundational" &&
+        !isKidsCourse
+      ) {
+        return {
+          error: "Group cohorts are only supported for Foundational, Beginners, and kids courses.",
+        };
       }
 
       const { data, error } = await supabase

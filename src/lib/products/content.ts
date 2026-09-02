@@ -133,6 +133,20 @@ const FOUNDATIONAL_CONTENT: ProductPageContent = {
       ],
       checkoutKey: "foundational-full",
     },
+    {
+      id: "group",
+      name: "Foundational Course (Group)",
+      price: "4 weeks",
+      priceNote: "Live group lessons · 4 weekly sessions · cohort schedule",
+      features: [
+        "4 live group sessions with a tutor",
+        "Fixed weekly cohort schedule",
+        "Punjabi alphabet, laga maatra, and muharni",
+        "Guided practice building words",
+        "Live pronunciation feedback in a small group",
+      ],
+      checkoutKey: "foundational-group",
+    },
   ],
   footerNote: "All sessions are recorded and available to watch on-demand.",
   faq: [
@@ -149,7 +163,7 @@ const FOUNDATIONAL_CONTENT: ProductPageContent = {
     {
       question: "Is this course 1–1 or in a group?",
       answer:
-        "Every Foundations session is private 1–1 with an expert tutor, so you get personalised feedback on your pronunciation.",
+        "You can take Foundations as private 1–1 sessions or join a small group cohort on a fixed weekly schedule. Both cover pronunciation with live tutor feedback.",
     },
     {
       question: "Do I need to attend one session per week?",

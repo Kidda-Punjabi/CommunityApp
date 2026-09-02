@@ -35,6 +35,7 @@ export async function formatCheckoutSuccessAccessLabel(
     if (key === "beginners-group") return "Beginners Course (Group)";
     if (key === "beginners-kids-group") return "Kids Beginners Course (Group)";
     if (key === "beginners-one-to-one") return "Beginners Course (1-to-1)";
+    if (key === "foundational-group") return "Foundational Course (Group)";
     if (key?.startsWith("foundational")) return "Foundational Course";
     if (key === "community") return "Kidda Community";
   } catch {

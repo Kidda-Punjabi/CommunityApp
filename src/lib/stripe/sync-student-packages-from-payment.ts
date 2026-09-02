@@ -22,6 +22,7 @@ export type PurchaseForStudentPackage = {
 };
 
 export function packageSlugFromCheckoutKey(checkoutKey: string): string | null {
+  if (checkoutKey === "foundational-group") return "foundational-group";
   if (checkoutKey === "foundational-refresher" || checkoutKey === "foundational-full") {
     return "foundational";
   }
@@ -31,7 +32,9 @@ export function packageSlugFromCheckoutKey(checkoutKey: string): string | null {
   if (checkoutKey === "community") return "community";
   const config = getCheckoutConfig(checkoutKey);
   if (!config) return null;
-  if (config.productSlug === "foundational") return "foundational";
+  if (config.productSlug === "foundational") {
+    return checkoutKey.includes("group") ? "foundational-group" : "foundational";
+  }
   if (config.productSlug === "community") return "community";
   if (config.productSlug === "beginners-kids") return "beginners-kids-group";
   if (checkoutKey.includes("one-to-one") || checkoutKey.includes("1-1")) return "beginners-1-1";
@@ -53,7 +56,9 @@ function membershipStatusForSlug(slug: string): PackageMembershipStatus {
 }
 
 function checklistTypeForSlug(slug: string): "group" | "one_to_one" {
-  return slug === "beginners-group" || slug === "beginners-kids-group"
+  return slug === "beginners-group" ||
+    slug === "beginners-kids-group" ||
+    slug === "foundational-group"
     ? "group"
     : "one_to_one";
 }

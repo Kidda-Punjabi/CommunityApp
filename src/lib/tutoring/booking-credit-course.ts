@@ -9,6 +9,7 @@ export type BookingCreditCourseScope = {
 const TIER_BY_CHECKOUT_KEY: Record<string, "foundational" | "beginners" | "community"> = {
   "foundational-refresher": "foundational",
   "foundational-full": "foundational",
+  "foundational-group": "foundational",
   "beginners-one-to-one": "beginners",
   "beginners-group": "beginners",
   "beginners-kids-group": "beginners",

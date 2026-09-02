@@ -46,6 +46,7 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
   const [assignCohortId, setAssignCohortId] = useState("");
   const [cohortMemberPick, setCohortMemberPick] = useState<AdminMemberOption[]>([]);
   const [newCohortName, setNewCohortName] = useState("");
+  const [newCohortCourseId, setNewCohortCourseId] = useState("");
   const [newCohortTutorId, setNewCohortTutorId] = useState("");
   const [lessonsCohortId, setLessonsCohortId] = useState<string | null>(null);
 
@@ -85,8 +86,13 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
   );
 
   const beginnersCourse = tutorCourses.find((course) => course.required_tier === "beginners");
+  const cohortEligibleCourses = tutorCourses.filter(
+    (course) => course.required_tier === "beginners" || course.required_tier === "foundational"
+  );
   const selectedCourse = tutorCourses.find((course) => course.id === assignCourseId);
   const selectedTier = selectedCourse?.required_tier ?? "";
+  const showDeliveryMode = selectedTier === "beginners" || selectedTier === "foundational";
+  const cohortsForAssign = data.cohorts.filter((cohort) => cohort.course_id === assignCourseId);
 
   const assignableStaff = useMemo(
     () =>
@@ -135,7 +141,7 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
     formData.set("student_id", assignStudent[0].userId);
     formData.set("tutor_id", assignTutorId);
     formData.set("course_id", assignCourseId);
-    if (selectedTier === "beginners" && deliveryMode) {
+    if (showDeliveryMode && deliveryMode) {
       formData.set("delivery_mode", deliveryMode);
     }
     if (deliveryMode === "group" && assignCohortId) {
@@ -146,9 +152,10 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
 
   function handleCreateCohort(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!beginnersCourse || !newCohortName.trim()) return;
+    const courseId = newCohortCourseId || beginnersCourse?.id;
+    if (!courseId || !newCohortName.trim()) return;
     const formData = new FormData();
-    formData.set("course_id", beginnersCourse.id);
+    formData.set("course_id", courseId);
     formData.set("name", newCohortName.trim());
     if (newCohortTutorId) formData.set("tutor_id", newCohortTutorId);
     cohortAction(formData);
@@ -257,8 +264,8 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
 
       <SectionCard title="Assign tutor to student">
         <p className="mb-4 text-sm text-zinc-600">
-          You can assign a tutor before or after purchase. Foundational is always 1-1. Beginners
-          requires a delivery mode; group also requires an active cohort membership.
+          You can assign a tutor before or after purchase. Foundational and Beginners both
+          support 1-1 or group delivery; group also requires an active cohort membership.
         </p>
         <form onSubmit={handleAssignSubmit} className="space-y-4">
           <div>
@@ -317,7 +324,7 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
             </select>
           </div>
 
-          {selectedTier === "beginners" && (
+          {showDeliveryMode && (
             <div>
               <label htmlFor="delivery_mode" className={labelClass}>
                 Delivery mode
@@ -339,7 +346,7 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
             </div>
           )}
 
-          {selectedTier === "beginners" && deliveryMode === "group" && (
+          {showDeliveryMode && deliveryMode === "group" && (
             <div>
               <label htmlFor="assign_cohort" className={labelClass}>
                 Cohort
@@ -352,7 +359,7 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
                 required
               >
                 <option value="">Select cohort…</option>
-                {data.cohorts.map((cohort) => (
+                {cohortsForAssign.map((cohort) => (
                   <option key={cohort.id} value={cohort.id}>
                     {cohort.name} ({cohort.members.length} members)
                   </option>
@@ -410,14 +417,33 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
         )}
       </SectionCard>
 
-      <SectionCard title="Beginners cohorts">
+      <SectionCard title="Group cohorts">
         <p className="mb-4 text-sm text-zinc-600">
-          Cohorts are only for Beginners group delivery. Add members before assigning group
-          enrollments.
+          Cohorts are for Foundational and Beginners group delivery. Add members before assigning
+          group enrollments.
         </p>
 
-        {beginnersCourse ? (
+        {cohortEligibleCourses.length > 0 ? (
           <form onSubmit={handleCreateCohort} className="mb-6 space-y-3 border-b border-zinc-100 pb-6">
+            <div>
+              <label htmlFor="cohort_course" className={labelClass}>
+                Course
+              </label>
+              <select
+                id="cohort_course"
+                value={newCohortCourseId}
+                onChange={(event) => setNewCohortCourseId(event.target.value)}
+                className={inputClass}
+                required
+              >
+                <option value="">Select course…</option>
+                {cohortEligibleCourses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label htmlFor="cohort_name" className={labelClass}>
                 New cohort name
@@ -452,12 +478,16 @@ export function StaffTutorsTab({ data }: StaffTutorsTabProps) {
               </select>
             </div>
             <FormMessage state={cohortState} />
-            <button type="submit" disabled={cohortPending || !newCohortName.trim()} className={buttonClass}>
+            <button
+              type="submit"
+              disabled={cohortPending || !newCohortName.trim() || !newCohortCourseId}
+              className={buttonClass}
+            >
               {cohortPending ? "Creating…" : "Create cohort"}
             </button>
           </form>
         ) : (
-          <p className="mb-4 text-sm text-amber-700">No Beginners course found.</p>
+          <p className="mb-4 text-sm text-amber-700">No Foundational or Beginners course found.</p>
         )}
 
         {data.cohorts.length === 0 ? (

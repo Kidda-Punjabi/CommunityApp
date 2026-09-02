@@ -60,7 +60,7 @@ export async function loadCohortsOverview(
   const [
     { data: cohortRows, error: cohortsError },
     { data: courses },
-    { data: packageRow },
+    { data: packageRows },
   ] = await Promise.all([
     supabase
       .from("cohorts")
@@ -68,7 +68,7 @@ export async function loadCohortsOverview(
       .order("active", { ascending: false })
       .order("created_at", { ascending: false }),
     supabase.from("courses").select("id, name, required_tier"),
-    supabase.from("packages").select("id, slug").eq("slug", "beginners-group").maybeSingle(),
+    supabase.from("packages").select("id, slug, delivery_mode"),
   ]);
 
   if (cohortsError) {
@@ -76,9 +76,14 @@ export async function loadCohortsOverview(
   }
 
   const courseById = new Map((courses ?? []).map((c) => [c.id, c] as const));
-  const beginnersCourseId =
-    (courses ?? []).find((c) => c.required_tier === "beginners")?.id ?? null;
-  const groupPackageId = packageRow?.id ?? null;
+  const groupCourseIds = (courses ?? [])
+    .filter((c) => c.required_tier === "beginners" || c.required_tier === "foundational")
+    .map((c) => c.id);
+  const groupPackageIds = (packageRows ?? [])
+    .filter((p) => p.delivery_mode === "group")
+    .map((p) => p.id);
+  const oneToOneBeginnersPackageId =
+    (packageRows ?? []).find((p) => p.slug === "beginners-1-1")?.id ?? null;
 
   const cohortIds = (cohortRows ?? []).map((c) => c.id);
 
@@ -88,7 +93,6 @@ export async function loadCohortsOverview(
     { data: authData },
     { data: enrollmentRows },
     { data: groupPackages },
-    { data: oneToOnePackageRow },
   ] = await Promise.all([
     cohortIds.length > 0
       ? supabase
@@ -99,27 +103,26 @@ export async function loadCohortsOverview(
       : Promise.resolve({ data: [] }),
     supabase.from("profiles").select("id, full_name, preferred_name, avatar_url"),
     supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-    beginnersCourseId
+    groupCourseIds.length > 0
       ? supabase
           .from("course_enrollments")
           .select("user_id, cohort_id, delivery_mode")
-          .eq("course_id", beginnersCourseId)
+          .in("course_id", groupCourseIds)
       : Promise.resolve({ data: [] }),
-    groupPackageId
+    groupPackageIds.length > 0
       ? supabase
           .from("student_packages")
           .select("user_id, status, purchased_at")
-          .eq("package_id", groupPackageId)
+          .in("package_id", groupPackageIds)
           .neq("status", "cancelled")
       : Promise.resolve({ data: [] }),
-    supabase.from("packages").select("id").eq("slug", "beginners-1-1").maybeSingle(),
   ]);
 
-  const { data: oneToOnePackages } = oneToOnePackageRow?.id
+  const { data: oneToOnePackages } = oneToOneBeginnersPackageId
     ? await supabase
         .from("student_packages")
         .select("user_id")
-        .eq("package_id", oneToOnePackageRow.id)
+        .eq("package_id", oneToOneBeginnersPackageId)
         .neq("status", "cancelled")
     : { data: [] };
 

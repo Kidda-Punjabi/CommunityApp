@@ -112,7 +112,24 @@ export async function assignCourseEnrollment(
     let deliveryMode: "one_to_one" | "group" | null = null;
 
     if (tier === "foundational") {
-      deliveryMode = null;
+      if (deliveryModeRaw === "group") {
+        deliveryMode = "group";
+        if (!cohortId) return { error: "Select a cohort for group delivery." };
+
+        const { data: membership } = await supabase
+          .from("cohort_members")
+          .select("cohort_id")
+          .eq("cohort_id", cohortId)
+          .eq("user_id", studentId)
+          .is("left_at", null)
+          .maybeSingle();
+
+        if (!membership) {
+          return { error: "Student must be an active member of the selected cohort." };
+        }
+      } else {
+        deliveryMode = null;
+      }
     } else if (tier === "beginners") {
       if (deliveryModeRaw !== "one_to_one" && deliveryModeRaw !== "group") {
         return { error: "Choose a delivery mode for Beginners." };
@@ -201,8 +218,12 @@ export async function createBeginnersCohort(
       .eq("id", courseId)
       .maybeSingle();
 
-    if (course?.required_tier !== "beginners" && course?.content_track !== "kids") {
-      return { error: "Cohorts are only for Beginners and kids courses." };
+    if (
+      course?.required_tier !== "beginners" &&
+      course?.required_tier !== "foundational" &&
+      course?.content_track !== "kids"
+    ) {
+      return { error: "Cohorts are only for Foundational, Beginners, and kids courses." };
     }
 
     const { error } = await supabase.from("cohorts").insert({

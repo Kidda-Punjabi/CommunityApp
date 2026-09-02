@@ -25,6 +25,15 @@ export const PACKAGE_CATALOG: PackageCatalogEntry[] = [
     description: "1-1 live tutoring with pronunciation, core vocabulary, and everyday phrases.",
   },
   {
+    slug: "foundational-group",
+    name: "Foundational Course (Group)",
+    learnTrackId: "foundational",
+    tier: "foundational",
+    deliveryMode: "group",
+    includesLiveSessions: true,
+    description: "Small-group Foundational lessons on a fixed weekly schedule.",
+  },
+  {
     slug: "beginners-1-1",
     name: "Beginners Course (1-1)",
     learnTrackId: "beginners",
@@ -70,8 +79,10 @@ export function packageSlugForEnrollment(
   tier: PaidCourseTier,
   deliveryMode: PackageDeliveryMode
 ): string {
-  if (tier === "foundational") return "foundational";
   if (tier === "community") return "community";
+  if (tier === "foundational") {
+    return deliveryMode === "group" ? "foundational-group" : "foundational";
+  }
   if (deliveryMode === "group") return "beginners-group";
   if (deliveryMode === "one_to_one") return "beginners-1-1";
   return "beginners-1-1";
