@@ -1,11 +1,14 @@
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
-import { HomeworkQuestionList } from "@/components/homework/homework-question-list";
 import { HomeworkSubmissionSection } from "@/components/homework/homework-submission-section";
+import { HomeworkTextForm } from "@/components/homework/homework-text-form";
 import { canAccessLessonInContext } from "@/lib/learning/learn-access";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { createClient } from "@/lib/supabase/server";
 import { learnHomeworkBackHref } from "@/lib/tutoring/homework-href";
-import { loadHomeworkQuestionsForLesson } from "@/lib/tutoring/homework-questions";
+import {
+  loadHomeworkQuestionsForLesson,
+  loadHomeworkSegmentForLesson,
+} from "@/lib/tutoring/homework-questions";
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { parseCatchupReturn } from "@/lib/catchup/return-url";
 import { ui } from "@/lib/ui/styles";
@@ -49,13 +52,20 @@ export default async function LessonHomeworkPage({ params, searchParams }: PageP
   const requiredTier = (courseRow as { required_tier: string } | null)?.required_tier;
   const backHref = learnHomeworkBackHref(requiredTier, lessonId, lesson.course_id);
 
-  const [questions, submissionMap] = await Promise.all([
-    loadHomeworkQuestionsForLesson(supabase, lessonId),
+  const [segment, submissionMap] = await Promise.all([
+    loadHomeworkSegmentForLesson(supabase, lessonId),
     fetchHomeworkSubmissionsForUser(supabase, user.id, [lessonId]),
   ]);
 
+  const submissionType = segment?.submissionType ?? "voice";
+  const questions =
+    submissionType === "text" ? await loadHomeworkQuestionsForLesson(supabase, lessonId) : [];
   const submission = submissionMap.get(lessonId) ?? null;
-  const hasQuestions = questions.length > 0;
+  const taskDescription =
+    segment?.activityInstructions?.trim() ||
+    (submissionType === "text"
+      ? "Write your answers below. Your tutor will review them."
+      : "Record a short voice note for your tutor after your session.");
 
   return (
     <div className={ui.page}>
@@ -72,34 +82,29 @@ export default async function LessonHomeworkPage({ params, searchParams }: PageP
         </p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-900">Homework</h1>
         <p className="mt-2 text-sm text-zinc-600">{lesson.title}</p>
-        <p className="mt-2 text-sm text-zinc-600">
-          {hasQuestions
-            ? "Work through each activity below, then record a voice note for your tutor."
-            : "Record a short voice note for your tutor after your session."}
-        </p>
+        <p className="mt-3 text-base text-zinc-800">{taskDescription}</p>
       </div>
 
-      {hasQuestions ? (
+      {submissionType === "text" ? (
         <div className="mt-6">
-          <HomeworkQuestionList questions={questions} />
+          <HomeworkTextForm
+            lessonId={lessonId}
+            questions={questions}
+            existingSubmission={submission}
+          />
         </div>
-      ) : null}
-
-      <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-10 mt-6 rounded-3xl border border-zinc-200/80 bg-white/95 p-4 shadow-[0_8px_32px_-8px_rgba(24,24,27,0.18)] backdrop-blur">
-        <p className="text-sm font-semibold text-zinc-900">
-          {submission ? "Your homework" : hasQuestions ? "Record homework" : "Record a voice note"}
-        </p>
-        <HomeworkSubmissionSection
-          lessonId={lessonId}
-          submission={submission}
-          variant="embedded"
-          description={
-            hasQuestions
-              ? "Read the activities above, then record yourself working through them."
-              : null
-          }
-        />
-      </div>
+      ) : (
+        <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-10 mt-6 rounded-3xl border border-zinc-200/80 bg-white/95 p-4 shadow-[0_8px_32px_-8px_rgba(24,24,27,0.18)] backdrop-blur">
+          <p className="text-sm font-semibold text-zinc-900">
+            {submission ? "Your homework" : "Record homework"}
+          </p>
+          <HomeworkSubmissionSection
+            lessonId={lessonId}
+            submission={submission}
+            variant="embedded"
+          />
+        </div>
+      )}
 
       {catchupReturn ? (
         <div className="mt-4">
