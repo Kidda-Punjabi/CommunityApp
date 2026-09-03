@@ -151,6 +151,15 @@ const TUTORIALS: Record<TutorialId, GameTutorialContent> = {
       "Pass the threshold to move on — you have a few attempts per word.",
     ],
   },
+  vowel_match: {
+    id: "vowel_match",
+    title: "How to play Vowel Match",
+    steps: [
+      "A Punjabi word plays automatically. Tap Replay any time to hear it again.",
+      "Select every matra you hear — some words have more than one.",
+      "Submit to check. You need the exact set: no missing matras, and no extras.",
+    ],
+  },
   buzz_in: {
     id: "buzz_in",
     title: "How to play Buzz-in",

@@ -98,6 +98,7 @@ const SLUG_TO_GAME_TYPE: Record<string, GameType> = {
   "comprehension-practice": "comprehension_practice",
   "lane-runner": "lane_runner",
   "speaking-practice": "speaking_practice",
+  "vowel-match": "vowel_match",
 };
 
 const RESOURCE_GAME_PATHS = new Set([

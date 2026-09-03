@@ -21,7 +21,11 @@ export default async function GamesPage() {
   ]);
 
   const englishMode = isEnglishGamesScope(scope);
-  const vocabularyGames = GAME_CATALOG.filter((g) => g.section === "vocabulary");
+  const vocabularyGames = GAME_CATALOG.filter((g) => {
+    if (g.section !== "vocabulary") return false;
+    if (englishMode && g.type === "vowel_match") return false;
+    return true;
+  });
   const grammarGames = englishMode
     ? []
     : GAME_CATALOG.filter((g) => g.section === "grammar");

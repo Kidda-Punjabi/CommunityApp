@@ -150,6 +150,14 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     section: "vocabulary",
     href: "/dashboard/games/speaking-practice",
   },
+  {
+    type: "vowel_match",
+    title: "Vowel Match",
+    description: "Hear a word and tap the matras you hear",
+    emoji: "🔉",
+    section: "vocabulary",
+    href: "/dashboard/games/vowel-match",
+  },
 ];
 
 export function gameDeckPlayHref(
