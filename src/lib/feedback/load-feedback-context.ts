@@ -35,14 +35,9 @@ function lessonLabelFor(
   return "N/A";
 }
 
-function cohortLabel(
-  course: NotionCourseOption,
-  cohortName: string | null | undefined
-): string {
-  if (cohortName?.trim()) return cohortName.trim();
-  if (course === "Foundational Course") return "Foundational Course";
-  if (course === "Community") return "Community";
-  return "N/A";
+function cohortLabel(cohortName: string | null | undefined): string {
+  const name = cohortName?.trim();
+  return name ? name : "N/A";
 }
 
 function matchSingleTutorName(rawName: string): string | null {
@@ -222,7 +217,7 @@ export async function loadFeedbackContext(
     fullName,
     email,
     phone: options?.phone?.trim() || null,
-    cohort: cohortLabel(course, cohortName),
+    cohort: cohortLabel(cohortName),
     course,
     lessonLabel: lessonLabelFor(course, lessonNumber),
     lessonNumber,
