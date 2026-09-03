@@ -169,6 +169,15 @@ const TUTORIALS: Record<TutorialId, GameTutorialContent> = {
       "You'll get instant feedback, then the next letter plays on its own.",
     ],
   },
+  word_start: {
+    id: "word_start",
+    title: "How to play Word Start",
+    steps: [
+      "A Punjabi word plays automatically. Tap Replay any time to hear it again.",
+      "Pick the letter the word starts with from a short list of lookalikes.",
+      "You'll get instant feedback, then the next word plays on its own.",
+    ],
+  },
   buzz_in: {
     id: "buzz_in",
     title: "How to play Buzz-in",

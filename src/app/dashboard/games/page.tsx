@@ -29,7 +29,12 @@ export default async function GamesPage() {
   const hasFoundationalAccess = hasTierAccess(courseAccess, "foundational");
   const vocabularyGames = GAME_CATALOG.filter((g) => {
     if (g.section !== "vocabulary") return false;
-    if (englishMode && (g.type === "vowel_match" || g.type === "sound_match")) return false;
+    if (
+      englishMode &&
+      (g.type === "vowel_match" || g.type === "sound_match" || g.type === "word_start")
+    ) {
+      return false;
+    }
     return true;
   });
   const grammarGames = englishMode

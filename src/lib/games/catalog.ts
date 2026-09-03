@@ -166,6 +166,14 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     section: "vocabulary",
     href: "/dashboard/games/sound-match",
   },
+  {
+    type: "word_start",
+    title: "Word Start",
+    description: "Hear a word and pick the letter it starts with",
+    emoji: "🔤",
+    section: "vocabulary",
+    href: "/dashboard/games/word-start",
+  },
 ];
 
 export function gameDeckPlayHref(
