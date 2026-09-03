@@ -1,6 +1,7 @@
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import { HomeworkSubmissionSection } from "@/components/homework/homework-submission-section";
 import { HomeworkTextForm } from "@/components/homework/homework-text-form";
+import { BackLink } from "@/components/navigation/back-link";
 import { canAccessLessonInContext } from "@/lib/learning/learn-access";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { createClient } from "@/lib/supabase/server";
@@ -12,7 +13,6 @@ import {
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { parseCatchupReturn } from "@/lib/catchup/return-url";
 import { ui } from "@/lib/ui/styles";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 type PageProps = {
@@ -69,12 +69,7 @@ export default async function LessonHomeworkPage({ params, searchParams }: PageP
 
   return (
     <div className={ui.page}>
-      <Link
-        href={backHref}
-        className="text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        ← Back to lessons
-      </Link>
+      <BackLink fallbackHref={backHref}>← Back to lessons</BackLink>
 
       <div className="mt-4">
         <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
