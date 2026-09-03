@@ -117,6 +117,11 @@ export function lettersForSelection(selected: readonly string[]): string[] {
   );
 }
 
+/** Same letter set as the "Full alphabet" group selector. */
+export function fullAlphabetLetters(): string[] {
+  return lettersForSelection([SOUND_MATCH_FULL_ID]);
+}
+
 function shuffle<T>(items: readonly T[]): T[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -191,15 +196,23 @@ export function pickNonConsecutive(pool: readonly string[], count: number): stri
 export function buildSoundMatchRound(
   letters: SoundMatchLetter[],
   selected: readonly string[],
-  questionCount: number
+  questionCount: number,
+  customLetters?: readonly string[]
 ): SoundMatchQuestion[] {
-  const wanted = new Set(lettersForSelection(selected));
+  const wanted = new Set(
+    customLetters && customLetters.length > 0
+      ? uniqueLetters(customLetters)
+      : lettersForSelection(selected)
+  );
   const available = letters.filter((letter) => wanted.has(letter.glyph) && letter.audioUrl);
   if (available.length === 0) return [];
 
   const byGlyph = new Map(available.map((letter) => [letter.glyph, letter]));
   const pool = [...byGlyph.keys()];
-  const groupIds = activeGroupIds(selected);
+  const groupIds =
+    customLetters && customLetters.length > 0
+      ? activeGroupIds([SOUND_MATCH_FULL_ID])
+      : activeGroupIds(selected);
   const sequence = pickNonConsecutive(pool, questionCount);
 
   return sequence.flatMap((glyph) => {
