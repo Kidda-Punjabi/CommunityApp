@@ -20,11 +20,15 @@ export type CatchupActionResult = {
   timingState?: "on_time" | "late" | "post_lesson" | "unknown" | null;
 };
 
-function revalidateCatchupPaths() {
+function revalidateCatchupPaths(lessonId?: string) {
   revalidatePath("/catchup", "layout");
   revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/learn/beginners");
+  revalidatePath("/dashboard/learn/foundational");
   revalidatePath("/dashboard/tutor/homework");
+  if (lessonId) {
+    revalidatePath(`/dashboard/learn/homework/${lessonId}`);
+  }
 }
 
 export async function awardCatchupActivityPointsAction(
@@ -115,7 +119,7 @@ export async function submitTextHomeworkAction(
 
     if (insertError) return { error: homeworkSubmitErrorMessage(insertError) };
 
-    revalidateCatchupPaths();
+    revalidateCatchupPaths(lessonId);
     return { success: "Homework submitted! Your tutor will review your written answers." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Failed to submit homework." };

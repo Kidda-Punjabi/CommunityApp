@@ -53,6 +53,7 @@ import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { createClient } from "@/lib/supabase/server";
+import { lessonHomeworkPath } from "@/lib/tutoring/homework-href";
 import { ui } from "@/lib/ui/styles";
 import { BackLink } from "@/components/navigation/back-link";
 import { notFound, redirect } from "next/navigation";
@@ -68,6 +69,10 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
   const track = getLearnTrack(trackId);
 
   if (!track) notFound();
+
+  if (homeworkFocusLessonId) {
+    redirect(lessonHomeworkPath(homeworkFocusLessonId, catchupReturn ?? null));
+  }
 
   if (trackId === "community") {
     await requireNoKidCommunityAccess();

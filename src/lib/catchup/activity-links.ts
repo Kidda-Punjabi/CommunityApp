@@ -1,6 +1,7 @@
 import { gameDeckPlayHref } from "@/lib/games/catalog";
 import type { CatchupGameRef, CatchupSegment, SegmentActivityType } from "./types";
 import { CATCHUP_RETURN_PARAM, buildCatchupReturnUrl } from "./return-url";
+import { lessonHomeworkPath } from "@/lib/tutoring/homework-href";
 
 type ActivityLinkContext = {
   lessonId: string;
@@ -49,7 +50,10 @@ export function buildSegmentActivityHref(
       return null;
     }
     case "homework":
-      return `/dashboard/learn/beginners?homework=${context.lessonId}&${returnParam}`;
+      return lessonHomeworkPath(
+        context.lessonId,
+        buildCatchupReturnUrl(context.lessonId, context.nextSegmentNumber)
+      );
     case "external_link":
       return segment.activityRefId ? String(segment.activityRefId) : null;
     default:

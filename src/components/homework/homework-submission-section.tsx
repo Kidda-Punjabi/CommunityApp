@@ -22,6 +22,7 @@ type HomeworkSubmissionSectionProps = {
   submission: HomeworkSubmissionView | null;
   variant?: "standalone" | "integrated" | "embedded";
   catchupReturn?: string | null;
+  description?: string | null;
 };
 
 function homeworkSubtitle(submission: HomeworkSubmissionView | null): string {
@@ -91,10 +92,12 @@ function HomeworkRecorderBody({
   lessonId,
   localSubmission,
   variant,
+  description,
 }: {
   lessonId: string;
   localSubmission: HomeworkSubmissionView | null;
   variant: "standalone" | "integrated" | "embedded";
+  description?: string | null;
 }) {
   const router = useRouter();
   const recorder = useAudioRecorder();
@@ -229,13 +232,15 @@ function HomeworkRecorderBody({
     );
   }
 
+  const intro =
+    description ??
+    (variant === "standalone"
+      ? "Record a short voice note for your tutor to review after your session."
+      : null);
+
   return (
     <div className={variant === "standalone" ? "mt-3" : "pt-2"}>
-      {variant === "standalone" ? (
-        <p className="text-sm text-zinc-600">
-          Record a short voice note for your tutor to review after your session.
-        </p>
-      ) : null}
+      {intro ? <p className="text-sm text-zinc-600">{intro}</p> : null}
 
       {nearLessonWarning ? (
         <div className={variant === "standalone" ? "mt-3" : "mb-3"}>
@@ -248,7 +253,7 @@ function HomeworkRecorderBody({
           type="button"
           onClick={() => void recorder.startRecording()}
           className={
-            variant === "standalone" || nearLessonWarning
+            variant === "standalone" || nearLessonWarning || description
               ? `mt-3 ${ui.btnSecondary}`
               : ui.btnSecondary
           }
@@ -312,6 +317,7 @@ export function HomeworkSubmissionSection({
   submission,
   variant = "standalone",
   catchupReturn = null,
+  description = null,
 }: HomeworkSubmissionSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const [localSubmission, setLocalSubmission] = useState(submission);
@@ -342,6 +348,7 @@ export function HomeworkSubmissionSection({
               lessonId={lessonId}
               localSubmission={localSubmission}
               variant="integrated"
+              description={description}
             />
             <CatchupReturnButton returnUrl={catchupReturn} />
           </div>
@@ -357,6 +364,7 @@ export function HomeworkSubmissionSection({
           lessonId={lessonId}
           localSubmission={localSubmission}
           variant="embedded"
+          description={description}
         />
       </div>
     );
@@ -369,6 +377,7 @@ export function HomeworkSubmissionSection({
         lessonId={lessonId}
         localSubmission={localSubmission}
         variant="standalone"
+        description={description}
       />
     </div>
   );

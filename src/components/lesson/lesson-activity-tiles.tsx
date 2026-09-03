@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { NavLink } from "@/components/ui/nav-link";
-import { HomeworkSubmissionSection } from "@/components/homework/homework-submission-section";
-import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import {
   LessonHomeworkIcon,
   LessonQuizIcon,
 } from "@/components/lesson/lesson-activity-icons";
+import { lessonHomeworkPath } from "@/lib/tutoring/homework-href";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import { cn } from "@/lib/ui/styles";
 
@@ -65,12 +64,6 @@ export function LessonActivityTiles({
   hasSubmittedFeedback,
   sessionCatchupHref = null,
 }: LessonActivityTilesProps) {
-  const [homeworkOpen, setHomeworkOpen] = useState(Boolean(homeworkCatchupReturn));
-
-  useEffect(() => {
-    if (homeworkCatchupReturn) setHomeworkOpen(true);
-  }, [homeworkCatchupReturn]);
-
   const hw = homeworkTileState(homework);
   const activityCount =
     (showHomework ? 1 : 0) + (quiz ? 1 : 0) + (flashcards ? 1 : 0) + 1;
@@ -120,8 +113,7 @@ export function LessonActivityTiles({
             tone={hw.tone}
             showDot={hw.showDot}
             icon={<LessonHomeworkIcon />}
-            onClick={() => setHomeworkOpen((open) => !open)}
-            active={homeworkOpen}
+            href={lessonHomeworkPath(lessonId, homeworkCatchupReturn)}
           />
         ) : null}
         {quiz ? (
@@ -155,18 +147,6 @@ export function LessonActivityTiles({
           }
         />
       </div>
-
-      {homeworkOpen && showHomework ? (
-        <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3">
-          <HomeworkSubmissionSection
-            lessonId={lessonId}
-            submission={homework}
-            variant="embedded"
-            catchupReturn={homeworkCatchupReturn}
-          />
-          <CatchupReturnButton returnUrl={homeworkCatchupReturn} />
-        </div>
-      ) : null}
     </div>
   );
 }

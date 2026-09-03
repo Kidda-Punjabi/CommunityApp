@@ -18,6 +18,7 @@ import { buildScheduleSessionByLessonId } from "@/lib/calendar/lesson-schedule-m
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import { loadStudentCohortHomeworkCompletedMap } from "@/lib/lessons/load-student-cohort-homework-completed";
 import { createClient } from "@/lib/supabase/server";
+import { lessonHomeworkPath } from "@/lib/tutoring/homework-href";
 import { notFound, redirect } from "next/navigation";
 
 type KidsCoursePageProps = {
@@ -31,6 +32,10 @@ export default async function KidsCourseLearnPage({
 }: KidsCoursePageProps) {
   const { courseId } = await params;
   const { homework: homeworkFocusLessonId, catchupReturn } = await searchParams;
+
+  if (homeworkFocusLessonId) {
+    redirect(lessonHomeworkPath(homeworkFocusLessonId, catchupReturn ?? null));
+  }
 
   const supabase = await createClient();
   const {

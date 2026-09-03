@@ -21,11 +21,14 @@ export type HomeworkActionResult = {
   timingState?: "on_time" | "late" | "post_lesson" | "unknown" | null;
 };
 
-function revalidateHomeworkPaths() {
+function revalidateHomeworkPaths(lessonId?: string) {
   revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/learn/foundational");
   revalidatePath("/dashboard/learn/beginners");
   revalidatePath("/dashboard/learn/kids");
+  if (lessonId) {
+    revalidatePath(`/dashboard/learn/homework/${lessonId}`);
+  }
 }
 
 export async function getHomeworkPlaybackUrl(
@@ -128,6 +131,7 @@ export async function submitHomeworkRecording(
     const { error: insertError } = await supabase.from("homework_submissions").insert(
       homeworkWrite(actor, {
         lesson_id: lessonId,
+        submission_type: "voice",
         storage_path: storagePath,
         mime_type: file.type || null,
         duration_seconds:
@@ -144,7 +148,7 @@ export async function submitHomeworkRecording(
       return { error: homeworkSubmitErrorMessage(insertError) };
     }
 
-    revalidateHomeworkPaths();
+    revalidateHomeworkPaths(lessonId);
     return { success: "Homework submitted! Your tutor will review it soon." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to submit homework." };
