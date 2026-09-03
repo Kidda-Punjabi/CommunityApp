@@ -44,10 +44,14 @@ export function VowelMatchRaceArena({ initialState, initialRoom }: VowelMatchRac
   );
   const [standings, setStandings] = useState(initialState.standings);
   const [selected, setSelected] = useState<VowelMatchId[]>([]);
-  const [feedback, setFeedback] = useState<{ isCorrect: boolean } | null>(null);
+  const [feedback, setFeedback] = useState<{ isCorrect: boolean; questionId: string } | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const feedbackTimerRef = useRef<number | null>(null);
+  const feedbackLockRef = useRef(false);
+  const pendingQuestionRef = useRef<VowelMatchRacePayload | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const { currentUserId, isPlaying, winScore } = state;
@@ -67,9 +71,23 @@ export function VowelMatchRaceArena({ initialState, initialRoom }: VowelMatchRac
 
   useEffect(() => {
     setSelected([]);
-    setFeedback(null);
+    if (!feedbackLockRef.current) setFeedback(null);
     playCurrentAudio();
   }, [myQuestion?.question_id, playCurrentAudio]);
+
+  function applyNextQuestion(next: VowelMatchRacePayload | null) {
+    if (!next) {
+      feedbackLockRef.current = false;
+      setFeedback(null);
+      setSelected([]);
+      return;
+    }
+    feedbackLockRef.current = false;
+    pendingQuestionRef.current = null;
+    setFeedback(null);
+    setSelected([]);
+    setMyQuestion(next);
+  }
 
   const refreshStandings = useCallback(async () => {
     const supabase = createClient();
@@ -128,7 +146,13 @@ export function VowelMatchRaceArena({ initialState, initialRoom }: VowelMatchRac
     onRoomChange: handleRoomChange,
     onMyRaceStateChange: (row) => {
       const next = payloadFromUnknown(row.current_question_payload);
-      if (next) setMyQuestion(next);
+      if (next) {
+        if (feedbackLockRef.current) {
+          pendingQuestionRef.current = next;
+        } else {
+          setMyQuestion((prev) => (prev?.question_id === next.question_id ? prev : next));
+        }
+      }
       setState((prev) => ({ ...prev, myRaceState: row }));
     },
     onStandingsChange: refreshStandings,
@@ -143,6 +167,7 @@ export function VowelMatchRaceArena({ initialState, initialRoom }: VowelMatchRac
 
   function submitAnswer() {
     if (!myQuestion || selected.length === 0 || pending || feedback) return;
+    const answeredQuestionId = myQuestion.question_id;
 
     startTransition(async () => {
       const result = await submitVowelMatchRaceAnswerAction(encodeVowelAnswer(selected));
@@ -152,13 +177,13 @@ export function VowelMatchRaceArena({ initialState, initialRoom }: VowelMatchRac
       }
       if (result.alreadyAnswered || result.gameEnded) return;
 
-      setFeedback({ isCorrect: Boolean(result.wasCorrect) });
+      feedbackLockRef.current = true;
+      setFeedback({ isCorrect: Boolean(result.wasCorrect), questionId: answeredQuestionId });
       if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
       feedbackTimerRef.current = window.setTimeout(() => {
-        setFeedback(null);
-        setSelected([]);
-        const next = payloadFromUnknown(result.nextQuestion);
-        if (next) setMyQuestion(next);
+        applyNextQuestion(
+          payloadFromUnknown(result.nextQuestion) ?? pendingQuestionRef.current
+        );
       }, FEEDBACK_MS);
 
       void refreshStandings();
@@ -242,9 +267,10 @@ export function VowelMatchRaceArena({ initialState, initialRoom }: VowelMatchRac
                 {myQuestion.options.filter(isVowelMatchId).map((option) => {
                   const isChosen = selected.includes(option);
                   const isCorrectOption = correctIds.includes(option);
-                  const showResult = feedback !== null;
+                  const showResult =
+                    feedback !== null && feedback.questionId === myQuestion.question_id;
                   let className =
-                    "flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ";
+                    "flex items-center justify-between rounded-xl border px-4 py-3 text-left ";
                   if (showResult) {
                     if (isCorrectOption) className += "border-emerald-400 bg-emerald-50";
                     else if (isChosen) className += "border-rose-300 bg-rose-50";
@@ -256,7 +282,7 @@ export function VowelMatchRaceArena({ initialState, initialRoom }: VowelMatchRac
                   }
                   return (
                     <button
-                      key={option}
+                      key={`${myQuestion.question_id}-${option}`}
                       type="button"
                       disabled={pending || showResult}
                       onClick={() => toggleOption(option)}
@@ -277,7 +303,7 @@ export function VowelMatchRaceArena({ initialState, initialRoom }: VowelMatchRac
                 Submit
               </button>
 
-              {feedback ? (
+              {feedback && feedback.questionId === myQuestion.question_id ? (
                 <p
                   className={`text-center text-sm font-semibold ${
                     feedback.isCorrect ? "text-emerald-600" : "text-rose-600"

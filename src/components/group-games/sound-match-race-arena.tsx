@@ -38,10 +38,16 @@ export function SoundMatchRaceArena({ initialState, initialRoom }: SoundMatchRac
     payloadFromUnknown(initialState.myRaceState?.current_question_payload)
   );
   const [standings, setStandings] = useState(initialState.standings);
-  const [feedback, setFeedback] = useState<{ isCorrect: boolean; selected: string } | null>(null);
+  const [feedback, setFeedback] = useState<{
+    isCorrect: boolean;
+    selected: string;
+    questionId: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const feedbackTimerRef = useRef<number | null>(null);
+  const feedbackLockRef = useRef(false);
+  const pendingQuestionRef = useRef<SoundMatchRacePayload | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const { currentUserId, isPlaying, winScore } = state;
@@ -62,6 +68,14 @@ export function SoundMatchRaceArena({ initialState, initialRoom }: SoundMatchRac
   useEffect(() => {
     if (!feedback) playCurrentAudio();
   }, [myQuestion?.question_id, playCurrentAudio, feedback]);
+
+  function applyNextQuestion(next: SoundMatchRacePayload | null) {
+    if (!next) return;
+    feedbackLockRef.current = false;
+    pendingQuestionRef.current = null;
+    setFeedback(null);
+    setMyQuestion(next);
+  }
 
   const refreshStandings = useCallback(async () => {
     const supabase = createClient();
@@ -120,7 +134,13 @@ export function SoundMatchRaceArena({ initialState, initialRoom }: SoundMatchRac
     onRoomChange: handleRoomChange,
     onMyRaceStateChange: (row) => {
       const next = payloadFromUnknown(row.current_question_payload);
-      if (next) setMyQuestion(next);
+      if (next) {
+        if (feedbackLockRef.current) {
+          pendingQuestionRef.current = next;
+        } else {
+          setMyQuestion((prev) => (prev?.question_id === next.question_id ? prev : next));
+        }
+      }
       setState((prev) => ({ ...prev, myRaceState: row }));
     },
     onStandingsChange: refreshStandings,
@@ -130,6 +150,7 @@ export function SoundMatchRaceArena({ initialState, initialRoom }: SoundMatchRac
     if (!isPlaying || !myQuestion || pending || feedback || room.status !== "in_progress") {
       return;
     }
+    const answeredQuestionId = myQuestion.question_id;
 
     startTransition(async () => {
       const result = await submitSoundMatchRaceAnswerAction(option);
@@ -139,12 +160,17 @@ export function SoundMatchRaceArena({ initialState, initialRoom }: SoundMatchRac
       }
       if (result.alreadyAnswered || result.gameEnded) return;
 
-      setFeedback({ isCorrect: Boolean(result.wasCorrect), selected: option });
+      feedbackLockRef.current = true;
+      setFeedback({
+        isCorrect: Boolean(result.wasCorrect),
+        selected: option,
+        questionId: answeredQuestionId,
+      });
       if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
       feedbackTimerRef.current = window.setTimeout(() => {
-        setFeedback(null);
-        const next = payloadFromUnknown(result.nextQuestion);
-        if (next) setMyQuestion(next);
+        applyNextQuestion(
+          payloadFromUnknown(result.nextQuestion) ?? pendingQuestionRef.current
+        );
       }, FEEDBACK_MS);
 
       void refreshStandings();
@@ -222,10 +248,11 @@ export function SoundMatchRaceArena({ initialState, initialRoom }: SoundMatchRac
 
               <div className="grid gap-3">
                 {myQuestion.options.map((option) => {
-                  const showResult = feedback !== null;
+                  const showResult =
+                    feedback !== null && feedback.questionId === myQuestion.question_id;
                   const isCorrectOption = option === myQuestion.correct_answer;
                   const isChosen = feedback?.selected === option;
-                  let className = `${ui.cardBordered} w-full px-4 py-4 text-left text-lg transition-colors `;
+                  let className = `${ui.cardBordered} w-full px-4 py-4 text-left text-lg `;
                   if (showResult) {
                     if (isCorrectOption) className += "border-emerald-500 bg-emerald-50";
                     else if (isChosen) className += "border-rose-500 bg-rose-50";
@@ -235,7 +262,7 @@ export function SoundMatchRaceArena({ initialState, initialRoom }: SoundMatchRac
                   }
                   return (
                     <button
-                      key={option}
+                      key={`${myQuestion.question_id}-${option}`}
                       type="button"
                       disabled={pending || showResult}
                       onClick={() => chooseOption(option)}
@@ -247,7 +274,7 @@ export function SoundMatchRaceArena({ initialState, initialRoom }: SoundMatchRac
                 })}
               </div>
 
-              {feedback ? (
+              {feedback && feedback.questionId === myQuestion.question_id ? (
                 <p
                   className={`text-center text-sm font-semibold ${
                     feedback.isCorrect ? "text-emerald-600" : "text-rose-600"

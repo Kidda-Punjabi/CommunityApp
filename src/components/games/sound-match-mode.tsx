@@ -51,7 +51,11 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
   const [questions, setQuestions] = useState<SoundMatchQuestion[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [results, setResults] = useState<SoundMatchQuestionResult[]>([]);
-  const [feedback, setFeedback] = useState<{ isCorrect: boolean; selected: string } | null>(null);
+  const [feedback, setFeedback] = useState<{
+    isCorrect: boolean;
+    selected: string;
+    questionIndex: number;
+  } | null>(null);
   const [pointsEarned, setPointsEarned] = useState(0);
 
   const advanceTimerRef = useRef<number | null>(null);
@@ -186,13 +190,13 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
       is_correct: isCorrect,
     };
 
-    setFeedback({ isCorrect, selected: option });
+    setFeedback({ isCorrect, selected: option, questionIndex });
 
     advanceTimerRef.current = window.setTimeout(() => {
       const nextResults = [...results, result];
+      setFeedback(null);
       if (questionIndex + 1 >= questions.length) {
         setResults(nextResults);
-        setFeedback(null);
         setPhase("finished");
         return;
       }
@@ -419,12 +423,12 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
 
       <div className="grid gap-2">
         {current?.options.map((option) => {
-          const showResult = feedback !== null;
+          const showResult = feedback !== null && feedback.questionIndex === questionIndex;
           const isCorrectOption = option === current.letter;
           const isChosen = feedback?.selected === option;
 
           let className =
-            "flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ";
+            "flex items-center justify-between rounded-xl border px-4 py-3 text-left ";
           if (showResult) {
             if (isCorrectOption) {
               className += "border-green-400 bg-green-50";
@@ -440,7 +444,7 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
 
           return (
             <button
-              key={option}
+              key={`${questionIndex}-${option}`}
               type="button"
               disabled={showResult}
               onClick={() => chooseOption(option)}
@@ -452,7 +456,7 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
         })}
       </div>
 
-      {feedback ? (
+      {feedback && feedback.questionIndex === questionIndex ? (
         <p
           className={`text-center text-sm font-medium ${
             feedback.isCorrect ? "text-green-700" : "text-amber-800"

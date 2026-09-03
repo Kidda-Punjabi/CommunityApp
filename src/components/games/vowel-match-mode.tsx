@@ -42,7 +42,9 @@ export function VowelMatchMode({ words, loadError }: VowelMatchModeProps) {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [selected, setSelected] = useState<VowelMatchId[]>([]);
   const [results, setResults] = useState<VowelMatchQuestionResult[]>([]);
-  const [feedback, setFeedback] = useState<{ isCorrect: boolean } | null>(null);
+  const [feedback, setFeedback] = useState<{ isCorrect: boolean; questionIndex: number } | null>(
+    null
+  );
   const [pointsEarned, setPointsEarned] = useState(0);
   const [ready, setReady] = useState(false);
 
@@ -157,13 +159,14 @@ export function VowelMatchMode({ words, loadError }: VowelMatchModeProps) {
       is_correct: isCorrect,
     };
 
-    setFeedback({ isCorrect });
+    setFeedback({ isCorrect, questionIndex });
 
     advanceTimerRef.current = window.setTimeout(() => {
       const nextResults = [...results, result];
+      setFeedback(null);
+      setSelected([]);
       if (questionIndex + 1 >= questions.length) {
         setResults(nextResults);
-        setFeedback(null);
         setPhase("finished");
         return;
       }
@@ -261,9 +264,10 @@ export function VowelMatchMode({ words, loadError }: VowelMatchModeProps) {
         {current?.options.map((option) => {
           const isChosen = selected.includes(option.id);
           const isCorrectOption = current.word.vowels_tested.includes(option.id);
-          const showResult = feedback !== null;
+          const showResult = feedback !== null && feedback.questionIndex === questionIndex;
 
-          let className = "flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ";
+          let className =
+            "flex items-center justify-between rounded-xl border px-4 py-3 text-left ";
           if (showResult) {
             if (isCorrectOption) {
               className += "border-green-400 bg-green-50";
@@ -280,7 +284,7 @@ export function VowelMatchMode({ words, loadError }: VowelMatchModeProps) {
 
           return (
             <button
-              key={option.id}
+              key={`${current.word.id}-${option.id}`}
               type="button"
               disabled={showResult}
               onClick={() => toggleOption(option.id)}
@@ -307,7 +311,7 @@ export function VowelMatchMode({ words, loadError }: VowelMatchModeProps) {
         Submit
       </button>
 
-      {feedback ? (
+      {feedback && feedback.questionIndex === questionIndex ? (
         <p
           className={`text-center text-sm font-medium ${
             feedback.isCorrect ? "text-green-700" : "text-amber-800"
