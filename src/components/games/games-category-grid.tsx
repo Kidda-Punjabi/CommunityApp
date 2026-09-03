@@ -8,6 +8,7 @@ type GamesCategoryGridProps = {
   games: GameCatalogEntry[];
   personalBests: Record<string, number>;
   isPremium?: boolean;
+  hasFoundationalAccess?: boolean;
 };
 
 export function GamesCategoryGrid({
@@ -15,6 +16,7 @@ export function GamesCategoryGrid({
   games,
   personalBests,
   isPremium = false,
+  hasFoundationalAccess = false,
 }: GamesCategoryGridProps) {
   return (
     <GamesHorizontalRow title={title}>
@@ -23,7 +25,7 @@ export function GamesCategoryGrid({
           key={game.type}
           game={game}
           personalBest={personalBests[game.type] ?? null}
-          locked={!isGameUnlockedForTier(game.type, isPremium)}
+          locked={!isGameUnlockedForTier(game.type, isPremium, hasFoundationalAccess)}
         />
       ))}
     </GamesHorizontalRow>

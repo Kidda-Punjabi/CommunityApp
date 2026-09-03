@@ -11,6 +11,7 @@ type GamesHubProps = {
   grammarGames: GameCatalogEntry[];
   personalBests: Record<string, number>;
   isPremium?: boolean;
+  hasFoundationalAccess?: boolean;
   hideGrammar?: boolean;
 };
 
@@ -19,6 +20,7 @@ export function GamesHub({
   grammarGames,
   personalBests,
   isPremium = false,
+  hasFoundationalAccess = false,
   hideGrammar = false,
 }: GamesHubProps) {
   return (
@@ -32,6 +34,7 @@ export function GamesHub({
         games={vocabularyGames}
         personalBests={personalBests}
         isPremium={isPremium}
+        hasFoundationalAccess={hasFoundationalAccess}
       />
 
       {!hideGrammar && grammarGames.length > 0 ? (
@@ -40,6 +43,7 @@ export function GamesHub({
           games={grammarGames}
           personalBests={personalBests}
           isPremium={isPremium}
+          hasFoundationalAccess={hasFoundationalAccess}
         />
       ) : null}
 
@@ -72,7 +76,8 @@ export function GamesHub({
 
 export function gameLockedForHub(
   type: GameCatalogEntry["type"],
-  isPremium: boolean
+  isPremium: boolean,
+  hasFoundationalAccess = false
 ): boolean {
-  return !isGameUnlockedForTier(type, isPremium);
+  return !isGameUnlockedForTier(type, isPremium, hasFoundationalAccess);
 }

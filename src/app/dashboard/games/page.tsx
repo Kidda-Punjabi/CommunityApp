@@ -6,24 +6,30 @@ import {
   isEnglishGamesScope,
   resolveGamesContentScope,
 } from "@/lib/games/content-scope";
+import { hasTierAccess } from "@/lib/learning/learn-access";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
-import { getCachedAuthSession } from "@/lib/supabase/cached-session";
+import {
+  getCachedAuthSession,
+  getCachedCourseAccess,
+} from "@/lib/supabase/cached-session";
 import { redirect } from "next/navigation";
 
 export default async function GamesPage() {
   const session = await getCachedAuthSession();
   if (!session) redirect("/login");
 
-  const [personalBests, isPremium, scope] = await Promise.all([
+  const [personalBests, isPremium, scope, courseAccess] = await Promise.all([
     getGamesTabData(session.user.id),
     hasPremiumAccess(session.supabase, session.user.id),
     resolveGamesContentScope(session.supabase, session.user.id),
+    getCachedCourseAccess(session.supabase, session.user),
   ]);
 
   const englishMode = isEnglishGamesScope(scope);
+  const hasFoundationalAccess = hasTierAccess(courseAccess, "foundational");
   const vocabularyGames = GAME_CATALOG.filter((g) => {
     if (g.section !== "vocabulary") return false;
-    if (englishMode && g.type === "vowel_match") return false;
+    if (englishMode && (g.type === "vowel_match" || g.type === "sound_match")) return false;
     return true;
   });
   const grammarGames = englishMode
@@ -39,7 +45,9 @@ export default async function GamesPage() {
             ? "Play vocabulary games with your Learn English flashcards."
             : isPremium
               ? "Play vocabulary and grammar games to reinforce what you've learned."
-              : `Free includes the first ${FREE_GAME_UNLOCK_COUNT} games. Premium unlocks the full catalogue.`}
+              : hasFoundationalAccess
+                ? "Foundational Course includes Sound Match and Vowel Match, plus the first four games. Premium unlocks the full catalogue."
+                : `Free includes the first ${FREE_GAME_UNLOCK_COUNT} games. Premium unlocks the full catalogue.`}
         </p>
       </div>
 
@@ -48,6 +56,7 @@ export default async function GamesPage() {
         grammarGames={grammarGames}
         personalBests={personalBests}
         isPremium={isPremium}
+        hasFoundationalAccess={hasFoundationalAccess}
         hideGrammar={englishMode}
       />
     </div>

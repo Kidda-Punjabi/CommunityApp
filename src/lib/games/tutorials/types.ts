@@ -38,6 +38,7 @@ const TUTORIAL_ID_SET: Record<TutorialId, true> = {
   lane_runner: true,
   speaking_practice: true,
   vowel_match: true,
+  sound_match: true,
   buzz_in: true,
   jeopardy: true,
   point_race: true,

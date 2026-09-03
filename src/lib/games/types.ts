@@ -16,6 +16,7 @@ export const GAME_TYPES = [
   "lane_runner",
   "speaking_practice",
   "vowel_match",
+  "sound_match",
 ] as const;
 
 export type GameType = (typeof GAME_TYPES)[number];

@@ -158,6 +158,14 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
     section: "vocabulary",
     href: "/dashboard/games/vowel-match",
   },
+  {
+    type: "sound_match",
+    title: "Sound Match",
+    description: "Hear a letter and pick it from commonly confused lookalikes",
+    emoji: "👂",
+    section: "vocabulary",
+    href: "/dashboard/games/sound-match",
+  },
 ];
 
 export function gameDeckPlayHref(

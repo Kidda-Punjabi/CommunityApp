@@ -160,6 +160,15 @@ const TUTORIALS: Record<TutorialId, GameTutorialContent> = {
       "Submit to check. You need the exact set: no missing matras, and no extras.",
     ],
   },
+  sound_match: {
+    id: "sound_match",
+    title: "How to play Sound Match",
+    steps: [
+      "A Punjabi letter plays automatically. Tap Replay any time to hear it again.",
+      "Pick the letter you heard from a short list of commonly confused lookalikes.",
+      "You'll get instant feedback, then the next letter plays on its own.",
+    ],
+  },
   buzz_in: {
     id: "buzz_in",
     title: "How to play Buzz-in",
