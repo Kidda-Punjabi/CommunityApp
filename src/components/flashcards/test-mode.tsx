@@ -5,7 +5,7 @@ import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-biling
 import { useMemo, useState } from "react";
 import { SessionProgressBar } from "@/components/session-progress-bar";
 import type { FlashcardDeckCard, FlashcardDeckContext } from "@/lib/flashcards/types";
-import { deckPracticeHref, pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
+import { deckPracticeHref, pickDistinctTexts, shuffleArray } from "@/lib/flashcards/utils";
 
 type FlashcardTestModeProps = {
   deck: FlashcardDeckContext;
@@ -49,8 +49,7 @@ function buildQuestions(deck: FlashcardDeckContext): Question[] {
   const backs = deck.cards.map((card) => card.back_text);
 
   return shuffleArray(deck.cards).map((card) => {
-    const wrongCount = Math.min(3, Math.max(backs.length - 1, 0));
-    const wrongAnswers = pickRandomItems(backs, wrongCount, card.back_text);
+    const wrongAnswers = pickDistinctTexts(backs, 3, card.back_text);
     const options = shuffleArray([card.back_text, ...wrongAnswers]).map((text) => {
       const line = testLine(
         text,
