@@ -232,6 +232,104 @@ export function pickNonConsecutive(pool: readonly string[], count: number): stri
   return result;
 }
 
+type SoundMatchClip = {
+  kind: SoundMatchQuestionKind;
+  letter: string;
+  audioUrl: string;
+  wordGurmukhi?: string;
+  wordRomanised?: string;
+};
+
+function uniqueByKey<T>(items: readonly T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const item of items) {
+    const value = key(item);
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    unique.push(item);
+  }
+  return unique;
+}
+
+/**
+ * Unique clips for one letter: a word first (so pairings are not letter-name
+ * heavy), then the isolated letter, then the remaining words.
+ */
+function uniqueClipsForLetter(
+  glyph: string,
+  letter: SoundMatchLetter | undefined,
+  words: readonly SoundMatchWordClip[]
+): SoundMatchClip[] {
+  const wordClips: SoundMatchClip[] = uniqueByKey(
+    words.filter((word) => word.starting_letter === glyph && word.audio_pa_url.trim()),
+    (word) => word.word_gurmukhi
+  ).map((word) => ({
+    kind: "word",
+    letter: glyph,
+    audioUrl: word.audio_pa_url,
+    wordGurmukhi: word.word_gurmukhi,
+    wordRomanised: word.romanised,
+  }));
+
+  const letterClip: SoundMatchClip | null = letter
+    ? { kind: "letter", letter: glyph, audioUrl: letter.audioUrl }
+    : null;
+
+  if (!letterClip) return shuffle(wordClips);
+  if (wordClips.length === 0) return [letterClip];
+
+  const shuffledWords = shuffle(wordClips);
+  return [shuffledWords[0]!, letterClip, ...shuffledWords.slice(1)];
+}
+
+/**
+ * Round-robin across letters. Use each unique clip once before repeating.
+ */
+function pickBalancedClips(
+  clipsByLetter: Map<string, SoundMatchClip[]>,
+  count: number
+): SoundMatchClip[] {
+  const glyphs = shuffle([...clipsByLetter.keys()].filter((glyph) => clipsByLetter.get(glyph)?.length));
+  if (glyphs.length === 0 || count <= 0) return [];
+
+  const unused = new Map(glyphs.map((glyph) => [glyph, [...(clipsByLetter.get(glyph) ?? [])]]));
+  const result: SoundMatchClip[] = [];
+  let cursor = 0;
+  let guard = 0;
+
+  while (result.length < count && guard < count * 80) {
+    guard += 1;
+    const glyph = glyphs[cursor % glyphs.length]!;
+    cursor += 1;
+
+    let bag = unused.get(glyph) ?? [];
+    if (bag.length === 0) {
+      bag = shuffle(clipsByLetter.get(glyph) ?? []);
+      unused.set(glyph, bag);
+    }
+    if (bag.length === 0) continue;
+
+    const last = result[result.length - 1];
+    let index = last ? bag.findIndex((clip) => clip.audioUrl !== last.audioUrl) : 0;
+    if (index < 0) {
+      const hasOther = glyphs.some((other) => {
+        if (other === glyph) return false;
+        const otherBag = unused.get(other) ?? [];
+        const pool = otherBag.length > 0 ? otherBag : clipsByLetter.get(other) ?? [];
+        return pool.some((clip) => clip.audioUrl !== last?.audioUrl);
+      });
+      if (hasOther) continue;
+      index = 0;
+    }
+
+    const next = bag.splice(index, 1)[0];
+    if (next) result.push(next);
+  }
+
+  return result;
+}
+
 export function buildSoundMatchRound(
   letters: SoundMatchLetter[],
   words: readonly SoundMatchWordClip[],
@@ -260,81 +358,17 @@ export function buildSoundMatchRound(
     (word) => wanted.has(word.starting_letter) && word.audio_pa_url.trim()
   );
 
-  const letterCount =
-    playableWords.length === 0
-      ? questionCount
-      : Math.ceil(questionCount / 2);
-  const wordCount = questionCount - letterCount;
-
-  const letterSequence = pickNonConsecutive(pool, letterCount);
-  const wordSequence = pickWordClips(playableWords, wordCount);
-
-  const kinds: SoundMatchQuestionKind[] = [];
-  if (wordSequence.length === 0) {
-    for (let i = 0; i < questionCount; i += 1) kinds.push("letter");
-  } else {
-    let next: SoundMatchQuestionKind = Math.random() < 0.5 ? "letter" : "word";
-    while (kinds.length < questionCount) {
-      const letterLeft = letterSequence.length - kinds.filter((k) => k === "letter").length;
-      const wordLeft = wordSequence.length - kinds.filter((k) => k === "word").length;
-      if (next === "word" && wordLeft > 0) kinds.push("word");
-      else if (next === "letter" && letterLeft > 0) kinds.push("letter");
-      else if (wordLeft > 0) kinds.push("word");
-      else kinds.push("letter");
-      next = next === "letter" ? "word" : "letter";
-    }
+  const clipsByLetter = new Map<string, SoundMatchClip[]>();
+  for (const glyph of pool) {
+    clipsByLetter.set(glyph, uniqueClipsForLetter(glyph, byGlyph.get(glyph), playableWords));
   }
 
-  let letterIndex = 0;
-  let wordIndex = 0;
-  const questions: SoundMatchQuestion[] = [];
-  for (const kind of kinds) {
-    if (kind === "word") {
-      const word = wordSequence[wordIndex];
-      wordIndex += 1;
-      if (!word) continue;
-      questions.push({
-        kind: "word",
-        letter: word.starting_letter,
-        audioUrl: word.audio_pa_url,
-        options: buildOptions(word.starting_letter, pool, groupIds),
-        wordGurmukhi: word.word_gurmukhi,
-        wordRomanised: word.romanised,
-      });
-      continue;
-    }
-    const glyph = letterSequence[letterIndex];
-    letterIndex += 1;
-    const letter = glyph ? byGlyph.get(glyph) : undefined;
-    if (!letter) continue;
-    questions.push({
-      kind: "letter",
-      letter: glyph,
-      audioUrl: letter.audioUrl,
-      options: buildOptions(glyph, pool, groupIds),
-    });
-  }
-
-  return questions;
-}
-
-function pickWordClips(
-  words: readonly SoundMatchWordClip[],
-  count: number
-): SoundMatchWordClip[] {
-  if (words.length === 0 || count <= 0) return [];
-  const shuffled = shuffle(words);
-  const result: SoundMatchWordClip[] = [];
-  let index = 0;
-  while (result.length < count) {
-    const next = shuffled[index % shuffled.length]!;
-    index += 1;
-    if (result.length > 0 && next.audio_pa_url === result[result.length - 1]?.audio_pa_url) {
-      const alt = shuffled.find((word) => word.audio_pa_url !== next.audio_pa_url);
-      result.push(alt ?? next);
-      continue;
-    }
-    result.push(next);
-  }
-  return result;
+  return pickBalancedClips(clipsByLetter, questionCount).map((clip) => ({
+    kind: clip.kind,
+    letter: clip.letter,
+    audioUrl: clip.audioUrl,
+    options: buildOptions(clip.letter, pool, groupIds),
+    wordGurmukhi: clip.wordGurmukhi,
+    wordRomanised: clip.wordRomanised,
+  }));
 }

@@ -25,6 +25,11 @@ const AUDIO_BUCKET = "quiz-question-audio";
 const STORAGE_PREFIX = "word-start";
 const EXPECTED_VOICE_ID = "ttyKbP9zTIRyRCN6b2Ye";
 
+/** Spoken form when the stored Gurmukhi spelling makes TTS misread the word. */
+const TTS_OVERRIDES: Record<string, string> = {
+  ਮੇਜ: "ਮੇਜ਼",
+};
+
 function loadEnvLocal() {
   const path = resolve(process.cwd(), ".env.local");
   if (!existsSync(path)) return;
@@ -126,7 +131,7 @@ async function main() {
 
     try {
       const { audio } = await synthesizeSpeech({
-        text: row.word_gurmukhi,
+        text: TTS_OVERRIDES[row.word_gurmukhi] ?? row.word_gurmukhi,
         voiceId: PUNJABI_LESSON_VOICE_ID,
         pronunciationDictionaryLocators: pronunciation ? [pronunciation] : undefined,
       });
