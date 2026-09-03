@@ -4,6 +4,14 @@ import { POINT_RACE_WIN_SCORE } from "@/lib/point-race/constants";
 import type { PointRaceGameState, RaceStanding, RaceStateRow } from "@/lib/point-race/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
+import { isRaceGameType, parseWinScore } from "@/lib/game-rooms/race";
+import { loadSoundMatchLetters } from "@/lib/games/load-sound-match";
+import { loadVowelMatchWords } from "@/lib/games/load-vowel-match";
+import {
+  buildSoundMatchRacePayload,
+  soundMatchGroupsFromSettings,
+} from "@/lib/games/sound-match-race";
+import { buildVowelMatchRacePayload } from "@/lib/games/vowel-match-race";
 
 export async function loadMyRaceState(
   supabase: SupabaseClient,
@@ -43,11 +51,11 @@ export async function loadRaceStandings(
   );
 }
 
-export async function ensurePointRaceInitialized(
+export async function ensureRaceInitialized(
   supabase: SupabaseClient,
   room: GameRoomRow
 ): Promise<void> {
-  if (room.game_type !== "point_race" || room.status !== "in_progress") return;
+  if (!isRaceGameType(room.game_type) || room.status !== "in_progress") return;
 
   const { data: existing, error: existingError } = await supabase
     .from("game_room_race_state")
@@ -69,16 +77,44 @@ export async function ensurePointRaceInitialized(
 
   const playerIds = (playingRows ?? []).map((row) => row.user_id);
   if (playerIds.length === 0) {
-    throw new Error("No playing participants to start point race.");
+    throw new Error("No playing participants to start the race.");
   }
 
-  const states = await buildInitialRaceQuestions(supabase, playerIds, room.settings);
+  let states: Array<{ player_id: string; current_question_payload: unknown }>;
+
+  if (room.game_type === "sound_match_group") {
+    const { letters, loadError } = await loadSoundMatchLetters(supabase);
+    if (loadError) throw new Error(loadError);
+    const groups = soundMatchGroupsFromSettings(room.settings);
+    states = playerIds.map((player_id) => ({
+      player_id,
+      current_question_payload: buildSoundMatchRacePayload(letters, groups),
+    }));
+  } else if (room.game_type === "vowel_match_group") {
+    const { words, loadError } = await loadVowelMatchWords(supabase);
+    if (loadError) throw new Error(loadError);
+    if (words.length === 0) throw new Error("Vowel Match words are not ready yet.");
+    states = playerIds.map((player_id) => ({
+      player_id,
+      current_question_payload: buildVowelMatchRacePayload(words),
+    }));
+  } else {
+    states = await buildInitialRaceQuestions(supabase, playerIds, room.settings);
+  }
+
   const { error } = await supabase.rpc("race_initialize_game", {
     p_room_id: room.id,
     p_states: states,
   });
 
   if (error) throw error;
+}
+
+export async function ensurePointRaceInitialized(
+  supabase: SupabaseClient,
+  room: GameRoomRow
+): Promise<void> {
+  await ensureRaceInitialized(supabase, room);
 }
 
 export async function loadPointRaceGameState(
@@ -121,7 +157,9 @@ export async function loadPointRaceGameState(
     : null;
 
   const winScore =
-    typeof room.settings?.win_score === "number" ? room.settings.win_score : POINT_RACE_WIN_SCORE;
+    typeof room.settings?.win_score === "number"
+      ? parseWinScore(room.settings.win_score, POINT_RACE_WIN_SCORE)
+      : POINT_RACE_WIN_SCORE;
   const winnerId =
     typeof room.settings?.winner_id === "string" ? room.settings.winner_id : null;
 

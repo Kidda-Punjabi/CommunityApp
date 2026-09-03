@@ -101,6 +101,17 @@ export function sameVowelSet(selected: VowelMatchId[], correct: VowelMatchId[]):
   return correct.every((id) => selectedSet.has(id));
 }
 
+export function encodeVowelAnswer(ids: readonly VowelMatchId[]): string {
+  return [...ids].sort().join(",");
+}
+
+export function parseVowelAnswer(raw: string): VowelMatchId[] {
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(isVowelMatchId);
+}
+
 export function buildVowelMatchOptions(
   correct: VowelMatchId[],
   seed: string

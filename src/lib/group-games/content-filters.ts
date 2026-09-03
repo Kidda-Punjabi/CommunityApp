@@ -85,6 +85,8 @@ export function buildRoomContentSettings(input: {
   questionCount: number;
   gameType: GroupGameType;
   topicTags: string[];
+  winScore?: number;
+  soundMatchGroups?: string[];
 }): GameRoomSettings {
   const settings: GameRoomSettings = {
     question_count: input.questionCount,
@@ -95,6 +97,20 @@ export function buildRoomContentSettings(input: {
     input.topicTags.length > 0
   ) {
     settings.topic_tags = input.topicTags;
+  }
+
+  if (
+    (input.gameType === "sound_match_group" || input.gameType === "vowel_match_group") &&
+    typeof input.winScore === "number"
+  ) {
+    settings.win_score = input.winScore;
+  }
+
+  if (input.gameType === "sound_match_group") {
+    settings.sound_match_groups =
+      input.soundMatchGroups && input.soundMatchGroups.length > 0
+        ? input.soundMatchGroups
+        : ["full"];
   }
 
   // difficulty_min / difficulty_max intentionally omitted until content is

@@ -13,6 +13,8 @@ const expected: Record<string, string> = {
   buzz_in: "buzz_in",
   jeopardy: "jeopardy",
   point_race: "point_race",
+  sound_match_group: "sound_match_group",
+  vowel_match_group: "vowel_match_group",
   chado_pauri_group: "chado_pauri_group",
   sentence_builder_group: "sentence_builder_group",
 };
@@ -22,7 +24,7 @@ for (const gameType of GROUP_GAME_TYPES) {
   assert.equal(id, expected[gameType], `${gameType} should map to a tutorial`);
   const content = getTutorialContent(id!);
   assert.ok(content.steps.length >= 2, `${id} needs at least 2 steps`);
-  assert.match(content.steps.join(" "), /buzz|Buzz|tile|Race|ladder|sentence/i);
+  assert.match(content.steps.join(" "), /buzz|Buzz|tile|Race|ladder|sentence|letter|matra|vowel|sound/i);
 }
 
 const lobbySrc = readFileSync(
@@ -54,6 +56,14 @@ const arenaChecks: Array<{ file: string; tutorialId: string; earlyReturnGuard?: 
   {
     file: "src/components/group-games/point-race-arena.tsx",
     tutorialId: "point_race",
+  },
+  {
+    file: "src/components/group-games/sound-match-race-arena.tsx",
+    tutorialId: "sound_match_group",
+  },
+  {
+    file: "src/components/group-games/vowel-match-race-arena.tsx",
+    tutorialId: "vowel_match_group",
   },
 ];
 

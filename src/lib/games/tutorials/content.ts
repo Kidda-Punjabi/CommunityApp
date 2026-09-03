@@ -198,6 +198,24 @@ const TUTORIALS: Record<TutorialId, GameTutorialContent> = {
       "First player to hit the room's target score wins. Spectators can watch the live standings.",
     ],
   },
+  sound_match_group: {
+    id: "sound_match_group",
+    title: "How to play Sound Match (group)",
+    steps: [
+      "Every player races on their own letter audio at their own pace — no shared buzz.",
+      "Listen and pick the letter you heard. Replay as many times as you need.",
+      "First player to hit the room's target score wins. Spectators can watch the live standings.",
+    ],
+  },
+  vowel_match_group: {
+    id: "vowel_match_group",
+    title: "How to play Vowel Match (group)",
+    steps: [
+      "Every player races on their own spoken words at their own pace — no shared buzz.",
+      "Select every matra you hear, then submit. You need the exact set to score.",
+      "First player to hit the room's target score wins. Spectators can watch the live standings.",
+    ],
+  },
   chado_pauri_group: {
     id: "chado_pauri_group",
     title: `How to play ${CHADO_PAURI_DISPLAY_NAME} (group)`,

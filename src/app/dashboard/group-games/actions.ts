@@ -15,8 +15,17 @@ import { buildJeopardyBoard } from "@/lib/jeopardy/build-board";
 import { ensureLadderInitialized } from "@/lib/chado-pauri-group/load-ladder";
 import { ensureSentenceBuilderInitialized } from "@/lib/sentence-builder-group/load-sentence";
 import { pickSessionSentences } from "@/lib/sentence-builder-group/pick-sentences";
-import { ensurePointRaceInitialized } from "@/lib/point-race/load-race";
+import { ensureRaceInitialized } from "@/lib/point-race/load-race";
 import { loadFlashcardPool } from "@/lib/point-race/build-questions";
+import { loadSoundMatchLetters } from "@/lib/games/load-sound-match";
+import { loadVowelMatchWords } from "@/lib/games/load-vowel-match";
+import { soundMatchGroupsFromSettings } from "@/lib/games/sound-match-race";
+import { lettersForSelection } from "@/lib/games/sound-match";
+import {
+  DEFAULT_GROUP_RACE_WIN_SCORE,
+  isRaceGameType,
+  parseWinScore,
+} from "@/lib/game-rooms/race";
 import { loadChadoPauriFlashcards } from "@/lib/games/chado-pauri/load-flashcards";
 import { loadGameRoom } from "@/lib/game-rooms/load-room";
 import { rejectIfKidCommunityBlocked } from "@/lib/kids/guards";
@@ -36,6 +45,8 @@ export async function createGameRoom(
   const questionCountRaw = String(formData.get("question_count") ?? "10").trim();
   const questionCount = Number.parseInt(questionCountRaw, 10);
   const topicTags = parseTopicTagsFromForm(formData.get("topic_tags"));
+  const winScore = parseWinScore(formData.get("win_score"), DEFAULT_GROUP_RACE_WIN_SCORE);
+  const soundMatchGroups = parseTopicTagsFromForm(formData.get("sound_match_groups"));
 
   if (!isGroupGameType(gameType)) {
     return { error: "Pick a group game type." };
@@ -49,6 +60,8 @@ export async function createGameRoom(
     questionCount,
     gameType,
     topicTags,
+    winScore: isRaceGameType(gameType) && gameType !== "point_race" ? winScore : undefined,
+    soundMatchGroups: gameType === "sound_match_group" ? soundMatchGroups : undefined,
   });
 
   const access = await rejectIfKidCommunityBlocked();
@@ -120,6 +133,20 @@ export async function startGameRoom(roomId: string): Promise<GroupGameActionResu
       await pickSessionSentences(supabase, questionCount, room.settings);
     } else if (room?.game_type === "point_race") {
       await loadFlashcardPool(supabase, room.settings);
+    } else if (room?.game_type === "sound_match_group") {
+      const { letters, loadError } = await loadSoundMatchLetters(supabase);
+      if (loadError) throw new Error(loadError);
+      const groups = soundMatchGroupsFromSettings(room.settings);
+      if (lettersForSelection(groups).length < 2) {
+        throw new Error("Pick at least one letter group to start Sound Match.");
+      }
+      if (letters.length < 2) {
+        throw new Error("Not enough letter audio to start Sound Match.");
+      }
+    } else if (room?.game_type === "vowel_match_group") {
+      const { words, loadError } = await loadVowelMatchWords(supabase);
+      if (loadError) throw new Error(loadError);
+      if (words.length === 0) throw new Error("Vowel Match words are not ready yet.");
     } else if (room?.game_type === "chado_pauri_group") {
       const { cards, loadError } = await loadChadoPauriFlashcards(supabase, room.settings);
       if (loadError) throw new Error(loadError);
@@ -179,10 +206,10 @@ export async function startGameRoom(roomId: string): Promise<GroupGameActionResu
     }
   }
 
-  if (room?.game_type === "point_race") {
+  if (room && isRaceGameType(room.game_type)) {
     const startedRoom = (await loadGameRoom(supabase, roomId)) ?? room;
     try {
-      await ensurePointRaceInitialized(supabase, { ...startedRoom, status: "in_progress" });
+      await ensureRaceInitialized(supabase, { ...startedRoom, status: "in_progress" });
     } catch (initError) {
       const message = initError instanceof Error ? initError.message : "Failed to initialize game.";
       return { error: message };
@@ -229,6 +256,14 @@ export async function resetGameRoomToLobby(input: {
         : DEFAULT_QUESTION_COUNT,
     gameType: nextType,
     topicTags: Array.isArray(topicTags) ? topicTags : [],
+    winScore:
+      isRaceGameType(nextType) && nextType !== "point_race"
+        ? parseWinScore(room.settings?.win_score, DEFAULT_GROUP_RACE_WIN_SCORE)
+        : undefined,
+    soundMatchGroups:
+      nextType === "sound_match_group"
+        ? soundMatchGroupsFromSettings(room.settings)
+        : undefined,
   });
 
   const { error } = await supabase.rpc("reset_game_room_to_lobby", {

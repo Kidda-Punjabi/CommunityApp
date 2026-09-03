@@ -22,6 +22,8 @@ const GROUP_GAME_EMOJIS: Record<GroupGameType, string> = {
   chado_pauri_group: "🪜",
   sentence_builder_group: "🧩",
   point_race: "🏁",
+  sound_match_group: "👂",
+  vowel_match_group: "🔉",
 };
 
 const BATTLE_GAME_LABELS: Record<(typeof BATTLE_GAME_SOURCES)[number], string> = {

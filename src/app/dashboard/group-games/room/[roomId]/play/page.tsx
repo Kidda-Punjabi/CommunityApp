@@ -6,6 +6,8 @@ import { ensureBuzzInInitialized, loadBuzzInGameState } from "@/lib/buzz-in/load
 import { ChadoPauriGroupArena } from "@/components/group-games/chado-pauri-group-arena";
 import { SentenceBuilderGroupArena } from "@/components/group-games/sentence-builder-group-arena";
 import { PointRaceArena } from "@/components/group-games/point-race-arena";
+import { SoundMatchRaceArena } from "@/components/group-games/sound-match-race-arena";
+import { VowelMatchRaceArena } from "@/components/group-games/vowel-match-race-arena";
 import { ensureLadderInitialized, loadLadderGameState } from "@/lib/chado-pauri-group/load-ladder";
 import { buildBackTextRomanisedMap } from "@/lib/chado-pauri-group/option-romanised";
 import { loadChadoPauriFlashcards } from "@/lib/games/chado-pauri/load-flashcards";
@@ -15,7 +17,7 @@ import {
   ensureSentenceBuilderInitialized,
   loadSentenceBuilderGroupState,
 } from "@/lib/sentence-builder-group/load-sentence";
-import { ensurePointRaceInitialized, loadPointRaceGameState } from "@/lib/point-race/load-race";
+import { ensureRaceInitialized, loadPointRaceGameState } from "@/lib/point-race/load-race";
 import { loadGameRoomView } from "@/lib/game-rooms/load-room";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -105,7 +107,7 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
   }
 
   if (view.room.game_type === "point_race") {
-    await ensurePointRaceInitialized(supabase, view.room);
+    await ensureRaceInitialized(supabase, view.room);
     const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
     const room = refreshedView?.room ?? view.room;
     const raceState = await loadPointRaceGameState(supabase, room, user.id);
@@ -114,6 +116,34 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
     return (
       <div className={ui.page}>
         <PointRaceArena initialState={raceState} initialRoom={room} />
+      </div>
+    );
+  }
+
+  if (view.room.game_type === "sound_match_group") {
+    await ensureRaceInitialized(supabase, view.room);
+    const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
+    const room = refreshedView?.room ?? view.room;
+    const raceState = await loadPointRaceGameState(supabase, room, user.id);
+    if (!raceState) notFound();
+
+    return (
+      <div className={ui.page}>
+        <SoundMatchRaceArena initialState={raceState} initialRoom={room} />
+      </div>
+    );
+  }
+
+  if (view.room.game_type === "vowel_match_group") {
+    await ensureRaceInitialized(supabase, view.room);
+    const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
+    const room = refreshedView?.room ?? view.room;
+    const raceState = await loadPointRaceGameState(supabase, room, user.id);
+    if (!raceState) notFound();
+
+    return (
+      <div className={ui.page}>
+        <VowelMatchRaceArena initialState={raceState} initialRoom={room} />
       </div>
     );
   }

@@ -13,9 +13,19 @@ import {
   GROUP_GAME_LABELS,
   GROUP_GAME_TYPES,
 } from "@/lib/game-rooms/constants";
+import {
+  DEFAULT_GROUP_RACE_WIN_SCORE,
+  RACE_WIN_SCORE_OPTIONS,
+} from "@/lib/game-rooms/race";
 import type { GroupGameType } from "@/lib/game-rooms/types";
 import { GROUP_GAMES_WITH_TOPIC_FILTER } from "@/lib/group-games/content-filters";
 import type { TopicOption } from "@/lib/group-games/load-topic-options";
+import {
+  SOUND_MATCH_FULL_ID,
+  SOUND_MATCH_GROUPS,
+  isFullAlphabet,
+  type SoundMatchSelectionId,
+} from "@/lib/games/sound-match";
 import { ui } from "@/lib/ui/styles";
 
 const initial: GroupGameActionResult = {};
@@ -46,6 +56,12 @@ export function GroupGamesHub({
     gameLocked ? lockedGameType : "buzz_in"
   );
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [winScore, setWinScore] = useState<(typeof RACE_WIN_SCORE_OPTIONS)[number]>(
+    DEFAULT_GROUP_RACE_WIN_SCORE
+  );
+  const [soundMatchGroups, setSoundMatchGroups] = useState<SoundMatchSelectionId[]>([
+    SOUND_MATCH_FULL_ID,
+  ]);
 
   const activeGameType = gameLocked ? lockedGameType : selectedGameType;
   const gameTitle = GROUP_GAME_LABELS[activeGameType];
@@ -63,6 +79,9 @@ export function GroupGamesHub({
   const showTopics = GROUP_GAMES_WITH_TOPIC_FILTER.has(activeGameType);
   const showQuestionCount =
     activeGameType === "buzz_in" || activeGameType === "sentence_builder_group";
+  const showRaceWinScore =
+    activeGameType === "sound_match_group" || activeGameType === "vowel_match_group";
+  const showSoundMatchGroups = activeGameType === "sound_match_group";
 
   const [createState, createAction, createPending] = useActionState(createGameRoom, initial);
   const [joinState, joinAction, joinPending] = useActionState(joinGameRoomByCode, initial);
@@ -199,6 +218,75 @@ export function GroupGamesHub({
         ) : (
           <input type="hidden" name="question_count" value={DEFAULT_QUESTION_COUNT} />
         )}
+
+        {showRaceWinScore ? (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              First to
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {RACE_WIN_SCORE_OPTIONS.map((score) => (
+                <button
+                  key={score}
+                  type="button"
+                  onClick={() => setWinScore(score)}
+                  className={winScore === score ? ui.pillActive : ui.pillInactive}
+                >
+                  {score} points
+                </button>
+              ))}
+            </div>
+            <input type="hidden" name="win_score" value={winScore} />
+            <p className="text-sm text-zinc-500">
+              Players race independently. First to {winScore} correct answers wins.
+            </p>
+          </div>
+        ) : null}
+
+        {showSoundMatchGroups ? (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Letter groups
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSoundMatchGroups([SOUND_MATCH_FULL_ID])}
+                className={isFullAlphabet(soundMatchGroups) ? ui.pillActive : ui.pillInactive}
+              >
+                Full alphabet
+              </button>
+              {SOUND_MATCH_GROUPS.map((group) => {
+                const active =
+                  !isFullAlphabet(soundMatchGroups) && soundMatchGroups.includes(group.id);
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() =>
+                      setSoundMatchGroups((current) => {
+                        const withoutFull = current.filter((value) => value !== SOUND_MATCH_FULL_ID);
+                        if (withoutFull.includes(group.id)) {
+                          const next = withoutFull.filter((value) => value !== group.id);
+                          return next.length > 0 ? next : [SOUND_MATCH_FULL_ID];
+                        }
+                        return [...withoutFull, group.id];
+                      })
+                    }
+                    className={active ? ui.pillActive : ui.pillInactive}
+                  >
+                    {group.label}
+                  </button>
+                );
+              })}
+            </div>
+            <input
+              type="hidden"
+              name="sound_match_groups"
+              value={JSON.stringify(soundMatchGroups)}
+            />
+          </div>
+        ) : null}
 
         {showTopics ? (
           <>

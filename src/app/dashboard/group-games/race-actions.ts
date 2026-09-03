@@ -2,8 +2,16 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { buildRandomMcqQuestion, getFlashcardPool } from "@/lib/point-race/build-questions";
-import type { McqQuestionPayload } from "@/lib/group-games/buzz-race-types";
 import type { GameRoomSettings } from "@/lib/game-rooms/types";
+import { type RaceGameType } from "@/lib/game-rooms/race";
+import type { McqQuestionPayload } from "@/lib/group-games/buzz-race-types";
+import { loadSoundMatchLetters } from "@/lib/games/load-sound-match";
+import { loadVowelMatchWords } from "@/lib/games/load-vowel-match";
+import {
+  buildSoundMatchRacePayload,
+  soundMatchGroupsFromSettings,
+} from "@/lib/games/sound-match-race";
+import { buildVowelMatchRacePayload } from "@/lib/games/vowel-match-race";
 
 export type RaceActionResult = {
   error?: string;
@@ -17,8 +25,9 @@ export type RaceActionResult = {
   gameEnded?: boolean;
 };
 
-async function loadActivePointRaceSettings(
-  supabase: Awaited<ReturnType<typeof createClient>>
+async function loadActiveRaceSettings(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  gameType: RaceGameType
 ): Promise<GameRoomSettings | null> {
   const {
     data: { user },
@@ -41,26 +50,14 @@ async function loadActivePointRaceSettings(
     .eq("id", raceState.room_id)
     .maybeSingle();
 
-  if (!room || room.game_type !== "point_race" || room.status !== "in_progress") {
+  if (!room || room.game_type !== gameType || room.status !== "in_progress") {
     return null;
   }
 
   return (room.settings as GameRoomSettings) ?? null;
 }
 
-export async function submitRaceAnswerAction(answer: string): Promise<RaceActionResult> {
-  const supabase = await createClient();
-  const settings = await loadActivePointRaceSettings(supabase);
-  const cards = await getFlashcardPool(supabase, settings);
-  const nextQuestion = buildRandomMcqQuestion(cards);
-
-  const { data, error } = await supabase.rpc("submit_race_answer", {
-    p_answer: answer,
-    p_next_question: nextQuestion,
-  });
-
-  if (error) return { error: error.message };
-
+function parseRaceRpcPayload(data: unknown): RaceActionResult {
   const payload = data as {
     already_answered?: boolean;
     game_ended?: boolean;
@@ -83,4 +80,51 @@ export async function submitRaceAnswerAction(answer: string): Promise<RaceAction
     gameCompleted: payload.game_completed,
     isWinner: payload.is_winner,
   };
+}
+
+export async function submitRaceAnswerAction(answer: string): Promise<RaceActionResult> {
+  const supabase = await createClient();
+  const settings = await loadActiveRaceSettings(supabase, "point_race");
+  const cards = await getFlashcardPool(supabase, settings);
+  const nextQuestion = buildRandomMcqQuestion(cards);
+
+  const { data, error } = await supabase.rpc("submit_race_answer", {
+    p_answer: answer,
+    p_next_question: nextQuestion,
+  });
+
+  if (error) return { error: error.message };
+  return parseRaceRpcPayload(data);
+}
+
+export async function submitSoundMatchRaceAnswerAction(answer: string): Promise<RaceActionResult> {
+  const supabase = await createClient();
+  const settings = await loadActiveRaceSettings(supabase, "sound_match_group");
+  const { letters, loadError } = await loadSoundMatchLetters(supabase);
+  if (loadError) return { error: loadError };
+  const nextQuestion = buildSoundMatchRacePayload(letters, soundMatchGroupsFromSettings(settings));
+
+  const { data, error } = await supabase.rpc("submit_race_answer", {
+    p_answer: answer,
+    p_next_question: nextQuestion,
+  });
+
+  if (error) return { error: error.message };
+  return parseRaceRpcPayload(data);
+}
+
+export async function submitVowelMatchRaceAnswerAction(answer: string): Promise<RaceActionResult> {
+  const supabase = await createClient();
+  await loadActiveRaceSettings(supabase, "vowel_match_group");
+  const { words, loadError } = await loadVowelMatchWords(supabase);
+  if (loadError) return { error: loadError };
+  const nextQuestion = buildVowelMatchRacePayload(words);
+
+  const { data, error } = await supabase.rpc("submit_race_answer", {
+    p_answer: answer,
+    p_next_question: nextQuestion,
+  });
+
+  if (error) return { error: error.message };
+  return parseRaceRpcPayload(data);
 }

@@ -6,6 +6,8 @@ export type TutorialId =
   | "buzz_in"
   | "jeopardy"
   | "point_race"
+  | "sound_match_group"
+  | "vowel_match_group"
   | "chado_pauri_group"
   | "sentence_builder_group";
 
@@ -42,6 +44,8 @@ const TUTORIAL_ID_SET: Record<TutorialId, true> = {
   buzz_in: true,
   jeopardy: true,
   point_race: true,
+  sound_match_group: true,
+  vowel_match_group: true,
   chado_pauri_group: true,
   sentence_builder_group: true,
 };

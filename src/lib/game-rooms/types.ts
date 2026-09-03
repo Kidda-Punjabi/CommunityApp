@@ -3,7 +3,9 @@ export type GroupGameType =
   | "jeopardy"
   | "chado_pauri_group"
   | "sentence_builder_group"
-  | "point_race";
+  | "point_race"
+  | "sound_match_group"
+  | "vowel_match_group";
 
 export type GameRoomStatus = "lobby" | "in_progress" | "completed" | "cancelled";
 
