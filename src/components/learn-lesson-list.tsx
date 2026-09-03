@@ -51,6 +51,12 @@ type LearnLessonListProps = {
   catchupReturn?: string | null;
   /** When false, hides the course-level “X of Y lessons complete” bar (Community). */
   showCourseProgress?: boolean;
+  /** Tighten space between Back and the title (Foundational Course). */
+  compactHeader?: boolean;
+  /** Do not auto-open a week accordion on load (Foundational Course). */
+  collapseLessonsByDefault?: boolean;
+  /** Where to render the in-progress / next-up / locked key. */
+  statusLegendPosition?: "top" | "bottom";
   scheduleSessionByLessonId?: Map<string, StudentScheduledSession>;
 };
 
@@ -79,6 +85,9 @@ export function LearnLessonList({
   homeworkFocusLessonId,
   catchupReturn,
   showCourseProgress = true,
+  compactHeader = false,
+  collapseLessonsByDefault = false,
+  statusLegendPosition = "top",
   scheduleSessionByLessonId,
 }: LearnLessonListProps) {
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
@@ -200,7 +209,7 @@ export function LearnLessonList({
     <div className={ui.page}>
       <BackLink fallbackHref={backHref}>← Back</BackLink>
 
-      <div className="mb-8 mt-4">
+      <div className={compactHeader ? "mb-5 mt-2" : "mb-8 mt-4"}>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
         {subtitle.trim() ? (
           <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
@@ -228,7 +237,7 @@ export function LearnLessonList({
         </div>
       ) : (
         <div className={ui.stack}>
-          <LessonStatusLegend />
+          {statusLegendPosition === "top" ? <LessonStatusLegend /> : null}
           {lessons.map((lesson) => {
             const row = progressMap.get(lesson.id);
             const { canBrowse, contentUnlocked } = lessonAccess(lesson);
@@ -238,7 +247,11 @@ export function LearnLessonList({
                 key={lesson.id}
                 lesson={lesson}
                 accordionName="learn-lessons"
-                defaultExpanded={lesson.id === defaultExpandedLessonId}
+                defaultExpanded={
+                  collapseLessonsByDefault
+                    ? false
+                    : lesson.id === defaultExpandedLessonId
+                }
                 canBrowse={canBrowse}
                 contentUnlocked={contentUnlocked}
                 visualStatus={visualStatusFor(lesson)}
@@ -275,6 +288,11 @@ export function LearnLessonList({
               If a lesson is greyed out or shows a lock, your tutor will unlock it once you have
               completed that session.
             </p>
+          ) : null}
+          {statusLegendPosition === "bottom" ? (
+            <div className="pt-2">
+              <LessonStatusLegend />
+            </div>
           ) : null}
         </div>
       )}

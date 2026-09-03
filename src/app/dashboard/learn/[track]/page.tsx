@@ -3,6 +3,7 @@ import { FreeLessonsPath } from "@/components/learn/free-lessons-path";
 import { GroupCohortOpensPanel } from "@/components/learn/group-cohort-opens-panel";
 import {
   BuyExtraOneToOneCard,
+  NeedMoreSupportLink,
   PackageHubPanel,
 } from "@/components/packages/package-hub-panel";
 import {
@@ -279,6 +280,15 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
         : Promise.resolve(new Map<string, boolean>()),
     ]);
 
+  const courseProgress = summarizeCourseProgress(lessons, completionMap);
+  const isFoundational = track.id === "foundational";
+  const packageProgressLabel =
+    isFoundational && courseProgress.totalLessons > 0
+      ? `${courseProgress.completedLessons} of ${courseProgress.totalLessons} done · ${Math.round(
+          (courseProgress.completedLessons / courseProgress.totalLessons) * 100
+        )}%`
+      : null;
+
   if (studentPackage) {
     staffSection =
       track.id === "community" && communityLeads ? (
@@ -287,10 +297,13 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
           <CommunityLeadSection leads={communityLeads} />
         </>
       ) : (
-        <PackageHubPanel pkg={studentPackage} cohortStats={cohortCourseStats} />
+        <PackageHubPanel
+          pkg={studentPackage}
+          cohortStats={cohortCourseStats}
+          progressLabel={packageProgressLabel}
+        />
       );
   }
-  const courseProgress = summarizeCourseProgress(lessons, completionMap);
   const scheduleSessionByLessonId = buildScheduleSessionByLessonId(
     upcomingLoad.sessions,
     lessons,
@@ -303,7 +316,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       subtitle={
         track.id === "community"
           ? `${lessons.length} week${lessons.length === 1 ? "" : "s"} of community lessons.`
-          : track.id === "beginners"
+          : track.id === "beginners" || isFoundational
             ? ""
             : `${lessons.length} lesson${lessons.length === 1 ? "" : "s"} in this course.`
       }
@@ -314,9 +327,12 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       flashcardProgressMap={flashcardProgressMap}
       quizProgressMap={quizProgressMap}
       completionMap={completionMap}
-      showCourseProgress={shouldShowLearnCourseProgress(track.id)}
+      showCourseProgress={!isFoundational && shouldShowLearnCourseProgress(track.id)}
+      compactHeader={isFoundational}
+      collapseLessonsByDefault={isFoundational}
+      statusLegendPosition={isFoundational ? "bottom" : "top"}
       courseProgress={
-        shouldShowLearnCourseProgress(track.id)
+        !isFoundational && shouldShowLearnCourseProgress(track.id)
           ? {
               completed: courseProgress.completedLessons,
               total: courseProgress.totalLessons,
@@ -328,7 +344,13 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
         track.id === "beginners" || studentPackage ? (
           <div className="space-y-4">
             {track.id === "beginners" ? <CourseAboutBlock level="beginners" /> : null}
-            {studentPackage ? <BuyExtraOneToOneCard pkg={studentPackage} /> : null}
+            {studentPackage ? (
+              isFoundational ? (
+                <NeedMoreSupportLink pkg={studentPackage} />
+              ) : (
+                <BuyExtraOneToOneCard pkg={studentPackage} />
+              )
+            ) : null}
           </div>
         ) : null
       }

@@ -10,6 +10,8 @@ type PackageHubPanelProps = {
   pkg: StudentPackage;
   variant?: "full" | "embedded";
   cohortStats?: StudentCohortCourseStats | null;
+  /** Compact “0 of 4 done · 0%” on the tutor row (Foundational Course). */
+  progressLabel?: string | null;
 };
 
 function statusLabel(status: StudentPackage["status"]): string {
@@ -56,10 +58,27 @@ export function BuyExtraOneToOneCard({ pkg }: { pkg: StudentPackage }) {
   );
 }
 
+/** Same destination as Book on Schedule; muted underlined text (Foundational Course). */
+export function NeedMoreSupportLink({ pkg }: { pkg: StudentPackage }) {
+  if (!shouldShowBuyExtraOneToOneLesson(pkg)) return null;
+
+  return (
+    <p className="text-center">
+      <Link
+        href="/dashboard/schedule"
+        className="text-xs font-medium text-zinc-500 underline underline-offset-2"
+      >
+        Need more support?
+      </Link>
+    </p>
+  );
+}
+
 export function PackageHubPanel({
   pkg,
   variant = "full",
   cohortStats = null,
+  progressLabel = null,
 }: PackageHubPanelProps) {
   const contactName = pkg.tutorName ?? pkg.communityLeadName;
   const contactAvatar = pkg.tutorAvatarUrl ?? pkg.communityLeadAvatarUrl;
@@ -88,7 +107,7 @@ export function PackageHubPanel({
       </div>
 
       {contactName ? (
-        <div className="flex items-center gap-3 rounded-xl bg-zinc-50 px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-zinc-50 px-3 py-2.5">
           <UserAvatar
             profile={{
               full_name: contactName,
@@ -103,6 +122,11 @@ export function PackageHubPanel({
               <p className="truncate text-xs text-zinc-500">{contactLabel}</p>
             ) : null}
           </div>
+          {progressLabel ? (
+            <p className="ml-auto shrink-0 text-right text-[13px] leading-tight text-zinc-500 max-[360px]:basis-full">
+              {progressLabel}
+            </p>
+          ) : null}
           {cohortStats ? <CourseCohortStats stats={cohortStats} /> : null}
         </div>
       ) : pkg.includesLiveSessions ? (
