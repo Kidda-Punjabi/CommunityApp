@@ -1,5 +1,5 @@
 import { SoundMatchMode } from "@/components/games/sound-match-mode";
-import { loadSoundMatchLetters } from "@/lib/games/load-sound-match";
+import { loadSoundMatchLetters, loadSoundMatchWords } from "@/lib/games/load-sound-match";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -11,11 +11,14 @@ export default async function SoundMatchPage() {
 
   if (!user) redirect("/login");
 
-  const { letters, loadError } = await loadSoundMatchLetters(supabase);
+  const [{ letters, loadError }, { words }] = await Promise.all([
+    loadSoundMatchLetters(supabase),
+    loadSoundMatchWords(supabase),
+  ]);
 
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
-      <SoundMatchMode letters={letters} loadError={loadError} />
+      <SoundMatchMode letters={letters} words={words} loadError={loadError} />
     </div>
   );
 }

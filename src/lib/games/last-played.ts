@@ -28,6 +28,7 @@ export function readLastPlayedGame(): PlayableGameId | null {
 }
 
 export function resolvePlayAgainId(stored: PlayableGameId | null): PlayableGameId {
+  if (stored === "word_start") return "sound_match";
   return stored ?? DEFAULT_PLAY_AGAIN_GAME;
 }
 

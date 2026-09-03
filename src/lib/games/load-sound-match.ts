@@ -3,6 +3,7 @@ import {
   lettersForSelection,
   uniqueLetters,
   type SoundMatchLetter,
+  type SoundMatchWordClip,
 } from "@/lib/games/sound-match";
 
 const FC_QUIZ_TITLES = ["FC - Q1", "FC - Q2"];
@@ -78,4 +79,33 @@ export async function loadSoundMatchLetters(
     const letter = byGlyph.get(glyph);
     return letter ? [letter] : [];
   }), loadError: null };
+}
+
+export async function loadSoundMatchWords(
+  supabase: SupabaseClient
+): Promise<{ words: SoundMatchWordClip[]; loadError: string | null }> {
+  const { data, error } = await supabase
+    .from("word_start_game_words")
+    .select("word_gurmukhi, romanised, starting_letter, audio_pa_url")
+    .order("display_order", { ascending: true });
+
+  if (error) {
+    return { words: [], loadError: error.message };
+  }
+
+  const words: SoundMatchWordClip[] = [];
+  for (const row of data ?? []) {
+    const audio = typeof row.audio_pa_url === "string" ? row.audio_pa_url.trim() : "";
+    const starting = typeof row.starting_letter === "string" ? row.starting_letter.trim() : "";
+    const gurmukhi = typeof row.word_gurmukhi === "string" ? row.word_gurmukhi.trim() : "";
+    if (!audio || !starting || !gurmukhi) continue;
+    words.push({
+      starting_letter: starting,
+      audio_pa_url: audio,
+      word_gurmukhi: gurmukhi,
+      romanised: typeof row.romanised === "string" ? row.romanised : "",
+    });
+  }
+
+  return { words, loadError: null };
 }

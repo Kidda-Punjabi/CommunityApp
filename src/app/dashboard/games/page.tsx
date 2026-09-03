@@ -30,8 +30,7 @@ export default async function GamesPage() {
   const vocabularyGames = GAME_CATALOG.filter((g) => {
     if (g.section !== "vocabulary") return false;
     if (
-      englishMode &&
-      (g.type === "vowel_match" || g.type === "sound_match" || g.type === "word_start")
+      englishMode && (g.type === "vowel_match" || g.type === "sound_match")
     ) {
       return false;
     }
@@ -51,7 +50,7 @@ export default async function GamesPage() {
             : isPremium
               ? "Play vocabulary and grammar games to reinforce what you've learned."
               : hasFoundationalAccess
-                ? "Foundational Course includes Sound Match, Vowel Match, and Word Start, plus the first four games. Premium unlocks the full catalogue."
+                ? "Foundational Course includes Sound Match and Vowel Match, plus the first four games. Premium unlocks the full catalogue."
                 : `Free includes the first ${FREE_GAME_UNLOCK_COUNT} games. Premium unlocks the full catalogue.`}
         </p>
       </div>

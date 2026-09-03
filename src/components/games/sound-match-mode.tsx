@@ -14,37 +14,42 @@ import {
   SOUND_MATCH_GROUPS,
   SOUND_MATCH_QUESTION_COUNTS,
   buildSoundMatchRound,
-  fullAlphabetLetters,
   isFullAlphabet,
   letterLabel,
   lettersForSelection,
+  pairChoiceKey,
+  pairChoiceLabel,
+  pairingChoices,
   type SoundMatchLetter,
+  type SoundMatchPairChoice,
   type SoundMatchQuestion,
   type SoundMatchQuestionResult,
   type SoundMatchSelectionId,
+  type SoundMatchWordClip,
 } from "@/lib/games/sound-match";
 import { createClient } from "@/lib/supabase/client";
 import { ui } from "@/lib/ui/styles";
 import { Volume2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const FEEDBACK_MS = 1100;
 
 type Phase = "setup" | "playing" | "finished";
-type SelectionMode = "group" | "letters";
+type SelectionMode = "group" | "pairing";
 
 type SoundMatchModeProps = {
   letters: SoundMatchLetter[];
+  words: SoundMatchWordClip[];
   loadError: string | null;
 };
 
-export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
+export function SoundMatchMode({ letters, words, loadError }: SoundMatchModeProps) {
   const [phase, setPhase] = useState<Phase>("setup");
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("group");
   const [selectedGroups, setSelectedGroups] = useState<SoundMatchSelectionId[]>([
     SOUND_MATCH_FULL_ID,
   ]);
-  const [selectedLetters, setSelectedLetters] = useState<string[]>([]);
+  const [selectedPair, setSelectedPair] = useState<SoundMatchPairChoice | null>(null);
   const [questionCount, setQuestionCount] = useState<(typeof SOUND_MATCH_QUESTION_COUNTS)[number]>(
     10
   );
@@ -66,16 +71,18 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
 
   const current = questions[questionIndex];
   const correctCount = results.filter((result) => result.is_correct).length;
-  const alphabetLetters = fullAlphabetLetters().filter((glyph) =>
-    letters.some((letter) => letter.glyph === glyph && letter.audioUrl)
-  );
+  const pairings = useMemo(() => pairingChoices(), []);
+  const pairPool = selectedPair ? [selectedPair.left, selectedPair.right] : [];
   const groupPoolSize = lettersForSelection(selectedGroups).filter((glyph) =>
     letters.some((letter) => letter.glyph === glyph)
   ).length;
-  const letterPoolSize = selectedLetters.filter((glyph) =>
+  const pairPoolSize = pairPool.filter((glyph) =>
     letters.some((letter) => letter.glyph === glyph && letter.audioUrl)
   ).length;
-  const poolSize = selectionMode === "letters" ? letterPoolSize : groupPoolSize;
+  const poolSize = selectionMode === "pairing" ? pairPoolSize : groupPoolSize;
+  const selectedGroup = selectedPair
+    ? SOUND_MATCH_GROUPS.find((group) => group.id === selectedPair.groupId)
+    : null;
 
   const playCurrentAudio = useCallback(() => {
     const audio = audioRef.current;
@@ -103,7 +110,7 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
     if (phase !== "playing") return;
     setFeedback(null);
     playCurrentAudio();
-  }, [phase, questionIndex, current?.letter, playCurrentAudio]);
+  }, [phase, questionIndex, current?.audioUrl, current?.kind, playCurrentAudio]);
 
   useEffect(() => {
     if (phase !== "finished" || savedRef.current) return;
@@ -120,7 +127,7 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
       const outcome = await saveGameScore(supabase, userId, "sound_match", correct, {
         groups_selected: selectedGroups,
         selection_mode: selectionMode,
-        letters_selected: selectionMode === "letters" ? selectedLetters : undefined,
+        pair_selected: selectedPair,
         question_count: total,
         correct_count: correct,
         correct,
@@ -132,15 +139,17 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
     };
 
     void persist();
-  }, [phase, questions.length, results, selectedGroups, selectedLetters, selectionMode]);
+  }, [phase, questions.length, results, selectedGroups, selectedPair, selectionMode]);
 
   function startRound() {
     if (advanceTimerRef.current) window.clearTimeout(advanceTimerRef.current);
     const nextQuestions = buildSoundMatchRound(
       letters,
+      words,
       selectedGroups,
       questionCount,
-      selectionMode === "letters" ? selectedLetters : undefined
+      selectionMode === "pairing" && selectedPair ? pairPool : undefined,
+      selectionMode === "pairing" ? selectedPair?.groupId : undefined
     );
     if (nextQuestions.length === 0) return;
     savedRef.current = false;
@@ -167,16 +176,6 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
     });
   }
 
-  function toggleLetter(glyph: string) {
-    setSelectedLetters((currentSelected) => {
-      if (currentSelected.includes(glyph)) {
-        return currentSelected.filter((value) => value !== glyph);
-      }
-      if (currentSelected.length >= 2) return currentSelected;
-      return [...currentSelected, glyph];
-    });
-  }
-
   function chooseOption(option: string) {
     if (!current || feedback) return;
 
@@ -184,10 +183,13 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
     playSound(isCorrect ? "correct" : "incorrect");
 
     const result: SoundMatchQuestionResult = {
+      kind: current.kind,
       letter: current.letter,
       selected: option,
       options: current.options,
       is_correct: isCorrect,
+      wordGurmukhi: current.wordGurmukhi,
+      wordRomanised: current.wordRomanised,
     };
 
     setFeedback({ isCorrect, selected: option, questionIndex });
@@ -220,11 +222,13 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
 
   if (phase === "setup") {
     const startDisabled =
-      selectionMode === "letters" ? selectedLetters.length !== 2 || letterPoolSize !== 2 : poolSize === 0;
-    const repeatWarning =
-      poolSize > 0 && questionCount > poolSize
-        ? `This selection has ${poolSize} letters — you'll hear some more than once.`
-        : null;
+      selectionMode === "pairing" ? !selectedPair || pairPoolSize !== 2 : poolSize === 0;
+    const wordPool =
+      selectionMode === "pairing" && selectedPair
+        ? words.filter((word) => pairPool.includes(word.starting_letter))
+        : words.filter((word) =>
+            lettersForSelection(selectedGroups).includes(word.starting_letter)
+          );
 
     return (
       <div className="space-y-6">
@@ -238,7 +242,7 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
           </p>
           <h1 className="mt-1 text-2xl font-bold text-zinc-900">{SOUND_MATCH_DISPLAY_NAME}</h1>
           <p className="mt-2 text-sm text-zinc-500">
-            Listen to a Punjabi letter and pick it from a set of commonly confused lookalikes.
+            Hear a letter on its own, or at the start of a word, and pick it from similar sounds.
           </p>
         </div>
 
@@ -274,81 +278,97 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
             </button>
             <button
               type="button"
-              onClick={() => setSelectionMode("letters")}
-              className={selectionMode === "letters" ? ui.pillActive : ui.pillInactive}
+              onClick={() => setSelectionMode("pairing")}
+              className={selectionMode === "pairing" ? ui.pillActive : ui.pillInactive}
             >
-              By letters
+              By pairing
             </button>
           </div>
         </div>
 
         {selectionMode === "group" ? (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Letter groups
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={toggleFullAlphabet}
-              className={isFullAlphabet(selectedGroups) ? ui.pillActive : ui.pillInactive}
-            >
-              Full alphabet
-            </button>
-            {SOUND_MATCH_GROUPS.map((group) => {
-              const active =
-                !isFullAlphabet(selectedGroups) && selectedGroups.includes(group.id);
-              return (
-                <button
-                  key={group.id}
-                  type="button"
-                  onClick={() => toggleGroup(group.id)}
-                  className={active ? ui.pillActive : ui.pillInactive}
-                >
-                  {group.label}
-                </button>
-              );
-            })}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Letter groups
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={toggleFullAlphabet}
+                className={isFullAlphabet(selectedGroups) ? ui.pillActive : ui.pillInactive}
+              >
+                Full alphabet
+              </button>
+              {SOUND_MATCH_GROUPS.map((group) => {
+                const active =
+                  !isFullAlphabet(selectedGroups) && selectedGroups.includes(group.id);
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() => toggleGroup(group.id)}
+                    className={active ? ui.pillActive : ui.pillInactive}
+                  >
+                    {group.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-sm text-zinc-500">
+              {isFullAlphabet(selectedGroups)
+                ? "Questions mix letter sounds and the start of words across all four confusable groups."
+                : SOUND_MATCH_GROUPS.filter((group) => selectedGroups.includes(group.id))
+                    .map((group) => group.description)
+                    .join(" · ")}
+            </p>
           </div>
-          <p className="text-sm text-zinc-500">
-            {isFullAlphabet(selectedGroups)
-              ? "Questions draw from all four confusable groups."
-              : SOUND_MATCH_GROUPS.filter((group) => selectedGroups.includes(group.id))
-                  .map((group) => group.description)
-                  .join(" · ")}
-          </p>
-        </div>
         ) : (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Pick exactly 2 letters
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {alphabetLetters.map((glyph) => {
-              const active = selectedLetters.includes(glyph);
-              return (
-                <button
-                  key={glyph}
-                  type="button"
-                  onClick={() => toggleLetter(glyph)}
-                  className={active ? ui.pillActive : ui.pillInactive}
-                >
-                  {letterLabel(glyph)}
-                </button>
-              );
-            })}
+          <div className="space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Similar-sound pairings
+            </p>
+            {SOUND_MATCH_GROUPS.filter((group) => group.pairs.length > 0).map((group) => (
+              <div key={group.id} className="space-y-2">
+                <p className="text-sm font-semibold text-zinc-800">{group.label}</p>
+                <p className="text-xs text-zinc-500">{group.description}</p>
+                <div className="flex flex-wrap gap-2">
+                  {pairings
+                    .filter((item) => item.group.id === group.id)
+                    .map((item) => {
+                      const choice: SoundMatchPairChoice = {
+                        groupId: group.id,
+                        left: item.left,
+                        right: item.right,
+                      };
+                      const active =
+                        selectedPair !== null &&
+                        pairChoiceKey(selectedPair) === pairChoiceKey(choice);
+                      return (
+                        <button
+                          key={pairChoiceKey(choice)}
+                          type="button"
+                          onClick={() => setSelectedPair(choice)}
+                          className={active ? ui.pillActive : ui.pillInactive}
+                        >
+                          {pairChoiceLabel(item.left, item.right)}
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            ))}
+            <p className="text-sm text-zinc-500">
+              {selectedPair && selectedGroup
+                ? `This pairing is ${pairChoiceLabel(selectedPair.left, selectedPair.right)} — similar sounds from ${selectedGroup.label}. You'll hear each letter on its own and at the start of words.`
+                : "Pick one pairing of similar letters. You don't choose the two letters separately."}
+            </p>
           </div>
-          <p className="text-sm text-zinc-500">
-            {selectedLetters.length === 2
-              ? `Round will only use ${letterLabel(selectedLetters[0]!)} and ${letterLabel(selectedLetters[1]!)}.`
-              : `Selected ${selectedLetters.length} of 2.`}
-          </p>
-        </div>
         )}
 
-        {repeatWarning ? (
+        {wordPool.length === 0 && poolSize > 0 ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            {repeatWarning}
+            Word clips aren't available for this selection yet, so this round will use letter sounds
+            only.
           </p>
         ) : null}
 
@@ -371,7 +391,12 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
         correct={correctCount}
         total={questions.length}
         sessionLog={results.map((result) => ({
-          prompt: letterLabel(result.letter),
+          prompt:
+            result.kind === "word" && result.wordGurmukhi
+              ? result.wordGurmukhi
+              : letterLabel(result.letter),
+          promptRomanised:
+            result.kind === "word" ? result.wordRomanised : undefined,
           userAnswer: letterLabel(result.selected),
           correctAnswer: letterLabel(result.letter),
           wasCorrect: result.is_correct,
@@ -406,9 +431,12 @@ export function SoundMatchMode({ letters, loadError }: SoundMatchModeProps) {
       <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
           {SOUND_MATCH_DISPLAY_NAME}
+          {current?.kind === "word" ? " · Word" : " · Letter"}
         </p>
         <p className="mt-2 text-center text-lg font-semibold text-zinc-900">
-          Which letter do you hear?
+          {current?.kind === "word"
+            ? "What does this word start with?"
+            : "Which letter do you hear?"}
         </p>
         <p className="mt-1 text-center text-sm text-zinc-500">
           Audio plays automatically. Replay as many times as you need.

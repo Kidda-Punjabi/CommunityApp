@@ -164,9 +164,9 @@ const TUTORIALS: Record<TutorialId, GameTutorialContent> = {
     id: "sound_match",
     title: "How to play Sound Match",
     steps: [
-      "A Punjabi letter plays automatically. Tap Replay any time to hear it again.",
-      "Pick the letter you heard from a short list of commonly confused lookalikes.",
-      "You'll get instant feedback, then the next letter plays on its own.",
+      "Choose a letter group, or one pairing of similar letters such as ਕ Kakka and ਖ Khakha.",
+      "You'll hear either the letter on its own or a word that starts with it. Tap Replay any time.",
+      "Pick the letter you heard. You'll get instant feedback, then the next clip plays.",
     ],
   },
   word_start: {

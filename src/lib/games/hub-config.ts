@@ -102,7 +102,7 @@ const SLUG_TO_GAME_TYPE: Record<string, GameType> = {
   "speaking-practice": "speaking_practice",
   "vowel-match": "vowel_match",
   "sound-match": "sound_match",
-  "word-start": "word_start",
+  "word-start": "sound_match",
 };
 
 const RESOURCE_GAME_PATHS = new Set([
@@ -173,6 +173,6 @@ export function playableIdFromPath(pathname: string): PlayableGameId | null {
 }
 
 export function isPlayableGameId(value: string): value is PlayableGameId {
-  if (value === "group_games" || value === "battle") return true;
+  if (value === "group_games" || value === "battle" || value === "word_start") return true;
   return GAME_CATALOG.some((entry) => entry.type === value);
 }

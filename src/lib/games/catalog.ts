@@ -161,18 +161,10 @@ export const GAME_CATALOG: GameCatalogEntry[] = [
   {
     type: "sound_match",
     title: "Sound Match",
-    description: "Hear a letter and pick it from commonly confused lookalikes",
+    description: "Hear a letter or the start of a word and pick it from similar sounds",
     emoji: "👂",
     section: "vocabulary",
     href: "/dashboard/games/sound-match",
-  },
-  {
-    type: "word_start",
-    title: "Word Start",
-    description: "Hear a word and pick the letter it starts with",
-    emoji: "🔤",
-    section: "vocabulary",
-    href: "/dashboard/games/word-start",
   },
 ];
 
