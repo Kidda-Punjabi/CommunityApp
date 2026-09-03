@@ -60,7 +60,7 @@ VALUES
   ('ਥੈਲਾ', 'bag', 'thaila', 'ਥ', ARRAY['ਤ', 'ਠ'], 15),
   ('ਦੁੱਧ', 'milk', 'dudh', 'ਦ', ARRAY['ਧ', 'ਡ'], 16),
   ('ਦੰਦ', 'teeth', 'dand', 'ਦ', ARRAY['ਧ', 'ਡ'], 17),
-  ('ਧੁੱਪ', 'sun', 'dhupp', 'ਧ', ARRAY['ਦ', 'ਢ'], 18),
+  ('ਧੁੱਪ', 'sunshine', 'dhupp', 'ਧ', ARRAY['ਦ', 'ਢ'], 18),
   ('ਡਾਕਟਰ', 'doctor', 'daaktar', 'ਡ', ARRAY['ਢ', 'ਦ'], 19),
   ('ਪਾਣੀ', 'water', 'paani', 'ਪ', ARRAY['ਫ', 'ਬ'], 20),
   ('ਪਰਦਾ', 'curtain', 'pardaa', 'ਪ', ARRAY['ਫ', 'ਬ'], 21),

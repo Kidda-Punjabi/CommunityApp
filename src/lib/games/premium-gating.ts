@@ -15,6 +15,7 @@ export const GAMES_PREMIUM_UNLOCK_URL = PREMIUM_UNLOCK_PATH;
 export const FOUNDATIONAL_COURSE_GAMES: readonly GameType[] = [
   "vowel_match",
   "sound_match",
+  "word_start",
 ];
 
 export function gameDisplayOrder(type: GameType): number {

@@ -51,7 +51,7 @@ export default async function GamesPage() {
             : isPremium
               ? "Play vocabulary and grammar games to reinforce what you've learned."
               : hasFoundationalAccess
-                ? "Foundational Course includes Sound Match and Vowel Match, plus the first four games. Premium unlocks the full catalogue."
+                ? "Foundational Course includes Sound Match, Vowel Match, and Word Start, plus the first four games. Premium unlocks the full catalogue."
                 : `Free includes the first ${FREE_GAME_UNLOCK_COUNT} games. Premium unlocks the full catalogue.`}
         </p>
       </div>
