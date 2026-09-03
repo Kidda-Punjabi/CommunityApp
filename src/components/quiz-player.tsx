@@ -2,12 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Volume2 } from "lucide-react";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { useAudioManager } from "@/lib/audio/audio-manager";
+import {
+  applySpeechPlaybackRate,
+  NORMAL_SPEECH_RATE,
+  SLOW_SPEECH_RATE,
+} from "@/lib/audio/speech-playback";
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import { LessonFeedbackPanel } from "@/components/feedback/lesson-feedback-panel";
 import { PointsEarnedBadge } from "@/components/points/points-earned-badge";
 import { createClient } from "@/lib/supabase/client";
+import { gurmukhiOptionName } from "@/lib/learn/gurmukhi-letter-names";
 import { sumPointsEarned } from "@/lib/points/notify-points-earned";
 import { quizScorePercent, saveQuizProgress } from "@/lib/progress/quiz-progress";
 import { PASSING_QUIZ_SCORE } from "@/lib/progress/quiz-progress";
@@ -27,6 +34,7 @@ export type QuizQuestion = {
   option_d: string;
   correct_answer: string;
   question_order: number;
+  question_audio_pa_url?: string | null;
 };
 
 type QuizPlayerProps = {
@@ -55,18 +63,44 @@ export function QuizPlayer({
   const [streakResult, setStreakResult] = useState<StreakResult | null>(null);
   const [pointsEarned, setPointsEarned] = useState(0);
   const [lessonCompleted, setLessonCompleted] = useState(false);
+  const [heardQuestionId, setHeardQuestionId] = useState<string | null>(null);
   const savedRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { playSound } = useAudioManager();
 
   const question = questions[index];
+  const audioUrl = question.question_audio_pa_url?.trim() || null;
+  const heardAudio = !audioUrl || heardQuestionId === question.id;
   const isCorrect = selected === question.correct_answer;
   const showNextButton = Boolean(selected && !isCorrect);
+  const answersLocked = Boolean(audioUrl && !heardAudio && !selected);
   const options = [
     { key: "a", label: question.option_a },
     { key: "b", label: question.option_b },
     { key: "c", label: question.option_c },
     { key: "d", label: question.option_d },
   ];
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, [question.id]);
+
+  function playQuestionAudio(rate: number) {
+    const audio = audioRef.current;
+    if (!audio || !audioUrl) return;
+    applySpeechPlaybackRate(audio, rate);
+    audio.currentTime = 0;
+    void audio
+      .play()
+      .then(() => setHeardQuestionId(question.id))
+      .catch(() => {
+        // Autoplay can fail until the student taps Listen.
+      });
+  }
 
   useEffect(() => {
     if (!finished || savedRef.current) return;
@@ -140,7 +174,7 @@ export function QuizPlayer({
   }, [finished, playSound]);
 
   function handleSelect(optionKey: string) {
-    if (selected) return;
+    if (selected || answersLocked) return;
     setSelected(optionKey);
     if (optionKey === question.correct_answer) {
       setScore((prev) => prev + 1);
@@ -205,19 +239,49 @@ export function QuizPlayer({
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
         <p className="text-lg font-medium text-zinc-900">{question.question_text}</p>
+        {audioUrl ? (
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <audio ref={audioRef} src={audioUrl} preload="auto" className="hidden" />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => playQuestionAudio(NORMAL_SPEECH_RATE)}
+                className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-violet-500"
+              >
+                <Volume2 className="h-4 w-4" aria-hidden="true" />
+                Listen
+              </button>
+              <button
+                type="button"
+                onClick={() => playQuestionAudio(SLOW_SPEECH_RATE)}
+                className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+              >
+                Slow
+              </button>
+            </div>
+            {answersLocked ? (
+              <p className="text-sm text-zinc-500">
+                Listen to the sound first, then choose an answer.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="mt-4 space-y-2">
           {options.map((option) => {
             const isSelected = selected === option.key;
-            const isCorrect = option.key === question.correct_answer;
+            const isCorrectOption = option.key === question.correct_answer;
             const showResult = Boolean(selected);
+            const letterName = gurmukhiOptionName(option.label);
 
             let className =
               "w-full rounded-xl border px-4 py-3 text-left text-sm font-medium text-zinc-900 transition-colors ";
 
-            if (!showResult) {
+            if (answersLocked) {
+              className += "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400";
+            } else if (!showResult) {
               className +=
                 "border-zinc-200 bg-white hover:border-violet-300 hover:bg-violet-50";
-            } else if (isCorrect) {
+            } else if (isCorrectOption) {
               className += "border-green-300 bg-green-50 text-green-900";
             } else if (isSelected) {
               className += "border-red-300 bg-red-50 text-red-900";
@@ -229,10 +293,17 @@ export function QuizPlayer({
               <button
                 key={option.key}
                 type="button"
+                disabled={answersLocked}
                 onClick={() => handleSelect(option.key)}
                 className={className}
               >
-                <span className="font-semibold uppercase">{option.key}.</span> {option.label}
+                <span className="font-semibold uppercase">{option.key}.</span>{" "}
+                <span className="text-lg">{option.label}</span>
+                {letterName ? (
+                  <span className="ml-2 text-sm font-medium text-violet-600">
+                    {letterName}
+                  </span>
+                ) : null}
               </button>
             );
           })}
