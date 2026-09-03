@@ -149,26 +149,36 @@ export type PendingHomeworkReviewRow = {
   timingState: "on_time" | "late" | "post_lesson" | "unknown";
 };
 
+/** A submission a tutor has already marked, kept playable so they can re-listen. */
+export type ReviewedHomeworkRow = PendingHomeworkReviewRow & {
+  approved: boolean | null;
+  tutorComment: string | null;
+  reviewedAt: string | null;
+};
+
+const HOMEWORK_REVIEW_SELECT = `
+  id,
+  student_id,
+  lesson_id,
+  storage_path,
+  mime_type,
+  duration_seconds,
+  submission_type,
+  text_answers,
+  submitted_at,
+  approved,
+  tutor_comment,
+  reviewed_at,
+  student:student_id (full_name, preferred_name),
+  lesson:lesson_id (title, lesson_number)
+`;
+
 export async function loadPendingHomeworkReviews(
   supabase: SupabaseClient
 ): Promise<PendingHomeworkReviewRow[]> {
   const { data, error } = await supabase
     .from("homework_submissions")
-    .select(
-      `
-      id,
-      student_id,
-      lesson_id,
-      storage_path,
-      mime_type,
-      duration_seconds,
-      submission_type,
-      text_answers,
-      submitted_at,
-      student:student_id (full_name, preferred_name),
-      lesson:lesson_id (title, lesson_number)
-    `
-    )
+    .select(HOMEWORK_REVIEW_SELECT)
     .eq("status", "pending_review")
     .eq("is_practice", false)
     .order("submitted_at", { ascending: true });
@@ -239,6 +249,77 @@ export async function loadPendingHomeworkReviews(
   );
 
   return rows;
+}
+
+/**
+ * Reviewed submissions stay visible to tutors so an approved recording can still be
+ * played back. Storage RLS grants access for as long as the enrolment/cohort membership
+ * is active, so a fresh signed URL works regardless of review status.
+ */
+export async function loadReviewedHomeworkSubmissions(
+  supabase: SupabaseClient,
+  limit = 25
+): Promise<ReviewedHomeworkRow[]> {
+  const { data, error } = await supabase
+    .from("homework_submissions")
+    .select(HOMEWORK_REVIEW_SELECT)
+    .eq("status", "reviewed")
+    .eq("is_practice", false)
+    .order("reviewed_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) {
+    if (isMissingHomeworkSchema(error.message)) return [];
+    throw error;
+  }
+
+  const { getDisplayName } = await import("@/lib/profile/display-name");
+  const { loadHomeworkTextQuestionsForLesson } = await import(
+    "@/lib/catchup/load-segment-questions"
+  );
+
+  return Promise.all(
+    (data ?? []).map(async (row) => {
+      const student = Array.isArray(row.student) ? row.student[0] : row.student;
+      const lesson = Array.isArray(row.lesson) ? row.lesson[0] : row.lesson;
+      const lessonId = row.lesson_id as string;
+      const submissionType: HomeworkSubmissionType =
+        row.submission_type === "text" ? "text" : "voice";
+
+      const answerKeys =
+        submissionType === "text"
+          ? (await loadHomeworkTextQuestionsForLesson(supabase, lessonId)).map((question) => ({
+              questionNumber: question.questionNumber,
+              promptEnglish: question.promptEnglish,
+              answerRomanised: question.answerRomanised,
+              answerGurmukhi: question.answerGurmukhi,
+            }))
+          : [];
+
+      return {
+        id: row.id as string,
+        studentId: row.student_id as string,
+        studentName: getDisplayName(student) ?? "Student",
+        lessonId,
+        lessonTitle: (lesson?.title as string) ?? "Lesson",
+        lessonNumber: (lesson?.lesson_number as number) ?? 0,
+        submittedAt: row.submitted_at as string,
+        submissionType,
+        storagePath: (row.storage_path as string | null) ?? null,
+        mimeType: (row.mime_type as string | null) ?? null,
+        durationSeconds: (row.duration_seconds as number | null) ?? null,
+        textAnswers:
+          (row.text_answers as Array<{ question_number: number; answer_text: string }> | null) ??
+          null,
+        answerKeys,
+        // Only meaningful while a submission is awaiting review.
+        timingState: "unknown" as const,
+        approved: (row.approved as boolean | null) ?? null,
+        tutorComment: (row.tutor_comment as string | null) ?? null,
+        reviewedAt: (row.reviewed_at as string | null) ?? null,
+      };
+    })
+  );
 }
 
 export const HOMEWORK_RECORDINGS_BUCKET = "homework-recordings";

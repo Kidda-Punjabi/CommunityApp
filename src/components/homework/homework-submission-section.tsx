@@ -4,14 +4,15 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   getHomeworkNearLessonWarning,
-  getHomeworkPlaybackUrl,
   submitHomeworkRecording,
 } from "@/app/dashboard/learn/homework-actions";
+import { HomeworkAudioPlayer } from "@/components/homework/homework-audio-player";
+import { formatClock } from "@/lib/audio/media-duration";
 import {
-  formatRecordingDuration,
   recordingExtensionForBlob,
   useAudioRecorder,
 } from "@/lib/audio/use-audio-recorder";
+import { AudioScrubber } from "@/components/homework/homework-audio-player";
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import { lessonContentRowButtonClass } from "@/components/lesson-card";
@@ -35,38 +36,6 @@ function homeworkSubtitle(submission: HomeworkSubmissionView | null): string {
     return "Submitted, awaiting review";
   }
   return "Not submitted yet · Record a short voice note for your tutor after your session";
-}
-
-function HomeworkAudioPlayback({ storagePath }: { storagePath: string }) {
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getHomeworkPlaybackUrl(storagePath).then((result) => {
-      if (cancelled) return;
-      if (result.playbackUrl) {
-        setAudioUrl(result.playbackUrl);
-      } else {
-        setError(result.error ?? "Could not load recording.");
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [storagePath]);
-
-  if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
-  }
-
-  if (!audioUrl) {
-    return <p className="text-sm text-zinc-500">Loading recording…</p>;
-  }
-
-  return <audio controls src={audioUrl} className="w-full" preload="metadata" />;
 }
 
 function NearLessonWarningBanner({
@@ -126,7 +95,24 @@ function HomeworkRecorderBody({
     };
   }, [lessonId, localSubmission]);
 
+  // Keep the tab alive while a recording is being finalised or uploaded.
+  useEffect(() => {
+    if (!pending) return;
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [pending]);
+
   function handleSubmit() {
+    if (recorder.state === "finalising") {
+      setActionError("Still saving your recording — try again in a moment.");
+      return;
+    }
+
     if (!recorder.blob) {
       setActionError("Please record your homework first.");
       return;
@@ -198,7 +184,10 @@ function HomeworkRecorderBody({
         ) : null}
         {localSubmission.storagePath ? (
           <div className="mt-3">
-            <HomeworkAudioPlayback storagePath={localSubmission.storagePath} />
+            <HomeworkAudioPlayer
+              storagePath={localSubmission.storagePath}
+              durationSeconds={localSubmission.durationSeconds}
+            />
           </div>
         ) : null}
       </div>
@@ -225,7 +214,10 @@ function HomeworkRecorderBody({
         ) : null}
         {localSubmission.storagePath ? (
           <div className="mt-3">
-            <HomeworkAudioPlayback storagePath={localSubmission.storagePath} />
+            <HomeworkAudioPlayer
+              storagePath={localSubmission.storagePath}
+              durationSeconds={localSubmission.durationSeconds}
+            />
           </div>
         ) : null}
       </div>
@@ -262,27 +254,39 @@ function HomeworkRecorderBody({
         </button>
       ) : null}
 
-      {recorder.state === "recording" ? (
+      {recorder.state === "recording" || recorder.state === "finalising" ? (
         <div className="space-y-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-red-800">Recording…</p>
-            <p className="font-mono text-sm text-red-700">
-              {formatRecordingDuration(recorder.durationSeconds)}
+            <p className="text-sm font-semibold text-red-800">
+              {recorder.state === "recording" ? "Recording…" : "Saving your recording…"}
+            </p>
+            <p className="font-mono text-sm tabular-nums text-red-700">
+              {formatClock(recorder.durationSeconds)}
             </p>
           </div>
           <button
             type="button"
             onClick={recorder.stopRecording}
-            className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-500"
+            disabled={recorder.state === "finalising"}
+            className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:bg-red-300"
           >
-            Stop
+            {recorder.state === "recording" ? "Stop" : "Finishing…"}
           </button>
         </div>
       ) : null}
 
       {recorder.state === "recorded" && recorder.previewUrl ? (
         <div className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
-          <audio controls src={recorder.previewUrl} className="w-full" preload="metadata" />
+          <p className="text-sm text-zinc-600">
+            Listen back before you submit — you can only send this once.
+          </p>
+          <AudioScrubber
+            src={recorder.previewUrl}
+            durationSeconds={recorder.durationSeconds}
+          />
+          {recorder.notice ? (
+            <p className="text-sm text-amber-800">{recorder.notice}</p>
+          ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"

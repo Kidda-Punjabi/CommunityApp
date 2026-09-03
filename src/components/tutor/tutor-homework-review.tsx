@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import {
-  getHomeworkPlaybackUrl,
-  reviewHomeworkSubmission,
-} from "@/app/dashboard/tutor/homework-actions";
+import { useRouter } from "next/navigation";
+import { reviewHomeworkSubmission } from "@/app/dashboard/tutor/homework-actions";
+import { HomeworkAudioPlayer } from "@/components/homework/homework-audio-player";
+import { HomeworkTextAnswers } from "@/components/homework/homework-text-answers";
 import type { PendingHomeworkReviewRow } from "@/lib/tutoring/homework-submissions";
 import { ui } from "@/lib/ui/styles";
 
@@ -41,33 +41,6 @@ function TimingBadge({
       After lesson
     </span>
   );
-}
-
-function ReviewAudioPlayer({ storagePath }: { storagePath: string }) {
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getHomeworkPlaybackUrl(storagePath).then((result) => {
-      if (cancelled) return;
-      if (result.playbackUrl) {
-        setAudioUrl(result.playbackUrl);
-      } else {
-        setError(result.error ?? "Could not load audio.");
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [storagePath]);
-
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
-  if (!audioUrl) return <p className="text-sm text-zinc-500">Loading audio…</p>;
-
-  return <audio controls src={audioUrl} className="w-full" preload="metadata" />;
 }
 
 function HomeworkReviewCard({
@@ -114,31 +87,15 @@ function HomeworkReviewCard({
 
       <div className="mt-4">
         {submission.submissionType === "text" ? (
-          <div className="space-y-3">
-            {submission.textAnswers?.map((answer) => {
-              const key = submission.answerKeys.find(
-                (row) => row.questionNumber === answer.question_number
-              );
-              return (
-                <div key={answer.question_number} className="rounded-xl border border-zinc-200 px-3 py-2">
-                  <p className="text-sm font-medium text-zinc-900">
-                    {answer.question_number}. {key?.promptEnglish ?? "Question"}
-                  </p>
-                  <p className="mt-1 text-sm text-zinc-700">
-                    Student: {answer.answer_text || "—"}
-                  </p>
-                  {key ? (
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Answer key: {key.answerGurmukhi ? `${key.answerGurmukhi} / ` : ""}
-                      {key.answerRomanised}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+          <HomeworkTextAnswers
+            textAnswers={submission.textAnswers}
+            answerKeys={submission.answerKeys}
+          />
         ) : submission.storagePath ? (
-          <ReviewAudioPlayer storagePath={submission.storagePath} />
+          <HomeworkAudioPlayer
+            storagePath={submission.storagePath}
+            durationSeconds={submission.durationSeconds}
+          />
         ) : (
           <p className="text-sm text-zinc-500">No recording attached.</p>
         )}
@@ -185,6 +142,7 @@ export function TutorHomeworkReview({
   submissions,
   fullPage = false,
 }: TutorHomeworkReviewProps) {
+  const router = useRouter();
   const [rows, setRows] = useState(submissions);
 
   useEffect(() => {
@@ -217,6 +175,8 @@ export function TutorHomeworkReview({
               submission={submission}
               onReviewed={(submissionId) => {
                 setRows((current) => current.filter((row) => row.id !== submissionId));
+                // Re-render the server tree so the card reappears under "Already reviewed".
+                router.refresh();
               }}
             />
           ))}

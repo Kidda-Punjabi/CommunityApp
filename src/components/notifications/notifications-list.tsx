@@ -13,6 +13,7 @@ import { respondFriendRequest } from "@/app/dashboard/friends/actions";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import type { NotificationItem } from "@/lib/notifications/load-notifications";
 import { notificationSummary } from "@/lib/notifications/load-notifications";
+import { lessonHomeworkPath } from "@/lib/tutoring/homework-href";
 import { ui } from "@/lib/ui/styles";
 
 type NotificationsListProps = {
@@ -40,23 +41,17 @@ function notificationHref(item: NotificationItem): string | null {
     }
   }
 
-  if (item.type === "homework_reviewed") {
+  // Address the lesson directly: guessing a track from `course_tier` sent Foundational
+  // and Community students to the wrong course's lesson list.
+  if (
+    item.type === "homework_reviewed" ||
+    (item.type === "announcement" && item.payload.homework_due === true)
+  ) {
     const lessonId = item.payload.lesson_id;
-    const tier = item.payload.course_tier;
-    const track =
-      tier === "beginners" || tier === "foundational" ? tier : "foundational";
     if (typeof lessonId === "string") {
-      return `/dashboard/learn/${track}#lesson-${lessonId}`;
+      return lessonHomeworkPath(lessonId);
     }
     return "/dashboard/learn";
-  }
-
-  if (item.type === "announcement" && item.payload.homework_due === true) {
-    const lessonId = item.payload.lesson_id;
-    if (typeof lessonId === "string") {
-      return `/dashboard/learn/beginners#lesson-${lessonId}`;
-    }
-    return "/dashboard/learn/beginners";
   }
 
   if (item.type === "cohort_switch_resolved" || item.type === "lesson_reschedule_resolved") {
@@ -379,7 +374,7 @@ export function NotificationsList({ notifications }: NotificationsListProps) {
                       onClick={(event) => void handleLinkClick(event, item, href)}
                       className="mt-3 block w-full rounded-lg bg-violet-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-violet-500"
                     >
-                      {item.type === "announcement" ? "Open lesson" : "View schedule"}
+                      {item.type === "announcement" ? "Open homework" : "View schedule"}
                     </Link>
                   )}
               </li>
