@@ -9,7 +9,8 @@ type NotionPropertyValue =
   | { select: { name: string } }
   | { multi_select: Array<{ name: string }> }
   | { number: number }
-  | { date: { start: string } };
+  | { date: { start: string } }
+  | { files: Array<{ name: string; external: { url: string } }> };
 
 function buildNotesTitle(
   comments: string,
@@ -57,13 +58,16 @@ export function buildNotionFeedbackProperties(
     "Feedback Date": {
       date: { start: submittedAt.toISOString() },
     },
-    Confidence: { number: payload.confidence },
-    "Tutor Effectiveness": { number: payload.tutorEffectiveness },
-    "Learning Relevance": { number: payload.learningRelevance },
     Comments: {
       rich_text: [{ text: { content: payload.comments.trim() } }],
     },
   };
+
+  if (payload.formVariant !== "week1") {
+    properties.Confidence = { number: payload.confidence! };
+    properties["Tutor Effectiveness"] = { number: payload.tutorEffectiveness! };
+    properties["Learning Relevance"] = { number: payload.learningRelevance! };
+  }
 
   if (context.phone?.trim()) {
     properties.Phone = {
@@ -75,6 +79,14 @@ export function buildNotionFeedbackProperties(
     properties.Tutor = {
       select: { name: context.notionTutor },
     };
+  }
+
+  if (payload.formVariant === "week1") {
+    properties.Understanding = { number: payload.understanding! };
+    properties.Speaking = { number: payload.speaking! };
+    if (payload.understandingGrammar != null) {
+      properties["Understanding Grammar"] = { number: payload.understandingGrammar };
+    }
   }
 
   if (payload.formVariant === "week12") {
@@ -98,6 +110,19 @@ export function buildNotionFeedbackProperties(
     if (payload.testimonials?.trim()) {
       properties.Testimonials = {
         rich_text: [{ text: { content: payload.testimonials.trim() } }],
+      };
+    }
+
+    if (payload.pictureUrl?.trim()) {
+      const pictureUrl = payload.pictureUrl.trim();
+      const fileName = pictureUrl.split("/").pop()?.split("?")[0] || "photo.jpg";
+      properties.Picture = {
+        files: [
+          {
+            name: fileName,
+            external: { url: pictureUrl },
+          },
+        ],
       };
     }
   }

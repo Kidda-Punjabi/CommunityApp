@@ -23,6 +23,8 @@ type LessonActivityTilesProps = {
   quiz: { href: string; statusLabel: string; tone: StatusTone } | null;
   flashcards: { href: string; statusLabel: string; tone: StatusTone } | null;
   hasSubmittedFeedback: boolean;
+  /** Beginners Course lesson 1 starting-point survey (separate from session feedback). */
+  startingPointHref?: string | null;
   /** When set, replaces the Recording hero tile (1-to-1 late-cancel catch-up). */
   sessionCatchupHref?: string | null;
 };
@@ -62,6 +64,7 @@ export function LessonActivityTiles({
   quiz,
   flashcards,
   hasSubmittedFeedback,
+  startingPointHref = null,
   sessionCatchupHref = null,
 }: LessonActivityTilesProps) {
   const hw = homeworkTileState(homework);
@@ -70,6 +73,17 @@ export function LessonActivityTiles({
 
   return (
     <div className="space-y-3 pt-2">
+      {startingPointHref ? (
+        <NavLink
+          href={startingPointHref}
+          className="block rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 hover:bg-violet-100"
+        >
+          <p className="text-sm font-semibold text-violet-900">Starting point</p>
+          <p className="mt-0.5 text-xs text-violet-800">
+            How confident do you feel at the beginning of the course?
+          </p>
+        </NavLink>
+      ) : null}
       <div className="grid grid-cols-2 gap-2">
         <HeroTile
           label="Slides"

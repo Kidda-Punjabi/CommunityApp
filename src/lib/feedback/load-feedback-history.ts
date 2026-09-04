@@ -24,6 +24,7 @@ export async function loadFeedbackHistoryForLesson(
     )
     .eq("user_id", userId)
     .eq("lesson_id", lessonId)
+    .neq("form_variant", "week1")
     .order("submitted_at", { ascending: false });
 
   if (error) throw error;
@@ -54,6 +55,7 @@ export async function fetchFeedbackSubmittedLessonIds(
     .select("lesson_id")
     .eq("user_id", userId)
     .in("lesson_id", lessonIds)
+    .neq("form_variant", "week1")
     .not("lesson_id", "is", null);
 
   if (error) throw error;

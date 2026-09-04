@@ -44,7 +44,7 @@ type FeedbackRow = {
   id: string;
   lesson_id: string | null;
   session_id: string | null;
-  form_variant: "standard" | "week12" | "community";
+  form_variant: "standard" | "week12" | "community" | "week1";
   full_name: string;
   email: string;
   phone: string | null;
@@ -53,9 +53,9 @@ type FeedbackRow = {
   lesson_label: string;
   tutor: string | null;
   tutor_unmatched: boolean;
-  learning_relevance: number;
-  tutor_effectiveness: number;
-  confidence: number;
+  learning_relevance: number | null;
+  tutor_effectiveness: number | null;
+  confidence: number | null;
   understanding: number | null;
   speaking: number | null;
   understanding_grammar: number | null;
@@ -68,6 +68,7 @@ type FeedbackRow = {
   recommend: "Yes" | "No" | null;
   video_testimonial: "Yes" | "No" | null;
   future_support: string[];
+  picture_url: string | null;
   submitted_at: string;
   notion_page_id: string | null;
 };
@@ -97,9 +98,9 @@ function rowToPayload(row: FeedbackRow): FeedbackSubmitPayload {
     formVariant: row.form_variant,
     lessonId: row.lesson_id,
     sessionId: row.session_id,
-    learningRelevance: row.learning_relevance,
-    tutorEffectiveness: row.tutor_effectiveness,
-    confidence: row.confidence,
+    learningRelevance: row.learning_relevance ?? undefined,
+    tutorEffectiveness: row.tutor_effectiveness ?? undefined,
+    confidence: row.confidence ?? undefined,
     understanding: row.understanding ?? undefined,
     speaking: row.speaking ?? undefined,
     understandingGrammar: row.understanding_grammar ?? undefined,
@@ -112,6 +113,7 @@ function rowToPayload(row: FeedbackRow): FeedbackSubmitPayload {
     recommend: row.recommend ?? undefined,
     videoTestimonial: row.video_testimonial ?? undefined,
     futureSupport: row.future_support as FeedbackSubmitPayload["futureSupport"],
+    pictureUrl: row.picture_url,
   };
 }
 

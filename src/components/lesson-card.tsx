@@ -257,6 +257,13 @@ export function LessonCard({
                 }
                 flashcards={flashcardsTile}
                 hasSubmittedFeedback={hasSubmittedFeedback}
+                startingPointHref={
+                  contentUnlocked &&
+                  lesson.lesson_number === 1 &&
+                  lesson.courses?.name === "Beginners Course"
+                    ? `/dashboard/feedback/${lesson.id}/starting-point`
+                    : null
+                }
                 sessionCatchupHref={hasCatchupSegments ? `/catchup/${lesson.id}` : null}
               />
 

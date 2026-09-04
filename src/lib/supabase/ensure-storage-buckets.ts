@@ -20,6 +20,7 @@ const REQUIRED_BUCKETS: Array<{
   { id: "lesson-audio", public: true },
   // Public URLs for cohort_lesson_log_entries.recording_url / slides_url / flashcards_url.
   { id: "lesson-log-media", public: true },
+  { id: "feedback-photos", public: true },
 ];
 
 export async function ensureStorageBuckets(supabase: SupabaseClient) {

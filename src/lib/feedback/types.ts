@@ -26,9 +26,9 @@ export type FeedbackSubmitPayload = {
   formVariant: FeedbackFormVariant;
   lessonId?: string | null;
   sessionId?: string | null;
-  learningRelevance: number;
-  tutorEffectiveness: number;
-  confidence: number;
+  learningRelevance?: number;
+  tutorEffectiveness?: number;
+  confidence?: number;
   understanding?: number;
   speaking?: number;
   understandingGrammar?: number;
@@ -41,6 +41,7 @@ export type FeedbackSubmitPayload = {
   recommend?: "Yes" | "No";
   videoTestimonial?: "Yes" | "No";
   futureSupport?: FutureSupportOption[];
+  pictureUrl?: string | null;
 };
 
 export type FeedbackSubmitResult = {

@@ -2,6 +2,8 @@ import {
   NOTION_COURSE_OPTIONS,
   NOTION_TUTOR_OPTIONS,
   isWeek12FeedbackForm,
+  isWeek1BaselineForm,
+  type FeedbackFormVariant,
   type NotionCourseOption,
 } from "./constants";
 import type { FeedbackContext } from "./types";
@@ -150,7 +152,11 @@ export async function loadFeedbackContext(
   supabase: SupabaseClient,
   userId: string,
   email: string,
-  options?: { lessonId?: string | null; phone?: string | null }
+  options?: {
+    lessonId?: string | null;
+    phone?: string | null;
+    formVariant?: Extract<FeedbackFormVariant, "week1">;
+  }
 ): Promise<FeedbackContext> {
   const { data: profile } = await supabase
     .from("profiles")
@@ -211,7 +217,12 @@ export async function loadFeedbackContext(
     tutorFullName,
     tutorDisplayName
   );
-  const formVariant = isWeek12FeedbackForm(course, lessonNumber) ? "week12" : "standard";
+  const formVariant =
+    options?.formVariant === "week1" && isWeek1BaselineForm(course, lessonNumber)
+      ? "week1"
+      : isWeek12FeedbackForm(course, lessonNumber)
+        ? "week12"
+        : "standard";
 
   return {
     fullName,

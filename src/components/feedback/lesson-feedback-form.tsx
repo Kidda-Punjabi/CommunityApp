@@ -8,6 +8,7 @@ import {
   type RatingFieldKey,
 } from "@/lib/feedback/constants";
 import type { FeedbackContext } from "@/lib/feedback/types";
+import { uploadFeedbackPhoto } from "@/lib/feedback/upload-photo";
 import { ui } from "@/lib/ui/styles";
 
 type RatingsState = Partial<Record<RatingFieldKey, number | null>>;
@@ -47,6 +48,7 @@ export function LessonFeedbackForm({
   const [includeTestimonial, setIncludeTestimonial] = useState(false);
   const [testimonials, setTestimonials] = useState("");
   const [futureSupport, setFutureSupport] = useState<string[]>([]);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -88,6 +90,9 @@ export function LessonFeedbackForm({
         body.includeTestimonial = includeTestimonial;
         body.testimonials = includeTestimonial ? testimonials : null;
         body.futureSupport = futureSupport;
+        if (photoFile) {
+          body.pictureUrl = await uploadFeedbackPhoto(photoFile);
+        }
       }
 
       const response = await fetch("/api/feedback/submit", {
@@ -239,6 +244,23 @@ export function LessonFeedbackForm({
                 onChange={(event) => setTestimonials(event.target.value)}
                 rows={3}
                 className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+
+          {(videoTestimonial === "Yes" || includeTestimonial) && (
+            <div>
+              <label className="block text-sm font-medium text-zinc-700">
+                Photo (optional)
+              </label>
+              <p className="mt-1 text-xs text-zinc-500">
+                If you&apos;re happy to, add a photo of yourself to go with your testimonial.
+              </p>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                className="mt-2 block w-full text-sm text-zinc-700 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-violet-700"
               />
             </div>
           )}

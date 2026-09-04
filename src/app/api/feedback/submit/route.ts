@@ -72,6 +72,7 @@ export async function POST(request: Request) {
     const context = await loadFeedbackContext(supabase, user.id, user.email, {
       lessonId: parsed.payload.lessonId,
       phone: user.phone,
+      formVariant: parsed.payload.formVariant === "week1" ? "week1" : undefined,
     });
 
     if (parsed.payload.formVariant !== context.formVariant) {

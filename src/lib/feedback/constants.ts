@@ -49,7 +49,29 @@ export type StandardRatingFieldKey = (typeof STANDARD_RATING_FIELDS)[number]["ke
 export type Week12ExtraRatingFieldKey = (typeof WEEK12_EXTRA_RATING_FIELDS)[number]["key"];
 export type RatingFieldKey = StandardRatingFieldKey | Week12ExtraRatingFieldKey;
 
-export type FeedbackFormVariant = "standard" | "week12" | "community";
+export type FeedbackFormVariant = "standard" | "week12" | "community" | "week1";
+
+/** Beginners Course lesson 1 starting-point baseline (separate from session feedback). */
+export const WEEK1_BASELINE_FIELDS = [
+  {
+    key: "understanding",
+    label: "How confident do you now feel understanding spoken Punjabi?",
+    required: true,
+  },
+  {
+    key: "speaking",
+    label: "How confident do you now feel basic speaking Punjabi?",
+    required: true,
+  },
+  {
+    key: "understandingGrammar",
+    label:
+      "How confident do you now feel understanding Punjabi grammar (tenses, word order, negatives)?",
+    required: false,
+  },
+] as const;
+
+export type Week1BaselineFieldKey = (typeof WEEK1_BASELINE_FIELDS)[number]["key"];
 
 /** Calendar title match for open Kidda Community Class sessions. */
 export const COMMUNITY_CLASS_TITLE_NEEDLE = "Kidda Community Class";
@@ -62,4 +84,11 @@ export function isWeek12FeedbackForm(
   lessonNumber: number | null | undefined
 ): boolean {
   return course === "Beginners Course" && lessonNumber === 12;
+}
+
+export function isWeek1BaselineForm(
+  course: NotionCourseOption,
+  lessonNumber: number | null | undefined
+): boolean {
+  return course === "Beginners Course" && lessonNumber === 1;
 }

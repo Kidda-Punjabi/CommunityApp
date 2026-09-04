@@ -6,6 +6,7 @@ import {
 } from "./constants";
 import type { FeedbackSubmitPayload } from "./types";
 import { parseRating, parseYesNo, validateFutureSupport } from "./notion";
+import { isAllowedFeedbackPhotoUrl } from "./photo-url";
 
 export function parseFeedbackSubmitBody(
   body: unknown
@@ -20,7 +21,51 @@ export function parseFeedbackSubmitBody(
       ? "week12"
       : raw.formVariant === "community"
         ? "community"
-        : "standard";
+        : raw.formVariant === "week1"
+          ? "week1"
+          : "standard";
+
+  const lessonId =
+    typeof raw.lessonId === "string" && raw.lessonId.trim() ? raw.lessonId.trim() : null;
+  const sessionId =
+    typeof raw.sessionId === "string" && raw.sessionId.trim() ? raw.sessionId.trim() : null;
+
+  const comments = typeof raw.comments === "string" ? raw.comments.trim() : "";
+
+  if (formVariant === "week1") {
+    const understanding = parseRating(raw.understanding);
+    const speaking = parseRating(raw.speaking);
+    if (understanding === null || speaking === null) {
+      return {
+        ok: false,
+        error: "Understanding spoken Punjabi and basic speaking must be rated from 1 to 5.",
+      };
+    }
+
+    let understandingGrammar: number | undefined;
+    if (raw.understandingGrammar != null && raw.understandingGrammar !== "") {
+      const parsedGrammar = parseRating(raw.understandingGrammar);
+      if (parsedGrammar === null) {
+        return {
+          ok: false,
+          error: "Understanding grammar must be a rating from 1 to 5.",
+        };
+      }
+      understandingGrammar = parsedGrammar;
+    }
+
+    return {
+      ok: true,
+      payload: {
+        formVariant: "week1",
+        lessonId,
+        understanding,
+        speaking,
+        understandingGrammar,
+        comments,
+      },
+    };
+  }
 
   const standardRatings: Partial<Record<string, number>> = {};
   for (const field of STANDARD_RATING_FIELDS) {
@@ -30,13 +75,6 @@ export function parseFeedbackSubmitBody(
     }
     standardRatings[field.key] = value;
   }
-
-  const lessonId =
-    typeof raw.lessonId === "string" && raw.lessonId.trim() ? raw.lessonId.trim() : null;
-  const sessionId =
-    typeof raw.sessionId === "string" && raw.sessionId.trim() ? raw.sessionId.trim() : null;
-
-  const comments = typeof raw.comments === "string" ? raw.comments.trim() : "";
 
   if (formVariant === "community") {
     if (!sessionId) {
@@ -108,6 +146,15 @@ export function parseFeedbackSubmitBody(
     };
   }
 
+  let pictureUrl: string | null = null;
+  if (typeof raw.pictureUrl === "string" && raw.pictureUrl.trim()) {
+    const trimmed = raw.pictureUrl.trim();
+    if (!isAllowedFeedbackPhotoUrl(trimmed)) {
+      return { ok: false, error: "Photo URL is not valid." };
+    }
+    pictureUrl = trimmed;
+  }
+
   return {
     ok: true,
     payload: {
@@ -128,6 +175,7 @@ export function parseFeedbackSubmitBody(
       recommend,
       videoTestimonial,
       futureSupport: futureSupportRaw as FutureSupportOption[],
+      pictureUrl,
     },
   };
 }
