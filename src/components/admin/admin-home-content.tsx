@@ -101,6 +101,11 @@ export function AdminHomeContent() {
             description="Approve or decline student requests to join an alternate group session"
           />
           <AdminNavListRow
+            href="/admin/public-forms"
+            title="Public forms"
+            description="Preview and test every backlog quiz and feedback link, including Week 1 starting point and Week 12"
+          />
+          <AdminNavListRow
             href="/admin/sales-calls"
             title="Sales calls"
             description="Create and edit sales call log entries synced with Notion"

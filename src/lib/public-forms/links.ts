@@ -53,3 +53,47 @@ export async function lookupPublicFormLinkBySlug(
     return null;
   }
 }
+
+export async function listPublicFormLinks(): Promise<PublicFormLink[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return [];
+
+  const endpoint = new URL("/rest/v1/public_form_links", url);
+  endpoint.searchParams.set("select", "slug,form_type,target_id,label");
+  endpoint.searchParams.set("order", "form_type.asc,label.asc");
+  endpoint.searchParams.set("limit", "100");
+
+  try {
+    const response = await fetch(endpoint, {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return [];
+
+    const rows = (await response.json()) as Array<{
+      slug: string;
+      form_type: string;
+      target_id: string;
+      label: string;
+    }>;
+
+    return rows.flatMap((row) => {
+      if (row.form_type !== "quiz" && row.form_type !== "feedback") return [];
+      return [
+        {
+          slug: row.slug,
+          formType: row.form_type,
+          targetId: row.target_id,
+          label: row.label,
+        } satisfies PublicFormLink,
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
