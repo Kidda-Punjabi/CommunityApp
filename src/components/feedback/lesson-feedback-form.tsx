@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { TestimonialBookingWidget } from "@/components/feedback/testimonial-booking-widget";
 import {
   FUTURE_SUPPORT_OPTIONS,
   STANDARD_RATING_FIELDS,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/feedback/constants";
 import type { FeedbackContext } from "@/lib/feedback/types";
 import { uploadFeedbackPhoto } from "@/lib/feedback/upload-photo";
+import type { GuestFeedbackSubmitConfig } from "@/lib/public-forms/guest-submit";
 import { ui } from "@/lib/ui/styles";
 
 type RatingsState = Partial<Record<RatingFieldKey, number | null>>;
@@ -26,6 +28,8 @@ type LessonFeedbackFormProps = {
   sessionId?: string | null;
   onSubmitted?: () => void;
   compact?: boolean;
+  guestSubmit?: GuestFeedbackSubmitConfig;
+  testimonialCalendarUrl?: string | null;
 };
 
 export function LessonFeedbackForm({
@@ -34,6 +38,8 @@ export function LessonFeedbackForm({
   sessionId,
   onSubmitted,
   compact = false,
+  guestSubmit,
+  testimonialCalendarUrl,
 }: LessonFeedbackFormProps) {
   const isWeek12 = context.formVariant === "week12";
   const isCommunity = context.formVariant === "community";
@@ -49,6 +55,8 @@ export function LessonFeedbackForm({
   const [testimonials, setTestimonials] = useState("");
   const [futureSupport, setFutureSupport] = useState<string[]>([]);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [cohort, setCohort] = useState("");
+  const [tutor, setTutor] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -58,7 +66,10 @@ export function LessonFeedbackForm({
     [ratingFields, ratings]
   );
 
-  const canSubmit = allRated && (!isWeek12 || recommend !== null);
+  const canSubmit =
+    allRated &&
+    (!isWeek12 || recommend !== null) &&
+    (!guestSubmit || (Boolean(cohort) && Boolean(tutor)));
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -67,9 +78,11 @@ export function LessonFeedbackForm({
 
     if (!canSubmit) {
       setError(
-        isWeek12
-          ? "Please complete all ratings and the recommend question."
-          : "Please complete all ratings."
+        guestSubmit && (!cohort || !tutor)
+          ? "Please choose your cohort and tutor."
+          : isWeek12
+            ? "Please complete all ratings and the recommend question."
+            : "Please complete all ratings."
       );
       return;
     }
@@ -84,6 +97,15 @@ export function LessonFeedbackForm({
         ...ratings,
       };
 
+      if (guestSubmit) {
+        body.slug = guestSubmit.slug;
+        body.fullName = guestSubmit.fullName;
+        body.email = guestSubmit.email;
+        body.phone = guestSubmit.phone;
+        body.cohort = cohort;
+        body.tutor = tutor;
+      }
+
       if (isWeek12) {
         body.recommend = recommend;
         body.videoTestimonial = videoTestimonial;
@@ -91,11 +113,12 @@ export function LessonFeedbackForm({
         body.testimonials = includeTestimonial ? testimonials : null;
         body.futureSupport = futureSupport;
         if (photoFile) {
-          body.pictureUrl = await uploadFeedbackPhoto(photoFile);
+          const upload = guestSubmit?.uploadPhoto ?? uploadFeedbackPhoto;
+          body.pictureUrl = await upload(photoFile);
         }
       }
 
-      const response = await fetch("/api/feedback/submit", {
+      const response = await fetch(guestSubmit?.submitUrl ?? "/api/feedback/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -142,11 +165,14 @@ export function LessonFeedbackForm({
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit} className={compact ? "space-y-5" : `mt-6 ${ui.stack}`}>
       <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-        <p className="font-medium text-zinc-900">{context.fullName}</p>
-        <p className="mt-1 text-zinc-500">{context.email}</p>
-        {context.phone && <p className="mt-0.5 text-zinc-500">{context.phone}</p>}
+        <p className="font-medium text-zinc-900">{guestSubmit?.fullName ?? context.fullName}</p>
+        <p className="mt-1 text-zinc-500">{guestSubmit?.email ?? context.email}</p>
+        {(guestSubmit?.phone ?? context.phone) && (
+          <p className="mt-0.5 text-zinc-500">{guestSubmit?.phone ?? context.phone}</p>
+        )}
         <dl className="mt-3 grid gap-1 sm:grid-cols-2">
           <div>
             <dt className="text-xs uppercase tracking-wide text-zinc-400">Course</dt>
@@ -158,16 +184,61 @@ export function LessonFeedbackForm({
             </dt>
             <dd>{context.lessonLabel}</dd>
           </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-400">Cohort</dt>
-            <dd>{context.cohort}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-400">Tutor</dt>
-            <dd>{context.tutor ?? "Not assigned"}</dd>
-          </div>
+          {guestSubmit ? (
+            <>
+              <div className="sm:col-span-2">
+                <label className="text-xs uppercase tracking-wide text-zinc-400" htmlFor="public-cohort">
+                  Cohort
+                </label>
+                <select
+                  id="public-cohort"
+                  value={cohort}
+                  onChange={(event) => setCohort(event.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  required
+                >
+                  <option value="">Select your cohort</option>
+                  {guestSubmit.cohorts.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs uppercase tracking-wide text-zinc-400" htmlFor="public-tutor">
+                  Tutor
+                </label>
+                <select
+                  id="public-tutor"
+                  value={tutor}
+                  onChange={(event) => setTutor(event.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                  required
+                >
+                  <option value="">Select your tutor</option>
+                  {guestSubmit.tutors.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-zinc-400">Cohort</dt>
+                <dd>{context.cohort}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-zinc-400">Tutor</dt>
+                <dd>{context.tutor ?? "Not assigned"}</dd>
+              </div>
+            </>
+          )}
         </dl>
-        {context.tutorUnmatched && (
+        {!guestSubmit && context.tutorUnmatched && (
           <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
             Your tutor name didn&apos;t match our Notion list — we&apos;ve flagged this for
             the team to review.
@@ -295,12 +366,24 @@ export function LessonFeedbackForm({
 
       <button
         type="submit"
-        disabled={submitting || !canSubmit}
+        disabled={submitting || !canSubmit || Boolean(success)}
         className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-60"
       >
         {submitting ? "Submitting…" : "Submit feedback"}
       </button>
     </form>
+    {success &&
+      isWeek12 &&
+      videoTestimonial === "Yes" &&
+      testimonialCalendarUrl && (
+        <TestimonialBookingWidget
+          calendarUrl={testimonialCalendarUrl}
+          fullName={guestSubmit?.fullName ?? context.fullName}
+          email={guestSubmit?.email ?? context.email}
+          phone={guestSubmit?.phone ?? context.phone ?? ""}
+        />
+      )}
+    </>
   );
 }
 

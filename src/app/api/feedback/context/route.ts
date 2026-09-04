@@ -1,4 +1,5 @@
 import { loadFeedbackContext } from "@/lib/feedback/load-feedback-context";
+import { getTestimonialCalendarUrl } from "@/lib/ghl/testimonial-calendar";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -20,5 +21,9 @@ export async function GET(request: Request) {
     phone: user.phone,
   });
 
-  return NextResponse.json({ context });
+  return NextResponse.json({
+    context,
+    testimonialCalendarUrl:
+      context.formVariant === "week12" ? getTestimonialCalendarUrl() : null,
+  });
 }

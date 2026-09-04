@@ -45,6 +45,10 @@ type QuizPlayerProps = {
   lessonId?: string | null;
   questions: QuizQuestion[];
   catchupReturn?: string | null;
+  /** Hide dashboard links, points, and lesson feedback (public /p/[slug] quizzes). */
+  hideLoggedInChrome?: boolean;
+  /** Called once when the quiz finishes. Score is a 0–100 percentage. */
+  onComplete?: (scorePercent: number) => void;
 };
 
 export function QuizPlayer({
@@ -55,6 +59,8 @@ export function QuizPlayer({
   lessonId,
   questions,
   catchupReturn,
+  hideLoggedInChrome = false,
+  onComplete,
 }: QuizPlayerProps) {
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -107,6 +113,11 @@ export function QuizPlayer({
 
     savedRef.current = true;
 
+    const percentage = quizScorePercent(score, questions.length);
+    onComplete?.(percentage);
+
+    if (hideLoggedInChrome) return;
+
     const persist = async () => {
       const supabase = createClient();
       const {
@@ -114,7 +125,6 @@ export function QuizPlayer({
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const percentage = quizScorePercent(score, questions.length);
       const result = await saveQuizProgress(supabase, user.id, quizId, percentage, { lessonId });
       const totalPoints = sumPointsEarned([result.quizPoints, result.lessonBonus]);
       setPointsEarned(totalPoints);
@@ -137,7 +147,7 @@ export function QuizPlayer({
       console.error("Failed to save quiz progress:", error);
       savedRef.current = false;
     });
-  }, [finished, quizId, lessonId, score, questions.length]);
+  }, [finished, quizId, lessonId, score, questions.length, hideLoggedInChrome, onComplete]);
 
   function advanceQuestion() {
     if (index + 1 >= questions.length) {
@@ -193,31 +203,35 @@ export function QuizPlayer({
         <h2 className="mt-2 text-2xl font-bold text-zinc-900">
           {score} / {questions.length} correct
         </h2>
-        <PointsEarnedBadge points={pointsEarned} className="mt-3" />
+        {!hideLoggedInChrome && <PointsEarnedBadge points={pointsEarned} className="mt-3" />}
         {streakResult?.streak_rescued && (
           <p className="mt-3 rounded-lg bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">
             Streak rescued! Back to {streakResult.display_streak} day
             {streakResult.display_streak === 1 ? "" : "s"}.
           </p>
         )}
-        <div className="mt-6 flex flex-col gap-2">
-          <CatchupReturnButton returnUrl={catchupReturn} />
-          {lessonCompleted && lessonId && (
-            <LessonFeedbackPanel lessonId={lessonId} />
-          )}
-          <Link
-            href="/dashboard/practice"
-            className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500"
-          >
-            Back to Practice
-          </Link>
-          <Link
-            href="/dashboard/learn"
-            className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
-          >
-            Back to Home
-          </Link>
-        </div>
+        {hideLoggedInChrome ? (
+          <p className="mt-6 text-sm text-zinc-600">Thanks for completing this quiz.</p>
+        ) : (
+          <div className="mt-6 flex flex-col gap-2">
+            <CatchupReturnButton returnUrl={catchupReturn} />
+            {lessonCompleted && lessonId && (
+              <LessonFeedbackPanel lessonId={lessonId} />
+            )}
+            <Link
+              href="/dashboard/practice"
+              className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500"
+            >
+              Back to Practice
+            </Link>
+            <Link
+              href="/dashboard/learn"
+              className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+            >
+              Back to Home
+            </Link>
+          </div>
+        )}
       </div>
     );
   }

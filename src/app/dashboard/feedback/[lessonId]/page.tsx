@@ -1,6 +1,7 @@
 import { LessonFeedbackForm } from "@/components/feedback/lesson-feedback-form";
 import { canAccessLessonInContext } from "@/lib/learning/learn-access";
 import { loadFeedbackContext } from "@/lib/feedback/load-feedback-context";
+import { getTestimonialCalendarUrl } from "@/lib/ghl/testimonial-calendar";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -79,7 +80,7 @@ export default async function LessonFeedbackPage({ params }: PageProps) {
       </div>
 
       <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <LessonFeedbackForm context={context} lessonId={lessonId} />
+        <LessonFeedbackForm context={context} lessonId={lessonId} testimonialCalendarUrl={getTestimonialCalendarUrl()} />
       </div>
     </div>
   );

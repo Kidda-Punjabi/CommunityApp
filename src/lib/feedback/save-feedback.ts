@@ -28,9 +28,10 @@ function isDuplicateCommunitySessionError(error: { code?: string; message?: stri
 
 export async function saveFeedbackSubmission(
   supabase: SupabaseClient,
-  userId: string,
+  userId: string | null,
   context: FeedbackContext,
-  payload: FeedbackSubmitPayload
+  payload: FeedbackSubmitPayload,
+  options?: { isGuest?: boolean }
 ): Promise<{
   submissionId: string;
   notionSynced: boolean;
@@ -40,6 +41,7 @@ export async function saveFeedbackSubmission(
   const isCommunity = payload.formVariant === "community";
   const sessionId = isCommunity ? (payload.sessionId ?? context.sessionId) : null;
   const lessonId = isCommunity ? null : context.lessonId;
+  const isGuest = Boolean(options?.isGuest) || userId == null;
 
   if (isCommunity && !sessionId) {
     throw new Error("A class session is required.");
@@ -49,6 +51,7 @@ export async function saveFeedbackSubmission(
     .from("feedback_submissions")
     .insert({
       user_id: userId,
+      is_guest: isGuest,
       lesson_id: lessonId,
       session_id: sessionId,
       form_variant: payload.formVariant,

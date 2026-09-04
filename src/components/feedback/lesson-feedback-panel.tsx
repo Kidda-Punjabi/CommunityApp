@@ -16,6 +16,7 @@ export function LessonFeedbackPanel({
   description = "Your feedback helps us improve lessons and support you better.",
 }: LessonFeedbackPanelProps) {
   const [context, setContext] = useState<FeedbackContext | null>(null);
+  const [testimonialCalendarUrl, setTestimonialCalendarUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -32,12 +33,16 @@ export function LessonFeedbackPanel({
         );
         const data = (await response.json()) as {
           context?: FeedbackContext;
+          testimonialCalendarUrl?: string | null;
           error?: string;
         };
         if (!response.ok) {
           throw new Error(data.error ?? "Failed to load feedback form.");
         }
-        if (!cancelled) setContext(data.context ?? null);
+        if (!cancelled) {
+          setContext(data.context ?? null);
+          setTestimonialCalendarUrl(data.testimonialCalendarUrl ?? null);
+        }
       } catch (loadError) {
         if (!cancelled) {
           setError(
@@ -57,7 +62,7 @@ export function LessonFeedbackPanel({
     };
   }, [lessonId]);
 
-  if (submitted) return null;
+  if (submitted && context?.formVariant !== "week12") return null;
 
   return (
     <div className="mt-6 rounded-2xl border border-violet-200 bg-violet-50/40 p-5 text-left">
@@ -73,6 +78,7 @@ export function LessonFeedbackPanel({
           context={context}
           lessonId={lessonId}
           compact
+          testimonialCalendarUrl={testimonialCalendarUrl}
           onSubmitted={() => setSubmitted(true)}
         />
       )}
