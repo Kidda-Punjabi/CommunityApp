@@ -79,7 +79,7 @@ export type AlternateCohortOption = {
 export type StudentScheduledSession = ScheduledSessionRow & {
   tutorName: string;
   cohortName: string | null;
-  /** Curriculum week number derived like cohort lesson logs (Lesson N). */
+  /** Curriculum week: stored week_number for cohort sessions, else derived. */
   lessonNumber: number | null;
   /** e.g. "Lesson 3 — 2 Aug" */
   lessonLabel: string;

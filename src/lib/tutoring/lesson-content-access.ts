@@ -143,7 +143,7 @@ async function fetchAlternateCohortByLessonId(
   ];
   const { data: fromSessions, error: fromError } = await supabase
     .from("tutor_scheduled_sessions")
-    .select("id, cohort_id, course_id, starts_at")
+    .select("id, cohort_id, course_id, starts_at, week_number")
     .in("id", fromSessionIds);
 
   if (fromError) throw fromError;
@@ -210,7 +210,8 @@ async function fetchAlternateCohortByLessonId(
     const from = fromById.get(row.session_id as string);
     const toCohortId = row.to_cohort_id as string | null;
     if (!from?.cohort_id || !from.course_id || !toCohortId) continue;
-    const lessonNumber = ordinalBySessionId.get(from.id as string);
+    const lessonNumber =
+      (from.week_number as number | null) ?? ordinalBySessionId.get(from.id as string);
     if (!lessonNumber) continue;
     const lessonId = lessonIdByCourseAndNumber.get(`${from.course_id}:${lessonNumber}`);
     if (!lessonId) continue;
