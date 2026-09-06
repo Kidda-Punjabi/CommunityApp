@@ -10,9 +10,9 @@ export type HomeworkTimingState = "on_time" | "late" | "post_lesson" | "unknown"
 /**
  * Resolve the live session start time that corresponds to this homework lesson.
  *
- * tutor_scheduled_sessions has no lesson_id — join path:
- * lesson → course_id + lesson_number → course_enrollments (cohort / 1:1) →
- * chronological matched sessions for that cohort/student (Nth session ≈ lesson N).
+ * Join path: lesson.lesson_number = tutor_scheduled_sessions.week_number
+ * for the student's cohort. Chronological index is a fallback when week_number
+ * is unset (typical for 1-to-1).
  */
 export async function findHomeworkLessonSessionStartsAt(
   supabase: SupabaseClient,
@@ -51,7 +51,7 @@ export async function findHomeworkLessonSessionStartsAt(
 
   let query = supabase
     .from("tutor_scheduled_sessions")
-    .select("id, starts_at, student_id, cohort_id, course_id")
+    .select("id, starts_at, student_id, cohort_id, course_id, week_number")
     .eq("status", "scheduled")
     .neq("match_method", "unmatched")
     .neq("match_method", "title_name")
@@ -78,6 +78,9 @@ export async function findHomeworkLessonSessionStartsAt(
     }
     return row.student_id === studentId && row.course_id === courseId;
   });
+
+  const byWeekNumber = matching.find((row) => row.week_number === lessonNumber);
+  if (byWeekNumber?.starts_at) return byWeekNumber.starts_at as string;
 
   const indexed = matching[lessonNumber - 1];
   if (indexed?.starts_at) return indexed.starts_at as string;

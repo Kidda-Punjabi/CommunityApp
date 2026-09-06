@@ -6,7 +6,9 @@ type LessonRef = {
 };
 
 /**
- * Map labelled calendar sessions onto curriculum lessons by derived week number.
+ * Map calendar sessions onto curriculum lessons by week equality:
+ * session.lessonNumber (from tutor_scheduled_sessions.week_number) =
+ * lessons.lesson_number, scoped to the same course.
  */
 export function buildScheduleSessionByLessonId(
   sessions: StudentScheduledSession[],
