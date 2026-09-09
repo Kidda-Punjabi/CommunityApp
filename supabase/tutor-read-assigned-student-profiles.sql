@@ -39,7 +39,7 @@ AS $$
           JOIN public.package_instances pi ON pi.id = sp.package_instance_id
           WHERE sp.user_id = p_profile_id
             AND pi.tutor_id = auth.uid()
-            AND sp.status IS DISTINCT FROM 'cancelled'
+            AND sp.status IS DISTINCT FROM 'withdrawn'
         )
       )
     );

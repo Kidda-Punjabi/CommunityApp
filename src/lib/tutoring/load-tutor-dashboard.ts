@@ -233,7 +233,7 @@ export async function loadTutorDashboard(
           .from("student_packages")
           .select("user_id, package_instance_id, course_id")
           .in("user_id", studentIds)
-          .neq("status", "cancelled")
+          .neq("status", "withdrawn")
       : Promise.resolve({
           data: [] as {
             user_id: string;
@@ -552,7 +552,7 @@ export async function loadTutorAssignedPackages(
           .from("student_packages")
           .select("package_instance_id")
           .in("package_instance_id", instanceIds)
-          .neq("status", "cancelled")
+          .neq("status", "withdrawn")
       : Promise.resolve({ data: [] }),
   ]);
 
