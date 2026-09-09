@@ -1,10 +1,111 @@
-import { getDisplayName } from "@/lib/profile/display-name";
+import {
+  getStaffFacingName,
+  isPlaceholderStudentName,
+  resolveStudentLabel,
+  studentNameFromPackageRunName,
+} from "@/lib/profile/display-name";
+import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { canManageCohort } from "@/lib/tutoring/tutor-access";
 import { isStoredSessionExcluded } from "@/lib/calendar/exclusions";
 import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
 import { localDateKey, todayDateKey } from "@/lib/calendar/day-bounds";
 import { loadTutorAvailability } from "@/lib/tutoring/availability/load-availability";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+type ProfileNameRow = {
+  id: string;
+  full_name: string | null;
+  preferred_name: string | null;
+};
+
+function applyProfileNames(
+  nameById: Map<string, string>,
+  profiles: ProfileNameRow[] | null | undefined
+) {
+  for (const profile of profiles ?? []) {
+    const label = getStaffFacingName(profile);
+    if (!label) continue;
+    const existing = nameById.get(profile.id);
+    if (!existing || isPlaceholderStudentName(existing)) {
+      nameById.set(profile.id, label);
+    }
+  }
+}
+
+async function refillMissingProfileNames(nameById: Map<string, string>, studentIds: string[]) {
+  const missingIds = studentIds.filter((id) => isPlaceholderStudentName(nameById.get(id) ?? null));
+  if (missingIds.length === 0) return;
+
+  const { client } = tryCreateServiceRoleClient();
+  if (!client) return;
+
+  const { data: profiles } = await client
+    .from("profiles")
+    .select("id, full_name, preferred_name")
+    .in("id", missingIds);
+
+  applyProfileNames(nameById, profiles);
+}
+
+function instanceNameByStudentId(params: {
+  oneToOneCourseIds: Map<string, string>;
+  instances:
+    | Array<{ id: string; name: string; course_id: string; status?: string | null }>
+    | null
+    | undefined;
+  studentPackages:
+    | Array<{
+        user_id: string;
+        package_instance_id: string | null;
+        course_id: string | null;
+      }>
+    | null
+    | undefined;
+}): Map<string, string> {
+  const result = new Map<string, string>();
+  const instanceById = new Map((params.instances ?? []).map((row) => [row.id, row] as const));
+
+  for (const row of params.studentPackages ?? []) {
+    if (!row.package_instance_id) continue;
+    const instance = instanceById.get(row.package_instance_id);
+    const label = studentNameFromPackageRunName(instance?.name);
+    if (label && !result.has(row.user_id)) result.set(row.user_id, label);
+  }
+
+  const activeStatuses = new Set([
+    "pre_scheduling",
+    "recruiting",
+    "scheduled",
+    "in_progress",
+    "paused",
+    "postponed",
+  ]);
+  const instancesByCourse = new Map<string, Array<{ id: string; name: string }>>();
+  for (const instance of params.instances ?? []) {
+    if (instance.status && !activeStatuses.has(instance.status)) continue;
+    const list = instancesByCourse.get(instance.course_id) ?? [];
+    list.push(instance);
+    instancesByCourse.set(instance.course_id, list);
+  }
+
+  const enrollmentsByCourse = new Map<string, string[]>();
+  for (const [studentId, courseId] of params.oneToOneCourseIds) {
+    const list = enrollmentsByCourse.get(courseId) ?? [];
+    list.push(studentId);
+    enrollmentsByCourse.set(courseId, list);
+  }
+
+  for (const [courseId, studentIds] of enrollmentsByCourse) {
+    if (studentIds.length !== 1) continue;
+    const instances = instancesByCourse.get(courseId) ?? [];
+    if (instances.length !== 1) continue;
+    const studentId = studentIds[0]!;
+    const label = studentNameFromPackageRunName(instances[0]?.name);
+    if (label && !result.has(studentId)) result.set(studentId, label);
+  }
+
+  return result;
+}
 
 export type TutorStudentRow = {
   enrollmentId: string;
@@ -56,11 +157,21 @@ export async function loadTutorDashboard(
   supabase: SupabaseClient,
   tutorId: string
 ): Promise<TutorDashboardData> {
-  const { data: enrollmentRows, error } = await supabase
+  let { data: enrollmentRows, error } = await supabase
     .from("course_enrollments")
-    .select("id, user_id, course_id, delivery_mode, cohort_id, courses(id, name, required_tier)")
+    .select("id, user_id, course_id, delivery_mode, cohort_id, kid_profile_id, courses(id, name, required_tier)")
     .eq("tutor_id", tutorId)
     .order("created_at", { ascending: true });
+
+  if (error && error.message.toLowerCase().includes("kid_profile_id")) {
+    const retry = await supabase
+      .from("course_enrollments")
+      .select("id, user_id, course_id, delivery_mode, cohort_id, courses(id, name, required_tier)")
+      .eq("tutor_id", tutorId)
+      .order("created_at", { ascending: true });
+    enrollmentRows = retry.data as typeof enrollmentRows;
+    error = retry.error;
+  }
 
   if (error) throw error;
 
@@ -73,12 +184,28 @@ export async function loadTutorDashboard(
     ),
   ];
 
+  const kidProfileIds = [
+    ...new Set(
+      (enrollmentRows ?? [])
+        .map((row) => row.kid_profile_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const oneToOneCourseIds = new Map<string, string>();
+  for (const row of enrollmentRows ?? []) {
+    if (row.delivery_mode === "group" && row.cohort_id) continue;
+    oneToOneCourseIds.set(row.user_id, row.course_id);
+  }
+
   const [
     { data: profiles },
     { data: cohortRows },
     { data: assignedCohortRows },
     { data: coverCohortIdRows, error: coverCohortIdsError },
     { data: memberRows },
+    { data: instanceRows },
+    { data: studentPackageRows },
+    { data: kidRows },
   ] = await Promise.all([
     studentIds.length > 0
       ? supabase
@@ -100,6 +227,23 @@ export async function loadTutorDashboard(
           .in("cohort_id", cohortIds)
           .is("left_at", null)
       : Promise.resolve({ data: [] as { cohort_id: string; user_id: string }[] }),
+    supabase.from("package_instances").select("id, name, course_id, status").eq("tutor_id", tutorId),
+    studentIds.length > 0
+      ? supabase
+          .from("student_packages")
+          .select("user_id, package_instance_id, course_id")
+          .in("user_id", studentIds)
+          .neq("status", "cancelled")
+      : Promise.resolve({
+          data: [] as {
+            user_id: string;
+            package_instance_id: string | null;
+            course_id: string | null;
+          }[],
+        }),
+    kidProfileIds.length > 0
+      ? supabase.from("kid_profiles").select("id, name").in("id", kidProfileIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
   ]);
 
   const coverCohortIds = [
@@ -149,12 +293,8 @@ export async function loadTutorDashboard(
     membersByCohortFromDb = extraMembers ?? [];
   }
 
-  const nameById = new Map(
-    (profiles ?? []).map((profile) => [
-      profile.id,
-      getDisplayName(profile) ?? "Student",
-    ] as const)
-  );
+  const nameById = new Map<string, string>();
+  applyProfileNames(nameById, profiles);
 
   const cohortMemberUserIds = [
     ...new Set(membersByCohortFromDb.map((member) => member.user_id)),
@@ -167,12 +307,34 @@ export async function loadTutorDashboard(
       .select("id, full_name, preferred_name")
       .in("id", missingProfileIds);
 
-    for (const profile of memberProfiles ?? []) {
-      if (!nameById.has(profile.id)) {
-        nameById.set(profile.id, getDisplayName(profile) ?? "Student");
+    applyProfileNames(nameById, memberProfiles);
+  }
+
+  await refillMissingProfileNames(nameById, [...studentIds, ...cohortMemberUserIds]);
+
+  const kidNameById = new Map<string, string>();
+  for (const kid of kidRows ?? []) {
+    const name = kid.name?.trim();
+    if (name) kidNameById.set(kid.id, name);
+  }
+  if (kidProfileIds.length > 0 && kidNameById.size < kidProfileIds.length) {
+    const { client } = tryCreateServiceRoleClient();
+    if (client) {
+      const { data: adminKids } = await client
+        .from("kid_profiles")
+        .select("id, name")
+        .in("id", kidProfileIds);
+      for (const kid of adminKids ?? []) {
+        const name = kid.name?.trim();
+        if (name && !kidNameById.has(kid.id)) kidNameById.set(kid.id, name);
       }
     }
   }
+  const packageNameByStudentId = instanceNameByStudentId({
+    oneToOneCourseIds,
+    instances: instanceRows,
+    studentPackages: studentPackageRows,
+  });
 
   const cohortNameById = new Map(
     [
@@ -184,7 +346,7 @@ export async function loadTutorDashboard(
   const membersByCohort = new Map<string, string[]>();
   for (const member of membersByCohortFromDb) {
     const list = membersByCohort.get(member.cohort_id) ?? [];
-    list.push(nameById.get(member.user_id) ?? "Student");
+    list.push(resolveStudentLabel(nameById.get(member.user_id)));
     membersByCohort.set(member.cohort_id, list);
   }
 
@@ -212,10 +374,17 @@ export async function loadTutorDashboard(
       continue;
     }
 
+    const kidName = row.kid_profile_id
+      ? kidNameById.get(row.kid_profile_id as string)
+      : null;
     const studentRow: TutorStudentRow = {
       enrollmentId: row.id,
       studentId: row.user_id,
-      studentName: nameById.get(row.user_id) ?? "Student",
+      studentName: resolveStudentLabel(
+        kidName,
+        nameById.get(row.user_id),
+        packageNameByStudentId.get(row.user_id)
+      ),
       studentEmail: null,
       courseId: row.course_id,
       courseName,
@@ -325,15 +494,16 @@ export async function loadTutorTodayLessons(
   const [{ data: profiles }, { data: cohorts }] = await Promise.all([
     studentIds.length > 0
       ? supabase.from("profiles").select("id, full_name, preferred_name").in("id", studentIds)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [] as ProfileNameRow[] }),
     cohortIds.length > 0
       ? supabase.from("cohorts").select("id, name").in("id", cohortIds)
       : Promise.resolve({ data: [] }),
   ]);
 
-  const studentNameById = new Map(
-    (profiles ?? []).map((profile) => [profile.id, getDisplayName(profile) ?? "Student"] as const)
-  );
+  const studentNameById = new Map<string, string>();
+  applyProfileNames(studentNameById, profiles);
+  await refillMissingProfileNames(studentNameById, studentIds);
+
   const cohortNameById = new Map((cohorts ?? []).map((cohort) => [cohort.id, cohort.name] as const));
 
   return sessions.map((row) => ({
@@ -342,7 +512,9 @@ export async function loadTutorTodayLessons(
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     meetLink: row.meet_link,
-    studentName: row.student_id ? (studentNameById.get(row.student_id) ?? null) : null,
+    studentName: row.student_id
+      ? resolveStudentLabel(studentNameById.get(row.student_id))
+      : null,
     cohortName: row.cohort_id ? (cohortNameById.get(row.cohort_id) ?? null) : null,
   }));
 }
@@ -521,8 +693,12 @@ export async function loadTutorStudentLessons(
     (recordings ?? []).map((row) => [row.lesson_id, row] as const)
   );
 
+  const nameById = new Map<string, string>();
+  applyProfileNames(nameById, profile ? [{ id: studentId, ...profile }] : []);
+  await refillMissingProfileNames(nameById, [studentId]);
+
   return {
-    studentName: getDisplayName(profile) ?? "Student",
+    studentName: resolveStudentLabel(nameById.get(studentId)),
     courseName: course?.name ?? "Course",
     lessons: (lessons ?? []).map((lesson) => {
       const recording = recordingByLesson.get(lesson.id);
@@ -607,9 +783,9 @@ export async function loadTutorCohortLessons(
           .in("id", memberIds)
       : { data: [] };
 
-  const nameById = new Map(
-    (profiles ?? []).map((p) => [p.id, getDisplayName(p) ?? "Member"] as const)
-  );
+  const nameById = new Map<string, string>();
+  applyProfileNames(nameById, profiles);
+  await refillMissingProfileNames(nameById, memberIds);
 
   const unlockedIds = new Set((unlocks ?? []).map((row) => row.lesson_id));
   const recordingByLesson = new Map(

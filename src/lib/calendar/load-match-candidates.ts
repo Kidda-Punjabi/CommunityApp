@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getDisplayName } from "@/lib/profile/display-name";
+import { getStaffFacingName, resolveStudentLabel } from "@/lib/profile/display-name";
 import type {
   TutorCohortMatchCandidate,
   TutorStudentMatchCandidate,
@@ -94,7 +94,7 @@ export async function loadTutorMatchCandidates(
     return {
       studentId: enrollment.user_id,
       email,
-      displayName: getDisplayName(profile ?? null) ?? "Student",
+      displayName: resolveStudentLabel(getStaffFacingName(profile ?? null)),
       cohortId: enrollment.cohort_id,
       courseId: enrollment.course_id,
       deliveryMode: enrollment.delivery_mode as TutorStudentMatchCandidate["deliveryMode"],
