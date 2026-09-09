@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, type FormEvent } from "react";
 import {
   requestCohortSwitch,
   type CalendarActionResult,
@@ -9,6 +9,7 @@ import {
   COHORT_SWITCH_SHORT_NOTICE_WARNING,
   COHORT_SWITCH_WARNING,
 } from "@/lib/calendar/cohort-switch-policy";
+import type { CohortSwitchSubmitInput } from "@/lib/calendar/schedule-preview";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { ui } from "@/lib/ui/styles";
 
@@ -17,17 +18,39 @@ const initial: CalendarActionResult = {};
 export function CohortSwitchRequestForm({
   session,
   onDone,
+  onSubmit,
 }: {
   session: StudentScheduledSession;
   onDone?: () => void;
+  onSubmit?: (input: CohortSwitchSubmitInput) => Promise<CalendarActionResult>;
 }) {
-  const [state, action, pending] = useActionState(requestCohortSwitch, initial);
+  const [state, action, pendingAction] = useActionState(requestCohortSwitch, initial);
+  const [overrideState, setOverrideState] = useState<CalendarActionResult>({});
+  const [overridePending, setOverridePending] = useState(false);
   const [open, setOpen] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [shortNoticeAcknowledged, setShortNoticeAcknowledged] = useState(false);
 
-  if (state.success) {
-    return <p className="mt-3 text-sm text-emerald-700">{state.success}</p>;
+  const usingOverride = Boolean(onSubmit);
+  const shownState = usingOverride ? overrideState : state;
+  const pending = usingOverride ? overridePending : pendingAction;
+
+  async function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!onSubmit) return;
+    const formData = new FormData(event.currentTarget);
+    setOverridePending(true);
+    const result = await onSubmit({
+      sessionId: String(formData.get("session_id") ?? ""),
+      toSessionId: String(formData.get("to_session_id") ?? ""),
+      message: String(formData.get("message") ?? "").trim(),
+    });
+    setOverrideState(result);
+    setOverridePending(false);
+  }
+
+  if (shownState.success) {
+    return <p className="mt-3 text-sm text-emerald-700">{shownState.success}</p>;
   }
 
   const requiresShortNoticeAck = session.isShortNoticeCohortSwitch;
@@ -45,7 +68,11 @@ export function CohortSwitchRequestForm({
   }
 
   return (
-    <form action={action} className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
+    <form
+      action={usingOverride ? undefined : action}
+      onSubmit={usingOverride ? handleOverrideSubmit : undefined}
+      className="mt-3 space-y-3 border-t border-zinc-100 pt-3"
+    >
       <input type="hidden" name="session_id" value={session.id} />
       <input type="hidden" name="to_session_id" value={selectedSessionId} />
       <div>
@@ -129,7 +156,7 @@ export function CohortSwitchRequestForm({
           only request a different class if it is genuinely necessary.
         </p>
       )}
-      {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
+      {shownState.error ? <p className="text-sm text-rose-600">{shownState.error}</p> : null}
       <div className="flex gap-2">
         <button type="submit" disabled={pending || !canSubmit} className={ui.btnPrimary}>
           {pending ? "Sending…" : "Send request"}

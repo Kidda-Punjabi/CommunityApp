@@ -6,7 +6,7 @@ import {
   AdminHubPage,
   AdminHubStack,
 } from "@/components/admin/admin-hub-list";
-import { CalendarClock, CalendarDays, Layers, UserRoundCog } from "lucide-react";
+import { CalendarClock, CalendarDays, Eye, Layers, UserRoundCog } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function AdminCohortsHub() {
@@ -69,6 +69,18 @@ export function AdminCohortsHub() {
           icon={<UserRoundCog className="h-[18px] w-[18px]" />}
           title="Tutor cover"
           summary="Cover requests for upcoming lessons"
+        />
+        <AdminHubLinkCard
+          href="/admin/test-cohort-switch"
+          icon={<Eye className="h-[18px] w-[18px]" />}
+          title="Test Cohort Switch"
+          summary="Preview the live student alternate-session request. Nothing is submitted."
+        />
+        <AdminHubLinkCard
+          href="/admin/test-session-reschedule"
+          icon={<Eye className="h-[18px] w-[18px]" />}
+          title="Test Session Reschedule"
+          summary="Preview the live student 1-to-1 reschedule request. Nothing is submitted."
         />
       </AdminHubStack>
     </AdminHubPage>

@@ -11,14 +11,20 @@ import { COHORT_SWITCH_CUTOFF_MS, RESCHEDULE_CUTOFF_MS } from "@/lib/calendar/co
 import { GROUP_LESSON_POLICY_NOTE } from "@/lib/calendar/cohort-switch-policy";
 import { formatSessionWhen, hoursUntilSession } from "@/lib/calendar/reschedule-policy";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
+import type { SchedulePreviewHandlers } from "@/lib/calendar/schedule-preview";
 import { ui } from "@/lib/ui/styles";
 
 type UpcomingLessonsListProps = {
   sessions: StudentScheduledSession[];
   hasBookingCredit?: boolean;
+  preview?: SchedulePreviewHandlers;
 };
 
-export function UpcomingLessonsList({ sessions, hasBookingCredit = false }: UpcomingLessonsListProps) {
+export function UpcomingLessonsList({
+  sessions,
+  hasBookingCredit = false,
+  preview,
+}: UpcomingLessonsListProps) {
   const [viewMode, setViewMode] = useState<LessonsViewMode>("list");
 
   if (sessions.length === 0) {
@@ -47,7 +53,7 @@ export function UpcomingLessonsList({ sessions, hasBookingCredit = false }: Upco
       {viewMode === "list" ? (
         <ul className="space-y-4">
           {sessions.map((session) => (
-            <LessonSessionCard key={session.id} session={session} />
+            <LessonSessionCard key={session.id} session={session} preview={preview} />
           ))}
         </ul>
       ) : (
@@ -67,7 +73,13 @@ export function UpcomingLessonsList({ sessions, hasBookingCredit = false }: Upco
   );
 }
 
-function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
+function LessonSessionCard({
+  session,
+  preview,
+}: {
+  session: StudentScheduledSession;
+  preview?: SchedulePreviewHandlers;
+}) {
   const hoursLeft = hoursUntilSession(session.starts_at);
   const isGroupLesson = Boolean(session.cohort_id);
   const cohortSwitchCutoffHours = COHORT_SWITCH_CUTOFF_MS / (60 * 60 * 1000);
@@ -124,7 +136,10 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
       </div>
 
       {session.rescheduleRequest?.status === "pending" ? (
-        <PendingRequestBanner requestId={session.rescheduleRequest.id} />
+        <PendingRequestBanner
+          requestId={session.rescheduleRequest.id}
+          onCancel={preview?.onCancelReschedule}
+        />
       ) : null}
 
       {session.rescheduleRequest?.status === "approved" ? (
@@ -149,30 +164,55 @@ function LessonSessionCard({ session }: { session: StudentScheduledSession }) {
         <CancelCohortSwitchRequestControl
           request={session.cohortSwitchRequest}
           className="mt-3"
+          onCancel={preview?.onCancelCohortSwitch}
         />
       ) : isGroupLesson ? (
-        <GroupCohortRescheduleControl session={session} showPending={false} className="mt-3" />
+        <GroupCohortRescheduleControl
+          session={session}
+          showPending={false}
+          className="mt-3"
+          onSubmit={preview?.onCohortSwitchSubmit}
+          onCancelRequest={preview?.onCancelCohortSwitch}
+        />
       ) : null}
 
       <div className="mt-3">
-        <Link href={`/dashboard/schedule/${session.id}`} className={ui.btnGhost}>
-          View lesson →
-        </Link>
+        {preview?.onViewLesson ? (
+          <button
+            type="button"
+            onClick={() => preview.onViewLesson?.(session.id)}
+            className={ui.btnGhost}
+          >
+            View lesson →
+          </button>
+        ) : (
+          <Link href={`/dashboard/schedule/${session.id}`} className={ui.btnGhost}>
+            View lesson →
+          </Link>
+        )}
       </div>
     </li>
   );
 }
 
-function PendingRequestBanner({ requestId }: { requestId: string }) {
+function PendingRequestBanner({
+  requestId,
+  onCancel,
+}: {
+  requestId: string;
+  onCancel?: (requestId: string) => Promise<{ error?: string; success?: string }>;
+}) {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   const cancel = async () => {
     setPending(true);
-    const result = await cancelRescheduleRequest(requestId);
+    const result = onCancel
+      ? await onCancel(requestId)
+      : await cancelRescheduleRequest(requestId);
     setMessage(result.success ?? result.error ?? null);
     setPending(false);
-    if (result.success) window.location.reload();
+    if (result.success && !onCancel) window.location.reload();
   };
 
   return (
