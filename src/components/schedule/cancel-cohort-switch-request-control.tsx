@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { cancelCohortSwitchRequest } from "@/app/dashboard/tutor/calendar-actions";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type { CohortSwitchRequestRow } from "@/lib/calendar/types";
+import type { PreviewActionResult } from "@/lib/calendar/schedule-preview";
 import { cn } from "@/lib/ui/styles";
 
 type CancelCohortSwitchRequestControlProps = {
@@ -15,12 +16,14 @@ type CancelCohortSwitchRequestControlProps = {
   className?: string;
   /** Compact single-line style for Learn cards. */
   compact?: boolean;
+  onCancel?: (requestId: string) => Promise<PreviewActionResult>;
 };
 
 export function CancelCohortSwitchRequestControl({
   request,
   className,
   compact = false,
+  onCancel,
 }: CancelCohortSwitchRequestControlProps) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -35,14 +38,16 @@ export function CancelCohortSwitchRequestControl({
   async function cancel() {
     setPending(true);
     setMessage(null);
-    const result = await cancelCohortSwitchRequest(request.id);
+    const result = onCancel
+      ? await onCancel(request.id)
+      : await cancelCohortSwitchRequest(request.id);
     setPending(false);
     if (result.error) {
       setMessage(result.error);
       return;
     }
     setMessage(result.success ?? "Request cancelled.");
-    router.refresh();
+    if (!onCancel) router.refresh();
   }
 
   return (

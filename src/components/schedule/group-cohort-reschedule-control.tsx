@@ -4,6 +4,7 @@ import { CancelCohortSwitchRequestControl } from "@/components/schedule/cancel-c
 import { CohortSwitchRequestForm } from "@/components/schedule/cohort-switch-request-form";
 import { NO_MATCHING_ALTERNATE_SESSION_COPY } from "@/lib/calendar/constants";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
+import type { CohortSwitchSubmitInput, PreviewActionResult } from "@/lib/calendar/schedule-preview";
 import { cn, ui } from "@/lib/ui/styles";
 
 export const NO_ALTERNATIVE_SESSIONS_COPY = NO_MATCHING_ALTERNATE_SESSION_COPY;
@@ -15,6 +16,8 @@ type GroupCohortRescheduleControlProps = {
   /** Pending requests are often already shown in the lesson schedule block. */
   showPending?: boolean;
   className?: string;
+  onSubmit?: (input: CohortSwitchSubmitInput) => Promise<PreviewActionResult>;
+  onCancelRequest?: (requestId: string) => Promise<PreviewActionResult>;
 };
 
 export function GroupCohortRescheduleControl({
@@ -22,6 +25,8 @@ export function GroupCohortRescheduleControl({
   forceShow = false,
   showPending = true,
   className,
+  onSubmit,
+  onCancelRequest,
 }: GroupCohortRescheduleControlProps) {
   const isGroup = Boolean(session?.cohort_id) || forceShow;
   if (!isGroup) return null;
@@ -36,6 +41,7 @@ export function GroupCohortRescheduleControl({
         request={session.cohortSwitchRequest}
         className={className ?? "mt-3"}
         compact
+        onCancel={onCancelRequest}
       />
     );
   }
@@ -48,7 +54,7 @@ export function GroupCohortRescheduleControl({
         <p className="text-xs text-zinc-500">
           Can&apos;t make this group? Request a matching alternate session here.
         </p>
-        <CohortSwitchRequestForm session={session} />
+        <CohortSwitchRequestForm session={session} onSubmit={onSubmit} />
       </div>
     );
   }

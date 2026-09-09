@@ -71,7 +71,9 @@ const navItems: NavItem[] = [
       pathname.startsWith("/admin/lesson-log") ||
       pathname.startsWith("/admin/reschedule-requests") ||
       pathname.startsWith("/admin/cover-requests") ||
-      pathname.startsWith("/admin/cohort-switch-requests"),
+      pathname.startsWith("/admin/cohort-switch-requests") ||
+      pathname.startsWith("/admin/test-cohort-switch") ||
+      pathname.startsWith("/admin/test-session-reschedule"),
   },
   {
     href: "/admin/content/people",

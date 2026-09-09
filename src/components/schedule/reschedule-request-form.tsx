@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition, type FormEvent } from "react";
 import { requestLessonReschedule, type CalendarActionResult } from "@/app/dashboard/tutor/calendar-actions";
 import { fetchRescheduleSlotsForSession } from "@/app/dashboard/schedule/reschedule-actions";
 import { BookingSlotCalendar } from "@/components/schedule/booking-slot-calendar";
+import type { RescheduleSubmitInput } from "@/lib/calendar/schedule-preview";
 import type { BookableSlot } from "@/lib/tutoring/availability/types";
 import { ui } from "@/lib/ui/styles";
 
@@ -13,30 +14,58 @@ export function RescheduleRequestForm({
   sessionId,
   isLateCancel = false,
   onDone,
+  onSubmit,
+  loadSlots,
 }: {
   sessionId: string;
   isLateCancel?: boolean;
   onDone?: () => void;
+  onSubmit?: (input: RescheduleSubmitInput) => Promise<CalendarActionResult>;
+  loadSlots?: (sessionId: string) => Promise<{ slots: BookableSlot[]; error?: string }>;
 }) {
-  const [state, action, pending] = useActionState(requestLessonReschedule, initial);
+  const [state, action, pendingAction] = useActionState(requestLessonReschedule, initial);
+  const [overrideState, setOverrideState] = useState<CalendarActionResult>({});
+  const [overridePending, setOverridePending] = useState(false);
   const [open, setOpen] = useState(false);
   const [slots, setSlots] = useState<BookableSlot[]>([]);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
   const [loadingSlots, startLoadSlots] = useTransition();
 
+  const usingOverride = Boolean(onSubmit);
+  const shownState = usingOverride ? overrideState : state;
+  const pending = usingOverride ? overridePending : pendingAction;
+
   useEffect(() => {
     if (!open || isLateCancel) return;
     startLoadSlots(async () => {
-      const result = await fetchRescheduleSlotsForSession(sessionId);
+      const result = loadSlots
+        ? await loadSlots(sessionId)
+        : await fetchRescheduleSlotsForSession(sessionId);
       setSlots(result.slots);
       setSlotsError(result.error ?? null);
       setSelectedSlot(null);
     });
-  }, [open, sessionId, isLateCancel]);
+  }, [open, sessionId, isLateCancel, loadSlots]);
 
-  if (state.success) {
-    return <p className="mt-3 text-sm text-emerald-700">{state.success}</p>;
+  async function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!onSubmit) return;
+    const formData = new FormData(event.currentTarget);
+    setOverridePending(true);
+    const result = await onSubmit({
+      sessionId: String(formData.get("session_id") ?? ""),
+      message: String(formData.get("message") ?? "").trim(),
+      lateCancel: String(formData.get("late_cancel")) === "1",
+      requestedStartsAt: String(formData.get("requested_starts_at") || "") || null,
+      requestedEndsAt: String(formData.get("requested_ends_at") || "") || null,
+    });
+    setOverrideState(result);
+    setOverridePending(false);
+  }
+
+  if (shownState.success) {
+    return <p className="mt-3 text-sm text-emerald-700">{shownState.success}</p>;
   }
 
   if (!open) {
@@ -50,7 +79,11 @@ export function RescheduleRequestForm({
   }
 
   return (
-    <form action={action} className="mt-3 space-y-4 border-t border-zinc-100 pt-3">
+    <form
+      action={usingOverride ? undefined : action}
+      onSubmit={usingOverride ? handleOverrideSubmit : undefined}
+      className="mt-3 space-y-4 border-t border-zinc-100 pt-3"
+    >
       <input type="hidden" name="session_id" value={sessionId} />
       <input type="hidden" name="late_cancel" value={isLateCancel ? "1" : "0"} />
       <input type="hidden" name="requested_starts_at" value={selectedSlot?.startsAt ?? ""} />
@@ -106,7 +139,7 @@ export function RescheduleRequestForm({
           : "Your tutor will review this request. If they approve, your calendar invite will be updated to the new time. Beginners 1-to-1 students get up to 2 reschedules for the course."}
       </p>
 
-      {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
+      {shownState.error ? <p className="text-sm text-rose-600">{shownState.error}</p> : null}
 
       <div className="flex gap-2">
         <button
