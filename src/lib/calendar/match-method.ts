@@ -17,5 +17,10 @@ export function isWeeklyRrule(recurrence: string[] | null | undefined): boolean 
   if (!upper.includes("FREQ=WEEKLY")) return false;
   const intervalMatch = upper.match(/INTERVAL=(\d+)/);
   if (intervalMatch && intervalMatch[1] !== "1") return false;
+  const byDayMatch = upper.match(/BYDAY=([A-Z,]+)/);
+  if (byDayMatch) {
+    const days = byDayMatch[1].split(",").filter(Boolean);
+    if (days.length !== 1) return false;
+  }
   return true;
 }
