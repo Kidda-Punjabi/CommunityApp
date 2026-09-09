@@ -7,16 +7,20 @@ type GoogleEventsListResponse = {
   nextSyncToken?: string;
 };
 
+type GoogleApiDate = { dateTime?: string; date?: string };
+
 type GoogleApiEvent = {
   id?: string;
   summary?: string;
   status?: string;
   updated?: string;
   recurringEventId?: string;
+  recurrence?: string[];
   hangoutLink?: string;
   location?: string;
-  start?: { dateTime?: string; date?: string };
-  end?: { dateTime?: string; date?: string };
+  start?: GoogleApiDate;
+  end?: GoogleApiDate;
+  originalStartTime?: GoogleApiDate;
   attendees?: { email?: string; responseStatus?: string }[];
   conferenceData?: {
     entryPoints?: { entryPointType?: string; uri?: string }[];
@@ -35,11 +39,16 @@ function extractMeetLink(event: GoogleApiEvent): string | null {
   return videoEntry?.uri ?? null;
 }
 
+function isoFromGoogleDate(value?: GoogleApiDate): string | null {
+  return value?.dateTime ?? value?.date ?? null;
+}
+
 function mapGoogleEvent(event: GoogleApiEvent): GoogleCalendarEvent | null {
   if (!event.id) return null;
 
-  const startIso = event.start?.dateTime ?? event.start?.date;
-  const endIso = event.end?.dateTime ?? event.end?.date;
+  const startIso =
+    isoFromGoogleDate(event.start) ?? isoFromGoogleDate(event.originalStartTime);
+  const endIso = isoFromGoogleDate(event.end) ?? startIso;
   if (!startIso || !endIso) return null;
 
   const attendeeEmails = (event.attendees ?? [])
@@ -345,4 +354,131 @@ export async function deleteGoogleCalendarEvent(
 
   const text = await res.text();
   throw new Error(`Google Calendar delete event failed (${res.status}): ${text.slice(0, 500)}`);
+}
+
+export type GoogleCalendarRecurringMaster = {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  hangoutLink: string | null;
+  location: string | null;
+  attendeeEmails: string[];
+  recurrence: string[];
+  status?: string;
+};
+
+const MASTER_EVENT_FIELDS =
+  "items(id,summary,status,start,end,recurrence,attendees(email),location,hangoutLink,conferenceData(entryPoints)),nextPageToken";
+
+const INSTANCE_EVENT_FIELDS =
+  "items(id,summary,status,start,end,originalStartTime,attendees(email),recurringEventId,location,hangoutLink,conferenceData(entryPoints)),nextPageToken";
+
+function mapRecurringMaster(event: GoogleApiEvent): GoogleCalendarRecurringMaster | null {
+  if (!event.id || event.status === "cancelled") return null;
+  const recurrence = (event.recurrence ?? []).filter(Boolean);
+  if (recurrence.length === 0) return null;
+
+  const startIso = isoFromGoogleDate(event.start);
+  const endIso = isoFromGoogleDate(event.end);
+  if (!startIso || !endIso) return null;
+
+  const attendeeEmails = (event.attendees ?? [])
+    .map((a) => a.email?.trim().toLowerCase())
+    .filter((email): email is string => Boolean(email));
+
+  return {
+    id: event.id,
+    summary: event.summary?.trim() || "Lesson",
+    start: startIso,
+    end: endIso,
+    hangoutLink: extractMeetLink(event),
+    location: event.location ?? null,
+    attendeeEmails,
+    recurrence,
+    status: event.status,
+  };
+}
+
+/** Unexpanded events (masters + one-offs). Recurring series include RRULE. */
+export async function listGoogleCalendarRecurringMasters(
+  accessToken: string,
+  calendarId: string,
+  options: { timeMin: string; timeMax: string }
+): Promise<GoogleCalendarRecurringMaster[]> {
+  const masters: GoogleCalendarRecurringMaster[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const params = new URLSearchParams({
+      singleEvents: "false",
+      maxResults: "250",
+      fields: MASTER_EVENT_FIELDS,
+      timeMin: options.timeMin,
+      timeMax: options.timeMax,
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Google Calendar list masters failed: ${text}`);
+    }
+
+    const data = (await res.json()) as GoogleEventsListResponse;
+    for (const item of data.items ?? []) {
+      const mapped = mapRecurringMaster(item);
+      if (mapped) masters.push(mapped);
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return masters;
+}
+
+/** Expanded instances of one recurring series, including cancelled (showDeleted). */
+export async function listGoogleCalendarEventInstances(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  options: { timeMin: string; timeMax: string; maxResults?: number }
+): Promise<GoogleCalendarEvent[]> {
+  const events: GoogleCalendarEvent[] = [];
+  let pageToken: string | undefined;
+  const maxResults = String(options.maxResults ?? 40);
+
+  do {
+    const params = new URLSearchParams({
+      maxResults,
+      fields: INSTANCE_EVENT_FIELDS,
+      timeMin: options.timeMin,
+      timeMax: options.timeMax,
+      showDeleted: "true",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}/instances?${params}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Google Calendar list instances failed: ${text}`);
+    }
+
+    const data = (await res.json()) as GoogleEventsListResponse;
+    for (const item of data.items ?? []) {
+      const mapped = mapGoogleEvent(item);
+      if (mapped) events.push(mapped);
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  events.sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
+  return events;
 }

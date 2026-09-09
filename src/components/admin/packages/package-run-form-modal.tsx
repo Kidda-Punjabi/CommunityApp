@@ -22,6 +22,10 @@ import {
   weekdayFromDateInput,
 } from "@/lib/admin/package-schedule";
 import { ui } from "@/lib/ui/styles";
+import {
+  GroupCohortCalendarLinkStep,
+  type GroupCohortCalendarLinkValue,
+} from "@/components/admin/packages/group-cohort-calendar-link-step";
 
 const WEEKDAYS = [...PACKAGE_WEEKDAYS];
 
@@ -72,8 +76,11 @@ export function PackageRunFormModal({
   const [startDate, setStartDate] = useState(dateInputFromIso(initial?.startDate));
   const [endDate, setEndDate] = useState(dateInputFromIso(initial?.endDate));
   const [active, setActive] = useState(initial?.active ?? true);
+  const [calendarLink, setCalendarLink] = useState<GroupCohortCalendarLinkValue | null>(null);
+  const [calendarReady, setCalendarReady] = useState(false);
 
   const isCommunity = initial?.kind === "community";
+  const isGroupCohortCreate = mode === "create" && kind === "cohort";
 
   function handleStartDateChange(value: string) {
     setStartDate(value);
@@ -108,10 +115,13 @@ export function PackageRunFormModal({
   function handleKindChange(next: AdminPackageKind) {
     setKind(next);
     setCapacity(next === "cohort" ? "7" : "1");
+    setCalendarLink(null);
+    setCalendarReady(false);
     if (next === "cohort") {
       const beginners = courses.find((c) => c.tier === "beginners");
       if (beginners) setCourseId(beginners.id);
       setPackageId("");
+      setStatus("pre_scheduling");
     } else {
       const first = instancePackages[0];
       if (first) {
@@ -131,17 +141,22 @@ export function PackageRunFormModal({
     setError(null);
     startTransition(async () => {
       if (mode === "create") {
+        if (kind === "cohort" && (!tutorId || !calendarReady || !calendarLink)) {
+          setError("Link exactly 12 calendar classes before creating this package.");
+          return;
+        }
         const result = await createPackageRun({
           kind,
           name,
           courseId: kind === "cohort" ? courseId : undefined,
           packageId: kind === "package_instance" ? packageId : undefined,
           tutorId: tutorId || null,
-          status,
+          status: kind === "cohort" && !calendarReady ? "pre_scheduling" : status,
           capacity: Number(capacity) || (kind === "cohort" ? 7 : 1),
           startDayOfWeek: startDay || null,
           startDate: isoFromDateInput(startDate),
           endDate: isoFromDateInput(endDate),
+          calendarLink: kind === "cohort" ? calendarLink : null,
         });
         if (result.error) {
           setError(result.error);
@@ -352,10 +367,14 @@ export function PackageRunFormModal({
                 Tutor
                 <select
                   value={tutorId}
-                  onChange={(e) => setTutorId(e.target.value)}
+                  onChange={(e) => {
+                    setTutorId(e.target.value);
+                    setCalendarLink(null);
+                    setCalendarReady(false);
+                  }}
                   className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
                 >
-                  <option value="">Unassigned</option>
+                  <option value="">{isGroupCohortCreate ? "Select tutor" : "Unassigned"}</option>
                   {tutors.map((tutor) => (
                     <option key={tutor.id} value={tutor.id}>
                       {tutor.name}
@@ -367,9 +386,10 @@ export function PackageRunFormModal({
               <label className="block text-sm text-zinc-700">
                 Status
                 <select
-                  value={status}
+                  value={isGroupCohortCreate && !calendarReady ? "pre_scheduling" : status}
                   onChange={(e) => setStatus(e.target.value as PackageInstanceStatus)}
-                  className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                  disabled={isGroupCohortCreate && !calendarReady}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2 disabled:bg-zinc-50 disabled:text-zinc-500"
                 >
                   {PACKAGE_INSTANCE_STATUSES.map((s) => (
                     <option key={s} value={s}>
@@ -377,6 +397,11 @@ export function PackageRunFormModal({
                     </option>
                   ))}
                 </select>
+                {isGroupCohortCreate && !calendarReady ? (
+                  <span className="mt-1 block text-xs text-zinc-500">
+                    Status stays Pre-scheduling until 12 calendar classes are linked.
+                  </span>
+                ) : null}
               </label>
 
               <div className="grid grid-cols-2 gap-3">
@@ -390,43 +415,78 @@ export function PackageRunFormModal({
                     className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
                   />
                 </label>
-                <label className="block text-sm text-zinc-700">
-                  Start day
-                  <select
-                    value={startDay}
-                    onChange={(e) => setStartDay(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-                  >
-                    <option value="">—</option>
-                    {WEEKDAYS.map((day) => (
-                      <option key={day} value={day}>
-                        {day}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {isGroupCohortCreate ? (
+                  <label className="block text-sm text-zinc-700">
+                    First class on or after
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                    />
+                    <span className="mt-1 block text-xs text-zinc-500">
+                      Filters the calendar series. Session dates come from the invite, not this
+                      field.
+                    </span>
+                  </label>
+                ) : (
+                  <label className="block text-sm text-zinc-700">
+                    Start day
+                    <select
+                      value={startDay}
+                      onChange={(e) => setStartDay(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                    >
+                      <option value="">—</option>
+                      {WEEKDAYS.map((day) => (
+                        <option key={day} value={day}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-sm text-zinc-700">
-                  Start date
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => handleStartDateChange(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+              {isGroupCohortCreate ? (
+                tutorId ? (
+                  <GroupCohortCalendarLinkStep
+                    tutorId={tutorId}
+                    startDate={startDate}
+                    onChange={(value, ready) => {
+                      setCalendarLink(value);
+                      setCalendarReady(ready);
+                      if (!ready) setStatus("pre_scheduling");
+                    }}
                   />
-                </label>
-                <label className="block text-sm text-zinc-700">
-                  End date
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
-                  />
-                </label>
-              </div>
+                ) : (
+                  <p className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+                    Select a tutor to load their live Google Calendar and link the weekly class
+                    series.
+                  </p>
+                )
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-sm text-zinc-700">
+                    Start date
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                    />
+                  </label>
+                  <label className="block text-sm text-zinc-700">
+                    End date
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
+                    />
+                  </label>
+                </div>
+              )}
 
               {mode === "edit" && !isCommunity && (
                 <label className="flex items-center gap-2 text-sm text-zinc-700">
@@ -461,8 +521,19 @@ export function PackageRunFormModal({
               <button
                 type="button"
                 onClick={submit}
-                disabled={pending || !name.trim() || (loadingOptions && !isCommunity)}
-                className={ui.btnPrimary}
+                disabled={
+                  pending ||
+                  !name.trim() ||
+                  (loadingOptions && !isCommunity) ||
+                  (isGroupCohortCreate && (!tutorId || !calendarReady))
+                }
+                aria-disabled={
+                  pending ||
+                  !name.trim() ||
+                  (loadingOptions && !isCommunity) ||
+                  (isGroupCohortCreate && (!tutorId || !calendarReady))
+                }
+                className={`${ui.btnPrimary} disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {mode === "create" ? "Create package" : "Save changes"}
               </button>

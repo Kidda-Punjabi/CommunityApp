@@ -151,8 +151,15 @@ export async function refreshCohortSessionWeekNumbers(
   const ambiguousSessionIds: string[] = [];
   let updated = 0;
 
+  const calendarLinkedIds = new Set(
+    ((sessions ?? []) as Array<CohortSessionWeekInput & { match_method?: string | null }>)
+      .filter((session) => session.match_method === "calendar_link")
+      .map((session) => session.id)
+  );
+
   await Promise.all(
     [...classSessionIds].map(async (sessionId) => {
+      if (calendarLinkedIds.has(sessionId)) return;
       const weekNumber = weekNumberBySessionId.get(sessionId) ?? null;
       if (weekNumber == null) ambiguousSessionIds.push(sessionId);
       const { error } = await adminClient

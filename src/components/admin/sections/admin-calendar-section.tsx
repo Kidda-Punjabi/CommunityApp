@@ -45,6 +45,8 @@ function formatMatchLabel(session: AdminTutorCalendarSession): string | null {
       return "Matched by name in title";
     case "manual":
       return "Manually matched";
+    case "calendar_link":
+      return "Linked from package calendar";
     case "unmatched":
       return null;
     default:

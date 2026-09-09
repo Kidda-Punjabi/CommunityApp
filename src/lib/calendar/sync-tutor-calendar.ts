@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listGoogleCalendarEvents } from "@/lib/calendar/google-calendar-api";
+import { isProtectedCalendarMatchMethod } from "@/lib/calendar/match-method";
 import { refreshCohortSessionWeekNumbers } from "@/lib/calendar/cohort-session-week-number";
 import { getValidTutorAccessToken } from "@/lib/calendar/tutor-access-token";
 import { loadTutorMatchCandidates } from "@/lib/calendar/load-match-candidates";
@@ -197,7 +198,7 @@ export async function syncTutorGoogleCalendar(
 
     await removeReplacedRecurringInstance(adminClient, tutorId, event, match);
 
-    if (existing?.match_method === "manual") {
+    if (existing && isProtectedCalendarMatchMethod(existing.match_method)) {
       manualUpdates.push({
         id: existing.id,
         payload: {
@@ -315,7 +316,8 @@ async function reconcileRemovedCalendarEvents(
   const staleIds = (sessions ?? [])
     .filter(
       (session) =>
-        session.match_method !== "manual" && !seenGoogleEventIds.has(session.google_event_id)
+        !isProtectedCalendarMatchMethod(session.match_method) &&
+        !seenGoogleEventIds.has(session.google_event_id)
     )
     .map((session) => session.id);
 

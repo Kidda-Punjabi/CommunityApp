@@ -140,6 +140,27 @@ export async function updatePackageInstanceStatus(
     if (kind === "community") {
       return { error: "Community is always active — manage members on the roster instead." };
     }
+    if (kind === "cohort") {
+      const {
+        countCohortCalendarLinkSessions,
+        cohortStatusRequiresFullCalendarLink,
+      } = await import("@/lib/admin/packages/group-cohort-calendar-link");
+      const { GROUP_COHORT_SESSION_COUNT } = await import(
+        "@/lib/admin/packages/group-cohort-calendar-occurrences"
+      );
+      if (cohortStatusRequiresFullCalendarLink(status)) {
+        const linked = await countCohortCalendarLinkSessions(supabase, id);
+        if (linked.error) return { error: linked.error };
+        if (
+          linked.calendarLinkCount > 0 &&
+          linked.calendarLinkCount !== GROUP_COHORT_SESSION_COUNT
+        ) {
+          return {
+            error: `This cohort needs exactly ${GROUP_COHORT_SESSION_COUNT} calendar-linked classes before it can leave Pre-scheduling.`,
+          };
+        }
+      }
+    }
     const table = kind === "cohort" ? "cohorts" : "package_instances";
     const { error } = await supabase.from(table).update({ status }).eq("id", id);
     if (error) return { error: error.message };
@@ -518,6 +539,92 @@ export async function refreshPackageInstanceCalendarMatch(
   }
 }
 
+export async function searchTutorWeeklyCalendarSeries(
+  tutorId: string,
+  startDate: string | null
+): Promise<{
+  series: Array<{
+    recurringEventId: string;
+    title: string;
+    weekday: string;
+    timeLabel: string;
+    nextStartsAt: string;
+    nextEndsAt: string;
+    matchesIntendedSlot: boolean;
+  }>;
+  matchingSlotCount?: number;
+  state?: "ok" | "no_connection";
+  error?: string;
+}> {
+  try {
+    await requireAdminFromActions();
+    if (!tutorId.trim()) {
+      return { series: [], error: "Select a tutor before loading their calendar." };
+    }
+    const supabase = createServiceRoleClient();
+    const { searchTutorWeeklyCalendarSeries: searchSeries } = await import(
+      "@/lib/admin/packages/group-cohort-calendar-link"
+    );
+    const result = await searchSeries(supabase, tutorId, startDate);
+    if (!result.ok) return { series: [], error: result.error };
+    return {
+      series: result.series,
+      matchingSlotCount: result.matchingSlotCount,
+      state: result.state,
+    };
+  } catch (e) {
+    return {
+      series: [],
+      error: e instanceof Error ? e.message : "Calendar search failed.",
+    };
+  }
+}
+
+export async function fetchTutorWeeklySeriesOccurrences(
+  tutorId: string,
+  recurringEventId: string,
+  startDate: string
+): Promise<{
+  occurrences: Array<{
+    googleEventId: string;
+    recurringEventId: string;
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    meetLink: string | null;
+    location: string | null;
+    attendeeEmails: string[];
+    status: string;
+    included: boolean;
+    weekNumber: number | null;
+  }>;
+  state?: "ok" | "no_connection";
+  error?: string;
+}> {
+  try {
+    await requireAdminFromActions();
+    if (!tutorId.trim()) {
+      return { occurrences: [], error: "Select a tutor before listing classes." };
+    }
+    const supabase = createServiceRoleClient();
+    const { fetchTutorWeeklySeriesOccurrences: fetchOccurrences } = await import(
+      "@/lib/admin/packages/group-cohort-calendar-link"
+    );
+    const result = await fetchOccurrences(supabase, {
+      tutorId,
+      recurringEventId,
+      startDate,
+    });
+    if (!result.ok) return { occurrences: [], error: result.error };
+    return { occurrences: result.occurrences, state: result.state };
+  } catch (e) {
+    return {
+      occurrences: [],
+      error: e instanceof Error ? e.message : "Failed to list calendar classes.",
+    };
+  }
+}
+
 export async function searchCohortCalendarMatches(cohortId: string): Promise<{
   candidates: Array<{
     googleEventId: string;
@@ -789,6 +896,19 @@ export async function createPackageRun(input: {
   startDayOfWeek?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  calendarLink?: {
+    recurringEventId: string;
+    occurrences: Array<{
+      googleEventId: string;
+      startsAt: string;
+      endsAt: string;
+      title: string;
+      meetLink: string | null;
+      location: string | null;
+      attendeeEmails: string[];
+      included: boolean;
+    }>;
+  } | null;
 }): Promise<ActionResult & { id?: string }> {
   try {
     const supabase = await requireAdminFromActions();
@@ -798,6 +918,18 @@ export async function createPackageRun(input: {
     if (input.kind === "cohort") {
       const courseId = input.courseId?.trim();
       if (!courseId) return { error: "Course is required for a group cohort." };
+
+      const tutorId = input.tutorId?.trim();
+      if (!tutorId) return { error: "Select a tutor before linking their class calendar." };
+
+      const {
+        parseGroupCohortCalendarLink,
+        insertGroupCohortCalendarLinkedSessions,
+        scheduleFieldsFromIncludedOccurrences,
+      } = await import("@/lib/admin/packages/group-cohort-calendar-link");
+
+      const parsed = parseGroupCohortCalendarLink(input.calendarLink);
+      if (!parsed.ok) return { error: parsed.error };
 
       const { data: course } = await supabase
         .from("courses")
@@ -816,25 +948,45 @@ export async function createPackageRun(input: {
         };
       }
 
+      const schedule = scheduleFieldsFromIncludedOccurrences(parsed.included);
+
       const { data, error } = await supabase
         .from("cohorts")
         .insert({
           course_id: courseId,
           name,
-          tutor_id: input.tutorId ?? null,
-          tutor_id_source: input.tutorId ? "manual" : "notion",
+          tutor_id: tutorId,
+          tutor_id_source: "manual",
           status: input.status ?? "pre_scheduling",
           capacity: input.capacity ?? 7,
-          start_day_of_week: input.startDayOfWeek ?? null,
-          start_date: input.startDate ?? null,
-          end_date: input.endDate ?? null,
+          start_day_of_week: schedule.startDayOfWeek,
+          start_date: schedule.startDate,
+          end_date: schedule.endDate,
+          weekly_session_start: schedule.weeklySessionStart,
+          weekly_session_end: schedule.weeklySessionEnd,
+          weekly_session_has_time: true,
         })
         .select("id")
         .single();
 
       if (error) return { error: error.message };
+
+      const linked = await insertGroupCohortCalendarLinkedSessions(supabase, {
+        tutorId,
+        cohortId: data.id,
+        courseId,
+        recurringEventId: parsed.recurringEventId,
+        included: parsed.included,
+      });
+
+      if (!linked.ok) {
+        await supabase.from("tutor_scheduled_sessions").delete().eq("cohort_id", data.id);
+        await supabase.from("cohorts").delete().eq("id", data.id);
+        return { error: linked.error };
+      }
+
       revalidatePackages(data.id);
-      return { success: `Cohort “${name}” created.`, id: data.id };
+      return { success: `Cohort “${name}” created with 12 calendar-linked classes.`, id: data.id };
     }
 
     const packageId = input.packageId?.trim();

@@ -23,7 +23,13 @@ export type ScheduledSessionRow = {
   meet_link: string | null;
   location: string | null;
   attendee_emails: string[];
-  match_method: "attendee_email" | "title_name" | "manual" | "unmatched" | null;
+  match_method:
+    | "attendee_email"
+    | "title_name"
+    | "manual"
+    | "unmatched"
+    | "calendar_link"
+    | null;
   rescheduling_allowed: boolean;
   status: ScheduledSessionStatus;
   /** Curriculum week (lessons.lesson_number sequence) for cohort class sessions. */
