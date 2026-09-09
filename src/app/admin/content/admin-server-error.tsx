@@ -41,7 +41,7 @@ export function AdminServerError({
         <Link href="/dashboard/profile" className={ui.btnSecondary}>
           Back to profile
         </Link>
-        <Link href="/admin/content" className={ui.btnPrimary}>
+        <Link href="/admin" className={ui.btnPrimary}>
           Reload admin
         </Link>
       </div>

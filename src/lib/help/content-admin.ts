@@ -14,9 +14,9 @@ export const ADMIN_HELP: HelpContent = {
           id: "nav",
           question: "How is the admin dashboard organised?",
           answer:
-            "Home shows stats and section links. People covers members, cohorts, tutors, staff, payments, and discount approvals. Learn content is curriculum. Games is practice content. Site is events, announcements, and branding.",
+            "Home is stats and items that need action. Cohorts covers groups, lesson logs, reschedules, and cover. People is members and staff. Payments is checkout, sales calls, and onboarding. Content is curriculum and site comms.",
           links: [
-            { label: "Admin home", href: "/admin/content" },
+            { label: "Admin home", href: "/admin" },
             { label: "People", href: "/admin/content/people" },
           ],
         },

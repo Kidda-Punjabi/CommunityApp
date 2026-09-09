@@ -1,19 +1,67 @@
 "use client";
 
-import Link from "next/link";
 import { fetchPeopleHubStats } from "@/app/admin/content/people-hub-actions";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
-import { HubCard } from "@/components/ui/hub-primitives";
-import { ui } from "@/lib/ui/styles";
+import {
+  AdminHubLinkCard,
+  AdminHubPage,
+  AdminHubStack,
+} from "@/components/admin/admin-hub-list";
+import { CreditCard, GraduationCap, Hand, Tag, UserRound, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type HubRow = {
   href: string;
-  icon: string;
+  icon: typeof Users;
   title: string;
-  description: string;
+  descriptionKey?: "cohorts" | "members" | "payments" | "discounts" | "staff";
+  fallback: string;
 };
+
+const rows: HubRow[] = [
+  {
+    href: "/admin/content/people/cohorts",
+    icon: Users,
+    title: "Cohorts",
+    descriptionKey: "cohorts",
+    fallback: "Active groups and allocations",
+  },
+  {
+    href: "/admin/content/people/members",
+    icon: UserRound,
+    title: "Members",
+    descriptionKey: "members",
+    fallback: "Enrolled members",
+  },
+  {
+    href: "/admin/content/people/payments",
+    icon: CreditCard,
+    title: "Payments",
+    descriptionKey: "payments",
+    fallback: "Stripe checkout sessions",
+  },
+  {
+    href: "/admin/content/people/discounts",
+    icon: Tag,
+    title: "Discounts",
+    descriptionKey: "discounts",
+    fallback: "Discount applications",
+  },
+  {
+    href: "/admin/content/people/staff",
+    icon: GraduationCap,
+    title: "Staff & tutors",
+    descriptionKey: "staff",
+    fallback: "Staff and tutor assignments",
+  },
+  {
+    href: "/admin/content/people/interest",
+    icon: Hand,
+    title: "Course interest",
+    fallback: "Coming-soon Intermediate and Advanced waitlist",
+  },
+];
 
 export function AdminPeopleHub() {
   const { data } = useAdminData();
@@ -40,83 +88,36 @@ export function AdminPeopleHub() {
     };
   }, [data.enrollments.length, data.staffMembers.length]);
 
-  const rows: HubRow[] = [
-    {
-      href: "/admin/content/people/cohorts",
-      icon: "👥",
-      title: "Cohorts",
-      description: descriptions.cohorts ?? (loadingStats ? "Loading…" : "—"),
-    },
-    {
-      href: "/admin/content/people/members",
-      icon: "🧑",
-      title: "Members",
-      description: descriptions.members ?? (loadingStats ? "Loading…" : "—"),
-    },
-    {
-      href: "/admin/content/people/payments",
-      icon: "💳",
-      title: "Payments",
-      description: descriptions.payments ?? "Stripe checkout sessions",
-    },
-    {
-      href: "/admin/content/people/discounts",
-      icon: "🏷️",
-      title: "Discounts",
-      description: descriptions.discounts ?? (loadingStats ? "Loading…" : "—"),
-    },
-    {
-      href: "/admin/content/people/staff",
-      icon: "🎓",
-      title: "Staff & tutors",
-      description: descriptions.staff ?? (loadingStats ? "Loading…" : "—"),
-    },
-    {
-      href: "/admin/content/people/interest",
-      icon: "✋",
-      title: "Course interest",
-      description: "Coming-soon Intermediate and Advanced waitlist",
-    },
-  ];
-
   return (
-    <div className={ui.page}>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">People</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          View cohorts and allocations, manage members, review discount applications, and assign
-          tutors or staff.
-        </p>
-      </div>
-
+    <AdminHubPage
+      title="People"
+      description="View cohorts and allocations, manage members, review discount applications, and assign tutors or staff."
+    >
       <AdminFetchErrors errors={data.errors} />
 
       {statsError ? (
-        <p className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="mb-6 rounded-[12px] border-[0.5px] border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {statsError}
         </p>
       ) : null}
 
-      <HubCard className="divide-y divide-zinc-100 px-0 py-0">
-        {rows.map((row) => (
-          <Link
-            key={row.href}
-            href={row.href}
-            className="flex items-center gap-3 px-6 py-3 transition-colors hover:bg-zinc-50"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-lg">
-              {row.icon}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-zinc-900">{row.title}</p>
-              <p className="mt-0.5 text-sm text-zinc-500">{row.description}</p>
-            </div>
-            <span className="shrink-0 text-lg leading-none text-zinc-400" aria-hidden="true">
-              ›
-            </span>
-          </Link>
-        ))}
-      </HubCard>
-    </div>
+      <AdminHubStack>
+        {rows.map((row) => {
+          const Icon = row.icon;
+          const summary = row.descriptionKey
+            ? descriptions[row.descriptionKey] ?? (loadingStats ? "Loading…" : row.fallback)
+            : row.fallback;
+          return (
+            <AdminHubLinkCard
+              key={row.href}
+              href={row.href}
+              icon={<Icon className="h-[18px] w-[18px]" />}
+              title={row.title}
+              summary={summary}
+            />
+          );
+        })}
+      </AdminHubStack>
+    </AdminHubPage>
   );
 }

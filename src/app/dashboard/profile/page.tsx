@@ -144,7 +144,7 @@ export default async function ProfilePage() {
               Manage courses, lessons, quizzes, and tutors.
             </p>
             <Link
-              href="/admin/content"
+              href="/admin"
               className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500"
             >
               Open admin panel

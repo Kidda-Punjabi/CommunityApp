@@ -1,4 +1,5 @@
-import { HubCard } from "@/components/ui/hub-primitives";
+import { adminHubCardClass } from "@/components/admin/admin-hub-list";
+import { cn } from "@/lib/ui/styles";
 
 type AdminStatsBarProps = {
   courses: number;
@@ -7,11 +8,11 @@ type AdminStatsBarProps = {
   staff: number;
 };
 
-function StatColumn({ value, label }: { value: number; label: string }) {
+function StatCard({ value, label }: { value: number; label: string }) {
   return (
-    <div className="min-w-0 flex-1 px-1 text-center">
+    <div className={cn(adminHubCardClass(), "px-3 py-3.5 text-center sm:px-4")}>
       <p className="text-lg font-medium tabular-nums text-zinc-900">{value}</p>
-      <p className="mt-0.5 text-[11px] text-zinc-500">{label}</p>
+      <p className="mt-0.5 text-[13px] text-zinc-500">{label}</p>
     </div>
   );
 }
@@ -23,13 +24,11 @@ export function AdminStatsBar({
   staff,
 }: AdminStatsBarProps) {
   return (
-    <HubCard className="px-4 py-4 sm:px-6">
-      <div className="flex items-stretch justify-between divide-x divide-zinc-100">
-        <StatColumn value={courses} label="Courses" />
-        <StatColumn value={membersEnrolled} label="Members enrolled" />
-        <StatColumn value={cohorts} label="Cohorts" />
-        <StatColumn value={staff} label="Staff" />
-      </div>
-    </HubCard>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <StatCard value={courses} label="Courses" />
+      <StatCard value={membersEnrolled} label="Members enrolled" />
+      <StatCard value={cohorts} label="Cohorts" />
+      <StatCard value={staff} label="Staff" />
+    </div>
   );
 }

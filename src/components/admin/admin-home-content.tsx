@@ -1,19 +1,40 @@
 "use client";
 
-import Link from "next/link";
-import { fetchAdminHomeAttention, type AdminAttentionItem } from "@/app/admin/content/home-actions";
+import { fetchAdminHomeAttention, type AdminAttentionCategory } from "@/app/admin/content/home-actions";
 import { fetchAdminTutorOverview } from "@/app/admin/content/tutor-overview-actions";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
+import {
+  AdminHubLinkCard,
+  AdminHubPage,
+  AdminHubStack,
+} from "@/components/admin/admin-hub-list";
 import { AdminStatsBar } from "@/components/admin/admin-stats-bar";
 import { formatTutorOverviewSummary } from "@/components/admin/admin-tutor-overview-panel";
-import { HubCard } from "@/components/ui/hub-primitives";
-import { ui } from "@/lib/ui/styles";
+import {
+  ArrowLeftRight,
+  Gift,
+  GraduationCap,
+  HelpCircle,
+  Sparkles,
+  Phone,
+  ScrollText,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { useEffect, useState } from "react";
+
+const ATTENTION_ICONS: Record<AdminAttentionCategory["id"], typeof Users> = {
+  cohort_switch: ArrowLeftRight,
+  enrollment_gaps: UserPlus,
+  cohorts_setup: Users,
+  payment_setup: ScrollText,
+  monthly_rewards: Gift,
+};
 
 export function AdminHomeContent() {
   const { data } = useAdminData();
-  const [attentionItems, setAttentionItems] = useState<AdminAttentionItem[]>([]);
+  const [categories, setCategories] = useState<AdminAttentionCategory[]>([]);
   const [attentionError, setAttentionError] = useState<string | null>(null);
   const [loadingAttention, setLoadingAttention] = useState(true);
   const [tutorCount, setTutorCount] = useState(0);
@@ -24,7 +45,7 @@ export function AdminHomeContent() {
     let cancelled = false;
     void fetchAdminHomeAttention().then((result) => {
       if (cancelled) return;
-      setAttentionItems(result.items);
+      setCategories(result.categories);
       setAttentionError(result.error ?? null);
       setLoadingAttention(false);
     });
@@ -49,17 +70,11 @@ export function AdminHomeContent() {
 
   const tutorSummary = formatTutorOverviewSummary(tutorCount, nearCapacity);
 
-  const showAttention = !loadingAttention && attentionItems.length > 0;
-
   return (
-    <div className={ui.page}>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Admin home</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          At-a-glance stats, items that need action, and quick links.
-        </p>
-      </div>
-
+    <AdminHubPage
+      title="Admin home"
+      description="At-a-glance stats, items that need action, and quick links."
+    >
       <AdminFetchErrors errors={data.errors} />
 
       <div className="mb-8">
@@ -72,118 +87,86 @@ export function AdminHomeContent() {
       </div>
 
       {attentionError ? (
-        <p className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="mb-6 rounded-[12px] border-[0.5px] border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {attentionError}
         </p>
       ) : null}
 
-      {showAttention ? (
-        <section className="mb-8">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
-            Needs attention
-          </h2>
-          <HubCard className="divide-y divide-zinc-100 px-0 py-0">
-            {attentionItems.map((item) => (
-              <AttentionRow key={item.id} item={item} />
-            ))}
-          </HubCard>
-        </section>
-      ) : null}
+      <section className="mb-8">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+          Needs attention
+        </h2>
+        {loadingAttention ? (
+          <p className="text-[13px] text-zinc-500">Loading live counts…</p>
+        ) : (
+          <AdminHubStack>
+            {categories.map((category) => {
+              const Icon = ATTENTION_ICONS[category.id];
+              return (
+                <AdminHubLinkCard
+                  key={category.id}
+                  href={category.href}
+                  icon={<Icon className="h-[18px] w-[18px]" />}
+                  title={category.title}
+                  summary={category.description}
+                  count={category.count}
+                  tone={category.tone}
+                />
+              );
+            })}
+          </AdminHubStack>
+        )}
+      </section>
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
           Sections
         </h2>
-        <HubCard className="divide-y divide-zinc-100 px-6 py-0">
-          <AdminNavListRow
+        <AdminHubStack>
+          <AdminHubLinkCard
             href="/admin/cohort-switch-requests"
+            icon={<ArrowLeftRight className="h-[18px] w-[18px]" />}
             title="Cohort change requests"
-            description="Approve or decline student requests to join an alternate group session"
+            summary="Approve or decline student requests to join an alternate group session"
           />
-          <AdminNavListRow
+          <AdminHubLinkCard
             href="/admin/public-forms"
+            icon={<ScrollText className="h-[18px] w-[18px]" />}
             title="Public forms"
-            description="Preview and test every backlog quiz and feedback link, including Week 1 starting point and Week 12"
+            summary="Preview and test every backlog quiz and feedback link, including Week 1 starting point and Week 12"
           />
-          <AdminNavListRow
+          <AdminHubLinkCard
             href="/admin/sales-calls"
+            icon={<Phone className="h-[18px] w-[18px]" />}
             title="Sales calls"
-            description="Create and edit sales call log entries synced with Notion"
+            summary="Create and edit sales call log entries synced with Notion"
           />
-          <AdminNavListRow
+          <AdminHubLinkCard
             href="/admin/monthly-rewards"
+            icon={<Gift className="h-[18px] w-[18px]" />}
             title="Monthly Rewards"
-            description="Calculate monthly top 3 and send Prezzee gift cards"
+            summary="Calculate monthly top 3 and send Prezzee gift cards"
           />
-          <AdminNavListRow
+          <AdminHubLinkCard
             href="/admin/content/tutors"
+            icon={<GraduationCap className="h-[18px] w-[18px]" />}
             title="Tutor overview"
-            description={
-              loadingTutorSummary
-                ? "Loading tutor summary…"
-                : tutorSummary
-            }
+            summary={loadingTutorSummary ? "Loading tutor summary…" : tutorSummary}
           />
-          <AdminNavListRow
+          <AdminHubLinkCard
             href="/admin/content/kids-stories"
+            icon={<Sparkles className="h-[18px] w-[18px]" />}
             title="Kids bedtime stories"
-            description="Author Premium kids stories (empty until content is approved)"
+            summary="Author Premium kids stories (empty until content is approved)"
           />
-          <AdminNavListRow
+          <AdminHubLinkCard
             href="/admin/content/help"
+            icon={<HelpCircle className="h-[18px] w-[18px]" />}
             title="Help articles"
-            description="FAQs and SOPs for cohorts, members, curriculum, and payments"
+            summary="FAQs and SOPs for cohorts, members, curriculum, and payments"
           />
-        </HubCard>
+        </AdminHubStack>
       </section>
-    </div>
-  );
-}
-
-function AttentionRow({ item }: { item: AdminAttentionItem }) {
-  return (
-    <Link
-      href={item.href}
-      className="flex items-center gap-3 px-6 py-3 transition-colors hover:bg-zinc-50"
-    >
-      <span
-        className={`h-2 w-2 shrink-0 rounded-full ${
-          item.urgent ? "bg-red-500" : "bg-zinc-300"
-        }`}
-        aria-hidden="true"
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-zinc-900">{item.title}</p>
-        <p className="mt-0.5 text-sm text-zinc-500">{item.detail}</p>
-      </div>
-      <span className="shrink-0 text-lg leading-none text-zinc-400" aria-hidden="true">
-        ›
-      </span>
-    </Link>
-  );
-}
-
-function AdminNavListRow({
-  href,
-  title,
-  description,
-}: {
-  href: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center justify-between gap-3 py-3 transition-colors hover:text-violet-600"
-    >
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-zinc-900">{title}</p>
-        <p className="mt-0.5 text-sm text-zinc-500">{description}</p>
-      </div>
-      <span className="shrink-0 text-lg leading-none text-zinc-400" aria-hidden="true">
-        ›
-      </span>
-    </Link>
+    </AdminHubPage>
   );
 }
