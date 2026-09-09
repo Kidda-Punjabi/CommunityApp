@@ -1,155 +1,116 @@
 "use server";
 
 import { fetchAdminOnboardingQueue } from "@/app/admin/onboarding/actions";
-import { fetchAdminTutorOverview } from "@/app/admin/content/tutor-overview-actions";
 import { fetchMonthlyRewardsAttention } from "@/app/admin/monthly-rewards/actions";
 import { loadGroupPurchaseAttention } from "@/lib/group-purchase/load-group-purchase-attention";
 import { countPendingCohortSwitchRequests } from "@/lib/admin/load-admin-cohort-switch-requests";
 import { requireAdminFromActions } from "@/app/admin/content/actions";
-import type { AdminOnboardingRow } from "@/lib/admin/onboarding/types";
 
-export type AdminAttentionItem = {
-  id: string;
-  kind:
-    | "overdue_onboarding"
-    | "tutor_calendar_disconnected"
-    | "monthly_rewards_pending"
-    | "monthly_rewards_uncalculated"
-    | "group_cohort_setup"
-    | "group_cohort_placement_pending"
-    | "notion_cohort_writeback"
-    | "notion_lead_link"
-    | "cohort_switch_pending"
-    | "unmatched_kids_checkout";
+export type AdminAttentionCategory = {
+  id:
+    | "cohort_switch"
+    | "enrollment_gaps"
+    | "cohorts_setup"
+    | "payment_setup"
+    | "monthly_rewards";
   title: string;
-  detail: string;
+  description: string;
   href: string;
-  urgent: boolean;
+  count: number;
+  tone: "neutral" | "warning" | "urgent";
 };
 
-function formatShortDate(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(iso));
-}
-
-function overdueOnboardingDetail(row: AdminOnboardingRow): string {
-  const paymentIso = row.paymentDate ?? row.purchasedAt.slice(0, 10);
-  const paymentLabel = formatShortDate(paymentIso);
-
-  if (!row.packageRunId) {
-    return `Payment ${paymentLabel}, still unassigned`;
-  }
-
-  if (row.progressDone < row.progressTotal) {
-    return `Payment ${paymentLabel}, setup incomplete`;
-  }
-
-  return `Payment ${paymentLabel}, onboarding stalled`;
+function toneForCount(
+  count: number,
+  attention: "warning" | "urgent"
+): "neutral" | "warning" | "urgent" {
+  return count > 0 ? attention : "neutral";
 }
 
 export async function fetchAdminHomeAttention(): Promise<{
-  items: AdminAttentionItem[];
+  categories: AdminAttentionCategory[];
   error?: string;
 }> {
-  const [onboarding, tutorOverview, monthlyRewards, groupPurchase, supabase] =
-    await Promise.all([
-      fetchAdminOnboardingQueue(),
-      fetchAdminTutorOverview(),
-      fetchMonthlyRewardsAttention(),
-      loadGroupPurchaseAttention(),
-      requireAdminFromActions(),
-    ]);
+  const [onboarding, monthlyRewards, groupPurchase, supabase] = await Promise.all([
+    fetchAdminOnboardingQueue(),
+    fetchMonthlyRewardsAttention(),
+    loadGroupPurchaseAttention(),
+    requireAdminFromActions(),
+  ]);
 
   const cohortSwitchPending = await countPendingCohortSwitchRequests(supabase);
 
   const errors = [
     onboarding.error,
-    tutorOverview.error,
     monthlyRewards.error,
     groupPurchase.error,
     cohortSwitchPending.error,
   ].filter(Boolean);
-  const items: AdminAttentionItem[] = [];
 
-  if (cohortSwitchPending.count > 0) {
-    const label =
-      cohortSwitchPending.count === 1
-        ? "1 cohort change request waiting for review"
-        : `${cohortSwitchPending.count} cohort change requests waiting for review`;
-    items.push({
-      id: "cohort-switch-pending",
-      kind: "cohort_switch_pending",
-      title: label,
-      detail: "Approve or decline alternate group session requests",
+  const enrollmentGaps = groupPurchase.items.filter(
+    (item) =>
+      item.kind === "group_cohort_placement_pending" ||
+      item.kind === "unmatched_kids_checkout"
+  ).length;
+
+  const cohortsNeedingSetup = groupPurchase.items.filter(
+    (item) => item.kind === "group_cohort_setup"
+  ).length;
+
+  const paymentSetupIncomplete = onboarding.rows.filter((row) => {
+    if (!row.isOverdue) return false;
+    return !row.packageRunId || row.progressDone < row.progressTotal;
+  }).length;
+
+  const categories: AdminAttentionCategory[] = [
+    {
+      id: "cohort_switch",
+      title: "Cohort switch requests",
+      description: "Pending requests to join an alternate group session",
       href: "/admin/cohort-switch-requests",
-      urgent: true,
-    });
-  }
-
-  for (const row of groupPurchase.items) {
-    items.push({
-      id: row.id,
-      kind: row.kind,
-      title: row.title,
-      detail: row.detail,
-      href: row.href,
-      urgent: row.urgent,
-    });
-  }
-
-  for (const pending of monthlyRewards.attention.pendingMonths) {
-    const cardLabel = pending.pendingCount === 1 ? "gift card" : "gift cards";
-    items.push({
-      id: `monthly-pending-${pending.monthStart}`,
-      kind: "monthly_rewards_pending",
-      title: `${pending.pendingCount} ${cardLabel} still pending for ${pending.monthLabel}`,
-      detail: "Go to Monthly Rewards to mark them as sent",
-      href: `/admin/monthly-rewards?month=${pending.monthStart.slice(0, 7)}`,
-      urgent: true,
-    });
-  }
+      count: cohortSwitchPending.count,
+      tone: toneForCount(cohortSwitchPending.count, "urgent"),
+    },
+    {
+      id: "enrollment_gaps",
+      title: "Enrollment gaps",
+      description: "Paid group members with no cohort, plus queued kids purchases",
+      href: "/admin/onboarding",
+      count: enrollmentGaps,
+      tone: toneForCount(enrollmentGaps, "urgent"),
+    },
+    {
+      id: "cohorts_setup",
+      title: "Cohorts needing setup",
+      description: "Cohorts with no calendar sync",
+      href: "/admin/packages",
+      count: cohortsNeedingSetup,
+      tone: toneForCount(cohortsNeedingSetup, "warning"),
+    },
+    {
+      id: "payment_setup",
+      title: "Payment setup incomplete",
+      description: "Setup incomplete or still unassigned",
+      href: "/admin/onboarding",
+      count: paymentSetupIncomplete,
+      tone: toneForCount(paymentSetupIncomplete, "warning"),
+    },
+  ];
 
   if (monthlyRewards.attention.uncalculatedMonth) {
     const month = monthlyRewards.attention.uncalculatedMonth;
-    items.push({
-      id: `monthly-uncalc-${month.monthStart}`,
-      kind: "monthly_rewards_uncalculated",
-      title: `Calculate monthly winners for ${month.monthLabel}`,
-      detail: "Previous month has ended — no winners saved yet",
+    categories.push({
+      id: "monthly_rewards",
+      title: "Monthly rewards",
+      description: `Winners not calculated for ${month.monthLabel}`,
       href: `/admin/monthly-rewards?month=${month.monthStart.slice(0, 7)}`,
-      urgent: false,
-    });
-  }
-
-  for (const row of onboarding.rows) {
-    if (!row.isOverdue) continue;
-    items.push({
-      id: `overdue-${row.studentPackageId}`,
-      kind: "overdue_onboarding",
-      title: row.studentLabel,
-      detail: overdueOnboardingDetail(row),
-      href: `/admin/onboarding#onboarding-row-${row.studentPackageId}`,
-      urgent: true,
-    });
-  }
-
-  for (const tutor of tutorOverview.tutors) {
-    if (tutor.connected) continue;
-    items.push({
-      id: `calendar-${tutor.tutorId}`,
-      kind: "tutor_calendar_disconnected",
-      title: tutor.displayName,
-      detail: "Calendar not connected",
-      href: "/admin/content/tutors",
-      urgent: false,
+      count: 1,
+      tone: "warning",
     });
   }
 
   return {
-    items,
+    categories,
     error: errors.length > 0 ? errors.join(" · ") : undefined,
   };
 }

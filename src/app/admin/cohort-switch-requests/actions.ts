@@ -165,6 +165,7 @@ export async function resolveAdminCohortSwitchRequest(input: {
     if (error) return { error: error.message };
 
     revalidatePath(PATH);
+    revalidatePath("/admin");
     revalidatePath("/admin/content");
     revalidatePath("/dashboard/schedule");
     revalidatePath("/dashboard/learn");

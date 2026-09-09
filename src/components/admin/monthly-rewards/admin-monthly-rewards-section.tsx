@@ -136,7 +136,7 @@ export function AdminMonthlyRewardsSection() {
     <div className={ui.page}>
       <div className="mb-6">
         <Link
-          href="/admin/content"
+          href="/admin"
           className="text-sm font-medium text-zinc-500 hover:text-violet-600"
         >
           ← Home

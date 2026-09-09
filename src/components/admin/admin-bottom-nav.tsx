@@ -24,10 +24,26 @@ function HomeIcon({ active }: { active: boolean }) {
   );
 }
 
+function CohortsIcon({ active }: { active: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+    </svg>
+  );
+}
+
 function PeopleIcon({ active }: { active: boolean }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+    </svg>
+  );
+}
+
+function PaymentsIcon({ active }: { active: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
     </svg>
   );
 }
@@ -40,119 +56,49 @@ function ContentIcon({ active }: { active: boolean }) {
   );
 }
 
-function PackagesIcon({ active }: { active: boolean }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
-    </svg>
-  );
-}
-
-function LessonsIcon({ active }: { active: boolean }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-    </svg>
-  );
-}
-
-function OnboardingIcon({ active }: { active: boolean }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  );
-}
-
-function AppOnboardIcon({ active }: { active: boolean }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.875a1.125 1.125 0 0 1 2.25 0v8.219c.517.162 1.02.382 1.5.659 1.591.914 2.675 2.626 2.675 4.591v1.093c0 .621-.504 1.125-1.125 1.125h-7.875c-.621 0-1.125-.504-1.125-1.125v-1.093c0-1.965 1.084-3.677 2.675-4.591.48-.277.983-.497 1.5-.659V1.875Z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 19.125a3.375 3.375 0 1 0 6.75 0" />
-    </svg>
-  );
-}
-
-function SalesIcon({ active }: { active: boolean }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a.75.75 0 0 0 .75.75h15.75a.75.75 0 0 0 .75-.75V6.375a.75.75 0 0 0-.75-.75H3a.75.75 0 0 0-.75.75v12.375ZM12 9.75V15M9 12.75h6" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 18.75 8.25 12l3 3.75L18 7.5" />
-    </svg>
-  );
-}
-
-function SiteIcon({ active }: { active: boolean }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-    </svg>
-  );
-}
-
 const navItems: NavItem[] = [
   {
-    href: "/admin/content",
+    href: "/admin",
     label: "Home",
-    match: (pathname) => pathname === "/admin/content",
+    match: (pathname) => pathname === "/admin" || pathname === "/admin/content",
+  },
+  {
+    href: "/admin/cohorts-hub",
+    label: "Cohorts",
+    match: (pathname) =>
+      pathname.startsWith("/admin/cohorts-hub") ||
+      pathname.startsWith("/admin/packages") ||
+      pathname.startsWith("/admin/lesson-log") ||
+      pathname.startsWith("/admin/reschedule-requests") ||
+      pathname.startsWith("/admin/cover-requests") ||
+      pathname.startsWith("/admin/cohort-switch-requests"),
   },
   {
     href: "/admin/content/people",
     label: "People",
-    match: (pathname) => pathname.startsWith("/admin/content/people"),
+    match: (pathname) =>
+      pathname.startsWith("/admin/content/people") &&
+      !pathname.startsWith("/admin/content/people/payments"),
   },
   {
-    href: "/admin/packages",
-    label: "Packages",
-    match: (pathname) => pathname.startsWith("/admin/packages"),
+    href: "/admin/payments-hub",
+    label: "Payments",
+    match: (pathname) =>
+      pathname.startsWith("/admin/payments-hub") ||
+      pathname.startsWith("/admin/content/people/payments") ||
+      pathname.startsWith("/admin/sales-calls") ||
+      pathname.startsWith("/admin/onboarding") ||
+      pathname.startsWith("/admin/app-onboarding"),
   },
   {
-    href: "/admin/lesson-log",
-    label: "Lessons",
-    match: (pathname) => pathname.startsWith("/admin/lesson-log"),
-  },
-  {
-    href: "/admin/onboarding",
-    label: "Pkg onboard",
-    match: (pathname) => pathname.startsWith("/admin/onboarding"),
-  },
-  {
-    href: "/admin/app-onboarding",
-    label: "App onboard",
-    match: (pathname) => pathname.startsWith("/admin/app-onboarding"),
-  },
-  {
-    href: "/admin/reschedule-requests",
-    label: "Reschedule",
-    match: (pathname) => pathname.startsWith("/admin/reschedule-requests"),
-  },
-  {
-    href: "/admin/cohort-switch-requests",
-    label: "Cohorts",
-    match: (pathname) => pathname.startsWith("/admin/cohort-switch-requests"),
-  },
-  {
-    href: "/admin/cover-requests",
-    label: "Cover",
-    match: (pathname) => pathname.startsWith("/admin/cover-requests"),
-  },
-  {
-    href: "/admin/sales-calls",
-    label: "Sales",
-    match: (pathname) => pathname.startsWith("/admin/sales-calls"),
-  },
-  {
-    href: "/admin/content/curriculum",
+    href: "/admin/content-hub",
     label: "Content",
     match: (pathname) =>
+      pathname.startsWith("/admin/content-hub") ||
       pathname.startsWith("/admin/content/curriculum") ||
-      pathname.startsWith("/admin/content/games"),
-  },
-  {
-    href: "/admin/content/site",
-    label: "Site",
-    match: (pathname) => pathname.startsWith("/admin/content/site"),
+      pathname.startsWith("/admin/content/games") ||
+      pathname.startsWith("/admin/content/audio-review") ||
+      pathname.startsWith("/admin/content/site"),
   },
 ];
 
@@ -160,28 +106,14 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
   switch (label) {
     case "Home":
       return <HomeIcon active={active} />;
+    case "Cohorts":
+      return <CohortsIcon active={active} />;
     case "People":
       return <PeopleIcon active={active} />;
-    case "Packages":
-      return <PackagesIcon active={active} />;
-    case "Lessons":
-      return <LessonsIcon active={active} />;
-    case "Pkg onboard":
-      return <OnboardingIcon active={active} />;
-    case "App onboard":
-      return <AppOnboardIcon active={active} />;
-    case "Reschedule":
-      return <OnboardingIcon active={active} />;
-    case "Cohorts":
-      return <PeopleIcon active={active} />;
-    case "Cover":
-      return <LessonsIcon active={active} />;
-    case "Sales":
-      return <SalesIcon active={active} />;
+    case "Payments":
+      return <PaymentsIcon active={active} />;
     case "Content":
       return <ContentIcon active={active} />;
-    case "Site":
-      return <SiteIcon active={active} />;
     default:
       return null;
   }

@@ -17,7 +17,7 @@ import type {
 import { revalidatePath } from "next/cache";
 
 const MONTHLY_REWARDS_PATH = "/admin/monthly-rewards";
-const ADMIN_HOME_PATH = "/admin/content";
+const ADMIN_HOME_PATH = "/admin";
 
 function parseMonth(monthStart: string): string | null {
   return normalizeMonthStart(monthStart);
@@ -69,6 +69,7 @@ export async function confirmMonthlyWinnersAction(
     if (result.error) return { error: result.error };
     revalidatePath(MONTHLY_REWARDS_PATH);
     revalidatePath(ADMIN_HOME_PATH);
+    revalidatePath("/admin/content");
     return { success: "Winners saved." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to save winners." };
@@ -85,6 +86,7 @@ export async function markMonthlyWinnerSentAction(
     if (result.error) return { error: result.error };
     revalidatePath(MONTHLY_REWARDS_PATH);
     revalidatePath(ADMIN_HOME_PATH);
+    revalidatePath("/admin/content");
     return { success: "Marked as sent." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update winner." };

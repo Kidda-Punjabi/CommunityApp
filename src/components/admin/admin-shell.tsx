@@ -20,7 +20,7 @@ export function AdminShell({ data, branding, dataSlice = "full", children }: Adm
       <header className="border-b border-zinc-200/80 bg-white">
         <AdminWidthContainer className="flex items-center justify-between px-5 py-4">
           <div className="flex items-center gap-3">
-            <KiddaLogo variant="icon" size="sm" href="/admin/content" branding={branding} />
+            <KiddaLogo variant="icon" size="sm" href="/admin" branding={branding} />
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
                 Admin
