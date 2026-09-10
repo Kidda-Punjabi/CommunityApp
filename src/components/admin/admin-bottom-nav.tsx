@@ -79,7 +79,8 @@ const navItems: NavItem[] = [
     href: "/admin/content/people",
     label: "People",
     match: (pathname) =>
-      pathname.startsWith("/admin/content/people") &&
+      (pathname.startsWith("/admin/content/people") ||
+        pathname.startsWith("/admin/content/tutors")) &&
       !pathname.startsWith("/admin/content/people/payments"),
   },
   {
@@ -100,7 +101,11 @@ const navItems: NavItem[] = [
       pathname.startsWith("/admin/content/curriculum") ||
       pathname.startsWith("/admin/content/games") ||
       pathname.startsWith("/admin/content/audio-review") ||
-      pathname.startsWith("/admin/content/site"),
+      pathname.startsWith("/admin/content/site") ||
+      pathname.startsWith("/admin/content/kids-stories") ||
+      pathname.startsWith("/admin/content/help") ||
+      pathname.startsWith("/admin/public-forms") ||
+      pathname.startsWith("/admin/monthly-rewards"),
   },
 ];
 

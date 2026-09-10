@@ -6,7 +6,7 @@ import {
   AdminHubPage,
   AdminHubStack,
 } from "@/components/admin/admin-hub-list";
-import { CalendarClock, CalendarDays, Eye, Layers, UserRoundCog } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, CalendarDays, Eye, Layers, UserRoundCog } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function AdminCohortsHub() {
@@ -63,6 +63,12 @@ export function AdminCohortsHub() {
           summary={rescheduleSummary}
           count={pendingReschedules}
           tone={pendingReschedules && pendingReschedules > 0 ? "warning" : "neutral"}
+        />
+        <AdminHubLinkCard
+          href="/admin/cohort-switch-requests"
+          icon={<ArrowLeftRight className="h-[18px] w-[18px]" />}
+          title="Cohort change requests"
+          summary="Approve or decline student requests to join an alternate group session"
         />
         <AdminHubLinkCard
           href="/admin/cover-requests"
