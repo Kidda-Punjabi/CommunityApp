@@ -25,6 +25,7 @@ type CohortMeta = {
   course_id: string;
   active: boolean;
   status: string | null;
+  start_date: string | null;
 };
 
 /**
@@ -59,7 +60,7 @@ export async function loadAlternateCohortSessions(
     await Promise.all([
       admin
         .from("cohorts")
-        .select("id, name, tutor_id, course_id, active, status")
+        .select("id, name, tutor_id, course_id, active, status, start_date")
         .in("course_id", courseIds)
         .eq("active", true),
       admin
@@ -135,6 +136,8 @@ export async function loadAlternateCohortSessions(
         startsAt: candidate.starts_at,
         endsAt: candidate.ends_at,
         lessonLabel: candidate.title,
+        startDate: cohort?.start_date ?? null,
+        weekNumber: candidate.week_number ?? null,
       });
     }
     result.set(source.id, optionsForSource);

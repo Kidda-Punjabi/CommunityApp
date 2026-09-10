@@ -19,6 +19,12 @@ import {
 } from "@/lib/learning/learn-access";
 import { resolveGroupCohortContentGate } from "@/lib/learning/group-cohort-content-gate";
 import { getLearnTrack, shouldShowLearnCourseProgress } from "@/lib/learning/learn-catalog";
+import {
+  currentWeekFromStoredWeekNumber,
+  formatStartedWeekProgressLine,
+  isSwitchCohortTrack,
+  resolveCohortProgressCurrentWeek,
+} from "@/lib/calendar/cohort-week-progress";
 import { findCoursesForTier } from "@/lib/membership/courses";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import {
@@ -56,13 +62,50 @@ import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { createClient } from "@/lib/supabase/server";
 import { lessonHomeworkPath } from "@/lib/tutoring/homework-href";
 import { ui } from "@/lib/ui/styles";
+import { SwitchCohortLink } from "@/components/learn/switch-cohort-link";
 import { BackLink } from "@/components/navigation/back-link";
 import { notFound, redirect } from "next/navigation";
+import type { StudentPackage } from "@/lib/packages/load-student-packages";
 
 type LearnTrackPageProps = {
   params: Promise<{ track: string }>;
   searchParams: Promise<{ homework?: string; catchupReturn?: string }>;
 };
+
+function groupCourseProgressLine(params: {
+  trackId: string;
+  pkg: StudentPackage | null;
+  totalWeeks: number;
+  sessions?: Array<{
+    cohort_id: string | null;
+    starts_at: string;
+    week_number?: number | null;
+    status?: string | null;
+  }>;
+}): string | null {
+  const { trackId, pkg, totalWeeks, sessions } = params;
+  if (!pkg || !isSwitchCohortTrack(trackId) || pkg.deliveryMode !== "group" || !pkg.cohortId) {
+    return null;
+  }
+  const storedWeek =
+    currentWeekFromStoredWeekNumber(
+      (sessions ?? []).filter((session) => session.cohort_id === pkg.cohortId)
+    )?.week ??
+    pkg.groupRescheduleSession?.week_number ??
+    null;
+  return formatStartedWeekProgressLine({
+    startDateIso: pkg.cohortStartDate,
+    currentWeek: resolveCohortProgressCurrentWeek({
+      startDateIso: pkg.cohortStartDate,
+      storedWeek,
+    }),
+    totalWeeks,
+  });
+}
+
+function shouldShowSwitchCohortLink(trackId: string, pkg: StudentPackage | null): boolean {
+  return isSwitchCohortTrack(trackId) && pkg?.deliveryMode === "group" && Boolean(pkg.cohortId);
+}
 
 export default async function LearnTrackPage({ params, searchParams }: LearnTrackPageProps) {
   const { track: trackId } = await params;
@@ -212,8 +255,15 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
 
   const courseIds = findCoursesForTier(access.courses, track.tier).map((c) => c.id);
   const contentGate = await resolveGroupCohortContentGate(supabase, user!.id, courseIds);
+  const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
 
   const studentPackage = findStudentPackageForTrack(studentPackages, track.id);
+  const showSwitchCohort = shouldShowSwitchCohortLink(track.id, studentPackage);
+  const gatedProgressLine = groupCourseProgressLine({
+    trackId: track.id,
+    pkg: studentPackage,
+    totalWeeks: lessons.length,
+  });
   const communityLeads =
     track.id === "community" ? await loadCommunityLeads(supabase) : null;
 
@@ -226,7 +276,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
           <CommunityLeadSection leads={communityLeads} />
         </>
       ) : (
-        <PackageHubPanel pkg={studentPackage} />
+        <PackageHubPanel pkg={studentPackage} cohortProgressLine={gatedProgressLine} showGroupReschedule={!showSwitchCohort} />
       );
   } else if (communityLeads) {
     staffSection = <CommunityLeadSection leads={communityLeads} />;
@@ -238,11 +288,14 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
         title={track.title}
         message={contentGate.message}
         staffSection={staffSection}
+        footerSection={
+          showSwitchCohort && isSwitchCohortTrack(track.id) ? (
+            <SwitchCohortLink trackId={track.id} />
+          ) : null
+        }
       />
     );
   }
-
-  const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
   const showHomework = track.id === "foundational" || track.id === "beginners";
   const lessonIds = lessons.map((lesson) => lesson.id);
 
@@ -288,6 +341,12 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
           (courseProgress.completedLessons / courseProgress.totalLessons) * 100
         )}%`
       : null;
+  const cohortProgressLine = groupCourseProgressLine({
+    trackId: track.id,
+    pkg: studentPackage,
+    totalWeeks: lessons.length,
+    sessions: upcomingLoad.sessions,
+  });
 
   if (studentPackage) {
     staffSection =
@@ -301,6 +360,8 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
           pkg={studentPackage}
           cohortStats={cohortCourseStats}
           progressLabel={packageProgressLabel}
+          cohortProgressLine={cohortProgressLine}
+          showGroupReschedule={!showSwitchCohort}
         />
       );
   }
@@ -341,7 +402,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       }
       staffSection={staffSection}
       footerSection={
-        track.id === "beginners" || studentPackage ? (
+        track.id === "beginners" || studentPackage || showSwitchCohort ? (
           <div className="space-y-4">
             {track.id === "beginners" ? <CourseAboutBlock level="beginners" /> : null}
             {studentPackage ? (
@@ -350,6 +411,9 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
               ) : (
                 <BuyExtraOneToOneCard pkg={studentPackage} />
               )
+            ) : null}
+            {showSwitchCohort && isSwitchCohortTrack(track.id) ? (
+              <SwitchCohortLink trackId={track.id} />
             ) : null}
           </div>
         ) : null
