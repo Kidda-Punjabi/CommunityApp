@@ -1,8 +1,9 @@
 "use client";
 
-import { fetchAdminHomeAttention, type AdminAttentionCategory } from "@/app/admin/content/home-actions";
+import { fetchAdminDashboard } from "@/app/admin/content/home-actions";
 import { fetchAdminTutorOverview } from "@/app/admin/content/tutor-overview-actions";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
+import { AdminDashboardGrid } from "@/components/admin/admin-dashboard-cards";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
 import {
   AdminHubLinkCard,
@@ -11,6 +12,7 @@ import {
 } from "@/components/admin/admin-hub-list";
 import { AdminStatsBar } from "@/components/admin/admin-stats-bar";
 import { formatTutorOverviewSummary } from "@/components/admin/admin-tutor-overview-panel";
+import type { AdminDashboardCard } from "@/lib/admin/dashboard/types";
 import {
   ArrowLeftRight,
   Gift,
@@ -19,35 +21,25 @@ import {
   Sparkles,
   Phone,
   ScrollText,
-  UserPlus,
-  Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const ATTENTION_ICONS: Record<AdminAttentionCategory["id"], typeof Users> = {
-  cohort_switch: ArrowLeftRight,
-  enrollment_gaps: UserPlus,
-  cohorts_setup: Users,
-  payment_setup: ScrollText,
-  monthly_rewards: Gift,
-};
-
 export function AdminHomeContent() {
   const { data } = useAdminData();
-  const [categories, setCategories] = useState<AdminAttentionCategory[]>([]);
-  const [attentionError, setAttentionError] = useState<string | null>(null);
-  const [loadingAttention, setLoadingAttention] = useState(true);
+  const [cards, setCards] = useState<AdminDashboardCard[]>([]);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [tutorCount, setTutorCount] = useState(0);
   const [nearCapacity, setNearCapacity] = useState(0);
   const [loadingTutorSummary, setLoadingTutorSummary] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    void fetchAdminHomeAttention().then((result) => {
+    void fetchAdminDashboard().then((result) => {
       if (cancelled) return;
-      setCategories(result.categories);
-      setAttentionError(result.error ?? null);
-      setLoadingAttention(false);
+      setCards(result.cards);
+      setDashboardError(result.error ?? null);
+      setLoadingDashboard(false);
     });
     return () => {
       cancelled = true;
@@ -73,9 +65,23 @@ export function AdminHomeContent() {
   return (
     <AdminHubPage
       title="Admin home"
-      description="At-a-glance stats, items that need action, and quick links."
+      description="Operational status first, then the usual shortcuts."
     >
       <AdminFetchErrors errors={data.errors} />
+
+      {dashboardError ? (
+        <p className="mb-6 rounded-[12px] border-[0.5px] border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {dashboardError}
+        </p>
+      ) : null}
+
+      <section className="mb-8">
+        {loadingDashboard ? (
+          <p className="text-[13px] text-zinc-500">Loading live status…</p>
+        ) : (
+          <AdminDashboardGrid cards={cards} />
+        )}
+      </section>
 
       <div className="mb-8">
         <AdminStatsBar
@@ -85,38 +91,6 @@ export function AdminHomeContent() {
           staff={data.staffMembers.length}
         />
       </div>
-
-      {attentionError ? (
-        <p className="mb-6 rounded-[12px] border-[0.5px] border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {attentionError}
-        </p>
-      ) : null}
-
-      <section className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
-          Needs attention
-        </h2>
-        {loadingAttention ? (
-          <p className="text-[13px] text-zinc-500">Loading live counts…</p>
-        ) : (
-          <AdminHubStack>
-            {categories.map((category) => {
-              const Icon = ATTENTION_ICONS[category.id];
-              return (
-                <AdminHubLinkCard
-                  key={category.id}
-                  href={category.href}
-                  icon={<Icon className="h-[18px] w-[18px]" />}
-                  title={category.title}
-                  summary={category.description}
-                  count={category.count}
-                  tone={category.tone}
-                />
-              );
-            })}
-          </AdminHubStack>
-        )}
-      </section>
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">

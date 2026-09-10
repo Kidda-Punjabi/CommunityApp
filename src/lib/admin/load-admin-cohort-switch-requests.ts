@@ -277,3 +277,24 @@ export async function countPendingCohortSwitchRequests(
     };
   }
 }
+
+export async function loadPendingCohortSwitchRequestCreatedAts(
+  supabase: SupabaseClient
+): Promise<{ createdAts: string[]; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from("cohort_switch_requests")
+      .select("created_at")
+      .eq("status", "pending");
+
+    if (error) return { createdAts: [], error: error.message };
+    return {
+      createdAts: (data ?? []).map((row) => row.created_at as string),
+    };
+  } catch (e) {
+    return {
+      createdAts: [],
+      error: e instanceof Error ? e.message : "Failed to load pending cohort change requests.",
+    };
+  }
+}

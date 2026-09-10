@@ -191,3 +191,24 @@ export async function loadAlternativeSlotsForTutor(
     };
   }
 }
+
+export async function loadPendingRescheduleRequestCreatedAts(
+  supabase: SupabaseClient
+): Promise<{ createdAts: string[]; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from("lesson_reschedule_requests")
+      .select("created_at")
+      .eq("status", "pending");
+
+    if (error) return { createdAts: [], error: error.message };
+    return {
+      createdAts: (data ?? []).map((row) => row.created_at as string),
+    };
+  } catch (e) {
+    return {
+      createdAts: [],
+      error: e instanceof Error ? e.message : "Failed to load pending reschedule requests.",
+    };
+  }
+}
