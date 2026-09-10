@@ -47,18 +47,17 @@ export function AdminDashboardGrid({
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
             {groupLabels[group]}
           </h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2">
             {slotsByGroup[group].map((id) => {
               const card = byId.get(id);
               if (loading || !card) {
-                return <AdminMetricCard key={id} label="" tone="ok" loading />;
+                return <AdminMetricCard key={id} label="" loading />;
               }
               return (
                 <AdminMetricCard
                   key={id}
                   label={card.label}
                   value={card.count}
-                  hint={card.hint}
                   href={card.href}
                   tone={card.tone}
                 />
