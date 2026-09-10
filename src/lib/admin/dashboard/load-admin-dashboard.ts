@@ -567,8 +567,8 @@ export async function loadAdminDashboard(
     setup.card,
     {
       id: "cohort_switch",
-      label: "Cohort switch requests",
-      hint: "Pending alternate-group requests",
+      label: "Group session reschedules",
+      hint: "Pending group session reschedule requests",
       href: "/admin/cohort-switch-requests",
       count: switchAges.createdAts.length,
       tone: pendingTone(switchAges.createdAts),
@@ -576,8 +576,8 @@ export async function loadAdminDashboard(
     },
     {
       id: "reschedule",
-      label: "Session reschedules",
-      hint: "Pending 1-1 reschedule requests",
+      label: "One-to-one session reschedules",
+      hint: "Pending one-to-one reschedule requests",
       href: "/admin/reschedule-requests",
       count: rescheduleAges.createdAts.length,
       tone: pendingTone(rescheduleAges.createdAts),
