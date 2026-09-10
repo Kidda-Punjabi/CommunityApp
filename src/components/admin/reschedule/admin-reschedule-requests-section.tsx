@@ -37,7 +37,9 @@ export function AdminRescheduleRequestsSection() {
   return (
     <div className={ui.page}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Reschedule requests</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+          One-to-one session reschedules
+        </h1>
         <p className="mt-1 text-sm text-zinc-500">
           Review student reschedule requests, pick a real available time from the tutor&apos;s
           calendar, and update the booking automatically.
