@@ -115,14 +115,8 @@ function AdminRescheduleCard({
         requestId: row.id,
         decision,
         tutorResponse: note || undefined,
-        newStartsAt:
-          decision === "approved"
-            ? slot?.startsAt ?? row.requestedStartsAt ?? undefined
-            : undefined,
-        newEndsAt:
-          decision === "approved"
-            ? slot?.endsAt ?? row.requestedEndsAt ?? undefined
-            : undefined,
+        newStartsAt: decision === "approved" ? slot?.startsAt : undefined,
+        newEndsAt: decision === "approved" ? slot?.endsAt : undefined,
       });
       setMessage(result.success ?? result.error ?? null);
       if (result.success) onResolved();
@@ -152,17 +146,12 @@ function AdminRescheduleCard({
       <p className="text-sm text-zinc-700">{row.message}</p>
       {row.preferredTimes ? (
         <p className="rounded-xl bg-violet-50 px-3 py-2 text-sm text-violet-900">
-          <span className="font-medium">Requested new time:</span> {row.preferredTimes}
+          <span className="font-medium">Preferred times:</span> {row.preferredTimes}
         </p>
       ) : null}
 
       {row.status === "pending" ? (
         <div className="space-y-3 border-t border-zinc-100 pt-3">
-          {row.requestedStartsAt && row.requestedEndsAt ? (
-            <p className="text-sm text-zinc-600">
-              You can approve the student&apos;s requested time, or pick another slot below.
-            </p>
-          ) : null}
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700">
               Available alternative times

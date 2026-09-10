@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import {
   excludeCalendarSession,
   linkSessionToPackage,
@@ -79,16 +80,13 @@ function RescheduleRequestCard({
         />
         {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
         {state.success ? <p className="text-sm text-emerald-700">{state.success}</p> : null}
+        <p className="text-xs text-zinc-500">
+          To approve a reschedule, pick an available time on Student requests.
+        </p>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="submit"
-            name="decision"
-            value="approved"
-            disabled={pending}
-            className={ui.btnPrimary}
-          >
-            Approve
-          </button>
+          <Link href="/dashboard/tutor/requests" className={ui.btnPrimary}>
+            Open requests
+          </Link>
           <button
             type="submit"
             name="decision"

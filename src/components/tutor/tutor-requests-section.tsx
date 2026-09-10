@@ -17,8 +17,6 @@ export type TutorRescheduleRequestItem = {
   session_id: string;
   message: string;
   preferred_times: string | null;
-  requested_starts_at?: string | null;
-  requested_ends_at?: string | null;
   studentName: string;
   sessionTitle: string;
   sessionStartsAt: string | null;
@@ -61,32 +59,23 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
   const [slots, setSlots] = useState<BookableSlot[]>([]);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const [showAlternatePicker, setShowAlternatePicker] = useState(false);
   const [selected, setSelected] = useState("");
 
-  const hasStudentPick = Boolean(request.requested_starts_at && request.requested_ends_at);
-  const studentPickLabel =
-    hasStudentPick && request.requested_starts_at && request.requested_ends_at
-      ? formatSessionWhen(request.requested_starts_at, request.requested_ends_at)
-      : request.preferred_times;
+  const isLateCancel = (request.preferred_times ?? "").startsWith("Late cancel");
 
   useEffect(() => {
-    if (!showAlternatePicker || !request.sessionStartsAt || !request.sessionEndsAt) return;
+    if (isLateCancel || !request.sessionStartsAt || !request.sessionEndsAt) return;
     setSlotsLoading(true);
     void loadTutorRescheduleSlots(request.sessionStartsAt, request.sessionEndsAt).then((result) => {
       setSlots(result.slots);
       setSlotsError(result.error ?? null);
       setSlotsLoading(false);
     });
-  }, [showAlternatePicker, request.sessionStartsAt, request.sessionEndsAt]);
+  }, [isLateCancel, request.sessionStartsAt, request.sessionEndsAt]);
 
   const selectedSlot = slots.find((slot) => slot.startsAt === selected);
-  const approveStartsAt = showAlternatePicker
-    ? selectedSlot?.startsAt
-    : (request.requested_starts_at ?? "");
-  const approveEndsAt = showAlternatePicker
-    ? selectedSlot?.endsAt
-    : (request.requested_ends_at ?? "");
+  const approveStartsAt = selectedSlot?.startsAt ?? "";
+  const approveEndsAt = selectedSlot?.endsAt ?? "";
 
   return (
     <div className={`${ui.cardBordered} space-y-3`}>
@@ -98,56 +87,46 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
         badge="Reschedule"
       />
       <p className="text-sm text-zinc-700">{request.message}</p>
-      {studentPickLabel ? (
+      {request.preferred_times ? (
         <p className="rounded-xl bg-violet-50 px-3 py-2 text-sm text-violet-900">
-          <span className="font-medium">Requested new time:</span> {studentPickLabel}
+          <span className="font-medium">Preferred times:</span> {request.preferred_times}
         </p>
       ) : null}
 
       <form action={action} className="space-y-3 border-t border-zinc-100 pt-3">
         <input type="hidden" name="request_id" value={request.id} />
-        <input type="hidden" name="new_starts_at" value={approveStartsAt ?? ""} />
-        <input type="hidden" name="new_ends_at" value={approveEndsAt ?? ""} />
+        <input type="hidden" name="new_starts_at" value={approveStartsAt} />
+        <input type="hidden" name="new_ends_at" value={approveEndsAt} />
 
-        {hasStudentPick ? (
-          showAlternatePicker ? (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">
-                Pick a different available time
-              </label>
-              {slotsLoading ? (
-                <p className="text-sm text-zinc-500">Loading your free slots…</p>
-              ) : slotsError ? (
-                <p className="text-sm text-amber-700">{slotsError}</p>
-              ) : (
-                <select
-                  value={selected}
-                  onChange={(e) => setSelected(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
-                >
-                  <option value="">Select a time…</option>
-                  {slots.map((slot) => (
-                    <option key={slot.startsAt} value={slot.startsAt}>
-                      {slot.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowAlternatePicker(true)}
-              className={ui.btnGhost}
-            >
-              Offer a different time instead
-            </button>
-          )
-        ) : (
+        {isLateCancel ? (
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
             Late cancel (within 24 hours). Confirming unlocks this lesson with Session catch-up
             instead of a recording.
           </p>
+        ) : (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">
+              Available alternative times
+            </label>
+            {slotsLoading ? (
+              <p className="text-sm text-zinc-500">Loading your free slots…</p>
+            ) : slotsError ? (
+              <p className="text-sm text-amber-700">{slotsError}</p>
+            ) : (
+              <select
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+              >
+                <option value="">Select a time…</option>
+                {slots.map((slot) => (
+                  <option key={slot.startsAt} value={slot.startsAt}>
+                    {slot.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         )}
 
         <textarea
@@ -159,9 +138,9 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
         {state.error ? <p className="text-sm text-rose-600">{state.error}</p> : null}
         {state.success ? <p className="text-sm text-emerald-700">{state.success}</p> : null}
         <p className="text-xs text-zinc-500">
-          {hasStudentPick
-            ? "Approving updates the lesson time in the app and sends an updated Google Calendar invite."
-            : "Confirming records the missed lesson and unlocks Session catch-up for the student."}
+          {isLateCancel
+            ? "Confirming records the missed lesson and unlocks Session catch-up for the student."
+            : "Approving updates the lesson time in the app and sends an updated Google Calendar invite."}
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -169,11 +148,11 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
             name="decision"
             value="denied"
             disabled={pending}
-            className={hasStudentPick ? ui.btnSecondary : ui.btnPrimary}
+            className={isLateCancel ? ui.btnPrimary : ui.btnSecondary}
           >
-            {hasStudentPick ? "Decline" : "Confirm late cancel → unlock catch-up"}
+            {isLateCancel ? "Confirm late cancel → unlock catch-up" : "Decline"}
           </button>
-          {hasStudentPick ? (
+          {!isLateCancel ? (
             <button
               type="submit"
               name="decision"
@@ -181,7 +160,7 @@ function RescheduleRequestCard({ request }: { request: TutorRescheduleRequestIte
               disabled={pending || !approveStartsAt || !approveEndsAt}
               className={ui.btnPrimary}
             >
-              {showAlternatePicker ? "Approve + update calendar" : "Approve requested time"}
+              Approve + update calendar
             </button>
           ) : null}
         </div>

@@ -107,8 +107,6 @@ export async function requestLessonReschedule(
     student_id: user.id,
     message,
     preferred_times: preferredTimes,
-    requested_starts_at: isLateCancel ? null : requestedStartsAt || null,
-    requested_ends_at: isLateCancel ? null : requestedEndsAt || null,
     status: "pending" as const,
     tutor_response: null,
     resolved_at: null,
@@ -120,15 +118,7 @@ export async function requestLessonReschedule(
       ? await supabase.from("lesson_reschedule_requests").update(payload).eq("id", existing.id)
       : await supabase.from("lesson_reschedule_requests").insert(payload);
 
-  if (error) {
-    if (error.message.includes("requested_starts_at") || error.message.includes("requested_ends_at")) {
-      return {
-        error:
-          "Reschedule slot storage is not applied in production yet. Apply supabase/lesson-reschedule-requested-slot.sql first.",
-      };
-    }
-    return { error: error.message };
-  }
+  if (error) return { error: error.message };
 
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard/learn");
@@ -176,17 +166,15 @@ export async function resolveRescheduleRequest(
 
   const { data: request, error: requestError } = await supabase
     .from("lesson_reschedule_requests")
-    .select("id, session_id, student_id, status, requested_starts_at, requested_ends_at")
+    .select("id, session_id, student_id, status")
     .eq("id", requestId)
     .maybeSingle();
 
   if (requestError || !request) return { error: "Request not found." };
   if (request.status !== "pending") return { error: "This request was already resolved." };
 
-  const approvedStartsAt =
-    decision === "approved" ? newStartsAt || (request.requested_starts_at as string | null) : null;
-  const approvedEndsAt =
-    decision === "approved" ? newEndsAt || (request.requested_ends_at as string | null) : null;
+  const approvedStartsAt = decision === "approved" ? newStartsAt || null : null;
+  const approvedEndsAt = decision === "approved" ? newEndsAt || null : null;
 
   if (decision === "approved" && (!approvedStartsAt || !approvedEndsAt)) {
     return { error: "Pick an available alternative time to approve this reschedule." };

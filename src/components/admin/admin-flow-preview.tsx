@@ -46,7 +46,7 @@ export function AdminFlowPreview({ flow }: { flow: AdminFlowPreviewKind }) {
   const [capturedPayload, setCapturedPayload] = useState<unknown>(null);
 
   const title =
-    flow === "cohort-switch" ? "Test Cohort Switch" : "Test Session Reschedule";
+    flow === "cohort-switch" ? "Test Cohort Reschedule" : "Test Session Reschedule";
   const description =
     flow === "cohort-switch"
       ? "Preview the live group alternate-session request a student sees. Nothing is submitted."

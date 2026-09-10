@@ -59,7 +59,7 @@ export async function resolveAdminRescheduleRequest(input: {
 
     const { data: request, error: requestError } = await supabase
       .from("lesson_reschedule_requests")
-      .select("id, session_id, student_id, status, requested_starts_at, requested_ends_at")
+      .select("id, session_id, student_id, status")
       .eq("id", input.requestId)
       .maybeSingle();
 
@@ -67,13 +67,9 @@ export async function resolveAdminRescheduleRequest(input: {
     if (request.status !== "pending") return { error: "Already resolved." };
 
     const approvedStartsAt =
-      input.decision === "approved"
-        ? input.newStartsAt?.trim() || (request.requested_starts_at as string | null)
-        : null;
+      input.decision === "approved" ? input.newStartsAt?.trim() || null : null;
     const approvedEndsAt =
-      input.decision === "approved"
-        ? input.newEndsAt?.trim() || (request.requested_ends_at as string | null)
-        : null;
+      input.decision === "approved" ? input.newEndsAt?.trim() || null : null;
 
     if (input.decision === "approved" && (!approvedStartsAt || !approvedEndsAt)) {
       return { error: "Select an alternative time to approve." };

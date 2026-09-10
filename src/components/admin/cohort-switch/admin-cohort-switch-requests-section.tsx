@@ -114,7 +114,7 @@ function buildAlternativeSuggestion(option: AlternateCohortOption): string {
     hour12: false,
     timeZone: UK_DISPLAY_TIMEZONE,
   });
-  return `This time isn't available, but ${option.name} with ${option.tutorName} on ${date} at ${time} might work instead — let us know if you'd like to switch to that.`;
+  return `This time isn't available, but ${option.name} with ${option.tutorName} on ${date} at ${time} might work instead — let us know if you'd like to reschedule to that.`;
 }
 
 function AdminCohortSwitchCard({

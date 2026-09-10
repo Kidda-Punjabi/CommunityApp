@@ -79,7 +79,7 @@ export function AdminCohortsHub() {
         <AdminHubLinkCard
           href="/admin/test-cohort-switch"
           icon={<Eye className="h-[18px] w-[18px]" />}
-          title="Test Cohort Switch"
+          title="Test Cohort Reschedule"
           summary="Preview the live student alternate-session request. Nothing is submitted."
         />
         <AdminHubLinkCard
