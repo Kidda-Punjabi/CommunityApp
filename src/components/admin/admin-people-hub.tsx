@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchAdminTutorOverview } from "@/app/admin/content/tutor-overview-actions";
 import { fetchPeopleHubStats } from "@/app/admin/content/people-hub-actions";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
@@ -8,6 +9,7 @@ import {
   AdminHubPage,
   AdminHubStack,
 } from "@/components/admin/admin-hub-list";
+import { formatTutorOverviewSummary } from "@/components/admin/admin-tutor-overview-panel";
 import { CreditCard, GraduationCap, Hand, Tag, UserRound, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -67,6 +69,7 @@ export function AdminPeopleHub() {
   const { data } = useAdminData();
   const [descriptions, setDescriptions] = useState<Record<string, string>>({});
   const [statsError, setStatsError] = useState<string | null>(null);
+  const [tutorSummary, setTutorSummary] = useState("Tutor load and calendar connections");
   const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
@@ -87,6 +90,18 @@ export function AdminPeopleHub() {
       cancelled = true;
     };
   }, [data.enrollments.length, data.staffMembers.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAdminTutorOverview().then((result) => {
+      if (cancelled) return;
+      const near = result.tutors.filter((row) => (row.capacityPercent ?? 0) >= 85).length;
+      setTutorSummary(formatTutorOverviewSummary(result.tutors.length, near));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <AdminHubPage
@@ -117,6 +132,12 @@ export function AdminPeopleHub() {
             />
           );
         })}
+        <AdminHubLinkCard
+          href="/admin/content/tutors"
+          icon={<GraduationCap className="h-[18px] w-[18px]" />}
+          title="Tutor overview"
+          summary={tutorSummary}
+        />
       </AdminHubStack>
     </AdminHubPage>
   );

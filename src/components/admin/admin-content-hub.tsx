@@ -5,7 +5,7 @@ import {
   AdminHubPage,
   AdminHubStack,
 } from "@/components/admin/admin-hub-list";
-import { BookOpen, Globe } from "lucide-react";
+import { BookOpen, Gift, Globe, HelpCircle, ScrollText, Sparkles } from "lucide-react";
 
 export function AdminContentHub() {
   return (
@@ -25,6 +25,30 @@ export function AdminContentHub() {
           icon={<Globe className="h-[18px] w-[18px]" />}
           title="Site and comms"
           summary="Events, announcements, branding, and recommendations"
+        />
+        <AdminHubLinkCard
+          href="/admin/public-forms"
+          icon={<ScrollText className="h-[18px] w-[18px]" />}
+          title="Public forms"
+          summary="Preview and test every backlog quiz and feedback link, including Week 1 starting point and Week 12"
+        />
+        <AdminHubLinkCard
+          href="/admin/monthly-rewards"
+          icon={<Gift className="h-[18px] w-[18px]" />}
+          title="Monthly Rewards"
+          summary="Calculate monthly top 3 and send Prezzee gift cards"
+        />
+        <AdminHubLinkCard
+          href="/admin/content/kids-stories"
+          icon={<Sparkles className="h-[18px] w-[18px]" />}
+          title="Kids bedtime stories"
+          summary="Author Premium kids stories (empty until content is approved)"
+        />
+        <AdminHubLinkCard
+          href="/admin/content/help"
+          icon={<HelpCircle className="h-[18px] w-[18px]" />}
+          title="Help articles"
+          summary="FAQs and SOPs for cohorts, members, curriculum, and payments"
         />
       </AdminHubStack>
     </AdminHubPage>
