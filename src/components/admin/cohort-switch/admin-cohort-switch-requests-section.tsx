@@ -39,7 +39,7 @@ export function AdminCohortSwitchRequestsSection() {
     <div className={ui.page}>
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
-          Cohort change requests
+          Group session reschedules
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
           Students ask to join a matching alternate group session when they can&apos;t make their
