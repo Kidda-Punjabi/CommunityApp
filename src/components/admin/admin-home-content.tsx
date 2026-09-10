@@ -42,11 +42,7 @@ export function AdminHomeContent() {
       ) : null}
 
       <section className="mb-8">
-        {loadingDashboard ? (
-          <p className="text-[13px] text-zinc-500">Loading live status…</p>
-        ) : (
-          <AdminDashboardGrid cards={cards} />
-        )}
+        <AdminDashboardGrid cards={cards} loading={loadingDashboard} />
       </section>
 
       <div className="mb-8">

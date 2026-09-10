@@ -1,34 +1,39 @@
-import { adminHubCardClass } from "@/components/admin/admin-hub-list";
-import { cn } from "@/lib/ui/styles";
+import { AdminMetricCard } from "@/components/admin/admin-metric-card";
 
 type AdminStatsBarProps = {
   courses: number;
   membersEnrolled: number;
   cohorts: number;
   staff: number;
+  loading?: boolean;
 };
 
-function StatCard({ value, label }: { value: number; label: string }) {
-  return (
-    <div className={cn(adminHubCardClass(), "px-3 py-3.5 text-center sm:px-4")}>
-      <p className="text-lg font-medium tabular-nums text-zinc-900">{value}</p>
-      <p className="mt-0.5 text-[13px] text-zinc-500">{label}</p>
-    </div>
-  );
-}
+const stats = [
+  { key: "courses", label: "Courses" },
+  { key: "membersEnrolled", label: "Members enrolled" },
+  { key: "cohorts", label: "Cohorts" },
+  { key: "staff", label: "Staff" },
+] as const;
 
 export function AdminStatsBar({
   courses,
   membersEnrolled,
   cohorts,
   staff,
+  loading = false,
 }: AdminStatsBarProps) {
+  const values = { courses, membersEnrolled, cohorts, staff };
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <StatCard value={courses} label="Courses" />
-      <StatCard value={membersEnrolled} label="Members enrolled" />
-      <StatCard value={cohorts} label="Cohorts" />
-      <StatCard value={staff} label="Staff" />
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-busy={loading}>
+      {stats.map((stat) => (
+        <AdminMetricCard
+          key={stat.key}
+          label={stat.label}
+          value={values[stat.key]}
+          loading={loading}
+        />
+      ))}
     </div>
   );
 }
