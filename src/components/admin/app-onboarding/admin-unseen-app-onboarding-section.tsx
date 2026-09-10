@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { fetchUnseenAppOnboarding } from "@/app/admin/app-onboarding/unseen/actions";
 import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
-import type { UnseenAppOnboardingRow } from "@/app/admin/app-onboarding/unseen/actions";
+import type { UnseenAppOnboardingRow } from "@/lib/admin/unseen-app-onboarding-types";
 import { ui } from "@/lib/ui/styles";
 
 function formatDate(iso: string): string {

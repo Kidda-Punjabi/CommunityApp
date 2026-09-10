@@ -1,28 +1,15 @@
 import "server-only";
 
+import type { IncompletePackageChecklistRow } from "@/lib/admin/incomplete-package-checklist-types";
 import type { PackageMembershipStatus } from "@/lib/admin/package-status";
 import type { OnboardingChecklistRow } from "@/lib/admin/packages/types";
 import { ONBOARDING_CHECKLIST_PROGRESS_KEYS } from "@/lib/admin/onboarding/types";
 import { getStaffFacingName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const PACKAGE_ONBOARDING_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+export type { IncompletePackageChecklistRow };
 
-export type IncompletePackageChecklistRow = {
-  checklistId: string;
-  studentPackageId: string;
-  userId: string | null;
-  displayName: string;
-  email: string | null;
-  courseName: string;
-  packageName: string;
-  membershipStatus: PackageMembershipStatus | null;
-  checklistType: "group" | "one_to_one";
-  createdAt: string;
-  stale: boolean;
-  checklist: OnboardingChecklistRow;
-  outstandingLabels: string[];
-};
+const PACKAGE_ONBOARDING_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const FLAG_LABELS: Record<(typeof ONBOARDING_CHECKLIST_PROGRESS_KEYS)[number], string> = {
   timeAssigned: "Time assigned",

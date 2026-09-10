@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchIncompletePackageChecklists } from "@/app/admin/onboarding/incomplete/actions";
 import { toggleOnboardingChecklistField } from "@/app/admin/onboarding/actions";
 import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
-import type { IncompletePackageChecklistRow } from "@/app/admin/onboarding/incomplete/actions";
+import type { IncompletePackageChecklistRow } from "@/lib/admin/incomplete-package-checklist-types";
 import { ONBOARDING_CHECKLIST_COLUMNS } from "@/lib/admin/onboarding/checklist-fields";
 import { membershipStatusLabel } from "@/lib/admin/package-status";
 import type { OnboardingChecklistRow } from "@/lib/admin/packages/types";
