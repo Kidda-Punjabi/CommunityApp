@@ -152,9 +152,60 @@ export async function createAdminCohortChangeRequest(input: {
 
     revalidatePath(PATH);
     revalidatePath("/admin");
+    revalidatePath("/admin/cohorts-hub");
     return { success: "Request logged.", id: data.id as string };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create request." };
+  }
+}
+
+export async function resolveAdminCohortChangeRequest(input: {
+  requestId: string;
+  decision: "approved" | "denied";
+  adminNotes?: string;
+}): Promise<ActionResult> {
+  try {
+    const supabase = await requireAdminFromActions();
+    const { createClient } = await import("@/lib/supabase/server");
+    const auth = await createClient();
+    const {
+      data: { user: adminUser },
+    } = await auth.auth.getUser();
+    if (!adminUser) return { error: "Unauthorized" };
+
+    const { data: request, error: requestError } = await supabase
+      .from("cohort_change_requests")
+      .select("id, status")
+      .eq("id", input.requestId)
+      .maybeSingle();
+
+    if (requestError || !request) return { error: "Request not found." };
+    if (request.status !== "pending") return { error: "Already resolved." };
+
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase
+      .from("cohort_change_requests")
+      .update({
+        status: input.decision,
+        admin_notes: input.adminNotes?.trim() || null,
+        resolved_at: nowIso,
+        resolved_by: adminUser.id,
+      })
+      .eq("id", input.requestId)
+      .eq("status", "pending");
+
+    if (error) return { error: withSchemaHint(error.message) };
+
+    revalidatePath(PATH);
+    revalidatePath(`${PATH}/${input.requestId}`);
+    revalidatePath("/admin");
+    revalidatePath("/admin/cohorts-hub");
+
+    return {
+      success: input.decision === "approved" ? "Request approved." : "Request declined.",
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to resolve request." };
   }
 }
 
@@ -213,6 +264,7 @@ export async function updateAdminCohortChangeRequest(input: {
     revalidatePath(PATH);
     revalidatePath(`${PATH}/${input.requestId}`);
     revalidatePath("/admin");
+    revalidatePath("/admin/cohorts-hub");
     return {
       success:
         status === "completed"

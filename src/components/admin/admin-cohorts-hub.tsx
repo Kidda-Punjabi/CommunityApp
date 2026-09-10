@@ -6,11 +6,25 @@ import {
   AdminHubPage,
   AdminHubStack,
 } from "@/components/admin/admin-hub-list";
-import { ArrowLeftRight, CalendarClock, CalendarDays, Eye, Layers, UserRoundCog } from "lucide-react";
+import {
+  ArrowLeftRight,
+  CalendarClock,
+  CalendarDays,
+  Eye,
+  Layers,
+  Repeat,
+  UserRoundCog,
+} from "lucide-react";
 import { useEffect, useState } from "react";
+
+function pendingRequestSummary(count: number | null): string {
+  if (count == null) return "Loading pending requests…";
+  return count === 1 ? "1 pending request" : `${count} pending requests`;
+}
 
 export function AdminCohortsHub() {
   const [pendingReschedules, setPendingReschedules] = useState<number | null>(null);
+  const [pendingCohortChanges, setPendingCohortChanges] = useState<number | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -18,19 +32,13 @@ export function AdminCohortsHub() {
     void fetchCohortsHubStats().then((result) => {
       if (cancelled) return;
       setPendingReschedules(result.pendingReschedules);
+      setPendingCohortChanges(result.pendingCohortChanges);
       setStatsError(result.error ?? null);
     });
     return () => {
       cancelled = true;
     };
   }, []);
-
-  const rescheduleSummary =
-    pendingReschedules == null
-      ? "Loading pending requests…"
-      : pendingReschedules === 1
-        ? "1 pending request"
-        : `${pendingReschedules} pending requests`;
 
   return (
     <AdminHubPage
@@ -59,16 +67,24 @@ export function AdminCohortsHub() {
         <AdminHubLinkCard
           href="/admin/reschedule-requests"
           icon={<CalendarClock className="h-[18px] w-[18px]" />}
-          title="Reschedule requests"
-          summary={rescheduleSummary}
+          title="One-to-one session reschedules"
+          summary={pendingRequestSummary(pendingReschedules)}
           count={pendingReschedules}
           tone={pendingReschedules && pendingReschedules > 0 ? "warning" : "neutral"}
         />
         <AdminHubLinkCard
           href="/admin/cohort-switch-requests"
           icon={<ArrowLeftRight className="h-[18px] w-[18px]" />}
-          title="Cohort change requests"
+          title="Group session reschedules"
           summary="Approve or decline student requests to join an alternate group session"
+        />
+        <AdminHubLinkCard
+          href="/admin/cohort-change-requests"
+          icon={<Repeat className="h-[18px] w-[18px]" />}
+          title="Cohort switch requests"
+          summary={pendingRequestSummary(pendingCohortChanges)}
+          count={pendingCohortChanges}
+          tone={pendingCohortChanges && pendingCohortChanges > 0 ? "warning" : "neutral"}
         />
         <AdminHubLinkCard
           href="/admin/cover-requests"
@@ -79,13 +95,13 @@ export function AdminCohortsHub() {
         <AdminHubLinkCard
           href="/admin/test-cohort-switch"
           icon={<Eye className="h-[18px] w-[18px]" />}
-          title="Test Cohort Reschedule"
+          title="Test Group Reschedule"
           summary="Preview the live student alternate-session request. Nothing is submitted."
         />
         <AdminHubLinkCard
           href="/admin/test-session-reschedule"
           icon={<Eye className="h-[18px] w-[18px]" />}
-          title="Test Session Reschedule"
+          title="Test One-to-one Reschedule"
           summary="Preview the live student 1-to-1 reschedule request. Nothing is submitted."
         />
       </AdminHubStack>

@@ -1,17 +1,24 @@
 "use server";
 
+import { fetchAdminCohortChangeRequests } from "@/app/admin/cohort-change-requests/actions";
 import { fetchAdminOnboardingQueue } from "@/app/admin/onboarding/actions";
 import { fetchAdminRescheduleRequests } from "@/app/admin/reschedule-requests/actions";
 
 export async function fetchCohortsHubStats(): Promise<{
   pendingReschedules: number;
+  pendingCohortChanges: number;
   error?: string;
 }> {
-  const reschedule = await fetchAdminRescheduleRequests();
+  const [reschedule, cohortChange] = await Promise.all([
+    fetchAdminRescheduleRequests(),
+    fetchAdminCohortChangeRequests(),
+  ]);
   const pendingReschedules = reschedule.rows.filter((row) => row.status === "pending").length;
+  const pendingCohortChanges = cohortChange.rows.filter((row) => row.status === "pending").length;
   return {
     pendingReschedules,
-    error: reschedule.error,
+    pendingCohortChanges,
+    error: reschedule.error ?? cohortChange.error,
   };
 }
 
