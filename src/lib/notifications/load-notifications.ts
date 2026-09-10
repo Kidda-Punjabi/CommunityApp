@@ -289,6 +289,9 @@ export function notificationSummary(item: NotificationItem): string {
         : `${studentName} requested ${toCohort} for ${sessionTitle}`;
     }
     case "cohort_switch_resolved": {
+      const movedSummary =
+        typeof item.payload.moved_summary === "string" ? item.payload.moved_summary.trim() : "";
+      if (movedSummary) return movedSummary;
       const sessionTitle = String(item.payload.session_title ?? "your group lesson");
       const when = formatNotificationWhen(item.payload.starts_at);
       if (item.payload.status === "approved") {

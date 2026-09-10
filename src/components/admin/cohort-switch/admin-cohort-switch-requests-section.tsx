@@ -5,6 +5,7 @@ import {
   fetchAdminCohortSwitchRequests,
   resolveAdminCohortSwitchRequest,
 } from "@/app/admin/cohort-switch-requests/actions";
+import { AdminAddCohortReschedule } from "@/components/admin/cohort-switch/admin-add-cohort-reschedule";
 import { AdminFilterPill, AdminStatusPill } from "@/components/admin/admin-filter-pills";
 import type { AdminCohortSwitchRequestRow } from "@/lib/admin/load-admin-cohort-switch-requests";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
@@ -60,6 +61,8 @@ export function AdminCohortSwitchRequestsSection() {
           onClick={() => setFilter("all")}
         />
       </div>
+
+      <AdminAddCohortReschedule onCreated={() => void reload()} />
 
       {loading ? (
         <p className="text-sm text-zinc-500">Loading…</p>
