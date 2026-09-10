@@ -45,6 +45,7 @@ export type StudentPackage = {
   communityLeadAvatarUrl: string | null;
   cohortId: string | null;
   cohortName: string | null;
+  cohortStartDate: string | null;
   nextSession: StudentPackageSession | null;
   upcomingSessionCount: number;
   /** Next upcoming group session, used for the course-card reschedule control. */
@@ -193,7 +194,7 @@ export async function loadStudentPackages(
           .in("id", tutorIds)
       : Promise.resolve({ data: [] }),
     cohortIds.length > 0
-      ? supabase.from("cohorts").select("id, name").in("id", cohortIds)
+      ? supabase.from("cohorts").select("id, name, start_date").in("id", cohortIds)
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -204,6 +205,9 @@ export async function loadStudentPackages(
     (tutors ?? []).map((tutor) => [tutor.id, tutor.avatar_url ?? null])
   );
   const cohortNameById = new Map((cohorts ?? []).map((cohort) => [cohort.id, cohort.name]));
+  const cohortStartDateById = new Map(
+    (cohorts ?? []).map((cohort) => [cohort.id, (cohort.start_date as string | null) ?? null])
+  );
 
   const packages: StudentPackage[] = [];
 
@@ -266,6 +270,9 @@ export async function loadStudentPackages(
       cohortId: enrollment?.cohort_id ?? null,
       cohortName: enrollment?.cohort_id
         ? (cohortNameById.get(enrollment.cohort_id) ?? null)
+        : null,
+      cohortStartDate: enrollment?.cohort_id
+        ? (cohortStartDateById.get(enrollment.cohort_id) ?? null)
         : null,
       nextSession: next
         ? {

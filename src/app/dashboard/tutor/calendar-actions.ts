@@ -10,6 +10,7 @@ import {
   loadBeginnersRescheduleLimitStatus,
 } from "@/lib/calendar/reschedule-limit";
 import { loadAlternateCohortSessionsForSource } from "@/lib/calendar/load-alternate-cohort-sessions";
+import { SWITCH_COHORT_SUCCESS_COPY } from "@/lib/calendar/cohort-week-progress";
 import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
@@ -380,9 +381,17 @@ export async function requestCohortSwitch(
 
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard/learn");
+  revalidatePath("/dashboard/learn/beginners/switch-cohort");
+  revalidatePath("/dashboard/learn/foundational/switch-cohort");
   revalidatePath("/admin/content");
   revalidatePath("/admin/cohort-switch-requests");
-  return { success: "Reschedule request sent to the Kidda team." };
+  const copyVariant = String(formData.get("copy_variant") ?? "").trim();
+  return {
+    success:
+      copyVariant === "switch_cohort"
+        ? SWITCH_COHORT_SUCCESS_COPY
+        : "Reschedule request sent to the Kidda team.",
+  };
 }
 
 export async function cancelCohortSwitchRequest(requestId: string): Promise<CalendarActionResult> {

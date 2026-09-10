@@ -7,12 +7,14 @@ type GroupCohortOpensPanelProps = {
   message: string;
   /** Optional package / staff section still shown while content is gated. */
   staffSection?: ReactNode;
+  footerSection?: ReactNode;
 };
 
 export function GroupCohortOpensPanel({
   title,
   message,
   staffSection,
+  footerSection,
 }: GroupCohortOpensPanelProps) {
   return (
     <div className={ui.page}>
@@ -34,6 +36,8 @@ export function GroupCohortOpensPanel({
           View schedule
         </NavLink>
       </div>
+
+      {footerSection ? <div className="mt-8">{footerSection}</div> : null}
     </div>
   );
 }

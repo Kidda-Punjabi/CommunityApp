@@ -80,6 +80,8 @@ export type AlternateCohortOption = {
   startsAt: string;
   endsAt: string;
   lessonLabel: string;
+  startDate?: string | null;
+  weekNumber?: number | null;
 };
 
 export type StudentScheduledSession = ScheduledSessionRow & {

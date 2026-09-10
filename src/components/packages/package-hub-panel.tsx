@@ -12,6 +12,10 @@ type PackageHubPanelProps = {
   cohortStats?: StudentCohortCourseStats | null;
   /** Compact “0 of 4 done · 0%” on the tutor row (Foundational Course). */
   progressLabel?: string | null;
+  /** Group course week progress, shown under the tutor row. */
+  cohortProgressLine?: string | null;
+  /** Beginners/Foundational group courses use the switch-cohort page instead. */
+  showGroupReschedule?: boolean;
 };
 
 function statusLabel(status: StudentPackage["status"]): string {
@@ -79,6 +83,8 @@ export function PackageHubPanel({
   variant = "full",
   cohortStats = null,
   progressLabel = null,
+  cohortProgressLine = null,
+  showGroupReschedule = true,
 }: PackageHubPanelProps) {
   const contactName = pkg.tutorName ?? pkg.communityLeadName;
   const contactAvatar = pkg.tutorAvatarUrl ?? pkg.communityLeadAvatarUrl;
@@ -135,7 +141,11 @@ export function PackageHubPanel({
         </p>
       ) : null}
 
-      {pkg.deliveryMode === "group" ? (
+      {cohortProgressLine ? (
+        <p className="text-sm text-zinc-500">{cohortProgressLine}</p>
+      ) : null}
+
+      {showGroupReschedule && pkg.deliveryMode === "group" ? (
         <GroupCohortRescheduleControl
           session={pkg.groupRescheduleSession}
           forceShow
