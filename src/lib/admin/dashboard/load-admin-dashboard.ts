@@ -7,14 +7,17 @@ import type {
   AdminDashboardSnapshot,
   DashboardTone,
 } from "@/lib/admin/dashboard/types";
+import { loadIncompletePackageChecklists } from "@/lib/admin/load-incomplete-package-checklists";
 import { loadPendingCohortSwitchRequestCreatedAts } from "@/lib/admin/load-admin-cohort-switch-requests";
 import { loadAdminOnboardingQueue } from "@/lib/admin/load-admin-onboarding";
 import { loadPendingRescheduleRequestCreatedAts } from "@/lib/admin/load-admin-reschedule-requests";
+import { loadUnseenAppOnboarding } from "@/lib/admin/load-unseen-app-onboarding";
 import { loadMonthlyRewardsAttention } from "@/lib/admin/monthly-rewards/load-monthly-rewards";
 import { loadGroupPurchaseAttention } from "@/lib/group-purchase/load-group-purchase-attention";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const PENDING_STALE_MS = 48 * 60 * 60 * 1000;
+const ONBOARDING_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const UNRESOLVED_GRACE_MS = 48 * 60 * 60 * 1000;
 const RECORDING_LOOKBACK_DAYS = 14;
 const SETUP_RED_DAYS = 7;
@@ -31,6 +34,12 @@ function pendingTone(createdAts: string[]): DashboardTone {
   if (createdAts.length === 0) return "ok";
   const cutoff = Date.now() - PENDING_STALE_MS;
   if (createdAts.some((value) => new Date(value).getTime() <= cutoff)) return "urgent";
+  return "warning";
+}
+
+function ageTone(timestamps: string[], staleMs: number, nowMs: number): DashboardTone {
+  if (timestamps.length === 0) return "ok";
+  if (timestamps.some((value) => nowMs - new Date(value).getTime() >= staleMs)) return "urgent";
   return "warning";
 }
 
@@ -518,6 +527,8 @@ export async function loadAdminDashboard(
     enrollmentGaps,
     unresolved,
     onboarding,
+    unseenAppOnboarding,
+    incompleteChecklists,
     monthlyRewards,
     recordings,
     integrity,
@@ -528,6 +539,8 @@ export async function loadAdminDashboard(
     loadEnrollmentGapsCard(supabase),
     loadUnresolvedEnrollmentsCard(supabase, nowMs),
     loadAdminOnboardingQueue(supabase),
+    loadUnseenAppOnboarding(supabase),
+    loadIncompletePackageChecklists(supabase),
     loadMonthlyRewardsAttention(supabase),
     loadMissingRecordingsCard(supabase),
     loadSessionIntegrityCard(supabase),
@@ -573,6 +586,32 @@ export async function loadAdminDashboard(
     enrollmentGaps.card,
     unresolved.card,
     {
+      id: "app_onboarding",
+      label: "App onboarding incomplete",
+      hint: "Students who have not seen in-app onboarding",
+      href: "/admin/app-onboarding/unseen",
+      count: unseenAppOnboarding.rows.length,
+      tone: ageTone(
+        unseenAppOnboarding.rows.map((row) => row.signedUpAt),
+        ONBOARDING_STALE_MS,
+        nowMs
+      ),
+      group: "enrollment",
+    },
+    {
+      id: "package_onboarding",
+      label: "Package onboarding incomplete",
+      hint: "Checklists not marked complete — open for per-item flags",
+      href: "/admin/onboarding/incomplete",
+      count: incompleteChecklists.rows.length,
+      tone: ageTone(
+        incompleteChecklists.rows.map((row) => row.createdAt),
+        ONBOARDING_STALE_MS,
+        nowMs
+      ),
+      group: "enrollment",
+    },
+    {
       id: "payment_setup",
       label: "Payment setup",
       hint: "Overdue onboarding checklist / unassigned package",
@@ -606,6 +645,8 @@ export async function loadAdminDashboard(
     enrollmentGaps.error,
     unresolved.error,
     onboarding.error,
+    unseenAppOnboarding.error,
+    incompleteChecklists.error,
     monthlyRewards.error,
     recordings.error,
     integrity.error,

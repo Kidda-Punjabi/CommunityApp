@@ -14,10 +14,12 @@ import { ensureOnboardingChecklistForStudentPackage, markOnboardingPackageAssign
 import { revalidatePath } from "next/cache";
 
 const ONBOARDING_PATH = "/admin/onboarding";
+const INCOMPLETE_ONBOARDING_PATH = "/admin/onboarding/incomplete";
 const PACKAGES_PATH = "/admin/packages";
 
 function revalidateOnboarding(runId?: string) {
   revalidatePath(ONBOARDING_PATH);
+  revalidatePath(INCOMPLETE_ONBOARDING_PATH);
   revalidatePath(PACKAGES_PATH);
   if (runId) revalidatePath(`${PACKAGES_PATH}/${runId}`);
 }

@@ -7,6 +7,8 @@ export type DashboardCardId =
   | "enrollment_gaps"
   | "unresolved_enrollments"
   | "payment_setup"
+  | "app_onboarding"
+  | "package_onboarding"
   | "monthly_rewards"
   | "missing_recordings"
   | "session_integrity";
