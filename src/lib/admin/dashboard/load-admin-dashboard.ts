@@ -158,37 +158,65 @@ async function loadEnrollmentGapsCard(
   const userIds = [...new Set(rows.map((row) => row.user_id as string))];
   const courseIds = [...new Set(rows.map((row) => row.course_id as string))];
 
-  const [{ data: enrollments }, { data: accessRows }, { data: members }] = await Promise.all([
-    userIds.length > 0
-      ? supabase
-          .from("course_enrollments")
-          .select("user_id, course_id")
-          .in("user_id", userIds)
-          .in("course_id", courseIds)
-      : Promise.resolve({ data: [] }),
-    userIds.length > 0
-      ? supabase
-          .from("course_access")
-          .select("user_id, course_id")
-          .in("user_id", userIds)
-          .in("course_id", courseIds)
-      : Promise.resolve({ data: [] }),
-    userIds.length > 0
-      ? supabase
+  async function fetchKeyed(
+    table: "course_enrollments" | "course_access"
+  ): Promise<{ keys: Set<string>; error?: string }> {
+    const keys = new Set<string>();
+    if (userIds.length === 0) return { keys };
+    for (let index = 0; index < userIds.length; index += 40) {
+      const chunk = userIds.slice(index, index + 40);
+      const { data, error } = await supabase
+        .from(table)
+        .select("user_id, course_id")
+        .in("user_id", chunk)
+        .in("course_id", courseIds);
+      if (error) return { keys, error: error.message };
+      for (const row of data ?? []) {
+        const typed = row as { user_id: string; course_id: string };
+        keys.add(`${typed.user_id}:${typed.course_id}`);
+      }
+    }
+    return { keys };
+  }
+
+  const [enrollResult, accessResult, memberResult] = await Promise.all([
+    fetchKeyed("course_enrollments"),
+    fetchKeyed("course_access"),
+    (async () => {
+      const memberUsers = new Set<string>();
+      if (userIds.length === 0) return { memberUsers };
+      for (let index = 0; index < userIds.length; index += 40) {
+        const chunk = userIds.slice(index, index + 40);
+        const { data, error } = await supabase
           .from("cohort_members")
           .select("user_id")
-          .in("user_id", userIds)
-          .is("left_at", null)
-      : Promise.resolve({ data: [] }),
+          .in("user_id", chunk)
+          .is("left_at", null);
+        if (error) return { memberUsers, error: error.message };
+        for (const row of data ?? []) memberUsers.add(row.user_id as string);
+      }
+      return { memberUsers };
+    })(),
   ]);
 
-  const enrollKeys = new Set(
-    (enrollments ?? []).map((row) => `${row.user_id}:${row.course_id}`)
-  );
-  const accessKeys = new Set(
-    (accessRows ?? []).map((row) => `${row.user_id}:${row.course_id}`)
-  );
-  const memberUsers = new Set((members ?? []).map((row) => row.user_id as string));
+  if (enrollResult.error || accessResult.error || memberResult.error) {
+    return {
+      card: {
+        id: "enrollment_gaps",
+        label: "Enrollment gaps",
+        hint: "Could not load",
+        href: "/admin/onboarding",
+        count: 0,
+        tone: "ok",
+        group: "enrollment",
+      },
+      error: enrollResult.error ?? accessResult.error ?? memberResult.error,
+    };
+  }
+
+  const enrollKeys = enrollResult.keys;
+  const accessKeys = accessResult.keys;
+  const memberUsers = memberResult.memberUsers;
 
   let count = 0;
   for (const row of rows) {
