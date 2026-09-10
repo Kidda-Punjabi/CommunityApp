@@ -1,18 +1,13 @@
 import "server-only";
 
 import { ASSIGNABLE_STAFF_ROLES } from "@/lib/auth/admin-access";
+import type { UnseenAppOnboardingRow } from "@/lib/admin/unseen-app-onboarding-types";
 import { getStaffFacingName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const APP_ONBOARDING_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+export type { UnseenAppOnboardingRow };
 
-export type UnseenAppOnboardingRow = {
-  userId: string;
-  displayName: string;
-  email: string | null;
-  signedUpAt: string;
-  stale: boolean;
-};
+const APP_ONBOARDING_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function loadEmailsById(
   supabase: SupabaseClient,

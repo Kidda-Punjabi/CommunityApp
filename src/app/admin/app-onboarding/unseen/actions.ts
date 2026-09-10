@@ -2,9 +2,7 @@
 
 import { requireAdminFromActions } from "@/app/admin/content/actions";
 import { loadUnseenAppOnboarding } from "@/lib/admin/load-unseen-app-onboarding";
-import type { UnseenAppOnboardingRow } from "@/lib/admin/load-unseen-app-onboarding";
-
-export type { UnseenAppOnboardingRow };
+import type { UnseenAppOnboardingRow } from "@/lib/admin/unseen-app-onboarding-types";
 
 export async function fetchUnseenAppOnboarding(): Promise<{
   rows: UnseenAppOnboardingRow[];
