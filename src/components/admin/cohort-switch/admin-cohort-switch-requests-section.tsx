@@ -230,8 +230,9 @@ function AdminCohortSwitchCard({
             ) : (
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs font-semibold text-violet-700">
-                  Show {row.alternateCandidates.length} other option
-                  {row.alternateCandidates.length === 1 ? "" : "s"}
+                  {`Show ${row.alternateCandidates.length} other option${
+                    row.alternateCandidates.length === 1 ? "" : "s"
+                  }`}
                 </summary>
                 <ul className="mt-2 space-y-2">
                   {row.alternateCandidates.map((option) => (
