@@ -155,14 +155,26 @@ async function loadEnrollmentGapsCard(
     return pkg?.slug !== COMMUNITY_PACKAGE_SLUG;
   });
 
-  const userIds = [...new Set(rows.map((row) => row.user_id as string))];
-  const courseIds = [...new Set(rows.map((row) => row.course_id as string))];
+  const userIds = [
+    ...new Set(
+      rows
+        .map((row) => row.user_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const courseIds = [
+    ...new Set(
+      rows
+        .map((row) => row.course_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
 
   async function fetchKeyed(
     table: "course_enrollments" | "course_access"
   ): Promise<{ keys: Set<string>; error?: string }> {
     const keys = new Set<string>();
-    if (userIds.length === 0) return { keys };
+    if (userIds.length === 0 || courseIds.length === 0) return { keys };
     for (let index = 0; index < userIds.length; index += 40) {
       const chunk = userIds.slice(index, index + 40);
       const { data, error } = await supabase
@@ -222,9 +234,12 @@ async function loadEnrollmentGapsCard(
   for (const row of rows) {
     const pkg = Array.isArray(row.packages) ? row.packages[0] : row.packages;
     const key = `${row.user_id}:${row.course_id}`;
-    const missingEnroll = !enrollKeys.has(key);
-    const missingAccess = !accessKeys.has(key);
-    const missingMember = pkg?.delivery_mode === "group" && !memberUsers.has(row.user_id as string);
+      const missingIdentity = !row.user_id || !row.course_id;
+      const missingEnroll = missingIdentity || !enrollKeys.has(key);
+      const missingAccess = missingIdentity || !accessKeys.has(key);
+      const missingMember =
+        pkg?.delivery_mode === "group" &&
+        (!row.user_id || !memberUsers.has(row.user_id as string));
     if (missingEnroll || missingAccess || missingMember) count += 1;
   }
 
