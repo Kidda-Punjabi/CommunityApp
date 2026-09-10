@@ -8,6 +8,7 @@ import type {
   DashboardTone,
 } from "@/lib/admin/dashboard/types";
 import { loadIncompletePackageChecklists } from "@/lib/admin/load-incomplete-package-checklists";
+import { countPendingCohortChangeRequests } from "@/lib/admin/load-admin-cohort-change-requests";
 import { loadPendingCohortSwitchRequestCreatedAts } from "@/lib/admin/load-admin-cohort-switch-requests";
 import { loadAdminOnboardingQueue } from "@/lib/admin/load-admin-onboarding";
 import { loadPendingRescheduleRequestCreatedAts } from "@/lib/admin/load-admin-reschedule-requests";
@@ -524,6 +525,7 @@ export async function loadAdminDashboard(
     setup,
     switchAges,
     rescheduleAges,
+    cohortChangePending,
     enrollmentGaps,
     unresolved,
     onboarding,
@@ -536,6 +538,7 @@ export async function loadAdminDashboard(
     loadCohortsSetupCard(supabase, nowMs),
     loadPendingCohortSwitchRequestCreatedAts(supabase),
     loadPendingRescheduleRequestCreatedAts(supabase),
+    countPendingCohortChangeRequests(supabase),
     loadEnrollmentGapsCard(supabase),
     loadUnresolvedEnrollmentsCard(supabase, nowMs),
     loadAdminOnboardingQueue(supabase),
@@ -581,6 +584,15 @@ export async function loadAdminDashboard(
       href: "/admin/reschedule-requests",
       count: rescheduleAges.createdAts.length,
       tone: pendingTone(rescheduleAges.createdAts),
+      group: "requests",
+    },
+    {
+      id: "cohort_change",
+      label: "Cohort switch requests",
+      hint: "Pending course/level change requests",
+      href: "/admin/cohort-change-requests",
+      count: cohortChangePending.count,
+      tone: cohortChangePending.count > 0 ? "urgent" : "ok",
       group: "requests",
     },
     enrollmentGaps.card,
@@ -642,6 +654,7 @@ export async function loadAdminDashboard(
     setup.error,
     switchAges.error,
     rescheduleAges.error,
+    cohortChangePending.error,
     enrollmentGaps.error,
     unresolved.error,
     onboarding.error,

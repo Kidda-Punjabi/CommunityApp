@@ -4,6 +4,7 @@ export type DashboardCardId =
   | "cohorts_setup"
   | "cohort_switch"
   | "reschedule"
+  | "cohort_change"
   | "enrollment_gaps"
   | "unresolved_enrollments"
   | "payment_setup"
