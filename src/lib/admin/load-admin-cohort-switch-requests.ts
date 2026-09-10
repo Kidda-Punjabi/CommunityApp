@@ -1,7 +1,8 @@
 import "server-only";
 
-import type { CohortSwitchRequestStatus } from "@/lib/calendar/types";
+import { loadAlternateCohortSessions } from "@/lib/calendar/load-alternate-cohort-sessions";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
+import type { AlternateCohortOption, CohortSwitchRequestStatus } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -24,13 +25,28 @@ export type AdminCohortSwitchRequestRow = {
   sessionStartsAt: string;
   sessionEndsAt: string;
   sessionWhen: string;
+  fromWeekNumber: number | null;
   toSessionId: string | null;
   toSessionStartsAt: string | null;
   toSessionEndsAt: string | null;
   toSessionWhen: string | null;
+  toWeekNumber: number | null;
   fromTutorName: string | null;
   toTutorName: string | null;
+  /** Other valid switch candidates from the same function students see, excluding the requested session. */
+  alternateCandidates: AlternateCohortOption[];
+  /** Whether `to_session_id` is still in that student-facing candidate list. */
+  requestedIsCurrentCandidate: boolean;
 };
+
+function asWeekNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
 
 export async function loadAdminCohortSwitchRequests(
   supabase: SupabaseClient
@@ -39,7 +55,7 @@ export async function loadAdminCohortSwitchRequests(
     const { data, error } = await supabase
       .from("cohort_switch_requests")
       .select(
-        "id, status, message, created_at, tutor_response, resolved_at, student_id, session_id, from_cohort_id, to_cohort_id, to_session_id, tutor_scheduled_sessions!session_id(id, title, starts_at, ends_at, tutor_id)"
+        "id, status, message, created_at, tutor_response, resolved_at, student_id, session_id, from_cohort_id, to_cohort_id, to_session_id, tutor_scheduled_sessions!session_id(id, title, starts_at, ends_at, tutor_id, week_number, course_id, cohort_id)"
       )
       .order("created_at", { ascending: false })
       .limit(200);
@@ -83,7 +99,7 @@ export async function loadAdminCohortSwitchRequests(
         toSessionIds.length > 0
           ? supabase
               .from("tutor_scheduled_sessions")
-              .select("id, starts_at, ends_at, tutor_id, title")
+              .select("id, starts_at, ends_at, tutor_id, title, week_number")
               .in("id", toSessionIds)
           : Promise.resolve({ data: [] }),
         supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
@@ -125,6 +141,7 @@ export async function loadAdminCohortSwitchRequests(
           endsAt: s.ends_at as string,
           tutorId: s.tutor_id as string,
           title: s.title as string,
+          weekNumber: asWeekNumber(s.week_number),
         },
       ])
     );
@@ -135,6 +152,15 @@ export async function loadAdminCohortSwitchRequests(
     );
 
     const rows: AdminCohortSwitchRequestRow[] = [];
+    const pendingSources: Array<{
+      id: string;
+      course_id: string;
+      tutor_id: string;
+      cohort_id: string;
+      week_number: number | null;
+    }> = [];
+    const pendingSourceIds = new Set<string>();
+
     for (const row of rowsRaw) {
       const session = Array.isArray(row.tutor_scheduled_sessions)
         ? row.tutor_scheduled_sessions[0]
@@ -150,10 +176,31 @@ export async function loadAdminCohortSwitchRequests(
       const fromTutor = profileById.get(session.tutor_id);
       const toTutorId = toSession?.tutorId ?? toCohort?.tutorId ?? null;
       const toTutor = toTutorId ? profileById.get(toTutorId) : null;
+      const fromWeekNumber = asWeekNumber(session.week_number);
+      const courseId = (session.course_id as string | null) ?? null;
+      const sourceCohortId =
+        (session.cohort_id as string | null) ?? (row.from_cohort_id as string | null);
+      const status = row.status as CohortSwitchRequestStatus;
+
+      if (
+        status === "pending" &&
+        courseId &&
+        sourceCohortId &&
+        !pendingSourceIds.has(session.id as string)
+      ) {
+        pendingSourceIds.add(session.id as string);
+        pendingSources.push({
+          id: session.id as string,
+          course_id: courseId,
+          tutor_id: session.tutor_id as string,
+          cohort_id: sourceCohortId,
+          week_number: fromWeekNumber,
+        });
+      }
 
       rows.push({
         id: row.id,
-        status: row.status as CohortSwitchRequestStatus,
+        status,
         message: row.message,
         createdAt: row.created_at,
         tutorResponse: row.tutor_response,
@@ -170,6 +217,7 @@ export async function loadAdminCohortSwitchRequests(
         sessionStartsAt: session.starts_at,
         sessionEndsAt: session.ends_at,
         sessionWhen: formatSessionWhen(session.starts_at, session.ends_at),
+        fromWeekNumber,
         toSessionId: (row.to_session_id as string | null) ?? null,
         toSessionStartsAt: toSession?.startsAt ?? null,
         toSessionEndsAt: toSession?.endsAt ?? null,
@@ -177,9 +225,22 @@ export async function loadAdminCohortSwitchRequests(
           toSession?.startsAt && toSession?.endsAt
             ? formatSessionWhen(toSession.startsAt, toSession.endsAt)
             : null,
+        toWeekNumber: toSession?.weekNumber ?? null,
         fromTutorName: getDisplayName(fromTutor ?? null),
         toTutorName: getDisplayName(toTutor ?? null),
+        alternateCandidates: [],
+        requestedIsCurrentCandidate: false,
       });
+    }
+
+    const alternateBySourceId = await loadAlternateCohortSessions(supabase, pendingSources);
+    for (const row of rows) {
+      if (row.status !== "pending") continue;
+      const all = alternateBySourceId.get(row.sessionId) ?? [];
+      row.alternateCandidates = all.filter((candidate) => candidate.id !== row.toSessionId);
+      row.requestedIsCurrentCandidate = row.toSessionId
+        ? all.some((candidate) => candidate.id === row.toSessionId)
+        : false;
     }
 
     rows.sort((a, b) => {
