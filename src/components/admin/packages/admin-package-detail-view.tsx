@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   addPackageRunMember,
+  setPackageInstanceAppAccessExpected,
   updatePackageInstanceStatus,
   updatePackageRunFields,
   updateStudentPackageMembershipStatus,
@@ -281,6 +282,7 @@ export function AdminPackageDetailView({
   const [endDate, setEndDate] = useState(dateInputFromIso(detail.endDate));
   const [capacity, setCapacity] = useState(String(detail.capacity));
   const [active, setActive] = useState(detail.active);
+  const [appAccessExpected, setAppAccessExpected] = useState(detail.appAccessExpected !== false);
 
   const isCommunity = detail.kind === "community";
   const checklistType = detail.deliveryMode === "group" ? "group" : "one_to_one";
@@ -296,6 +298,10 @@ export function AdminPackageDetailView({
     const el = document.getElementById(`roster-${initialRoster}`);
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [initialRoster]);
+
+  useEffect(() => {
+    setAppAccessExpected(detail.appAccessExpected !== false);
+  }, [detail.appAccessExpected, detail.id]);
 
   function handleStartDateChange(value: string) {
     setStartDate(value);
@@ -326,6 +332,18 @@ export function AdminPackageDetailView({
     setStatus(next);
     startTransition(async () => {
       await updatePackageInstanceStatus(detail.kind, detail.id, next);
+      router.refresh();
+    });
+  }
+
+  function saveAppAccessExpected(next: boolean) {
+    setAppAccessExpected(next);
+    startTransition(async () => {
+      const result = await setPackageInstanceAppAccessExpected(detail.id, next);
+      if (result.error) {
+        setAppAccessExpected(!next);
+        return;
+      }
       router.refresh();
     });
   }
@@ -471,6 +489,24 @@ export function AdminPackageDetailView({
                   className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2"
                 />
               </label>
+              {detail.kind === "package_instance" ? (
+                <label className="flex items-start gap-2 pb-1 text-sm text-zinc-700 sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={appAccessExpected}
+                    disabled={pending}
+                    onChange={(e) => saveAppAccessExpected(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-violet-600"
+                  />
+                  <span>
+                    <span className="font-medium">App access expected</span>
+                    <span className="mt-0.5 block text-xs font-normal text-zinc-500">
+                      Uncheck if this student was added only so a tutor can manage live-session
+                      reschedules. They are not expected to download or log into the app.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
             </>
           )}
         </div>

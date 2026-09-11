@@ -15,6 +15,7 @@ import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin
 import { fetchCommunityPackageProduct } from "@/lib/admin/community-package";
 import { loadCohortLessonProgressMap } from "@/lib/lessons/load-lesson-log-progress";
 import { getDisplayName } from "@/lib/profile/display-name";
+import { isAppAccessExpected } from "@/lib/admin/app-access-expected";
 import type { TutorIdSource } from "@/lib/notion/tutor-id-source";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -282,7 +283,7 @@ export async function loadAdminPackagesList(
     supabase
       .from("package_instances")
       .select(
-        "id, name, package_id, course_id, tutor_id, tutor_id_source, status, start_day_of_week, start_date, end_date, capacity, active, notion_page_id"
+        "id, name, package_id, course_id, tutor_id, tutor_id_source, status, start_day_of_week, start_date, end_date, capacity, active, notion_page_id, app_access_expected"
       )
       .order("created_at", { ascending: false }),
     supabase.from("courses").select("id, name"),
@@ -947,6 +948,9 @@ export async function loadAdminPackagesList(
             ? "group"
             : "one_to_one",
       active: instance.active,
+      appAccessExpected: isAppAccessExpected(
+        instance.app_access_expected as boolean | null | undefined
+      ),
       ...roster,
       lessonUnlockCount: 0,
       lastLessonLoggedAt: null,

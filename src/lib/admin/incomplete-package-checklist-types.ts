@@ -4,6 +4,7 @@ import type { OnboardingChecklistRow } from "@/lib/admin/packages/types";
 export type IncompletePackageChecklistRow = {
   checklistId: string;
   studentPackageId: string;
+  packageInstanceId: string | null;
   userId: string | null;
   displayName: string;
   email: string | null;
