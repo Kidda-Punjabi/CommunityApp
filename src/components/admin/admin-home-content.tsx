@@ -4,6 +4,7 @@ import { fetchAdminDashboard } from "@/app/admin/content/home-actions";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
 import { AdminAcquisitionDashboard } from "@/components/admin/acquisition/admin-acquisition-dashboard";
 import { AdminDashboardGrid } from "@/components/admin/admin-dashboard-cards";
+import { AdminDeliverySection } from "@/components/admin/delivery/admin-delivery-section";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
 import { AdminHubPage } from "@/components/admin/admin-hub-list";
 import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
@@ -72,6 +73,8 @@ export function AdminHomeContent() {
           </>
         ) : activeTab === "acquisition" ? (
           <AdminAcquisitionDashboard />
+        ) : activeTab === "delivery" ? (
+          <AdminDeliverySection />
         ) : (
           <ComingSoonPanel />
         )}
