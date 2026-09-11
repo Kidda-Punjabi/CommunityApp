@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
+import {
+  resolveCourseActor,
+  studentActorFilter,
+  type CourseActor,
+} from "@/lib/kids/course-actor";
 
 export type HomeworkSubmissionStatus = "pending_review" | "reviewed";
 export type HomeworkSubmissionType = "voice" | "text";
@@ -95,6 +99,9 @@ export function homeworkSubmitErrorMessage(error: {
   return error.message?.trim() || "Failed to submit homework.";
 }
 
+const HOMEWORK_VIEW_SELECT =
+  "id, lesson_id, storage_path, mime_type, duration_seconds, submission_type, text_answers, status, approved, tutor_comment, submitted_at";
+
 export async function fetchHomeworkSubmissionsForUser(
   supabase: SupabaseClient,
   userId: string,
@@ -107,9 +114,7 @@ export async function fetchHomeworkSubmissionsForUser(
   const filter = studentActorFilter(actor);
   const { data, error } = await supabase
     .from("homework_submissions")
-    .select(
-      "id, lesson_id, storage_path, mime_type, duration_seconds, submission_type, text_answers, status, approved, tutor_comment, submitted_at"
-    )
+    .select(HOMEWORK_VIEW_SELECT)
     .eq(filter.column, filter.value)
     .eq("is_practice", false)
     .in("lesson_id", lessonIds);
@@ -124,6 +129,28 @@ export async function fetchHomeworkSubmissionsForUser(
   }
 
   return map;
+}
+
+export async function fetchFormalHomeworkForActor(
+  supabase: SupabaseClient,
+  actor: CourseActor,
+  lessonId: string
+): Promise<HomeworkSubmissionView | null> {
+  const filter = studentActorFilter(actor);
+  const { data, error } = await supabase
+    .from("homework_submissions")
+    .select(HOMEWORK_VIEW_SELECT)
+    .eq("lesson_id", lessonId)
+    .eq(filter.column, filter.value)
+    .eq("is_practice", false)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingHomeworkSchema(error.message)) return null;
+    throw error;
+  }
+
+  return data ? toView(data as HomeworkRow) : null;
 }
 
 export type PendingHomeworkReviewRow = {
