@@ -79,11 +79,13 @@ function readString(value: unknown): string | null {
 
 async function countNotionLeadsCreated(
   start: Date,
-  end: Date
+  end: Date,
+  signal?: AbortSignal
 ): Promise<number> {
   let count = 0;
   let cursor: string | null = null;
   do {
+    if (signal?.aborted) throw new Error("Notion request timed out");
     const body: Record<string, unknown> = {
       page_size: 100,
       filter: {
@@ -94,6 +96,11 @@ async function countNotionLeadsCreated(
       },
     };
     if (cursor) body.start_cursor = cursor;
+    const timeout = AbortSignal.timeout(8000);
+    const requestSignal =
+      signal && typeof AbortSignal.any === "function"
+        ? AbortSignal.any([signal, timeout])
+        : (signal ?? timeout);
     const data = await notionJson<{
       results: unknown[];
       has_more: boolean;
@@ -101,6 +108,8 @@ async function countNotionLeadsCreated(
     }>(`/databases/${NOTION_LEADS_DATA_SOURCE_ID}/query`, {
       method: "POST",
       body: JSON.stringify(body),
+      signal: requestSignal,
+      cache: "no-store",
     });
     count += data.results.length;
     cursor = data.has_more ? data.next_cursor : null;
@@ -300,10 +309,12 @@ async function loadNotionLeads(range: ResolvedAcquisitionRange): Promise<{
   previous: number | null;
   source: AcquisitionSourceSync;
 }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12_000);
   try {
     const [current, previous] = await Promise.all([
-      countNotionLeadsCreated(range.start, range.end),
-      countNotionLeadsCreated(range.previousStart, range.previousEnd),
+      countNotionLeadsCreated(range.start, range.end, controller.signal),
+      countNotionLeadsCreated(range.previousStart, range.previousEnd, controller.signal),
     ]);
     return {
       current,
@@ -315,6 +326,8 @@ async function loadNotionLeads(range: ResolvedAcquisitionRange): Promise<{
       },
     };
   } catch (error) {
+    const timedOut = controller.signal.aborted;
+    const name = error instanceof Error ? error.name : "";
     return {
       current: null,
       previous: null,
@@ -322,9 +335,16 @@ async function loadNotionLeads(range: ResolvedAcquisitionRange): Promise<{
         id: "notion",
         label: NOTION_SOURCE_LABEL,
         readAt: null,
-        error: error instanceof Error ? error.message : "Failed to read Notion leads",
+        error:
+          timedOut || name === "TimeoutError" || name === "AbortError"
+            ? "Notion request timed out"
+            : error instanceof Error
+              ? error.message
+              : "Failed to read Notion leads",
       },
     };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -171,30 +171,46 @@ export function AdminAcquisitionDashboard() {
     setLoading(false);
   }, []);
 
+  const fetchSnapshot = useCallback(
+    async (nextRange: AcquisitionRangeId, from?: string, to?: string) => {
+      const timeout = new Promise<{ error: string }>((resolve) => {
+        setTimeout(
+          () => resolve({ error: "Acquisition timed out. Try again — pipeline sources may be slow." }),
+          28_000
+        );
+      });
+      return Promise.race([
+        fetchAcquisitionDashboard({
+          rangeId: nextRange,
+          from: nextRange === "custom" ? from : undefined,
+          to: nextRange === "custom" ? to : undefined,
+        }),
+        timeout,
+      ]);
+    },
+    []
+  );
+
   const load = useCallback(
     async (nextRange: AcquisitionRangeId, from?: string, to?: string) => {
       setLoading(true);
       setError(null);
-      const result = await fetchAcquisitionDashboard({
-        rangeId: nextRange,
-        from: nextRange === "custom" ? from : undefined,
-        to: nextRange === "custom" ? to : undefined,
-      });
+      const result = await fetchSnapshot(nextRange, from, to);
       applyResult(result);
     },
-    [applyResult]
+    [applyResult, fetchSnapshot]
   );
 
   useEffect(() => {
     let cancelled = false;
-    void fetchAcquisitionDashboard({ rangeId: "30d" }).then((result) => {
+    void fetchSnapshot("30d").then((result) => {
       if (cancelled) return;
       applyResult(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [applyResult]);
+  }, [applyResult, fetchSnapshot]);
 
   const leadsCount = snapshot?.funnel.find((stage) => stage.id === "leads")?.count ?? 0;
   const maxFillDays = useMemo(() => {
