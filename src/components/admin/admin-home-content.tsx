@@ -2,6 +2,7 @@
 
 import { fetchAdminDashboard } from "@/app/admin/content/home-actions";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
+import { AdminAcquisitionDashboard } from "@/components/admin/acquisition/admin-acquisition-dashboard";
 import { AdminDashboardGrid } from "@/components/admin/admin-dashboard-cards";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
 import { AdminHubPage } from "@/components/admin/admin-hub-list";
@@ -69,6 +70,8 @@ export function AdminHomeContent() {
             ) : null}
             <AdminDashboardGrid cards={cards} loading={loadingDashboard} />
           </>
+        ) : activeTab === "acquisition" ? (
+          <AdminAcquisitionDashboard />
         ) : (
           <ComingSoonPanel />
         )}
