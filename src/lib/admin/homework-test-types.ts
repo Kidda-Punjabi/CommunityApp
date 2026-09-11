@@ -44,6 +44,13 @@ export type HomeworkTestPreview = {
   taskDescription: string;
 };
 
+export type HomeworkTestLessonView = {
+  lesson: HomeworkTestLesson;
+  courseName: string;
+  questions: HomeworkTextQuestion[];
+  taskDescription: string;
+};
+
 export function homeworkTestStudentKey(input: {
   studentId: string | null;
   kidProfileId: string | null;
@@ -83,7 +90,24 @@ export function filterHomeworkTestStudents(
 }
 
 export function homeworkTestLessonLabel(lesson: HomeworkTestLesson): string {
-  return `Week ${lesson.lessonNumber} · ${lesson.title} (${lesson.submissionType})`;
+  return `Week ${lesson.lessonNumber} · ${lesson.title} (${homeworkTestFormatLabel(lesson.submissionType)})`;
+}
+
+export function homeworkTestFormatLabel(type: "voice" | "text"): string {
+  return type === "text" ? "written answers" : "voice recording";
+}
+
+export function homeworkTaskDescription(
+  lesson: Pick<HomeworkTestLesson, "activityInstructions" | "submissionType">,
+  segmentInstructions?: string | null
+): string {
+  return (
+    segmentInstructions?.trim() ||
+    lesson.activityInstructions?.trim() ||
+    (lesson.submissionType === "text"
+      ? "Write your answers below. Your tutor will review them."
+      : "Record a short voice note for your tutor after your session.")
+  );
 }
 
 export function courseActorFromHomeworkTestStudent(

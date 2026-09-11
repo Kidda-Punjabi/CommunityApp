@@ -9,6 +9,7 @@ import {
   loadHomeworkTestCohorts,
   loadHomeworkTestCourses,
   loadHomeworkTestLessons,
+  loadHomeworkTestLessonView,
   loadHomeworkTestPreview,
   loadHomeworkTestStudent,
   loadHomeworkTestStudents,
@@ -88,6 +89,19 @@ export async function loadHomeworkTestStudentsAction(cohortId: string) {
     return {
       students: [],
       error: error instanceof Error ? error.message : "Could not load students.",
+    };
+  }
+}
+
+export async function loadHomeworkTestLessonViewAction(lessonId: string) {
+  try {
+    const supabase = await requireAdminFromActions();
+    const view = await loadHomeworkTestLessonView(supabase, lessonId);
+    return { view };
+  } catch (error) {
+    return {
+      view: null,
+      error: error instanceof Error ? error.message : "Could not load homework.",
     };
   }
 }

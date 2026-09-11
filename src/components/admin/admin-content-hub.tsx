@@ -5,7 +5,7 @@ import {
   AdminHubPage,
   AdminHubStack,
 } from "@/components/admin/admin-hub-list";
-import { BookOpen, Gift, Globe, HelpCircle, ScrollText, Sparkles } from "lucide-react";
+import { BookOpen, Eye, Gift, Globe, HelpCircle, ScrollText, Sparkles } from "lucide-react";
 
 export function AdminContentHub() {
   return (
@@ -31,6 +31,12 @@ export function AdminContentHub() {
           icon={<ScrollText className="h-[18px] w-[18px]" />}
           title="Public forms"
           summary="Preview and test every backlog quiz and feedback link, including Week 1 starting point and Week 12"
+        />
+        <AdminHubLinkCard
+          href="/admin/homework-test"
+          icon={<Eye className="h-[18px] w-[18px]" />}
+          title="Test homework submission"
+          summary="See the live student homework page and submit as a cohort student"
         />
         <AdminHubLinkCard
           href="/admin/monthly-rewards"

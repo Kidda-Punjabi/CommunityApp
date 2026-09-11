@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   courseActorFromHomeworkTestStudent,
   filterHomeworkTestStudents,
+  homeworkTaskDescription,
+  homeworkTestFormatLabel,
   homeworkTestLessonLabel,
   homeworkTestStudentKey,
   pickDefaultHomeworkTestCourseId,
@@ -80,7 +82,12 @@ describe("homeworkTestLessonLabel", () => {
     };
     assert.equal(
       homeworkTestLessonLabel(lesson),
-      "Week 2 · Greetings (voice)"
+      "Week 2 · Greetings (voice recording)"
+    );
+    assert.equal(homeworkTestFormatLabel("text"), "written answers");
+    assert.equal(
+      homeworkTaskDescription(lesson, "Record the 10 sentences in Punjabi."),
+      "Record the 10 sentences in Punjabi."
     );
   });
 });

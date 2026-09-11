@@ -9,6 +9,7 @@ import {
   loadHomeworkTestBootstrapAction,
   loadHomeworkTestCohortsAction,
   loadHomeworkTestLessonsAction,
+  loadHomeworkTestLessonViewAction,
   loadHomeworkTestPreviewAction,
   loadHomeworkTestStudentsAction,
   submitAdminHomeworkRecording,
@@ -18,11 +19,13 @@ import { HomeworkSubmissionSection } from "@/components/homework/homework-submis
 import { HomeworkTextForm } from "@/components/homework/homework-text-form";
 import {
   filterHomeworkTestStudents,
+  homeworkTestFormatLabel,
   homeworkTestLessonLabel,
   pickDefaultHomeworkTestCourseId,
   type HomeworkTestCohort,
   type HomeworkTestCourse,
   type HomeworkTestLesson,
+  type HomeworkTestLessonView,
   type HomeworkTestPreview,
   type HomeworkTestStudent,
 } from "@/lib/admin/homework-test-types";
@@ -30,6 +33,9 @@ import { ui } from "@/lib/ui/styles";
 
 const selectClass =
   "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900";
+
+const PICK_STUDENT_FIRST =
+  "Choose a student below and confirm the live submission before submitting.";
 
 export function AdminHomeworkTestSection() {
   const [courses, setCourses] = useState<HomeworkTestCourse[]>([]);
@@ -41,10 +47,12 @@ export function AdminHomeworkTestSection() {
   const [cohortId, setCohortId] = useState("");
   const [studentKey, setStudentKey] = useState("");
   const [studentQuery, setStudentQuery] = useState("");
+  const [lessonView, setLessonView] = useState<HomeworkTestLessonView | null>(null);
   const [preview, setPreview] = useState<HomeworkTestPreview | null>(null);
   const [confirmedLive, setConfirmedLive] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [loadingLesson, setLoadingLesson] = useState(false);
   const [pipelineNote, setPipelineNote] = useState<string | null>(null);
 
   const selectedLesson = lessons.find((row) => row.id === lessonId) ?? null;
@@ -54,6 +62,12 @@ export function AdminHomeworkTestSection() {
     () => filterHomeworkTestStudents(students, studentQuery),
     [students, studentQuery]
   );
+  const viewLesson = lessonView?.lesson ?? selectedLesson;
+  const alreadySubmitted = Boolean(preview?.submission);
+  const canSubmitLive = Boolean(selectedStudent && confirmedLive && !alreadySubmitted);
+  const actorInput = selectedStudent
+    ? { lessonId, cohortId, studentKey: selectedStudent.key }
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +76,7 @@ export function AdminHomeworkTestSection() {
       setCourses(result.courses);
       setLoadError(result.error ?? null);
       setCourseId(pickDefaultHomeworkTestCourseId(result.courses));
-      setLoading(false);
+      setLoadingOptions(false);
     });
     return () => {
       cancelled = true;
@@ -79,7 +93,7 @@ export function AdminHomeworkTestSection() {
     }
 
     let cancelled = false;
-    setLoading(true);
+    setLoadingOptions(true);
     void Promise.all([
       loadHomeworkTestLessonsAction(courseId),
       loadHomeworkTestCohortsAction(courseId),
@@ -91,15 +105,36 @@ export function AdminHomeworkTestSection() {
       setCohortId("");
       setStudentKey("");
       setStudents([]);
+      setLessonView(null);
       setPreview(null);
       setConfirmedLive(false);
       setLoadError(lessonResult.error ?? cohortResult.error ?? null);
-      setLoading(false);
+      setLoadingOptions(false);
     });
     return () => {
       cancelled = true;
     };
   }, [courseId]);
+
+  useEffect(() => {
+    if (!lessonId) {
+      setLessonView(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLessonView(null);
+    setLoadingLesson(true);
+    void loadHomeworkTestLessonViewAction(lessonId).then((result) => {
+      if (cancelled) return;
+      setLessonView(result.view ?? null);
+      setLoadError(result.error ?? null);
+      setLoadingLesson(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId]);
 
   useEffect(() => {
     if (!cohortId) {
@@ -109,7 +144,6 @@ export function AdminHomeworkTestSection() {
     }
 
     let cancelled = false;
-    setLoading(true);
     void loadHomeworkTestStudentsAction(cohortId).then((result) => {
       if (cancelled) return;
       setStudents(result.students);
@@ -117,7 +151,6 @@ export function AdminHomeworkTestSection() {
       setPreview(null);
       setConfirmedLive(false);
       setLoadError(result.error ?? null);
-      setLoading(false);
     });
     return () => {
       cancelled = true;
@@ -134,13 +167,11 @@ export function AdminHomeworkTestSection() {
     let cancelled = false;
     setPreview(null);
     setConfirmedLive(false);
-    setLoading(true);
     void loadHomeworkTestPreviewAction(lessonId, cohortId, studentKey).then((result) => {
       if (cancelled) return;
       setPreview(result.preview ?? null);
       setConfirmedLive(Boolean(result.preview?.submission));
       setLoadError(result.error ?? null);
-      setLoading(false);
     });
     return () => {
       cancelled = true;
@@ -157,27 +188,18 @@ export function AdminHomeworkTestSection() {
     setPreview(result.preview ?? null);
   }
 
-  const actorInput = selectedStudent
-    ? { lessonId, cohortId, studentKey: selectedStudent.key }
-    : null;
-
-  const alreadySubmitted = Boolean(preview?.submission);
-  const canRenderHomework =
-    preview && selectedStudent && actorInput && (alreadySubmitted || confirmedLive);
-
   return (
     <div className={ui.page}>
       <div className="mb-6">
-        <Link href="/admin/cohorts-hub" className="text-sm font-medium text-violet-600 hover:text-violet-500">
-          ← Cohorts
+        <Link href="/admin/content-hub" className="text-sm font-medium text-violet-600 hover:text-violet-500">
+          ← Content
         </Link>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
           Test homework submission
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Submit as a real student for a cohort/package, using the live homework UI. This writes
-          a real <code className="text-xs">homework_submissions</code> row so the tutor inbox and
-          audio pipeline can be verified.
+          Pick a course and week to see the live student homework page — the task, format, and
+          record / write UI. Choose a student only if you want to submit for real.
         </p>
       </div>
 
@@ -222,7 +244,7 @@ export function AdminHomeworkTestSection() {
         </label>
 
         <label className="block">
-          <span className="text-sm font-medium text-zinc-700">3. Cohort</span>
+          <span className="text-sm font-medium text-zinc-700">3. Cohort (only to submit)</span>
           <select
             className={selectClass}
             value={cohortId}
@@ -241,7 +263,7 @@ export function AdminHomeworkTestSection() {
 
         <div>
           <label className="block" htmlFor="homework-test-student-search">
-            <span className="text-sm font-medium text-zinc-700">4. Student / package</span>
+            <span className="text-sm font-medium text-zinc-700">4. Student / package (only to submit)</span>
           </label>
           <input
             id="homework-test-student-search"
@@ -270,53 +292,53 @@ export function AdminHomeworkTestSection() {
               </option>
             ))}
           </select>
-          {cohortId && !loading && visibleStudents.length === 0 ? (
+          {cohortId && visibleStudents.length === 0 ? (
             <p className="mt-1 text-xs text-zinc-500">No matching students in this cohort.</p>
           ) : null}
         </div>
       </div>
 
-      {loading ? <p className="mt-4 text-sm text-zinc-500">Loading…</p> : null}
+      {loadingOptions && !viewLesson ? (
+        <p className="mt-4 text-sm text-zinc-500">Loading…</p>
+      ) : null}
 
-      {preview && selectedStudent && selectedLesson && selectedCohort ? (
+      {lessonId && loadingLesson && !lessonView ? (
+        <p className="mt-4 text-sm text-zinc-500">Loading student homework page…</p>
+      ) : null}
+
+      {lessonView && viewLesson ? (
         <div className="mt-6 space-y-4">
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-            <p className="font-semibold">Live submission</p>
-            <p className="mt-1">
-              This uses the same insert path as a student. It sets{" "}
-              <code className="text-xs">is_practice = false</code> so the row appears in{" "}
-              {selectedCohort.tutorLabel
-                ? `${selectedCohort.tutorLabel}'s`
-                : "the tutor"}{" "}
-              homework inbox. Practice rows are excluded from that queue.
-            </p>
-            {alreadySubmitted ? (
-              <p className="mt-2">
-                {selectedStudent.displayName} already has a formal submission for this lesson.
-                The live UI below shows that existing row.
+          {selectedStudent && selectedCohort ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <p className="font-semibold">Live submission</p>
+              <p className="mt-1">
+                Submitting as {selectedStudent.displayName} writes a real row (
+                <code className="text-xs">is_practice = false</code>) to{" "}
+                {selectedCohort.tutorLabel
+                  ? `${selectedCohort.tutorLabel}'s`
+                  : "the tutor"}{" "}
+                homework inbox.
               </p>
-            ) : (
-              <p className="mt-2">
-                If {selectedStudent.displayName} has not submitted this week yet, this will block
-                their own later submission (one formal homework per lesson).
-              </p>
-            )}
-          </div>
-
-          {!alreadySubmitted ? (
-            <label className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={confirmedLive}
-                onChange={(event) => setConfirmedLive(event.target.checked)}
-              />
-              <span>
-                I understand this creates a real homework submission for{" "}
-                <strong>{selectedStudent.displayName}</strong> ({selectedLesson.title}) and will
-                show in the tutor inbox.
-              </span>
-            </label>
+              {alreadySubmitted ? (
+                <p className="mt-2">
+                  {selectedStudent.displayName} already submitted this lesson. The student view
+                  below still shows the assignment they were given.
+                </p>
+              ) : (
+                <label className="mt-3 flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={confirmedLive}
+                    onChange={(event) => setConfirmedLive(event.target.checked)}
+                  />
+                  <span>
+                    I understand this creates a real homework submission for{" "}
+                    <strong>{selectedStudent.displayName}</strong>.
+                  </span>
+                </label>
+              )}
+            </div>
           ) : null}
 
           {pipelineNote ? (
@@ -325,98 +347,104 @@ export function AdminHomeworkTestSection() {
             </p>
           ) : null}
 
-          {canRenderHomework && actorInput ? (
-            <div className="rounded-3xl border border-zinc-200/80 bg-white p-5 shadow-[0_4px_24px_-6px_rgba(24,24,27,0.08)]">
-              <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
-                Lesson {preview.lesson.lessonNumber} · {selectedCohort.name}
-              </p>
-              <h2 className="mt-1 text-xl font-bold text-zinc-900">Homework</h2>
-              <p className="mt-2 text-sm text-zinc-600">{preview.lesson.title}</p>
-              <p className="mt-3 text-base text-zinc-800">{preview.taskDescription}</p>
-              <p className="mt-2 text-xs text-zinc-500">
-                Submitting as {selectedStudent.displayName}
-                {selectedStudent.studentPackageId
-                  ? ` · package ${selectedStudent.studentPackageId.slice(0, 8)}`
-                  : ""}
-                {selectedStudent.studentId
-                  ? ` · student ${selectedStudent.studentId.slice(0, 8)}`
-                  : ""}
-              </p>
+          <div>
+            <p className="text-sm font-semibold text-zinc-900">Student homework page</p>
+            <p className="mt-0.5 text-sm text-zinc-500">
+              This is the same screen a student gets for this week, including the task and{" "}
+              {homeworkTestFormatLabel(viewLesson.submissionType)} controls.
+            </p>
+            <div className="mx-auto mt-3 max-w-md overflow-hidden rounded-[1.75rem] border border-zinc-200 bg-zinc-50 shadow-[0_8px_32px_-8px_rgba(24,24,27,0.18)]">
+              <div className="px-5 py-7">
+                <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
+                  Lesson {viewLesson.lessonNumber} · {lessonView.courseName}
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-zinc-900">Homework</h2>
+                <p className="mt-2 text-sm text-zinc-600">{viewLesson.title}</p>
+                <p className="mt-3 text-base text-zinc-800">{lessonView.taskDescription}</p>
 
-              {preview.lesson.submissionType === "text" ? (
-                <div className="mt-6">
-                  <HomeworkTextForm
-                    key={`${preview.lesson.id}-${selectedStudent.key}-text`}
-                    lessonId={preview.lesson.id}
-                    questions={preview.questions}
-                    existingSubmission={preview.submission}
-                    submitText={async (id, answers) => {
-                      const result = await submitAdminHomeworkText(
-                        { ...actorInput, lessonId: id },
-                        answers
-                      );
-                      if (!result.error) {
-                        setPipelineNote(
-                          result.submissionId
-                            ? `Submitted. Row ${result.submissionId} should appear at /dashboard/tutor/homework.`
-                            : result.success ?? "Submitted."
+                {viewLesson.submissionType === "text" ? (
+                  <div className="mt-6">
+                    <HomeworkTextForm
+                      key={`${viewLesson.id}-text`}
+                      lessonId={viewLesson.id}
+                      questions={lessonView.questions}
+                      existingSubmission={null}
+                      submitText={async (id, answers) => {
+                        if (!canSubmitLive || !actorInput) {
+                          return { error: PICK_STUDENT_FIRST };
+                        }
+                        const result = await submitAdminHomeworkText(
+                          { ...actorInput, lessonId: id },
+                          answers
                         );
-                        await reloadPreview();
+                        if (!result.error) {
+                          setPipelineNote(
+                            result.submissionId
+                              ? `Submitted. Row ${result.submissionId} should appear at /dashboard/tutor/homework.`
+                              : result.success ?? "Submitted."
+                          );
+                          await reloadPreview();
+                        }
+                        return result;
+                      }}
+                      loadNearLessonWarning={(id) =>
+                        selectedStudent
+                          ? getAdminHomeworkTextNearLessonWarning(
+                              id,
+                              selectedStudent.studentId,
+                              selectedStudent.kidProfileId
+                            )
+                          : Promise.resolve({ nearLessonWarning: null, timingState: null })
                       }
-                      return result;
-                    }}
-                    loadNearLessonWarning={(id) =>
-                      getAdminHomeworkTextNearLessonWarning(
-                        id,
-                        selectedStudent.studentId,
-                        selectedStudent.kidProfileId
-                      )
-                    }
-                  />
-                </div>
-              ) : (
-                <div className="mt-6 rounded-3xl border border-zinc-200/80 bg-white/95 p-4">
-                  <p className="text-sm font-semibold text-zinc-900">
-                    {preview.submission ? "Your homework" : "Record homework"}
-                  </p>
-                  <HomeworkSubmissionSection
-                    key={`${preview.lesson.id}-${selectedStudent.key}-voice`}
-                    lessonId={preview.lesson.id}
-                    submission={preview.submission}
-                    variant="embedded"
-                    submitRecording={async (id, formData) => {
-                      const result = await submitAdminHomeworkRecording(
-                        { ...actorInput, lessonId: id },
-                        formData
-                      );
-                      if (!result.error) {
-                        setPipelineNote(
-                          [
-                            result.success,
-                            result.submissionId ? `Row ${result.submissionId}.` : null,
-                            result.storagePath ? `Audio ${result.storagePath}.` : null,
-                            "Check /dashboard/tutor/homework for the tutor inbox.",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")
+                    />
+                  </div>
+                ) : (
+                  <div className="sticky bottom-0 z-10 mt-6 rounded-3xl border border-zinc-200/80 bg-white/95 p-4 shadow-[0_8px_32px_-8px_rgba(24,24,27,0.18)] backdrop-blur">
+                    <p className="text-sm font-semibold text-zinc-900">Record homework</p>
+                    <HomeworkSubmissionSection
+                      key={`${viewLesson.id}-voice`}
+                      lessonId={viewLesson.id}
+                      submission={null}
+                      variant="embedded"
+                      submitRecording={async (id, formData) => {
+                        if (!canSubmitLive || !actorInput) {
+                          return { error: PICK_STUDENT_FIRST };
+                        }
+                        const result = await submitAdminHomeworkRecording(
+                          { ...actorInput, lessonId: id },
+                          formData
                         );
-                        await reloadPreview();
+                        if (!result.error) {
+                          setPipelineNote(
+                            [
+                              result.success,
+                              result.submissionId ? `Row ${result.submissionId}.` : null,
+                              result.storagePath ? `Audio ${result.storagePath}.` : null,
+                              "Check /dashboard/tutor/homework for the tutor inbox.",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")
+                          );
+                          await reloadPreview();
+                        }
+                        return result;
+                      }}
+                      loadPlaybackUrl={getAdminHomeworkPlaybackUrl}
+                      loadNearLessonWarning={(id) =>
+                        selectedStudent
+                          ? getAdminHomeworkNearLessonWarning(
+                              id,
+                              selectedStudent.studentId,
+                              selectedStudent.kidProfileId
+                            )
+                          : Promise.resolve({ nearLessonWarning: null, timingState: null })
                       }
-                      return result;
-                    }}
-                    loadPlaybackUrl={getAdminHomeworkPlaybackUrl}
-                    loadNearLessonWarning={(id) =>
-                      getAdminHomeworkNearLessonWarning(
-                        id,
-                        selectedStudent.studentId,
-                        selectedStudent.kidProfileId
-                      )
-                    }
-                  />
-                </div>
-              )}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          ) : null}
+          </div>
         </div>
       ) : null}
     </div>
