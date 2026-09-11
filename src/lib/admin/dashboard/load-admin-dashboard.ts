@@ -1,12 +1,12 @@
 import "server-only";
 
-import { COMMUNITY_PACKAGE_SLUG } from "@/lib/admin/community-package";
 import { isUkBankHoliday } from "@/lib/admin/dashboard/uk-bank-holidays";
 import type {
   AdminDashboardCard,
   AdminDashboardSnapshot,
   DashboardTone,
 } from "@/lib/admin/dashboard/types";
+import { loadEnrollmentGaps } from "@/lib/admin/load-enrollment-gaps";
 import { loadIncompletePackageChecklists } from "@/lib/admin/load-incomplete-package-checklists";
 import { countPendingCohortChangeRequests } from "@/lib/admin/load-admin-cohort-change-requests";
 import { loadPendingCohortSwitchRequestCreatedAts } from "@/lib/admin/load-admin-cohort-switch-requests";
@@ -140,125 +140,29 @@ async function loadCohortsSetupCard(
 async function loadEnrollmentGapsCard(
   supabase: SupabaseClient
 ): Promise<{ card: AdminDashboardCard; error?: string }> {
-  const { data: packages, error: packageError } = await supabase
-    .from("student_packages")
-    .select("id, user_id, course_id, packages(slug, delivery_mode)")
-    .eq("status", "confirmed");
-
-  if (packageError) {
+  const result = await loadEnrollmentGaps(supabase);
+  if (result.error) {
     return {
       card: {
         id: "enrollment_gaps",
         label: "Enrollment gaps",
         hint: "Could not load",
-        href: "/admin/onboarding",
+        href: "/admin/enrollment-gaps",
         count: 0,
         tone: "ok",
         group: "enrollment",
       },
-      error: packageError.message,
+      error: result.error,
     };
   }
 
-  const rows = (packages ?? []).filter((row) => {
-    const pkg = Array.isArray(row.packages) ? row.packages[0] : row.packages;
-    return pkg?.slug !== COMMUNITY_PACKAGE_SLUG;
-  });
-
-  const userIds = [
-    ...new Set(
-      rows
-        .map((row) => row.user_id as string | null)
-        .filter((id): id is string => Boolean(id))
-    ),
-  ];
-  const courseIds = [
-    ...new Set(
-      rows
-        .map((row) => row.course_id as string | null)
-        .filter((id): id is string => Boolean(id))
-    ),
-  ];
-
-  async function fetchKeyed(
-    table: "course_enrollments" | "course_access"
-  ): Promise<{ keys: Set<string>; error?: string }> {
-    const keys = new Set<string>();
-    if (userIds.length === 0 || courseIds.length === 0) return { keys };
-    for (let index = 0; index < userIds.length; index += 40) {
-      const chunk = userIds.slice(index, index + 40);
-      const { data, error } = await supabase
-        .from(table)
-        .select("user_id, course_id")
-        .in("user_id", chunk)
-        .in("course_id", courseIds);
-      if (error) return { keys, error: error.message };
-      for (const row of data ?? []) {
-        const typed = row as { user_id: string; course_id: string };
-        keys.add(`${typed.user_id}:${typed.course_id}`);
-      }
-    }
-    return { keys };
-  }
-
-  const [enrollResult, accessResult, memberResult] = await Promise.all([
-    fetchKeyed("course_enrollments"),
-    fetchKeyed("course_access"),
-    (async () => {
-      const memberUsers = new Set<string>();
-      if (userIds.length === 0) return { memberUsers };
-      for (let index = 0; index < userIds.length; index += 40) {
-        const chunk = userIds.slice(index, index + 40);
-        const { data, error } = await supabase
-          .from("cohort_members")
-          .select("user_id")
-          .in("user_id", chunk)
-          .is("left_at", null);
-        if (error) return { memberUsers, error: error.message };
-        for (const row of data ?? []) memberUsers.add(row.user_id as string);
-      }
-      return { memberUsers };
-    })(),
-  ]);
-
-  if (enrollResult.error || accessResult.error || memberResult.error) {
-    return {
-      card: {
-        id: "enrollment_gaps",
-        label: "Enrollment gaps",
-        hint: "Could not load",
-        href: "/admin/onboarding",
-        count: 0,
-        tone: "ok",
-        group: "enrollment",
-      },
-      error: enrollResult.error ?? accessResult.error ?? memberResult.error,
-    };
-  }
-
-  const enrollKeys = enrollResult.keys;
-  const accessKeys = accessResult.keys;
-  const memberUsers = memberResult.memberUsers;
-
-  let count = 0;
-  for (const row of rows) {
-    const pkg = Array.isArray(row.packages) ? row.packages[0] : row.packages;
-    const key = `${row.user_id}:${row.course_id}`;
-      const missingIdentity = !row.user_id || !row.course_id;
-      const missingEnroll = missingIdentity || !enrollKeys.has(key);
-      const missingAccess = missingIdentity || !accessKeys.has(key);
-      const missingMember =
-        pkg?.delivery_mode === "group" &&
-        (!row.user_id || !memberUsers.has(row.user_id as string));
-    if (missingEnroll || missingAccess || missingMember) count += 1;
-  }
-
+  const count = result.grantQueue.length + result.missingAccess.length;
   return {
     card: {
       id: "enrollment_gaps",
       label: "Enrollment gaps",
-      hint: "Confirmed packages missing enroll / access / cohort row",
-      href: "/admin/onboarding",
+      hint: "Unresolved grant queue and package instances with no student package",
+      href: "/admin/enrollment-gaps",
       count,
       tone: countTone(count, 2),
       group: "enrollment",
