@@ -62,7 +62,8 @@ export async function loadPublicQuizById(quizId: string): Promise<PublicQuizPayl
   };
 }
 
-export async function loadBeginnersLessonId(
+export async function loadCourseLessonId(
+  courseName: string,
   lessonNumber: number
 ): Promise<string | null> {
   const { client, error } = tryCreateServiceRoleClient();
@@ -71,7 +72,7 @@ export async function loadBeginnersLessonId(
   const { data: course } = await client
     .from("courses")
     .select("id")
-    .eq("name", "Beginners Course")
+    .eq("name", courseName)
     .maybeSingle();
 
   if (!course?.id) return null;
@@ -84,4 +85,10 @@ export async function loadBeginnersLessonId(
     .maybeSingle();
 
   return lesson?.id ?? null;
+}
+
+export async function loadBeginnersLessonId(
+  lessonNumber: number
+): Promise<string | null> {
+  return loadCourseLessonId("Beginners Course", lessonNumber);
 }

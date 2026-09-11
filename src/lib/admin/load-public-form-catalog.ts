@@ -42,28 +42,36 @@ function quizSortKey(label: string): [number, number] {
   return [2, 0];
 }
 
-function feedbackSortKey(targetId: string): number {
-  if (targetId === "week-1-starting-point") return 0;
-  if (targetId === "week-1-session") return 1;
+function feedbackSortKey(targetId: string, course: string): [number, number] {
+  if (course === "Foundational Course") {
+    const found = /^foundational-week-(\d+)$/.exec(targetId);
+    return [1, found ? Number.parseInt(found[1], 10) : 99];
+  }
+  if (targetId === "week-1-starting-point") return [0, 0];
+  if (targetId === "week-1-session") return [0, 1];
   const match = /^week-(\d+)$/.exec(targetId);
-  return match ? Number.parseInt(match[1], 10) : 99;
+  return [0, match ? Number.parseInt(match[1], 10) : 99];
 }
 
 function feedbackMappingNote(
   targetId: string,
   formVariant: "standard" | "week1" | "week12",
-  lessonLabel: string
+  lessonLabel: string,
+  course: string
 ): string {
   if (formVariant === "week1") {
-    return `Starting-point survey (not session feedback). Notion Course = Beginners Course, Lesson = ${lessonLabel}. Ratings: understanding spoken Punjabi, basic speaking, optional grammar.`;
+    return `Starting-point survey (not session feedback). Notion Course = ${course}, Lesson = ${lessonLabel}. Ratings: understanding spoken Punjabi, basic speaking, optional grammar.`;
   }
   if (formVariant === "week12") {
-    return `End-of-course survey. Notion Course = Beginners Course, Lesson = ${lessonLabel}. Extra ratings, recommend, video testimonial, optional photo, and booking widget after Yes.`;
+    return `End-of-course survey. Notion Course = ${course}, Lesson = ${lessonLabel}. Extra ratings, recommend, video testimonial, optional photo, and booking widget after Yes.`;
   }
   if (targetId === "week-1-session") {
-    return `Standard session feedback for week 1. Notion Course = Beginners Course, Lesson = ${lessonLabel}. Three ratings: learning relevance, tutor effectiveness, confidence.`;
+    return `Standard session feedback for week 1. Notion Course = ${course}, Lesson = ${lessonLabel}. Three ratings: learning relevance, tutor effectiveness, confidence.`;
   }
-  return `Standard session feedback. Notion Course = Beginners Course, Lesson = ${lessonLabel}. Three ratings: learning relevance, tutor effectiveness, confidence.`;
+  if (course === "Foundational Course") {
+    return `Standard session feedback. Notion Course = ${course}, Lesson = ${lessonLabel}. Three ratings: learning relevance, tutor effectiveness, confidence. Guest must choose 1-1 or their cohort number.`;
+  }
+  return `Standard session feedback. Notion Course = ${course}, Lesson = ${lessonLabel}. Three ratings: learning relevance, tutor effectiveness, confidence.`;
 }
 
 export async function loadPublicFormCatalog(): Promise<PublicFormCatalog> {
@@ -122,16 +130,21 @@ export async function loadPublicFormCatalog(): Promise<PublicFormCatalog> {
           formVariant: target.formVariant,
           lessonLabel: target.lessonLabel,
           studentTitle: copy.title,
-          notionCourse: "Beginners Course",
+          notionCourse: target.course,
           mappingNote: feedbackMappingNote(
             link.targetId,
             target.formVariant,
-            target.lessonLabel
+            target.lessonLabel,
+            target.course
           ),
         } satisfies PublicFormCatalogFeedback,
       ];
     })
-    .sort((a, b) => feedbackSortKey(a.targetId) - feedbackSortKey(b.targetId));
+    .sort((a, b) => {
+      const [ag, ai] = feedbackSortKey(a.targetId, a.notionCourse);
+      const [bg, bi] = feedbackSortKey(b.targetId, b.notionCourse);
+      return ag - bg || ai - bi;
+    });
 
   const error =
     quizzes.length === 0 && feedback.length === 0

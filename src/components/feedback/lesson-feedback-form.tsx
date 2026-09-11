@@ -197,7 +197,9 @@ export function LessonFeedbackForm({
                   className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
                   required
                 >
-                  <option value="">Select your cohort</option>
+                  <option value="">
+                    {guestSubmit.cohortPlaceholder ?? "Select your cohort"}
+                  </option>
                   {guestSubmit.cohorts.map((option) => (
                     <option key={option} value={option}>
                       {option}

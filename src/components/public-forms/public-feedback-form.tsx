@@ -64,6 +64,10 @@ function PublicFeedbackRun({
     cohorts,
     tutors: PUBLIC_FEEDBACK_TUTOR_OPTIONS,
     uploadPhoto: (file: File) => uploadPublicFeedbackPhoto(slug, file),
+    cohortPlaceholder:
+      context.course === "Foundational Course"
+        ? "Select 1-1 or your cohort number"
+        : undefined,
   };
 
   const filledContext: FeedbackContext = {

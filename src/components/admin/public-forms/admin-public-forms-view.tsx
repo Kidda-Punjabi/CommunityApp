@@ -12,6 +12,22 @@ import { useState } from "react";
 
 type TabId = "quizzes" | "feedback";
 
+const EXPECTED_QUIZZES = 14;
+const EXPECTED_FEEDBACK = 17;
+
+function feedbackGroups(forms: PublicFormCatalogFeedback[]) {
+  const groups: Array<{ course: string; forms: PublicFormCatalogFeedback[] }> = [];
+  for (const form of forms) {
+    const last = groups[groups.length - 1];
+    if (last && last.course === form.notionCourse) {
+      last.forms.push(form);
+    } else {
+      groups.push({ course: form.notionCourse, forms: [form] });
+    }
+  }
+  return groups;
+}
+
 export function AdminPublicFormsView({ catalog }: { catalog: PublicFormCatalog }) {
   const [tab, setTab] = useState<TabId>("quizzes");
   const [previewHref, setPreviewHref] = useState<string | null>(null);
@@ -38,10 +54,12 @@ export function AdminPublicFormsView({ catalog }: { catalog: PublicFormCatalog }
         </p>
       ) : null}
 
-      {catalog.quizzes.length !== 14 || catalog.feedback.length !== 13 ? (
+      {catalog.quizzes.length !== EXPECTED_QUIZZES ||
+      catalog.feedback.length !== EXPECTED_FEEDBACK ? (
         <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Expected 14 quizzes and 13 feedback links. Found {catalog.quizzes.length} quizzes
-          and {catalog.feedback.length} feedback links.
+          Expected {EXPECTED_QUIZZES} quizzes and {EXPECTED_FEEDBACK} feedback links.
+          Found {catalog.quizzes.length} quizzes and {catalog.feedback.length} feedback
+          links.
         </p>
       ) : null}
 
@@ -76,21 +94,29 @@ export function AdminPublicFormsView({ catalog }: { catalog: PublicFormCatalog }
           ))}
         </div>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 space-y-8">
           <p className="text-sm text-zinc-500">
-            Includes Week 1 starting point, Week 1 session, Weeks 2–11, and Week 12
-            end-of-course. Guest submits write Phone, Course, and Lesson into the Notion
-            Feedback Database.
+            Beginners: Week 1 starting point, Week 1 session, Weeks 2–11, and Week 12
+            end-of-course. Foundational: Weeks 1–4 session feedback. Guest submits write
+            Phone, Course, and Lesson into the Notion Feedback Database. Foundational
+            guests must choose 1-1 or their cohort number.
           </p>
-          {catalog.feedback.map((form) => (
-            <FeedbackRow
-              key={form.slug}
-              form={form}
-              previewHref={previewHref}
-              onTogglePreview={() =>
-                setPreviewHref((current) => (current === form.href ? null : form.href))
-              }
-            />
+          {feedbackGroups(catalog.feedback).map((group) => (
+            <section key={group.course} className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+                {group.course}
+              </h2>
+              {group.forms.map((form) => (
+                <FeedbackRow
+                  key={form.slug}
+                  form={form}
+                  previewHref={previewHref}
+                  onTogglePreview={() =>
+                    setPreviewHref((current) => (current === form.href ? null : form.href))
+                  }
+                />
+              ))}
+            </section>
           ))}
         </div>
       )}

@@ -3,7 +3,7 @@ import type { FeedbackContext } from "@/lib/feedback/types";
 import { parsePublicFeedbackTarget, publicFeedbackCopy } from "@/lib/public-forms/feedback-target";
 import { lookupPublicFormLinkBySlug } from "@/lib/public-forms/links";
 import { loadPublicCohortOptions } from "@/lib/public-forms/load-cohort-options";
-import { loadBeginnersLessonId, loadPublicQuizById } from "@/lib/public-forms/load-quiz";
+import { loadCourseLessonId, loadPublicQuizById } from "@/lib/public-forms/load-quiz";
 import { getTestimonialCalendarUrl } from "@/lib/ghl/testimonial-calendar";
 import { notFound } from "next/navigation";
 
@@ -41,7 +41,7 @@ export default async function PublicFormPage({ params }: PageProps) {
 
   const [cohorts, lessonId] = await Promise.all([
     loadPublicCohortOptions(),
-    loadBeginnersLessonId(target.lessonNumber),
+    loadCourseLessonId(target.course, target.lessonNumber),
   ]);
 
   const context: FeedbackContext = {
@@ -49,7 +49,7 @@ export default async function PublicFormPage({ params }: PageProps) {
     email: "",
     phone: null,
     cohort: "",
-    course: "Beginners Course",
+    course: target.course,
     lessonLabel: target.lessonLabel,
     lessonNumber: target.lessonNumber,
     tutor: null,

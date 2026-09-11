@@ -1,11 +1,26 @@
-import type { FeedbackFormVariant } from "@/lib/feedback/constants";
+import type { FeedbackFormVariant, NotionCourseOption } from "@/lib/feedback/constants";
 
 export type PublicFeedbackTarget = {
   targetId: string;
   formVariant: Extract<FeedbackFormVariant, "standard" | "week1" | "week12">;
   lessonNumber: number;
   lessonLabel: string;
+  course: NotionCourseOption;
 };
+
+function beginnersTarget(
+  targetId: string,
+  formVariant: PublicFeedbackTarget["formVariant"],
+  lessonNumber: number
+): PublicFeedbackTarget {
+  return {
+    targetId,
+    formVariant,
+    lessonNumber,
+    lessonLabel: `Lesson ${lessonNumber}`,
+    course: "Beginners Course",
+  };
+}
 
 export function publicFeedbackCopy(target: PublicFeedbackTarget): {
   kicker: string;
@@ -26,6 +41,13 @@ export function publicFeedbackCopy(target: PublicFeedbackTarget): {
       intro: "You've finished the Beginners Course — this is our end-of-course survey.",
     };
   }
+  if (target.course === "Foundational Course") {
+    return {
+      kicker: "Session feedback",
+      title: `Foundational lesson ${target.lessonNumber} feedback`,
+      intro: "How was this Foundational Course lesson for you?",
+    };
+  }
   return {
     kicker: "Session feedback",
     title: `Lesson ${target.lessonNumber} feedback`,
@@ -35,19 +57,22 @@ export function publicFeedbackCopy(target: PublicFeedbackTarget): {
 
 export function parsePublicFeedbackTarget(targetId: string): PublicFeedbackTarget | null {
   if (targetId === "week-1-session") {
+    return beginnersTarget(targetId, "standard", 1);
+  }
+  if (targetId === "week-1-starting-point") {
+    return beginnersTarget(targetId, "week1", 1);
+  }
+
+  const foundational = /^foundational-week-(\d+)$/.exec(targetId);
+  if (foundational) {
+    const lessonNumber = Number.parseInt(foundational[1], 10);
+    if (lessonNumber < 1 || lessonNumber > 4) return null;
     return {
       targetId,
       formVariant: "standard",
-      lessonNumber: 1,
-      lessonLabel: "Lesson 1",
-    };
-  }
-  if (targetId === "week-1-starting-point") {
-    return {
-      targetId,
-      formVariant: "week1",
-      lessonNumber: 1,
-      lessonLabel: "Lesson 1",
+      lessonNumber,
+      lessonLabel: `Lesson ${lessonNumber}`,
+      course: "Foundational Course",
     };
   }
 
@@ -56,10 +81,9 @@ export function parsePublicFeedbackTarget(targetId: string): PublicFeedbackTarge
   const lessonNumber = Number.parseInt(match[1], 10);
   if (lessonNumber < 2 || lessonNumber > 12) return null;
 
-  return {
+  return beginnersTarget(
     targetId,
-    formVariant: lessonNumber === 12 ? "week12" : "standard",
-    lessonNumber,
-    lessonLabel: `Lesson ${lessonNumber}`,
-  };
+    lessonNumber === 12 ? "week12" : "standard",
+    lessonNumber
+  );
 }

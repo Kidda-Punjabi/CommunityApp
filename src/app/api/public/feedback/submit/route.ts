@@ -5,7 +5,7 @@ import { parsePublicFeedbackTarget } from "@/lib/public-forms/feedback-target";
 import { validateGuestIdentity } from "@/lib/public-forms/guest";
 import { lookupPublicFormLinkBySlug } from "@/lib/public-forms/links";
 import { loadPublicCohortOptions } from "@/lib/public-forms/load-cohort-options";
-import { loadBeginnersLessonId } from "@/lib/public-forms/load-quiz";
+import { loadCourseLessonId } from "@/lib/public-forms/load-quiz";
 import { isPublicFeedbackTutor } from "@/lib/public-forms/options";
 import { createServiceRoleClient, getServiceRoleConfigError } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
@@ -75,13 +75,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unable to submit feedback." }, { status: 500 });
   }
 
-  const lessonId = await loadBeginnersLessonId(target.lessonNumber);
+  const lessonId = await loadCourseLessonId(target.course, target.lessonNumber);
   const context: FeedbackContext = {
     fullName: identity.identity.fullName,
     email: identity.identity.email,
     phone: identity.identity.phone,
     cohort,
-    course: "Beginners Course",
+    course: target.course,
     lessonLabel: target.lessonLabel,
     lessonNumber: target.lessonNumber,
     tutor,
