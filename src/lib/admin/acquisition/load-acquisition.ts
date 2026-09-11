@@ -37,7 +37,6 @@ import { GhlApiError } from "@/lib/ghl/client";
 import {
   listGhlSalesPipelines,
   searchGhlOpportunities,
-  type GhlOpportunity,
   type GhlPipeline,
 } from "@/lib/ghl/opportunities";
 import { NOTION_LEADS_DATA_SOURCE_ID, notionJson } from "@/lib/notion/client";
@@ -294,49 +293,52 @@ function funnelStage(
   };
 }
 
-export async function loadAcquisitionSnapshot(
-  supabase: SupabaseClient,
-  input: {
-    rangeId?: AcquisitionRangeId;
-    from?: string;
-    to?: string;
-  } = {}
-): Promise<AcquisitionSnapshot> {
-  const range: ResolvedAcquisitionRange = resolveAcquisitionRange(
-    input.rangeId ?? "30d",
-    new Date(),
-    input.from && input.to ? { from: input.from, to: input.to } : undefined
-  );
-  const generatedAt = new Date().toISOString();
-  const sources: AcquisitionSourceSync[] = [];
+const NOTION_SOURCE_LABEL = "Notion — leads and sales calls";
 
-  let newLeadsCurrent: number | null = null;
-  let newLeadsPrevious: number | null = null;
+async function loadNotionLeads(range: ResolvedAcquisitionRange): Promise<{
+  current: number | null;
+  previous: number | null;
+  source: AcquisitionSourceSync;
+}> {
   try {
     const [current, previous] = await Promise.all([
       countNotionLeadsCreated(range.start, range.end),
       countNotionLeadsCreated(range.previousStart, range.previousEnd),
     ]);
-    newLeadsCurrent = current;
-    newLeadsPrevious = previous;
-    sources.push({
-      id: "notion",
-      label: "Notion — leads and sales calls",
-      readAt: new Date().toISOString(),
-    });
+    return {
+      current,
+      previous,
+      source: {
+        id: "notion",
+        label: NOTION_SOURCE_LABEL,
+        readAt: new Date().toISOString(),
+      },
+    };
   } catch (error) {
-    sources.push({
-      id: "notion",
-      label: "Notion — leads and sales calls",
-      readAt: null,
-      error: error instanceof Error ? error.message : "Failed to read Notion leads",
-    });
+    return {
+      current: null,
+      previous: null,
+      source: {
+        id: "notion",
+        label: NOTION_SOURCE_LABEL,
+        readAt: null,
+        error: error instanceof Error ? error.message : "Failed to read Notion leads",
+      },
+    };
   }
+}
 
-  let salesCalls: SalesCallRow[] = [];
+async function loadSalesCallsData(
+  supabase: SupabaseClient,
+  range: ResolvedAcquisitionRange
+): Promise<{
+  salesCalls: SalesCallRow[];
+  leadById: Map<string, { name: string | null; email: string | null }>;
+  error: string | null;
+}> {
   const leadById = new Map<string, { name: string | null; email: string | null }>();
   try {
-    salesCalls = await fetchSalesCalls(supabase, range.previousStart.toISOString());
+    const salesCalls = await fetchSalesCalls(supabase, range.previousStart.toISOString());
     const leadIds = [
       ...new Set(
         salesCalls
@@ -358,65 +360,29 @@ export async function loadAcquisitionSnapshot(
         });
       }
     }
-    if (!sources.some((source) => source.id === "notion" && !source.error)) {
-      sources.push({
-        id: "notion",
-        label: "Notion — leads and sales calls",
-        readAt: new Date().toISOString(),
-      });
-    }
+    return { salesCalls, leadById, error: null };
   } catch (error) {
-    sources.push({
-      id: "supabase",
-      label: "Supabase — sales calls",
-      readAt: null,
+    return {
+      salesCalls: [],
+      leadById,
       error: error instanceof Error ? error.message : "Failed to read sales calls",
-    });
+    };
   }
+}
 
-  const callsIn = (start: Date, end: Date) =>
-    salesCalls.filter((row) => inRange(row.call_date, start, end));
-  const currentCalls = callsIn(range.start, range.end);
-  const previousCalls = callsIn(range.previousStart, range.previousEnd);
-  const bookedCurrent = currentCalls.length;
-  const bookedPrevious = previousCalls.length;
-  const showedCurrent = currentCalls.filter((row) => row.show_up).length;
-  const showedPrevious = previousCalls.filter((row) => row.show_up).length;
-  const closedCurrent = currentCalls.filter((row) => row.closed).length;
-  const closedPrevious = previousCalls.filter((row) => row.closed).length;
-
-  const notionCashFor = (start: Date, end: Date) => {
-    let cashOnCall = 0;
-    let paidAfterwards = 0;
-    const payments: MatchablePayment[] = [];
-    for (const row of salesCalls) {
-      const when = row.payment_date || row.call_date;
-      if (!inRange(when, start, end)) continue;
-      const onCall = poundsToPence(row.cash_on_call);
-      const afterwards = poundsToPence(row.paid_afterwards);
-      if (onCall <= 0 && afterwards <= 0) continue;
-      cashOnCall += onCall;
-      paidAfterwards += afterwards;
-      const lead = row.lead_notion_page_id ? leadById.get(row.lead_notion_page_id) : null;
-      payments.push({
-        id: row.id,
-        email: lead?.email ?? null,
-        name: lead?.name ?? row.notes,
-        amountPence: onCall + afterwards,
-      });
-    }
-    return { cashOnCall, paidAfterwards, payments };
-  };
-  const notionCashCurrent = notionCashFor(range.start, range.end);
-
-  let ghlOpportunities: GhlOpportunity[] = [];
-  let ghlOpportunityTotal: number | null = null;
-  let ghlContacted: number | null = null;
-  let ghlCycleDays: number | null = null;
-  let pipelines: GhlPipeline[] = [];
+async function loadGhlData(range: ResolvedAcquisitionRange): Promise<{
+  opportunityTotal: number | null;
+  contacted: number | null;
+  cycleDays: number | null;
+  source: AcquisitionSourceSync;
+}> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
   try {
-    pipelines = await listGhlSalesPipelines();
-    const salesPipelineIds = new Set(pipelines.map((pipeline) => pipeline.id));
+    const pipelines: GhlPipeline[] = await listGhlSalesPipelines(
+      undefined,
+      controller.signal
+    );
     const stageNameById = new Map<string, string>();
     for (const pipeline of pipelines) {
       for (const stage of pipeline.stages) {
@@ -424,58 +390,91 @@ export async function loadAcquisitionSnapshot(
       }
     }
 
-    const [createdInRange, wonAll] = await Promise.all([
-      searchGhlOpportunities({
-        status: "all",
-        dateStartMs: range.start.getTime(),
-        dateEndMs: range.end.getTime(),
-      }),
-      searchGhlOpportunities({ status: "won" }),
+    const [createdResults, wonResults] = await Promise.all([
+      Promise.all(
+        pipelines.map((pipeline) =>
+          searchGhlOpportunities({
+            pipelineId: pipeline.id,
+            status: "all",
+            dateStartMs: range.start.getTime(),
+            dateEndMs: range.end.getTime(),
+            signal: controller.signal,
+          })
+        )
+      ),
+      Promise.all(
+        pipelines.map((pipeline) =>
+          searchGhlOpportunities({
+            pipelineId: pipeline.id,
+            status: "won",
+            dateStartMs: range.start.getTime(),
+            dateEndMs: range.end.getTime(),
+            signal: controller.signal,
+          })
+        )
+      ),
     ]);
 
-    ghlOpportunities = createdInRange.opportunities.filter((opportunity) =>
-      salesPipelineIds.has(opportunity.pipelineId)
-    );
-    ghlOpportunityTotal = ghlOpportunities.length;
-    ghlContacted = ghlOpportunities.filter((opportunity) => {
-      const stageName = stageNameById.get(opportunity.pipelineStageId) ?? "";
-      return !isUnworkedPipelineStage(stageName);
-    }).length;
-
-    const wonInRange = wonAll.opportunities
-      .filter((opportunity) => salesPipelineIds.has(opportunity.pipelineId))
+    const ghlOpportunities = createdResults.flatMap((result) => result.opportunities);
+    const wonInRange = wonResults
+      .flatMap((result) => result.opportunities)
       .filter((opportunity) => inRange(opportunity.lastStatusChangeAt, range.start, range.end));
-    ghlCycleDays = averageCycleDays(
-      wonInRange.flatMap((opportunity) => {
-        if (!opportunity.createdAt || !opportunity.lastStatusChangeAt) return [];
-        const created = new Date(opportunity.createdAt).getTime();
-        const closedAt = new Date(opportunity.lastStatusChangeAt).getTime();
-        if (!Number.isFinite(created) || !Number.isFinite(closedAt)) return [];
-        return [msToDays(closedAt - created)];
-      })
-    );
-    sources.push({
-      id: "ghl",
-      label: "GoHighLevel — pipeline",
-      readAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    const message =
-      error instanceof GhlApiError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : "Failed to read GHL opportunities";
-    sources.push({
-      id: "ghl",
-      label: "GoHighLevel — pipeline",
-      readAt: null,
-      error: message,
-    });
-  }
 
-  let stripePayments: ClassifiedStripePayment[] = [];
-  let previousStripePayments: ClassifiedStripePayment[] = [];
+    return {
+      opportunityTotal: createdResults.reduce((sum, result) => sum + result.total, 0),
+      contacted: ghlOpportunities.filter((opportunity) => {
+        const stageName = stageNameById.get(opportunity.pipelineStageId) ?? "";
+        return !isUnworkedPipelineStage(stageName);
+      }).length,
+      cycleDays: averageCycleDays(
+        wonInRange.flatMap((opportunity) => {
+          if (!opportunity.createdAt || !opportunity.lastStatusChangeAt) return [];
+          const created = new Date(opportunity.createdAt).getTime();
+          const closedAt = new Date(opportunity.lastStatusChangeAt).getTime();
+          if (!Number.isFinite(created) || !Number.isFinite(closedAt)) return [];
+          return [msToDays(closedAt - created)];
+        })
+      ),
+      source: {
+        id: "ghl",
+        label: "GoHighLevel — pipeline",
+        readAt: new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    const aborted = controller.signal.aborted;
+    const message =
+      aborted || (error instanceof GhlApiError && error.status === 408)
+        ? "GHL request timed out"
+        : error instanceof GhlApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Failed to read GHL opportunities";
+    return {
+      opportunityTotal: null,
+      contacted: null,
+      cycleDays: null,
+      source: {
+        id: "ghl",
+        label: "GoHighLevel — pipeline",
+        readAt: null,
+        error: message,
+      },
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadStripeData(
+  supabase: SupabaseClient,
+  range: ResolvedAcquisitionRange
+): Promise<{
+  payments: ClassifiedStripePayment[];
+  previousPayments: ClassifiedStripePayment[];
+  source: AcquisitionSourceSync;
+}> {
   try {
     const [currentEvents, previousEvents] = await Promise.all([
       fetchStripeEvents(supabase, range.start.toISOString(), range.end.toISOString()),
@@ -485,56 +484,34 @@ export async function loadAcquisitionSnapshot(
         range.previousEnd.toISOString()
       ),
     ]);
-    stripePayments = classifyStripeEvents(currentEvents);
-    previousStripePayments = classifyStripeEvents(previousEvents);
-    sources.push({
-      id: "stripe",
-      label: "Stripe — payments",
-      readAt: new Date().toISOString(),
-    });
+    return {
+      payments: classifyStripeEvents(currentEvents),
+      previousPayments: classifyStripeEvents(previousEvents),
+      source: {
+        id: "stripe",
+        label: "Stripe — payments",
+        readAt: new Date().toISOString(),
+      },
+    };
   } catch (error) {
-    sources.push({
-      id: "stripe",
-      label: "Stripe — payments",
-      readAt: null,
-      error: error instanceof Error ? error.message : "Failed to read Stripe webhook events",
-    });
+    return {
+      payments: [],
+      previousPayments: [],
+      source: {
+        id: "stripe",
+        label: "Stripe — payments",
+        readAt: null,
+        error: error instanceof Error ? error.message : "Failed to read Stripe webhook events",
+      },
+    };
   }
+}
 
-  const stripeTotalPence = stripePayments.reduce((sum, payment) => sum + payment.amountPence, 0);
-  const previousStripeTotalPence = previousStripePayments.reduce(
-    (sum, payment) => sum + payment.amountPence,
-    0
-  );
-  const stripeCount = stripePayments.length;
-  const previousStripeCount = previousStripePayments.length;
-  const avgPackagePence = stripeCount > 0 ? Math.round(stripeTotalPence / stripeCount) : null;
-  const previousAvgPackagePence =
-    previousStripeCount > 0 ? Math.round(previousStripeTotalPence / previousStripeCount) : null;
-
-  const breakdown: CashBreakdown | null =
-    stripeCount === 0
-      ? null
-      : stripePayments.reduce<CashBreakdown>(
-          (acc, payment) => {
-            if (payment.bucket === "group") acc.groupPence += payment.amountPence;
-            else if (payment.bucket === "one_to_one") acc.oneToOnePence += payment.amountPence;
-            else if (payment.bucket === "community") acc.communityPence += payment.amountPence;
-            else acc.otherPence += payment.amountPence;
-            return acc;
-          },
-          { groupPence: 0, oneToOnePence: 0, communityPence: 0, otherPence: 0 }
-        );
-
-  const stripeSourceFailed = sources.some((source) => source.id === "stripe" && source.error);
-  const notionLeadsFailed = newLeadsCurrent == null;
-  const salesCallsFailed = sources.some(
-    (source) => source.id === "supabase" && source.error?.includes("sales calls")
-  );
-  const ghlFailed = sources.some((source) => source.id === "ghl" && source.error);
-
-  let upcoming: UpcomingCohortRow[] = [];
-  let timeToFill: AcquisitionSnapshot["timeToFill"] = [];
+async function loadCohortData(supabase: SupabaseClient): Promise<{
+  upcoming: UpcomingCohortRow[];
+  timeToFill: AcquisitionSnapshot["timeToFill"];
+  source: AcquisitionSourceSync;
+}> {
   try {
     const [{ data: cohorts, error: cohortError }, { data: courses, error: courseError }] =
       await Promise.all([
@@ -571,7 +548,7 @@ export async function loadAcquisitionSnapshot(
 
     const now = new Date();
     const upcomingStatuses = new Set(["pre_scheduling", "recruiting", "scheduled"]);
-    upcoming = liveCohorts
+    const upcoming = liveCohorts
       .filter((cohort) => upcomingStatuses.has((cohort.status as string) ?? ""))
       .filter((cohort) => {
         if (!cohort.start_date) return true;
@@ -598,7 +575,7 @@ export async function loadAcquisitionSnapshot(
         } satisfies UpcomingCohortRow;
       });
 
-    timeToFill = liveCohorts
+    const timeToFill = liveCohorts
       .map((cohort) => {
         const capacity = (cohort.capacity as number | null) ?? 0;
         const days = timeToFillDays(membersByCohort.get(cohort.id as string) ?? [], capacity);
@@ -616,23 +593,148 @@ export async function loadAcquisitionSnapshot(
       .reverse()
       .map(({ label, days }) => ({ label, days }));
 
+    return {
+      upcoming,
+      timeToFill,
+      source: {
+        id: "supabase",
+        label: "Supabase — cohorts",
+        readAt: new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    return {
+      upcoming: [],
+      timeToFill: [],
+      source: {
+        id: "supabase",
+        label: "Supabase — cohorts",
+        readAt: null,
+        error: error instanceof Error ? error.message : "Failed to read cohorts",
+      },
+    };
+  }
+}
+
+export async function loadAcquisitionSnapshot(
+  supabase: SupabaseClient,
+  input: {
+    rangeId?: AcquisitionRangeId;
+    from?: string;
+    to?: string;
+  } = {}
+): Promise<AcquisitionSnapshot> {
+  const range: ResolvedAcquisitionRange = resolveAcquisitionRange(
+    input.rangeId ?? "30d",
+    new Date(),
+    input.from && input.to ? { from: input.from, to: input.to } : undefined
+  );
+  const generatedAt = new Date().toISOString();
+
+  const [notionLeads, salesCallLoad, ghlLoad, stripeLoad, cohortLoad] = await Promise.all([
+    loadNotionLeads(range),
+    loadSalesCallsData(supabase, range),
+    loadGhlData(range),
+    loadStripeData(supabase, range),
+    loadCohortData(supabase),
+  ]);
+
+  const sources: AcquisitionSourceSync[] = [notionLeads.source];
+  if (salesCallLoad.error) {
     sources.push({
       id: "supabase",
-      label: "Supabase — cohorts",
+      label: "Supabase — sales calls",
+      readAt: null,
+      error: salesCallLoad.error,
+    });
+  } else if (notionLeads.source.error) {
+    sources.push({
+      id: "notion",
+      label: NOTION_SOURCE_LABEL,
       readAt: new Date().toISOString(),
     });
-  } catch (error) {
-    sources.push({
-      id: "supabase",
-      label: "Supabase — cohorts",
-      readAt: null,
-      error: error instanceof Error ? error.message : "Failed to read cohorts",
-    });
   }
+  sources.push(ghlLoad.source, stripeLoad.source, cohortLoad.source);
+
+  const salesCalls = salesCallLoad.salesCalls;
+  const leadById = salesCallLoad.leadById;
+  const callsIn = (start: Date, end: Date) =>
+    salesCalls.filter((row) => inRange(row.call_date, start, end));
+  const currentCalls = callsIn(range.start, range.end);
+  const previousCalls = callsIn(range.previousStart, range.previousEnd);
+  const bookedCurrent = currentCalls.length;
+  const bookedPrevious = previousCalls.length;
+  const showedCurrent = currentCalls.filter((row) => row.show_up).length;
+  const showedPrevious = previousCalls.filter((row) => row.show_up).length;
+  const closedCurrent = currentCalls.filter((row) => row.closed).length;
+  const closedPrevious = previousCalls.filter((row) => row.closed).length;
+
+  const notionCashFor = (start: Date, end: Date) => {
+    let cashOnCall = 0;
+    let paidAfterwards = 0;
+    const payments: MatchablePayment[] = [];
+    for (const row of salesCalls) {
+      const when = row.payment_date || row.call_date;
+      if (!inRange(when, start, end)) continue;
+      const onCall = poundsToPence(row.cash_on_call);
+      const afterwards = poundsToPence(row.paid_afterwards);
+      if (onCall <= 0 && afterwards <= 0) continue;
+      cashOnCall += onCall;
+      paidAfterwards += afterwards;
+      const lead = row.lead_notion_page_id ? leadById.get(row.lead_notion_page_id) : null;
+      payments.push({
+        id: row.id,
+        email: lead?.email ?? null,
+        name: lead?.name ?? row.notes,
+        amountPence: onCall + afterwards,
+      });
+    }
+    return { cashOnCall, paidAfterwards, payments };
+  };
+  const notionCashCurrent = notionCashFor(range.start, range.end);
+
+  const ghlOpportunityTotal = ghlLoad.opportunityTotal;
+  const ghlContacted = ghlLoad.contacted;
+  const ghlCycleDays = ghlLoad.cycleDays;
+
+  const stripePayments = stripeLoad.payments;
+  const previousStripePayments = stripeLoad.previousPayments;
+
+  const stripeTotalPence = stripePayments.reduce((sum, payment) => sum + payment.amountPence, 0);
+  const previousStripeTotalPence = previousStripePayments.reduce(
+    (sum, payment) => sum + payment.amountPence,
+    0
+  );
+  const stripeCount = stripePayments.length;
+  const previousStripeCount = previousStripePayments.length;
+  const avgPackagePence = stripeCount > 0 ? Math.round(stripeTotalPence / stripeCount) : null;
+  const previousAvgPackagePence =
+    previousStripeCount > 0 ? Math.round(previousStripeTotalPence / previousStripeCount) : null;
+
+  const breakdown: CashBreakdown | null =
+    stripeCount === 0
+      ? null
+      : stripePayments.reduce<CashBreakdown>(
+          (acc, payment) => {
+            if (payment.bucket === "group") acc.groupPence += payment.amountPence;
+            else if (payment.bucket === "one_to_one") acc.oneToOnePence += payment.amountPence;
+            else if (payment.bucket === "community") acc.communityPence += payment.amountPence;
+            else acc.otherPence += payment.amountPence;
+            return acc;
+          },
+          { groupPence: 0, oneToOnePence: 0, communityPence: 0, otherPence: 0 }
+        );
+
+  const stripeSourceFailed = Boolean(stripeLoad.source.error);
+  const notionLeadsFailed = notionLeads.current == null;
+  const salesCallsFailed = Boolean(salesCallLoad.error);
+  const ghlFailed = Boolean(ghlLoad.source.error);
+  const upcoming = cohortLoad.upcoming;
+  const timeToFill = cohortLoad.timeToFill;
 
   const newLeads = countMetric(
-    newLeadsCurrent,
-    newLeadsPrevious,
+    notionLeads.current,
+    notionLeads.previous,
     notionLeadsFailed ? { unavailableReason: "Could not read Notion leads" } : undefined
   );
   const callsBooked = countMetric(

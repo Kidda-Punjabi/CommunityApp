@@ -66,9 +66,13 @@ export function isSalesPipelineName(name: string): boolean {
   return GHL_SALES_PIPELINE_NAMES.some((salesName) => salesName.toLowerCase() === normalized);
 }
 
-export async function listGhlPipelines(locationId = GHL_LOCATION_ID): Promise<GhlPipeline[]> {
+export async function listGhlPipelines(
+  locationId = GHL_LOCATION_ID,
+  signal?: AbortSignal
+): Promise<GhlPipeline[]> {
   const data = await ghlJson<PipelinesResponse>(
-    `/opportunities/pipelines?locationId=${encodeURIComponent(locationId)}`
+    `/opportunities/pipelines?locationId=${encodeURIComponent(locationId)}`,
+    signal ? { signal } : undefined
   );
   return (data.pipelines ?? [])
     .map((pipeline) => ({
@@ -86,9 +90,10 @@ export async function listGhlPipelines(locationId = GHL_LOCATION_ID): Promise<Gh
 }
 
 export async function listGhlSalesPipelines(
-  locationId = GHL_LOCATION_ID
+  locationId = GHL_LOCATION_ID,
+  signal?: AbortSignal
 ): Promise<GhlPipeline[]> {
-  const pipelines = await listGhlPipelines(locationId);
+  const pipelines = await listGhlPipelines(locationId, signal);
   return pipelines.filter((pipeline) => isSalesPipelineName(pipeline.name));
 }
 
@@ -113,6 +118,7 @@ export async function searchGhlOpportunities(options: {
   dateStartMs?: number;
   dateEndMs?: number;
   pageLimit?: number;
+  signal?: AbortSignal;
 }): Promise<{ opportunities: GhlOpportunity[]; total: number }> {
   const locationId = options.locationId ?? GHL_LOCATION_ID;
   const pageLimit = options.pageLimit ?? 100;
@@ -120,7 +126,7 @@ export async function searchGhlOpportunities(options: {
   let startAfterId: string | undefined;
   let startAfter: number | undefined;
   let total = 0;
-  const maxPages = 30;
+  const maxPages = 6;
 
   for (let page = 0; page < maxPages; page += 1) {
     const params = new URLSearchParams({
@@ -134,7 +140,15 @@ export async function searchGhlOpportunities(options: {
     if (startAfterId) params.set("startAfterId", startAfterId);
     if (startAfter != null) params.set("startAfter", String(startAfter));
 
-    const data = await ghlJson<SearchResponse>(`/opportunities/search?${params.toString()}`);
+    let data: SearchResponse;
+    try {
+      data = await ghlJson<SearchResponse>(`/opportunities/search?${params.toString()}`, {
+        signal: options.signal,
+      });
+    } catch (error) {
+      if (page === 0) throw error;
+      break;
+    }
     const batch = (data.opportunities ?? []).map(mapOpportunity).filter((row) => row.id);
     opportunities.push(...batch);
     total = data.meta?.total ?? opportunities.length;
