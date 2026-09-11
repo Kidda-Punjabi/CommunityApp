@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import {
   getCatchupHomeworkNearLessonWarning,
   submitTextHomeworkAction,
+  type CatchupActionResult,
 } from "@/app/catchup/catchup-actions";
-import type { HomeworkTextQuestion } from "@/lib/catchup/load-segment-questions";
+import type { HomeworkTextQuestion, TextHomeworkAnswer } from "@/lib/catchup/load-segment-questions";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import { ui } from "@/lib/ui/styles";
 
@@ -14,6 +15,11 @@ type HomeworkTextFormProps = {
   lessonId: string;
   questions: HomeworkTextQuestion[];
   existingSubmission: HomeworkSubmissionView | null;
+  submitText?: (
+    lessonId: string,
+    answers: TextHomeworkAnswer[]
+  ) => Promise<CatchupActionResult>;
+  loadNearLessonWarning?: (lessonId: string) => Promise<CatchupActionResult>;
 };
 
 function submittedAnswer(
@@ -28,6 +34,8 @@ export function HomeworkTextForm({
   lessonId,
   questions,
   existingSubmission,
+  submitText = submitTextHomeworkAction,
+  loadNearLessonWarning = getCatchupHomeworkNearLessonWarning,
 }: HomeworkTextFormProps) {
   const router = useRouter();
   const [answers, setAnswers] = useState<Record<number, string>>({});
@@ -45,7 +53,7 @@ export function HomeworkTextForm({
     }
 
     let cancelled = false;
-    getCatchupHomeworkNearLessonWarning(lessonId).then((result) => {
+    loadNearLessonWarning(lessonId).then((result) => {
       if (cancelled) return;
       setNearLessonWarning(result.nearLessonWarning ?? null);
       setTimingTone(result.timingState === "post_lesson" ? "post_lesson" : "late");
@@ -54,7 +62,7 @@ export function HomeworkTextForm({
     return () => {
       cancelled = true;
     };
-  }, [existingSubmission, lessonId]);
+  }, [existingSubmission, lessonId, loadNearLessonWarning]);
 
   if (existingSubmission?.status === "reviewed") {
     return (
@@ -146,7 +154,7 @@ export function HomeworkTextForm({
 
     startTransition(async () => {
       try {
-        const result = await submitTextHomeworkAction(lessonId, payload);
+        const result = await submitText(lessonId, payload);
         if (result.error) {
           setError(result.error);
           return;

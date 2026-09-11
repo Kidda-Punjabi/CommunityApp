@@ -3,13 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { awardQuizAttemptPoints } from "@/lib/leaderboard/points";
 import type { TextHomeworkAnswer } from "@/lib/catchup/load-segment-questions";
-import {
-  HOMEWORK_ALREADY_SUBMITTED_MESSAGE,
-  homeworkSubmitErrorMessage,
-  homeworkTimingWarningMessage,
-} from "@/lib/tutoring/homework-submissions";
+import { homeworkTimingWarningMessage } from "@/lib/tutoring/homework-submissions";
 import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
-import { homeworkWrite, resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
+import { homeworkWrite, resolveCourseActor } from "@/lib/kids/course-actor";
+import { persistTextHomework } from "@/lib/tutoring/submit-homework";
 import { revalidatePath } from "next/cache";
 
 export type CatchupActionResult = {
@@ -86,38 +83,14 @@ export async function submitTextHomeworkAction(
 
     if (!user) return { error: "You must be signed in." };
 
-    if (!answers.length || answers.some((row) => !row.answer_text?.trim())) {
-      return { error: "Please answer every question before submitting." };
-    }
-
     const actor = await resolveCourseActor(supabase, user.id);
-    const studentFilter = studentActorFilter(actor);
-    const { data: existing } = await supabase
-      .from("homework_submissions")
-      .select("id")
-      .eq("lesson_id", lessonId)
-      .eq(studentFilter.column, studentFilter.value)
-      .eq("is_practice", false)
-      .maybeSingle();
-
-    if (existing) {
-      return { error: HOMEWORK_ALREADY_SUBMITTED_MESSAGE };
-    }
-
-    const { error: insertError } = await supabase.from("homework_submissions").insert(
-      homeworkWrite(actor, {
-        lesson_id: lessonId,
-        submission_type: "text",
-        text_answers: answers.map((row) => ({
-          question_number: row.question_number,
-          answer_text: row.answer_text.trim(),
-        })),
-        status: "pending_review",
-        submitted_at: new Date().toISOString(),
-      })
-    );
-
-    if (insertError) return { error: homeworkSubmitErrorMessage(insertError) };
+    const persisted = await persistTextHomework({
+      supabase,
+      actor,
+      lessonId,
+      answers,
+    });
+    if ("error" in persisted) return { error: persisted.error };
 
     revalidateCatchupPaths(lessonId);
     return { success: "Homework submitted! Your tutor will review your written answers." };

@@ -6,6 +6,7 @@ import {
   getHomeworkNearLessonWarning,
   getHomeworkPlaybackUrl,
   submitHomeworkRecording,
+  type HomeworkActionResult,
 } from "@/app/dashboard/learn/homework-actions";
 import {
   formatRecordingDuration,
@@ -17,12 +18,20 @@ import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions
 import { lessonContentRowButtonClass } from "@/components/lesson-card";
 import { ui } from "@/lib/ui/styles";
 
+type HomeworkSubmitRecording = (
+  lessonId: string,
+  formData: FormData
+) => Promise<HomeworkActionResult>;
+
 type HomeworkSubmissionSectionProps = {
   lessonId: string;
   submission: HomeworkSubmissionView | null;
   variant?: "standalone" | "integrated" | "embedded";
   catchupReturn?: string | null;
   description?: string | null;
+  submitRecording?: HomeworkSubmitRecording;
+  loadPlaybackUrl?: (storagePath: string) => Promise<HomeworkActionResult>;
+  loadNearLessonWarning?: (lessonId: string) => Promise<HomeworkActionResult>;
 };
 
 function homeworkSubtitle(submission: HomeworkSubmissionView | null): string {
@@ -37,14 +46,20 @@ function homeworkSubtitle(submission: HomeworkSubmissionView | null): string {
   return "Not submitted yet · Record a short voice note for your tutor after your session";
 }
 
-function HomeworkAudioPlayback({ storagePath }: { storagePath: string }) {
+function HomeworkAudioPlayback({
+  storagePath,
+  loadPlaybackUrl,
+}: {
+  storagePath: string;
+  loadPlaybackUrl: (storagePath: string) => Promise<HomeworkActionResult>;
+}) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    getHomeworkPlaybackUrl(storagePath).then((result) => {
+    loadPlaybackUrl(storagePath).then((result) => {
       if (cancelled) return;
       if (result.playbackUrl) {
         setAudioUrl(result.playbackUrl);
@@ -56,7 +71,7 @@ function HomeworkAudioPlayback({ storagePath }: { storagePath: string }) {
     return () => {
       cancelled = true;
     };
-  }, [storagePath]);
+  }, [loadPlaybackUrl, storagePath]);
 
   if (error) {
     return <p className="text-sm text-red-600">{error}</p>;
@@ -93,11 +108,17 @@ function HomeworkRecorderBody({
   localSubmission,
   variant,
   description,
+  submitRecording,
+  loadPlaybackUrl,
+  loadNearLessonWarning,
 }: {
   lessonId: string;
   localSubmission: HomeworkSubmissionView | null;
   variant: "standalone" | "integrated" | "embedded";
   description?: string | null;
+  submitRecording: HomeworkSubmitRecording;
+  loadPlaybackUrl: (storagePath: string) => Promise<HomeworkActionResult>;
+  loadNearLessonWarning: (lessonId: string) => Promise<HomeworkActionResult>;
 }) {
   const router = useRouter();
   const recorder = useAudioRecorder();
@@ -115,7 +136,7 @@ function HomeworkRecorderBody({
     }
 
     let cancelled = false;
-    getHomeworkNearLessonWarning(lessonId).then((result) => {
+    loadNearLessonWarning(lessonId).then((result) => {
       if (cancelled) return;
       setNearLessonWarning(result.nearLessonWarning ?? null);
       setTimingTone(result.timingState === "post_lesson" ? "post_lesson" : "late");
@@ -124,7 +145,7 @@ function HomeworkRecorderBody({
     return () => {
       cancelled = true;
     };
-  }, [lessonId, localSubmission]);
+  }, [lessonId, loadNearLessonWarning, localSubmission]);
 
   function handleSubmit() {
     if (!recorder.blob) {
@@ -150,7 +171,7 @@ function HomeworkRecorderBody({
 
     startTransition(async () => {
       try {
-        const result = await submitHomeworkRecording(lessonId, formData);
+        const result = await submitRecording(lessonId, formData);
         if (result.error) {
           setActionError(result.error);
           router.refresh();
@@ -198,7 +219,10 @@ function HomeworkRecorderBody({
         ) : null}
         {localSubmission.storagePath ? (
           <div className="mt-3">
-            <HomeworkAudioPlayback storagePath={localSubmission.storagePath} />
+            <HomeworkAudioPlayback
+              storagePath={localSubmission.storagePath}
+              loadPlaybackUrl={loadPlaybackUrl}
+            />
           </div>
         ) : null}
       </div>
@@ -225,7 +249,10 @@ function HomeworkRecorderBody({
         ) : null}
         {localSubmission.storagePath ? (
           <div className="mt-3">
-            <HomeworkAudioPlayback storagePath={localSubmission.storagePath} />
+            <HomeworkAudioPlayback
+              storagePath={localSubmission.storagePath}
+              loadPlaybackUrl={loadPlaybackUrl}
+            />
           </div>
         ) : null}
       </div>
@@ -318,6 +345,9 @@ export function HomeworkSubmissionSection({
   variant = "standalone",
   catchupReturn = null,
   description = null,
+  submitRecording = submitHomeworkRecording,
+  loadPlaybackUrl = getHomeworkPlaybackUrl,
+  loadNearLessonWarning = getHomeworkNearLessonWarning,
 }: HomeworkSubmissionSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const [localSubmission, setLocalSubmission] = useState(submission);
@@ -325,6 +355,15 @@ export function HomeworkSubmissionSection({
   useEffect(() => {
     setLocalSubmission(submission);
   }, [submission]);
+
+  const recorderProps = {
+    lessonId,
+    localSubmission,
+    description,
+    submitRecording,
+    loadPlaybackUrl,
+    loadNearLessonWarning,
+  };
 
   if (variant === "integrated") {
     return (
@@ -344,12 +383,7 @@ export function HomeworkSubmissionSection({
         </div>
         {expanded ? (
           <div className="space-y-3 border-b border-zinc-100 pb-3">
-            <HomeworkRecorderBody
-              lessonId={lessonId}
-              localSubmission={localSubmission}
-              variant="integrated"
-              description={description}
-            />
+            <HomeworkRecorderBody {...recorderProps} variant="integrated" />
             <CatchupReturnButton returnUrl={catchupReturn} />
           </div>
         ) : null}
@@ -360,12 +394,7 @@ export function HomeworkSubmissionSection({
   if (variant === "embedded") {
     return (
       <div className="space-y-3">
-        <HomeworkRecorderBody
-          lessonId={lessonId}
-          localSubmission={localSubmission}
-          variant="embedded"
-          description={description}
-        />
+        <HomeworkRecorderBody {...recorderProps} variant="embedded" />
       </div>
     );
   }
@@ -373,12 +402,7 @@ export function HomeworkSubmissionSection({
   return (
     <div className="mt-4 border-t border-zinc-100 pt-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Homework</p>
-      <HomeworkRecorderBody
-        lessonId={lessonId}
-        localSubmission={localSubmission}
-        variant="standalone"
-        description={description}
-      />
+      <HomeworkRecorderBody {...recorderProps} variant="standalone" />
     </div>
   );
 }
