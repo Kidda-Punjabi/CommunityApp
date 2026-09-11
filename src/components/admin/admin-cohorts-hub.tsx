@@ -104,12 +104,6 @@ export function AdminCohortsHub() {
           title="Test One-to-one Reschedule"
           summary="Preview the live student 1-to-1 reschedule request. Nothing is submitted."
         />
-        <AdminHubLinkCard
-          href="/admin/homework-test"
-          icon={<Eye className="h-[18px] w-[18px]" />}
-          title="Test homework submission"
-          summary="Submit live homework as a student to verify the tutor inbox and audio pipeline."
-        />
       </AdminHubStack>
     </AdminHubPage>
   );

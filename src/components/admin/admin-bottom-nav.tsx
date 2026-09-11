@@ -74,8 +74,7 @@ const navItems: NavItem[] = [
       pathname.startsWith("/admin/cohort-switch-requests") ||
       pathname.startsWith("/admin/cohort-change-requests") ||
       pathname.startsWith("/admin/test-cohort-switch") ||
-      pathname.startsWith("/admin/test-session-reschedule") ||
-      pathname.startsWith("/admin/homework-test"),
+      pathname.startsWith("/admin/test-session-reschedule"),
   },
   {
     href: "/admin/content/people",
@@ -107,6 +106,7 @@ const navItems: NavItem[] = [
       pathname.startsWith("/admin/content/kids-stories") ||
       pathname.startsWith("/admin/content/help") ||
       pathname.startsWith("/admin/public-forms") ||
+      pathname.startsWith("/admin/homework-test") ||
       pathname.startsWith("/admin/monthly-rewards"),
   },
 ];

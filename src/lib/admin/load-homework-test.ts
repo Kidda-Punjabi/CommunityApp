@@ -2,10 +2,12 @@ import "server-only";
 
 import {
   courseActorFromHomeworkTestStudent,
+  homeworkTaskDescription,
   homeworkTestStudentKey,
   type HomeworkTestCohort,
   type HomeworkTestCourse,
   type HomeworkTestLesson,
+  type HomeworkTestLessonView,
   type HomeworkTestPreview,
   type HomeworkTestStudent,
 } from "@/lib/admin/homework-test-types";
@@ -338,12 +340,10 @@ export async function loadHomeworkTestPreview(
   ]);
 
   const submissionType = segment?.submissionType ?? lesson.submissionType;
-  const taskDescription =
-    segment?.activityInstructions?.trim() ||
-    lesson.activityInstructions?.trim() ||
-    (submissionType === "text"
-      ? "Write your answers below. Your tutor will review them."
-      : "Record a short voice note for your tutor after your session.");
+  const taskDescription = homeworkTaskDescription(
+    { ...lesson, submissionType },
+    segment?.activityInstructions
+  );
 
   return {
     lesson: { ...lesson, submissionType },
@@ -352,6 +352,31 @@ export async function loadHomeworkTestPreview(
     questions,
     submission,
     taskDescription,
+  };
+}
+
+export async function loadHomeworkTestLessonView(
+  supabase: SupabaseClient,
+  lessonId: string
+): Promise<HomeworkTestLessonView> {
+  const lesson = await loadHomeworkTestLesson(supabase, lessonId);
+  if (!lesson) throw new Error("Lesson not found.");
+
+  const [{ data: course }, segment, questions] = await Promise.all([
+    supabase.from("courses").select("name").eq("id", lesson.courseId).maybeSingle(),
+    loadHomeworkSegmentForLesson(supabase, lesson.id),
+    loadHomeworkQuestionsForLesson(supabase, lesson.id),
+  ]);
+
+  const submissionType = segment?.submissionType ?? lesson.submissionType;
+  return {
+    lesson: { ...lesson, submissionType },
+    courseName: (course?.name as string | null) ?? "Course",
+    questions: submissionType === "text" ? questions : [],
+    taskDescription: homeworkTaskDescription(
+      { ...lesson, submissionType },
+      segment?.activityInstructions
+    ),
   };
 }
 
