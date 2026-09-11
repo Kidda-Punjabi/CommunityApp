@@ -120,7 +120,7 @@ export async function searchGhlOpportunities(options: {
   let startAfterId: string | undefined;
   let startAfter: number | undefined;
   let total = 0;
-  const maxPages = 30;
+  const maxPages = 6;
 
   for (let page = 0; page < maxPages; page += 1) {
     const params = new URLSearchParams({
@@ -134,7 +134,13 @@ export async function searchGhlOpportunities(options: {
     if (startAfterId) params.set("startAfterId", startAfterId);
     if (startAfter != null) params.set("startAfter", String(startAfter));
 
-    const data = await ghlJson<SearchResponse>(`/opportunities/search?${params.toString()}`);
+    let data: SearchResponse;
+    try {
+      data = await ghlJson<SearchResponse>(`/opportunities/search?${params.toString()}`);
+    } catch (error) {
+      if (page === 0) throw error;
+      break;
+    }
     const batch = (data.opportunities ?? []).map(mapOpportunity).filter((row) => row.id);
     opportunities.push(...batch);
     total = data.meta?.total ?? opportunities.length;

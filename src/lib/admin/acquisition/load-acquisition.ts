@@ -416,7 +416,6 @@ export async function loadAcquisitionSnapshot(
   let pipelines: GhlPipeline[] = [];
   try {
     pipelines = await listGhlSalesPipelines();
-    const salesPipelineIds = new Set(pipelines.map((pipeline) => pipeline.id));
     const stageNameById = new Map<string, string>();
     for (const pipeline of pipelines) {
       for (const stage of pipeline.stages) {
@@ -424,26 +423,38 @@ export async function loadAcquisitionSnapshot(
       }
     }
 
-    const [createdInRange, wonAll] = await Promise.all([
-      searchGhlOpportunities({
-        status: "all",
-        dateStartMs: range.start.getTime(),
-        dateEndMs: range.end.getTime(),
-      }),
-      searchGhlOpportunities({ status: "won" }),
+    const [createdResults, wonResults] = await Promise.all([
+      Promise.all(
+        pipelines.map((pipeline) =>
+          searchGhlOpportunities({
+            pipelineId: pipeline.id,
+            status: "all",
+            dateStartMs: range.start.getTime(),
+            dateEndMs: range.end.getTime(),
+          })
+        )
+      ),
+      Promise.all(
+        pipelines.map((pipeline) =>
+          searchGhlOpportunities({
+            pipelineId: pipeline.id,
+            status: "won",
+            dateStartMs: range.start.getTime(),
+            dateEndMs: range.end.getTime(),
+          })
+        )
+      ),
     ]);
 
-    ghlOpportunities = createdInRange.opportunities.filter((opportunity) =>
-      salesPipelineIds.has(opportunity.pipelineId)
-    );
-    ghlOpportunityTotal = ghlOpportunities.length;
+    ghlOpportunities = createdResults.flatMap((result) => result.opportunities);
+    ghlOpportunityTotal = createdResults.reduce((sum, result) => sum + result.total, 0);
     ghlContacted = ghlOpportunities.filter((opportunity) => {
       const stageName = stageNameById.get(opportunity.pipelineStageId) ?? "";
       return !isUnworkedPipelineStage(stageName);
     }).length;
 
-    const wonInRange = wonAll.opportunities
-      .filter((opportunity) => salesPipelineIds.has(opportunity.pipelineId))
+    const wonInRange = wonResults
+      .flatMap((result) => result.opportunities)
       .filter((opportunity) => inRange(opportunity.lastStatusChangeAt, range.start, range.end));
     ghlCycleDays = averageCycleDays(
       wonInRange.flatMap((opportunity) => {

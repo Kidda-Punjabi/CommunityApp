@@ -31,17 +31,27 @@ export async function ghlJson<T>(
   init?: RequestInit
 ): Promise<T> {
   const url = path.startsWith("http") ? path : `${GHL_API_BASE}${path}`;
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${getGhlApiKey()}`,
-      Version: GHL_API_VERSION,
-      Accept: "application/json",
-      "User-Agent": GHL_USER_AGENT,
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      signal: init?.signal ?? AbortSignal.timeout(8000),
+      headers: {
+        Authorization: `Bearer ${getGhlApiKey()}`,
+        Version: GHL_API_VERSION,
+        Accept: "application/json",
+        "User-Agent": GHL_USER_AGENT,
+        ...(init?.headers ?? {}),
+      },
+      cache: "no-store",
+    });
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new GhlApiError(408, "GHL request timed out");
+    }
+    throw error;
+  }
   const body = await response.text();
   if (!response.ok) {
     throw new GhlApiError(response.status, body);
