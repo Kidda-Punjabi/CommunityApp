@@ -17,6 +17,10 @@ export const NOTION_SALES_CALL_DATA_SOURCE_ID =
 export const NOTION_LESSONS_LOG_DATA_SOURCE_ID =
   process.env.NOTION_LESSONS_LOG_DATA_SOURCE_ID ?? "2b0b5ac4-29c6-80b1-ad5e-d3f15d15e6c3";
 
+/** Notion Test Scores database (public quiz attempts). */
+export const NOTION_TEST_SCORES_DATA_SOURCE_ID =
+  process.env.NOTION_TEST_SCORES_DATA_SOURCE_ID ?? "334b5ac4-29c6-803d-9c25-000b060b3061";
+
 export class NotionApiError extends Error {
   constructor(
     readonly status: number,

@@ -1,5 +1,6 @@
 import { validateGuestIdentity } from "@/lib/public-forms/guest";
 import { lookupPublicFormLinkBySlug } from "@/lib/public-forms/links";
+import { savePublicQuizAttempt } from "@/lib/public-forms/save-public-quiz-attempt";
 import { createServiceRoleClient, getServiceRoleConfigError } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
 
@@ -43,15 +44,19 @@ export async function POST(request: Request) {
   }
 
   const supabase = createServiceRoleClient();
-  const { error } = await supabase.from("public_quiz_attempts").insert({
-    full_name: identity.identity.fullName,
-    email: identity.identity.email,
-    phone: identity.identity.phone,
-    quiz_id: link.targetId,
-    score,
-  });
-
-  if (error) {
+  try {
+    await savePublicQuizAttempt(supabase, {
+      fullName: identity.identity.fullName,
+      email: identity.identity.email,
+      phone: identity.identity.phone,
+      quizId: link.targetId,
+      score,
+    });
+  } catch (error) {
+    console.error(
+      "[public quiz submit] insert failed",
+      error instanceof Error ? error.message : error
+    );
     return NextResponse.json({ error: "Unable to save your score." }, { status: 500 });
   }
 
