@@ -53,6 +53,8 @@ export type AdminPackageListRow = {
   capacity: number;
   deliveryMode: "group" | "one_to_one" | null;
   active: boolean;
+  /** Package instances only. Default true — false means backlog without an app account. */
+  appAccessExpected?: boolean;
   interested: PackagesRosterMember[];
   waitingForPayment: PackagesRosterMember[];
   confirmed: PackagesRosterMember[];

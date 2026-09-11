@@ -78,6 +78,7 @@ async function loadMissingAccessInstances(
       .from("package_instances")
       .select("id, name, status, notion_page_id, course_id, courses(name)")
       .in("status", [...MISSING_ACCESS_INSTANCE_STATUSES])
+      .eq("app_access_expected", true)
       .order("name", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
 

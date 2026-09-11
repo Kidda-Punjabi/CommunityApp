@@ -47,6 +47,13 @@ function revalidatePackages(id?: string) {
   if (id) revalidatePath(`${PACKAGES_PATH}/${id}`);
 }
 
+function revalidateAppAccessExpected(id: string) {
+  revalidatePackages(id);
+  revalidatePath("/admin");
+  revalidatePath("/admin/enrollment-gaps");
+  revalidatePath("/admin/onboarding/incomplete");
+}
+
 export async function fetchAdminPackagesList(): Promise<{
   rows: AdminPackageListRow[];
   error?: string;
@@ -130,6 +137,38 @@ export async function resolvePackageKind(id: string): Promise<AdminPackageKind |
   return null;
 }
 
+export async function setPackageInstanceAppAccessExpected(
+  packageInstanceId: string,
+  appAccessExpected: boolean
+): Promise<ActionResult> {
+  try {
+    const id = packageInstanceId.trim();
+    if (!id) return { error: "Package instance is required." };
+
+    const supabase = await requireAdminFromActions();
+    const { data, error } = await supabase
+      .from("package_instances")
+      .update({ app_access_expected: appAccessExpected })
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+
+    if (error) return { error: error.message };
+    if (!data) return { error: "Package instance not found." };
+
+    revalidateAppAccessExpected(id);
+    return {
+      success: appAccessExpected
+        ? "App access is expected for this package instance."
+        : "App access is not expected for this package instance.",
+    };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Failed to update app access expected.",
+    };
+  }
+}
+
 export async function updatePackageInstanceStatus(
   kind: AdminPackageKind,
   id: string,
@@ -182,6 +221,7 @@ export async function updatePackageRunFields(
     startDayOfWeek?: string | null;
     capacity?: number;
     active?: boolean;
+    appAccessExpected?: boolean;
   }
 ): Promise<ActionResult> {
   try {
@@ -211,10 +251,17 @@ export async function updatePackageRunFields(
     if (fields.startDayOfWeek !== undefined) payload.start_day_of_week = fields.startDayOfWeek;
     if (fields.capacity !== undefined) payload.capacity = fields.capacity;
     if (fields.active !== undefined) payload.active = fields.active;
+    if (kind === "package_instance" && fields.appAccessExpected !== undefined) {
+      payload.app_access_expected = fields.appAccessExpected;
+    }
 
     const { error } = await supabase.from(table).update(payload).eq("id", id);
     if (error) return { error: error.message };
-    revalidatePackages(id);
+    if (kind === "package_instance" && fields.appAccessExpected !== undefined) {
+      revalidateAppAccessExpected(id);
+    } else {
+      revalidatePackages(id);
+    }
     return { success: "Package updated." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update package." };
@@ -896,6 +943,7 @@ export async function createPackageRun(input: {
   startDayOfWeek?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  appAccessExpected?: boolean;
   calendarLink?: {
     recurringEventId: string;
     occurrences: Array<{
@@ -1016,6 +1064,7 @@ export async function createPackageRun(input: {
         start_day_of_week: input.startDayOfWeek ?? null,
         start_date: input.startDate ?? null,
         end_date: input.endDate ?? null,
+        app_access_expected: input.appAccessExpected ?? true,
       })
       .select("id")
       .single();

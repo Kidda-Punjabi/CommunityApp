@@ -76,6 +76,7 @@ export function PackageRunFormModal({
   const [startDate, setStartDate] = useState(dateInputFromIso(initial?.startDate));
   const [endDate, setEndDate] = useState(dateInputFromIso(initial?.endDate));
   const [active, setActive] = useState(initial?.active ?? true);
+  const [appAccessExpected, setAppAccessExpected] = useState(initial?.appAccessExpected !== false);
   const [calendarLink, setCalendarLink] = useState<GroupCohortCalendarLinkValue | null>(null);
   const [calendarReady, setCalendarReady] = useState(false);
 
@@ -157,6 +158,7 @@ export function PackageRunFormModal({
           startDate: isoFromDateInput(startDate),
           endDate: isoFromDateInput(endDate),
           calendarLink: kind === "cohort" ? calendarLink : null,
+          appAccessExpected: kind === "package_instance" ? appAccessExpected : undefined,
         });
         if (result.error) {
           setError(result.error);
@@ -193,6 +195,8 @@ export function PackageRunFormModal({
         endDate: isoFromDateInput(endDate),
         capacity: Number(capacity) || initial.capacity,
         active,
+        appAccessExpected:
+          initial.kind === "package_instance" ? appAccessExpected : undefined,
       });
       if (fieldsResult.error) {
         setError(fieldsResult.error);
@@ -496,6 +500,24 @@ export function PackageRunFormModal({
                     onChange={(e) => setActive(e.target.checked)}
                   />
                   Active (uncheck to archive)
+                </label>
+              )}
+
+              {(kind === "package_instance" || initial?.kind === "package_instance") && (
+                <label className="flex items-start gap-2 text-sm text-zinc-700">
+                  <input
+                    type="checkbox"
+                    checked={appAccessExpected}
+                    onChange={(e) => setAppAccessExpected(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-violet-600"
+                  />
+                  <span>
+                    <span className="font-medium">App access expected</span>
+                    <span className="mt-0.5 block text-xs font-normal text-zinc-500">
+                      Uncheck if this student was added only so a tutor can manage live-session
+                      reschedules.
+                    </span>
+                  </span>
                 </label>
               )}
                 </>

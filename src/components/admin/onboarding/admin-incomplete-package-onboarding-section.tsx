@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchIncompletePackageChecklists } from "@/app/admin/onboarding/incomplete/actions";
 import { toggleOnboardingChecklistField } from "@/app/admin/onboarding/actions";
+import { setPackageInstanceAppAccessExpected } from "@/app/admin/packages/actions";
 import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
 import type { IncompletePackageChecklistRow } from "@/lib/admin/incomplete-package-checklist-types";
 import { ONBOARDING_CHECKLIST_COLUMNS } from "@/lib/admin/onboarding/checklist-fields";
@@ -33,6 +34,7 @@ export function AdminIncompletePackageOnboardingSection() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [checklistPending, setChecklistPending] = useState<string | null>(null);
+  const [appAccessPendingId, setAppAccessPendingId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const result = await fetchIncompletePackageChecklists();
@@ -86,6 +88,27 @@ export function AdminIncompletePackageOnboardingSection() {
     await reload();
   }
 
+  async function handleAppAccessNotExpected(row: IncompletePackageChecklistRow) {
+    if (!row.packageInstanceId) return;
+    if (
+      !window.confirm(
+        `Mark “${row.packageName}” as not expecting app access? It will leave Package onboarding incomplete until you turn this back on.`
+      )
+    ) {
+      return;
+    }
+    setAppAccessPendingId(row.packageInstanceId);
+    const result = await setPackageInstanceAppAccessExpected(row.packageInstanceId, false);
+    setAppAccessPendingId(null);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setRows((current) =>
+      current.filter((entry) => entry.packageInstanceId !== row.packageInstanceId)
+    );
+  }
+
   return (
     <div className={ui.page}>
       <div className="mb-6">
@@ -97,7 +120,8 @@ export function AdminIncompletePackageOnboardingSection() {
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
           Every checklist with onboarding_completed = false, including which setup flags are still
-          outstanding. This is the full stale backlog — not the overdue-only Payment setup card.
+          outstanding — excluding package instances marked as not expecting app access. This is
+          the full stale backlog, not the overdue-only Payment setup card.
         </p>
         <p className="mt-2 text-xs text-zinc-400">
           Assignment and membership edits stay on{" "}
@@ -146,6 +170,7 @@ export function AdminIncompletePackageOnboardingSection() {
                     {column.header}
                   </th>
                 ))}
+                <th className="px-3 py-3">App access</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
@@ -211,6 +236,22 @@ export function AdminIncompletePackageOnboardingSection() {
                       />
                     </td>
                   ))}
+                  <td className="px-3 py-3">
+                    {row.packageInstanceId ? (
+                      <button
+                        type="button"
+                        disabled={appAccessPendingId === row.packageInstanceId}
+                        onClick={() => void handleAppAccessNotExpected(row)}
+                        className={`${ui.btnPrimary} px-4 py-2 text-xs disabled:opacity-60`}
+                      >
+                        {appAccessPendingId === row.packageInstanceId
+                          ? "Saving…"
+                          : "App access not expected"}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-zinc-400">Group cohort</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

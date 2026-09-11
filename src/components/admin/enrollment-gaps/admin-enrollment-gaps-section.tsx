@@ -6,6 +6,7 @@ import {
   fetchEnrollmentGaps,
   markGrantQueueResolved,
 } from "@/app/admin/enrollment-gaps/actions";
+import { setPackageInstanceAppAccessExpected } from "@/app/admin/packages/actions";
 import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
 import type {
   EnrollmentGrantQueueRow,
@@ -70,6 +71,25 @@ export function AdminEnrollmentGapsSection() {
     });
   }
 
+  async function handleAppAccessNotExpected(row: MissingAccessRow) {
+    if (
+      !window.confirm(
+        `Mark “${row.name}” as not expecting app access? It will leave Missing access until you turn this back on.`
+      )
+    ) {
+      return;
+    }
+    setPendingId(row.id);
+    setActionError(null);
+    const result = await setPackageInstanceAppAccessExpected(row.id, false);
+    setPendingId(null);
+    if (result.error) {
+      setActionError(result.error);
+      return;
+    }
+    setMissingAccess((current) => current.filter((entry) => entry.id !== row.id));
+  }
+
   return (
     <div className={ui.page}>
       <div className="mb-6">
@@ -79,7 +99,7 @@ export function AdminEnrollmentGapsSection() {
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">Enrollment gaps</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Unresolved purchase-grant queue items and active package instances with no student
-          package row. Confirm in Notion before enrolling.
+          package row (where app access is expected). Confirm in Notion before enrolling.
         </p>
       </div>
 
@@ -206,34 +226,55 @@ export function AdminEnrollmentGapsSection() {
                   <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Course</th>
                   <th className="px-3 py-3">Notion</th>
+                  <th className="px-3 py-3">App access</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {missingAccess.map((row) => (
-                  <tr key={row.id} className="hover:bg-zinc-50/50">
-                    <td className="px-4 py-3 font-semibold text-zinc-900">{row.name}</td>
-                    <td className="px-3 py-3">
-                      <AdminStatusPill tone={packageStatusPillTone(row.status)}>
-                        {packageStatusLabel(row.status)}
-                      </AdminStatusPill>
-                    </td>
-                    <td className="px-3 py-3 text-zinc-600">{row.courseName}</td>
-                    <td className="px-3 py-3">
-                      {row.notionPageId ? (
-                        <a
-                          href={notionPageHref(row.notionPageId)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-violet-600 hover:text-violet-500"
+                {missingAccess.map((row) => {
+                  const pending = pendingId === row.id;
+                  return (
+                    <tr key={row.id} className="hover:bg-zinc-50/50">
+                      <td className="px-4 py-3 font-semibold text-zinc-900">
+                        <Link
+                          href={`/admin/packages/${row.id}`}
+                          className="text-violet-600 hover:text-violet-500"
                         >
-                          Open in Notion
-                        </a>
-                      ) : (
-                        <span className="text-zinc-400">No Notion page</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                          {row.name}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3">
+                        <AdminStatusPill tone={packageStatusPillTone(row.status)}>
+                          {packageStatusLabel(row.status)}
+                        </AdminStatusPill>
+                      </td>
+                      <td className="px-3 py-3 text-zinc-600">{row.courseName}</td>
+                      <td className="px-3 py-3">
+                        {row.notionPageId ? (
+                          <a
+                            href={notionPageHref(row.notionPageId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-violet-600 hover:text-violet-500"
+                          >
+                            Open in Notion
+                          </a>
+                        ) : (
+                          <span className="text-zinc-400">No Notion page</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => void handleAppAccessNotExpected(row)}
+                          className={`${ui.btnPrimary} px-4 py-2 text-xs disabled:opacity-60`}
+                        >
+                          {pending ? "Saving…" : "App access not expected"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
