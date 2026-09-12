@@ -5,7 +5,7 @@ import {
   packageStatusLabel,
   type CohortOverview,
   type CohortsOverviewData,
-} from "@/lib/admin/load-cohorts-overview";
+} from "@/lib/admin/cohorts-overview-types";
 import { ui } from "@/lib/ui/styles";
 import { useEffect, useState } from "react";
 import { SectionCard } from "./ui";
