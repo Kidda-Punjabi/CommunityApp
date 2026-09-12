@@ -636,6 +636,22 @@ async function loadCohortData(supabase: SupabaseClient): Promise<{
   }
 }
 
+function firstResolved<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      }
+    );
+  });
+}
+
 export async function loadAcquisitionSnapshot(
   supabase: SupabaseClient,
   input: {
@@ -652,11 +668,52 @@ export async function loadAcquisitionSnapshot(
   const generatedAt = new Date().toISOString();
 
   const [notionLeads, salesCallLoad, ghlLoad, stripeLoad, cohortLoad] = await Promise.all([
-    loadNotionLeads(range),
-    loadSalesCallsData(supabase, range),
-    loadGhlData(range),
-    loadStripeData(supabase, range),
-    loadCohortData(supabase),
+    firstResolved(loadNotionLeads(range), 13_000, {
+      current: null,
+      previous: null,
+      source: {
+        id: "notion",
+        label: NOTION_SOURCE_LABEL,
+        readAt: null,
+        error: "Notion request timed out",
+      },
+    }),
+    firstResolved(loadSalesCallsData(supabase, range), 12_000, {
+      salesCalls: [],
+      leadById: new Map(),
+      error: "Sales calls timed out",
+    }),
+    firstResolved(loadGhlData(range), 21_000, {
+      opportunityTotal: null,
+      contacted: null,
+      cycleDays: null,
+      source: {
+        id: "ghl",
+        label: "GoHighLevel — pipeline",
+        readAt: null,
+        error: "GHL request timed out",
+      },
+    }),
+    firstResolved(loadStripeData(supabase, range), 12_000, {
+      payments: [],
+      previousPayments: [],
+      source: {
+        id: "stripe",
+        label: "Stripe — payments",
+        readAt: null,
+        error: "Stripe request timed out",
+      },
+    }),
+    firstResolved(loadCohortData(supabase), 12_000, {
+      upcoming: [],
+      timeToFill: [],
+      source: {
+        id: "supabase",
+        label: "Supabase — cohorts",
+        readAt: null,
+        error: "Cohorts timed out",
+      },
+    }),
   ]);
 
   const sources: AcquisitionSourceSync[] = [notionLeads.source];
