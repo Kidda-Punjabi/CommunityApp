@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AdminFilterPill } from "@/components/admin/admin-filter-pills";
+import { isKidsPurchaseQueueViewId } from "@/lib/admin/kids-purchase-grant-queue-types";
 import type { AdminSavedView, PackagesViewConfig } from "@/lib/admin/packages/types";
 import { DEFAULT_PACKAGES_VIEW_CONFIG } from "@/lib/admin/packages/types";
 import {
@@ -77,6 +78,8 @@ type AdminPackagesBoardHeaderProps = {
   onDeleteView: (viewId: string) => void;
   onReset: () => void;
   onNewPackage: () => void;
+  onSelectKidsPurchaseQueue: () => void;
+  kidsPurchaseQueueCount: number | null;
 };
 
 export function AdminPackagesBoardHeader({
@@ -100,14 +103,20 @@ export function AdminPackagesBoardHeader({
   onDeleteView,
   onReset,
   onNewPackage,
+  onSelectKidsPurchaseQueue,
+  kidsPurchaseQueueCount,
 }: AdminPackagesBoardHeaderProps) {
   const [showSearch, setShowSearch] = useState(Boolean(config.search));
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showSortPanel, setShowSortPanel] = useState(false);
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(false);
 
-  const activeView = savedViews.find((view) => view.id === activeViewId) ?? null;
+  const kidsQueueActive = isKidsPurchaseQueueViewId(activeViewId);
+  const activeView = kidsQueueActive
+    ? null
+    : savedViews.find((view) => view.id === activeViewId) ?? null;
   const isDirty =
+    !kidsQueueActive &&
     activeViewId !== null &&
     baselineConfig !== null &&
     !configsMatch(config, baselineConfig);
@@ -199,7 +208,12 @@ export function AdminPackagesBoardHeader({
               onRename={(name) => onRenameView(view.id, name)}
             />
           ))}
-          {!showNewViewForm ? (
+          <ViewTab
+            label="Kids purchases"
+            active={kidsQueueActive}
+            onClick={onSelectKidsPurchaseQueue}
+          />
+          {!showNewViewForm && !kidsQueueActive ? (
             <button
               type="button"
               onClick={onShowNewViewForm}
@@ -212,50 +226,54 @@ export function AdminPackagesBoardHeader({
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          {showSearch ? (
-            <input
-              type="search"
-              value={config.search}
-              onChange={(event) =>
-                onSetConfig((current) => ({ ...current, search: event.target.value }))
-              }
-              placeholder="Search packages…"
-              className="w-36 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm sm:w-44"
-              autoFocus
-            />
+          {!kidsQueueActive ? (
+            <>
+              {showSearch ? (
+                <input
+                  type="search"
+                  value={config.search}
+                  onChange={(event) =>
+                    onSetConfig((current) => ({ ...current, search: event.target.value }))
+                  }
+                  placeholder="Search packages…"
+                  className="w-36 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm sm:w-44"
+                  autoFocus
+                />
+              ) : null}
+
+              <ToolbarIconButton
+                label="Search"
+                active={Boolean(config.search)}
+                onClick={toggleSearch}
+              >
+                <SearchIcon />
+              </ToolbarIconButton>
+
+              <ToolbarIconButton
+                label="Filter"
+                active={hasFilters}
+                onClick={toggleFilterPanel}
+              >
+                <FilterIcon />
+              </ToolbarIconButton>
+
+              <ToolbarIconButton
+                label="Sort"
+                active={hasNonDefaultSort}
+                onClick={toggleSortPanel}
+              >
+                <SortIcon />
+              </ToolbarIconButton>
+
+              <ToolbarIconButton
+                label="Properties"
+                active={hasHiddenColumns}
+                onClick={togglePropertiesPanel}
+              >
+                <PropertiesIcon />
+              </ToolbarIconButton>
+            </>
           ) : null}
-
-          <ToolbarIconButton
-            label="Search"
-            active={Boolean(config.search)}
-            onClick={toggleSearch}
-          >
-            <SearchIcon />
-          </ToolbarIconButton>
-
-          <ToolbarIconButton
-            label="Filter"
-            active={hasFilters}
-            onClick={toggleFilterPanel}
-          >
-            <FilterIcon />
-          </ToolbarIconButton>
-
-          <ToolbarIconButton
-            label="Sort"
-            active={hasNonDefaultSort}
-            onClick={toggleSortPanel}
-          >
-            <SortIcon />
-          </ToolbarIconButton>
-
-          <ToolbarIconButton
-            label="Properties"
-            active={hasHiddenColumns}
-            onClick={togglePropertiesPanel}
-          >
-            <PropertiesIcon />
-          </ToolbarIconButton>
 
           <Link
             href="/admin/packages/notion"
@@ -270,9 +288,11 @@ export function AdminPackagesBoardHeader({
             Lesson Log
           </Link>
 
-          <button type="button" onClick={onNewPackage} className={ui.btnPrimary}>
-            New package
-          </button>
+          {!kidsQueueActive ? (
+            <button type="button" onClick={onNewPackage} className={ui.btnPrimary}>
+              New package
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -308,7 +328,7 @@ export function AdminPackagesBoardHeader({
         </div>
       ) : null}
 
-      {!showNewViewForm ? (
+      {!showNewViewForm && !kidsQueueActive ? (
         <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 px-3 py-2 sm:px-4">
           <ActiveConfigPill label={sortLabel} onClick={toggleSortPanel} tone="sort" />
 
@@ -405,7 +425,7 @@ export function AdminPackagesBoardHeader({
         </div>
       ) : null}
 
-      {showFilterPanel ? (
+      {showFilterPanel && !kidsQueueActive ? (
         <div className="space-y-4 border-t border-zinc-100 bg-zinc-50/50 px-3 py-4 sm:px-4">
           <FilterSection title="Status">
             <div className="flex flex-wrap gap-2">
@@ -512,7 +532,7 @@ export function AdminPackagesBoardHeader({
         </div>
       ) : null}
 
-      {showSortPanel ? (
+      {showSortPanel && !kidsQueueActive ? (
         <div className="border-t border-zinc-100 bg-zinc-50/50 px-3 py-4 sm:px-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400">Sort</p>
           <div className="flex flex-wrap gap-2">
@@ -552,7 +572,7 @@ export function AdminPackagesBoardHeader({
         </div>
       ) : null}
 
-      {showPropertiesPanel ? (
+      {showPropertiesPanel && !kidsQueueActive ? (
         <div className="border-t border-zinc-100 bg-zinc-50/50 px-3 py-4 sm:px-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Properties
@@ -578,13 +598,25 @@ export function AdminPackagesBoardHeader({
       ) : null}
 
       <div className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500 sm:px-4">
-        {resultCount} package{resultCount === 1 ? "" : "s"}
-        {activeView ? (
+        {kidsQueueActive ? (
           <>
-            {" "}
-            · <span className="font-medium text-zinc-700">{activeView.name}</span>
+            {kidsPurchaseQueueCount == null
+              ? "Unresolved kids purchases"
+              : `${kidsPurchaseQueueCount} unresolved kids purchase${
+                  kidsPurchaseQueueCount === 1 ? "" : "s"
+                }`}
           </>
-        ) : null}
+        ) : (
+          <>
+            {resultCount} package{resultCount === 1 ? "" : "s"}
+            {activeView ? (
+              <>
+                {" "}
+                · <span className="font-medium text-zinc-700">{activeView.name}</span>
+              </>
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   );

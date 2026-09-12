@@ -166,7 +166,7 @@ export async function loadGroupPurchaseAttention(): Promise<{
       detail: missingMarkers
         ? `${email} paid via a path that skipped kids checkout (no child name). Rename the Notion Kid lead, then create the kid profile. Session ${row.stripe_checkout_session_id}.`
         : `${email} — ${row.reason}. Session ${row.stripe_checkout_session_id}.`,
-      href: row.cohort_id ? `/admin/packages?cohort=${row.cohort_id}` : "/admin/packages",
+      href: "/admin/packages?view=kids-purchases",
       urgent: true,
     });
   }
