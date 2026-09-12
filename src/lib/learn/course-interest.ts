@@ -1,5 +1,6 @@
 import "server-only";
 
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { LEARN_COURSE_LEVELS, isComingSoonLevel } from "@/lib/learn/course-levels";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -64,13 +65,7 @@ export async function loadCourseInterestSignups(
     (profiles ?? []).map((profile) => [profile.id as string, profile])
   );
 
-  const emailById = new Map<string, string | null>();
-  await Promise.all(
-    userIds.map(async (userId) => {
-      const { data } = await supabase.auth.admin.getUserById(userId);
-      emailById.set(userId, data.user?.email ?? null);
-    })
-  );
+  const emailById = await loadEmailsByUserId(supabase, userIds);
 
   return (rows ?? []).map((row) => {
     const userId = row.user_id as string;

@@ -9,6 +9,7 @@ import {
   loadTutorAvailability,
   loadTutorBusyBlocks,
 } from "@/lib/tutoring/availability/load-availability";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { BookableSlot } from "@/lib/tutoring/availability/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -76,7 +77,7 @@ export async function loadAdminRescheduleRequests(
       ),
     ];
 
-    const [{ data: profiles }, { data: cohorts }, authUsers] = await Promise.all([
+    const [{ data: profiles }, { data: cohorts }, emailById] = await Promise.all([
       supabase
         .from("profiles")
         .select("id, full_name, preferred_name")
@@ -84,16 +85,11 @@ export async function loadAdminRescheduleRequests(
       cohortIds.length > 0
         ? supabase.from("cohorts").select("id, name").in("id", cohortIds)
         : Promise.resolve({ data: [] }),
-      supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+      loadEmailsByUserId(supabase, studentIds),
     ]);
 
     const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
     const cohortById = new Map((cohorts ?? []).map((c) => [c.id, c.name]));
-    const emailById = new Map(
-      (authUsers.data?.users ?? [])
-        .filter((u) => u.email)
-        .map((u) => [u.id, u.email!] as const)
-    );
 
     const rows: AdminRescheduleRequestRow[] = [];
     for (const row of rowsRaw) {

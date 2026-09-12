@@ -9,6 +9,7 @@ import {
   type CohortChangeRequestStatus,
   type StudentCourseEnrollmentOption,
 } from "@/lib/admin/cohort-change-request-types";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getStaffFacingName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -106,24 +107,19 @@ async function hydrateRows(
     ),
   ] as string[];
 
-  const [{ data: profiles }, { data: courses }, authUsers] = await Promise.all([
+  const [{ data: profiles }, { data: courses }, emailById] = await Promise.all([
     studentIds.length > 0
       ? supabase.from("profiles").select("id, full_name, preferred_name").in("id", studentIds)
       : Promise.resolve({ data: [] }),
     courseIds.length > 0
       ? supabase.from("courses").select("id, name").in("id", courseIds)
       : Promise.resolve({ data: [] }),
-    supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    loadEmailsByUserId(supabase, studentIds),
   ]);
 
   const profileById = new Map((profiles ?? []).map((row) => [row.id as string, row]));
   const courseNameById = new Map(
     (courses ?? []).map((row) => [row.id as string, (row.name as string) || "Untitled course"])
-  );
-  const emailById = new Map(
-    (authUsers.data?.users ?? [])
-      .filter((user) => user.email)
-      .map((user) => [user.id, user.email as string])
   );
 
   return rowsRaw.map((row) => {

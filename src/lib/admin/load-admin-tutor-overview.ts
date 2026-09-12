@@ -2,6 +2,7 @@ import type { AppRole } from "@/lib/auth/admin-access";
 import { ADMIN_UPCOMING_LESSONS_WINDOW_DAYS } from "@/lib/calendar/constants";
 import { startOfWeekMonday } from "@/lib/calendar/time-grid-calendar";
 import { DEFAULT_WEEKLY_CAPACITY_HOURS } from "@/lib/tutoring/availability/constants";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -85,7 +86,7 @@ export async function loadAdminTutorOverview(
   weekEnd.setDate(weekEnd.getDate() + 7);
 
   const [
-    { data: authData, error: authError },
+    emailById,
     { data: profiles, error: profilesError },
     { data: availability },
     { data: connections },
@@ -95,7 +96,7 @@ export async function loadAdminTutorOverview(
     { data: exclusions },
     { data: pendingRequests },
   ] = await Promise.all([
-    supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    loadEmailsByUserId(supabase, tutorIds),
     supabase.from("profiles").select("id, full_name, preferred_name").in("id", tutorIds),
     supabase
       .from("tutor_availability_settings")
@@ -131,10 +132,8 @@ export async function loadAdminTutorOverview(
       .in("tutor_scheduled_sessions.tutor_id", tutorIds),
   ]);
 
-  if (authError) return { tutors: [], error: authError.message };
   if (profilesError) return { tutors: [], error: profilesError.message };
 
-  const emailById = new Map((authData?.users ?? []).map((user) => [user.id, user.email ?? null] as const));
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile] as const));
   const availabilityByTutor = new Map(
     (availability ?? []).map((row) => [row.tutor_id, Number(row.weekly_capacity_hours)] as const)

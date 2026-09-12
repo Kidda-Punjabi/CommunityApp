@@ -14,6 +14,7 @@ import { loadAdminOnboardingQueue } from "@/lib/admin/load-admin-onboarding";
 import { loadPendingRescheduleRequestCreatedAts } from "@/lib/admin/load-admin-reschedule-requests";
 import { loadUnseenAppOnboarding } from "@/lib/admin/load-unseen-app-onboarding";
 import { loadMonthlyRewardsAttention } from "@/lib/admin/monthly-rewards/load-monthly-rewards";
+import { loadAuthEmailSet } from "@/lib/admin/load-admin-profiles-with-email";
 import { loadGroupPurchaseAttention } from "@/lib/group-purchase/load-group-purchase-attention";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -74,17 +75,7 @@ function normalizeNotionId(id: string): string {
 }
 
 async function listAuthEmails(supabase: SupabaseClient): Promise<Set<string>> {
-  const emails = new Set<string>();
-  for (let page = 1; page <= 10; page += 1) {
-    const { data } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-    const users = data?.users ?? [];
-    for (const user of users) {
-      const email = user.email?.trim().toLowerCase();
-      if (email) emails.add(email);
-    }
-    if (users.length < 1000) break;
-  }
-  return emails;
+  return loadAuthEmailSet(supabase);
 }
 
 function ownCohortClassTitle(title: string, cohortName: string): boolean {

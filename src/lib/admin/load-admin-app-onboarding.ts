@@ -8,8 +8,9 @@ import type {
   AdminAppOnboardingSummary,
   AppOnboardingFilter,
 } from "@/lib/admin/app-onboarding/types";
+import { loadAdminProfilesWithEmail } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 type ProfileRow = {
   id: string;
@@ -22,21 +23,6 @@ type ProfileRow = {
 };
 
 const PER_PAGE = 50;
-const MAX_AUTH_PAGES = 50;
-
-async function loadAllAuthUsers(supabase: SupabaseClient): Promise<User[]> {
-  const users: User[] = [];
-  for (let page = 1; page <= MAX_AUTH_PAGES; page += 1) {
-    const { data, error } = await supabase.auth.admin.listUsers({
-      page,
-      perPage: 1000,
-    });
-    if (error) throw error;
-    users.push(...data.users);
-    if (data.users.length < 1000) break;
-  }
-  return users;
-}
 
 async function loadPracticedUserIds(
   supabase: SupabaseClient,
@@ -76,7 +62,12 @@ function emptySummary(): AdminAppOnboardingSummary {
 }
 
 function buildRow(
-  authUser: User,
+  authUser: {
+    id: string;
+    email: string | null;
+    email_confirmed_at: string | null;
+    auth_created_at: string | null;
+  },
   profile: ProfileRow | undefined,
   practicedIds: Set<string>
 ): AdminAppOnboardingRow {
@@ -101,7 +92,7 @@ function buildRow(
     userId: authUser.id,
     email: authUser.email ?? null,
     displayName: getDisplayName(profile ?? null) ?? authUser.email ?? authUser.id.slice(0, 8),
-    signedUpAt: authUser.created_at ?? profile?.created_at ?? new Date(0).toISOString(),
+    signedUpAt: authUser.auth_created_at ?? profile?.created_at ?? new Date(0).toISOString(),
     learnerLevel: profile?.learner_level ?? null,
     milestones,
     progressDone: done,
@@ -139,7 +130,7 @@ export async function loadAdminAppOnboarding(
   const sanitized = options.query?.trim().toLowerCase() ?? "";
 
   try {
-    const authUsers = await loadAllAuthUsers(supabase);
+    const authUsers = await loadAdminProfilesWithEmail(supabase, null);
     if (authUsers.length === 0) {
       return {
         rows: [],

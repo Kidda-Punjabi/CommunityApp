@@ -14,6 +14,7 @@ import type {
 import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin/package-status";
 import { fetchCommunityPackageProduct } from "@/lib/admin/community-package";
 import { loadCohortLessonProgressMap } from "@/lib/lessons/load-lesson-log-progress";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isAppAccessExpected } from "@/lib/admin/app-access-expected";
 import type { TutorIdSource } from "@/lib/notion/tutor-id-source";
@@ -252,16 +253,7 @@ async function loadEmails(
   supabase: SupabaseClient,
   userIds: string[]
 ): Promise<Map<string, string | null>> {
-  const emailById = new Map<string, string | null>();
-  if (userIds.length === 0) return emailById;
-
-  const { data } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  for (const user of data?.users ?? []) {
-    if (userIds.includes(user.id)) {
-      emailById.set(user.id, user.email ?? null);
-    }
-  }
-  return emailById;
+  return loadEmailsByUserId(supabase, userIds);
 }
 
 export async function loadAdminPackagesList(

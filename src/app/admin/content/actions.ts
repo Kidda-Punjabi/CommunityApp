@@ -8,6 +8,7 @@ import type { StorageBucket } from "@/lib/supabase/upload";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseBulkFlashcards } from "@/lib/admin/parse-bulk-flashcards";
+import { loadAdminProfilesWithEmail, loadEmailToUserIdMap } from "@/lib/admin/load-admin-profiles-with-email";
 import {
   buildCourseLessonLookup,
   inferWeekNumberFromSetName,
@@ -1044,15 +1045,10 @@ async function findUserIdByEmail(
   const normalized = email.trim().toLowerCase();
   if (!normalized) return { error: "Email is required." };
 
-  const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-  if (error) return { error: error.message };
-
-  const user = data.users.find(
-    (item) => item.email?.toLowerCase() === normalized
-  );
-
-  if (!user) return { error: "No user found with that email." };
-  return { userId: user.id };
+  const emailToId = await loadEmailToUserIdMap(supabase);
+  const userId = emailToId.get(normalized);
+  if (!userId) return { error: "No user found with that email." };
+  return { userId };
 }
 
 const STREAK_DEBUG_SELECT =
@@ -1312,18 +1308,18 @@ export async function searchAdminMembers(
       });
     }
 
-    const { data: authData, error: authError } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
-    if (authError) return { error: authError.message };
+    const authRows = await loadAdminProfilesWithEmail(supabase, null);
+    const emailById = new Map(authRows.map((row) => [row.id, row.email ?? null] as const));
+    for (const [id, option] of byId) {
+      option.email = emailById.get(id) ?? option.email;
+    }
 
-    const emailMatches = authData.users
-      .filter((user) => user.email?.toLowerCase().includes(sanitized))
+    const emailMatches = authRows
+      .filter((row) => row.email?.toLowerCase().includes(sanitized))
       .slice(0, 25);
 
     const emailOnlyIds = emailMatches
-      .map((user) => user.id)
+      .map((row) => row.id)
       .filter((id) => !byId.has(id));
 
     if (emailOnlyIds.length > 0) {
