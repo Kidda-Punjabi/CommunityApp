@@ -29,6 +29,7 @@ import { kidsCourseHubStatus } from "@/lib/learning/kids-cohort-display";
 import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
 import { courseDetailPath } from "@/lib/learn/course-levels";
 import { loadRegisteredComingSoonLevels } from "@/lib/learn/course-interest";
+import { loadKidProgressSummariesForParent } from "@/lib/kids/load-kid-progress-summary";
 import { findCoursesForTier } from "@/lib/membership/courses";
 import { resolveCourseActor } from "@/lib/kids/course-actor";
 import {
@@ -67,6 +68,7 @@ export default async function LearnPage() {
   }
 
   const lessonsPromise = fetchLearnContent(supabase);
+  const actorPromise = resolveCourseActor(supabase, user.id);
   const [
     homeTab,
     access,
@@ -76,6 +78,7 @@ export default async function LearnPage() {
     kidsCourses,
     kidProfileCount,
     registeredInterest,
+    kidProgressSummaries,
   ] = await Promise.all([
     getHomeTabData(user.id),
     getCachedCourseAccess(supabase, user),
@@ -83,7 +86,7 @@ export default async function LearnPage() {
     lessonsPromise.then((lessons) =>
       fetchLessonCompletionMap(supabase, user.id, lessons)
     ),
-    resolveCourseActor(supabase, user.id),
+    actorPromise,
     fetchAccessibleKidsCourses(supabase, user.id),
     supabase
       .from("kid_profiles")
@@ -91,6 +94,11 @@ export default async function LearnPage() {
       .eq("parent_user_id", user.id)
       .then(({ count }) => count ?? 0),
     loadRegisteredComingSoonLevels(supabase, user.id),
+    actorPromise.then((resolved) =>
+      resolved.kind === "kid"
+        ? Promise.resolve([])
+        : loadKidProgressSummariesForParent(supabase, user.id)
+    ),
   ]);
 
   const { dashboard, profile, onboarding, unreadNotificationCount } = homeTab;
@@ -295,7 +303,9 @@ export default async function LearnPage() {
         </div>
 
         <div className="mt-6 space-y-3">
-          {kidProfileCount > 0 ? <LearnKidsProgressLink /> : null}
+          {kidProfileCount > 0 ? (
+            <LearnKidsProgressLink summaries={kidProgressSummaries} />
+          ) : null}
           <LearnSecondaryTiles
             communityHref={communityHref}
             communityStatus={communityStatus}

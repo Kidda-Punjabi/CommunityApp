@@ -371,8 +371,8 @@ function CreateKidProfileDialog({
           />
           <span>
             I have read and agree to Kidda&apos;s{" "}
-            <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-violet-600">
-              Privacy Policy
+            <a href="/kids-terms" target="_blank" rel="noreferrer" className="font-semibold text-violet-600">
+              Kids course terms
             </a>
           </span>
         </label>

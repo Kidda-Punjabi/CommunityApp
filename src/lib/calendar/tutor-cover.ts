@@ -215,6 +215,20 @@ export async function assignCoverTutor(
     deadline,
   });
 
+  const { error: kidsNotifyError } = await supabase.rpc("notify_session_kids_of_cover", {
+    p_session_id: session.id,
+    p_actor_user_id: request.requesting_tutor_id,
+    p_payload: {
+      session_id: session.id,
+      session_title: session.title ?? "Lesson",
+      starts_at: session.starts_at,
+      decision_deadline: deadline,
+    },
+  });
+  if (kidsNotifyError) {
+    console.error("[notify_session_kids_of_cover]", kidsNotifyError.message);
+  }
+
   if (session.google_event_id) {
     await inviteCoverTutorOnCalendar(supabase, {
       owningTutorId: session.tutor_id,
