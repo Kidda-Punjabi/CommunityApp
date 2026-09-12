@@ -57,12 +57,22 @@ BEGIN
   ORDER BY ce.created_at DESC
   LIMIT 1;
 
+  -- Prefer kid_profile_id. Also accept older parent-keyed rows that belong to
+  -- this kid's course/cohort (XOR actor columns). Never mix in the parent's
+  -- other adult courses.
   SELECT
     COUNT(*) FILTER (WHERE a.attended IS TRUE)::INTEGER,
     COUNT(*)::INTEGER
   INTO v_present, v_total
   FROM public.cohort_lesson_attendance a
-  WHERE a.kid_profile_id = p_kid_profile_id;
+  WHERE a.kid_profile_id = p_kid_profile_id
+     OR (
+       a.kid_profile_id IS NULL
+       AND v_parent IS NOT NULL
+       AND a.student_id = v_parent
+       AND v_cohort_id IS NOT NULL
+       AND a.cohort_id = v_cohort_id
+     );
 
   -- Outstanding = earliest happened lesson with no non-practice submission.
   -- Due date comes from the lesson log date (homework_submissions has no due column).
@@ -78,9 +88,20 @@ BEGIN
     AND NOT EXISTS (
       SELECT 1
       FROM public.homework_submissions hs
-      WHERE hs.kid_profile_id = p_kid_profile_id
-        AND hs.lesson_id = log.lesson_id
+      WHERE hs.lesson_id = log.lesson_id
         AND hs.is_practice = false
+        AND (
+          hs.kid_profile_id = p_kid_profile_id
+          OR (
+            hs.kid_profile_id IS NULL
+            AND hs.student_id = v_parent
+            AND v_course_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM public.lessons hl
+              WHERE hl.id = hs.lesson_id AND hl.course_id = v_course_id
+            )
+          )
+        )
     )
   ORDER BY log.lesson_date ASC, l.lesson_number ASC
   LIMIT 1;
@@ -91,15 +112,33 @@ BEGIN
     SELECT hs.tutor_comment AS note,
            COALESCE(hs.reviewed_at, hs.submitted_at) AS noted_at
     FROM public.homework_submissions hs
-    WHERE hs.kid_profile_id = p_kid_profile_id
-      AND hs.tutor_comment IS NOT NULL
+    JOIN public.lessons hl ON hl.id = hs.lesson_id
+    WHERE hs.tutor_comment IS NOT NULL
       AND btrim(hs.tutor_comment) <> ''
+      AND (
+        hs.kid_profile_id = p_kid_profile_id
+        OR (
+          hs.kid_profile_id IS NULL
+          AND hs.student_id = v_parent
+          AND v_course_id IS NOT NULL
+          AND hl.course_id = v_course_id
+        )
+      )
     UNION ALL
     SELECT a.tutor_note AS note, a.updated_at AS noted_at
     FROM public.cohort_lesson_attendance a
-    WHERE a.kid_profile_id = p_kid_profile_id
-      AND a.tutor_note IS NOT NULL
+    WHERE a.tutor_note IS NOT NULL
       AND btrim(a.tutor_note) <> ''
+      AND (
+        a.kid_profile_id = p_kid_profile_id
+        OR (
+          a.kid_profile_id IS NULL
+          AND v_parent IS NOT NULL
+          AND a.student_id = v_parent
+          AND v_cohort_id IS NOT NULL
+          AND a.cohort_id = v_cohort_id
+        )
+      )
   ) n
   ORDER BY n.noted_at DESC NULLS LAST
   LIMIT 1;

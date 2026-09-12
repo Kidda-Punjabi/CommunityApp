@@ -6,6 +6,8 @@ import type { KidProfile } from "@/lib/kids/types";
 import { ui } from "@/lib/ui/styles";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 type KidsProgressDetailPageProps = {
   params: Promise<{ kidProfileId: string }>;
 };
