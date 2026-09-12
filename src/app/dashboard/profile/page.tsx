@@ -1,6 +1,7 @@
 import { LogoutButton } from "@/app/dashboard/logout-button";
 import { ViewAsPanel } from "@/app/dashboard/profile/view-as-panel";
 import { TestOnboardingButton } from "@/components/onboarding/test-onboarding-button";
+import { ProfileSwitcher } from "@/components/kids/profile-switcher";
 import { AccountCard } from "@/components/profile/account-card";
 import { FriendsSummaryRow } from "@/components/profile/friends-summary-row";
 import { PlacementReminderBanner } from "@/components/profile/placement-reminder-banner";
@@ -14,6 +15,8 @@ import {
   getCourseAccessContext,
   tiersFromUnlockedCourses,
 } from "@/lib/membership/unlocked";
+import { loadKidSession } from "@/lib/kids/session";
+import type { KidProfile } from "@/lib/kids/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { loadEditableProfile } from "@/lib/profile/load-editable-profile";
 import { loadFriendsProfileData } from "@/lib/friends/load-friends";
@@ -30,8 +33,20 @@ export default async function ProfilePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const profile = await loadEditableProfile(supabase, user!.id);
+  const [profile, kidSession] = await Promise.all([
+    loadEditableProfile(supabase, user!.id),
+    loadKidSession(user!.id),
+  ]);
   const displayName = getDisplayName(profile);
+
+  const { data: kidProfileRows } = kidSession.hasKidProfiles
+    ? await supabase
+        .from("kid_profiles")
+        .select("*")
+        .eq("parent_user_id", user!.id)
+        .order("created_at", { ascending: true })
+    : { data: [] };
+  const kidProfiles = (kidProfileRows ?? []) as KidProfile[];
 
   if (user?.email) {
     try {
@@ -89,6 +104,21 @@ export default async function ProfilePage() {
           Edit
         </Link>
       </div>
+
+      {kidProfiles.length > 0 && (
+        <section className="mt-8">
+          <h2 className={ui.sectionTitle}>Profiles</h2>
+          <p className="-mt-2 mb-6 text-sm text-zinc-500">
+            You&apos;re using your parent account. Switching to a kid profile does not need a PIN.
+          </p>
+          <ProfileSwitcher
+            kidProfiles={kidProfiles}
+            hasPin={kidSession.hasPin}
+            parentName={displayName || "Parent"}
+            activeKidProfileId={null}
+          />
+        </section>
+      )}
 
       <div className={`mt-8 ${ui.stackLoose}`}>
         {showPlacementReminder && <PlacementReminderBanner />}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { awardKidSticker, logKidActivity } from "@/lib/kids/award-sticker";
+import { usesKidsShell } from "@/lib/kids/constants";
 import { getActiveKidProfileIdFromCookie } from "@/lib/kids/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   await logKidActivity(supabase, kidProfileId, activityType, metadata ?? {});
 
   let sticker = null;
-  if (kid.age_tier === "pre_reader" || kid.age_tier === "early_reader") {
+  if (usesKidsShell(kid.age_tier)) {
     sticker = await awardKidSticker(supabase, kidProfileId);
   }
 

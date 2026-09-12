@@ -1,4 +1,4 @@
-import { tagMatchesKidFriendly, usesKidsShell, type KidAgeTier } from "@/lib/kids/constants";
+import { tagMatchesKidFriendly, usesKidsShell } from "@/lib/kids/constants";
 import type { KidProfile } from "@/lib/kids/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -31,11 +31,11 @@ export function kidForumBlocked(activeKidProfile: KidProfile | null): boolean {
   return activeKidProfile !== null;
 }
 
-export function kidUsesStickerRewards(ageTier: KidAgeTier): boolean {
+export function kidUsesStickerRewards(ageTier: string): boolean {
   return usesKidsShell(ageTier);
 }
 
-export function kidHomeHref(ageTier: KidAgeTier): string {
+export function kidHomeHref(ageTier: string): string {
   return usesKidsShell(ageTier) ? "/dashboard/kids" : "/dashboard/learn";
 }
 

@@ -2,7 +2,6 @@ import { ProfileSwitcher } from "@/components/kids/profile-switcher";
 import { loadKidSession } from "@/lib/kids/session";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createClient } from "@/lib/supabase/server";
-import { ui } from "@/lib/ui/styles";
 import { redirect } from "next/navigation";
 
 export default async function KidsProfileSwitcherPage() {
@@ -13,7 +12,7 @@ export default async function KidsProfileSwitcherPage() {
   if (!user) redirect("/login");
 
   const kidSession = await loadKidSession(user.id);
-  const kidActive = kidSession.activeKidProfile !== null;
+  const activeKidProfileId = kidSession.activeKidProfile?.id ?? null;
 
   const { data: kidProfiles } = await supabase
     .from("kid_profiles")
@@ -30,16 +29,23 @@ export default async function KidsProfileSwitcherPage() {
   const parentName = getDisplayName(profile) ?? user.email?.split("@")[0] ?? "Parent";
 
   return (
-    <div className={`flex min-h-dvh flex-col items-center justify-center px-6 py-12 ${ui.pageBg}`}>
+    <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
       <h1 className="font-heading text-3xl font-bold tracking-tight text-zinc-900">
         Who&apos;s learning?
       </h1>
+      <p className="mt-2 text-center text-sm text-zinc-500">
+        {activeKidProfileId
+          ? "Pick a profile to switch. Grown-up account needs the PIN."
+          : "Choose who is using the app."}
+      </p>
       <div className="mt-12">
         <ProfileSwitcher
           kidProfiles={kidProfiles ?? []}
           hasPin={Boolean(profile?.kids_pin_hash)}
           parentName={parentName}
-          kidActive={kidActive}
+          activeKidProfileId={activeKidProfileId}
+          allowCreate={activeKidProfileId === null}
+          pickedWhoThisSession={kidSession.pickedWhoThisSession}
         />
       </div>
     </div>

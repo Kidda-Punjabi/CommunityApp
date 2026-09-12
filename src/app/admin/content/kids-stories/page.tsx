@@ -40,9 +40,10 @@ export default async function AdminKidsStoriesPage() {
             <span className={labelClass}>Age tier</span>
             <select name="age_tier" className={inputClass} defaultValue="all">
               <option value="all">All ages</option>
-              <option value="pre_reader">Pre-reader</option>
-              <option value="early_reader">Early reader</option>
-              <option value="independent">Independent</option>
+              <option value="kids">Kids (6 & under)</option>
+              <option value="juniors">Juniors (7–9)</option>
+              <option value="preteens">Preteens (10–12)</option>
+              <option value="teens">Teens (13–15)</option>
             </select>
           </label>
           <label>

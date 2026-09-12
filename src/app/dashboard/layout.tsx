@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { BottomNav } from "@/components/bottom-nav";
 import { PullToRefresh } from "@/components/pull-to-refresh";
-import { ProfileSwitchChip } from "@/components/kids/profile-switch-chip";
 import { KidSessionProvider } from "@/components/kids/kid-session-provider";
+import { KidsShellNav } from "@/components/kids/kids-shell-nav";
 import { KidsShellRouteGuard } from "@/components/kids/kids-shell-route-guard";
 import { TabNavProvider } from "@/components/navigation/tab-nav-provider";
 import { LastPlayedGameTracker } from "@/components/games/last-played-tracker";
@@ -64,12 +64,12 @@ export default async function DashboardLayout({
     redirect("/dashboard/profile/kids");
   }
 
-  if (isPickerScreen) {
+  const isFirstRunPicker = isPickerScreen && !kidSession.pickedWhoThisSession;
+  if (isFirstRunPicker) {
     return <div className={`flex min-h-dvh flex-col ${ui.pageBg}`}>{children}</div>;
   }
 
   const parentInitial = (user.email?.trim().charAt(0) ?? "P").toUpperCase();
-  const showProfileChip = kidSession.hasKidProfiles && !access.viewAs?.active;
 
   return (
     <FirstRunProvider
@@ -104,17 +104,20 @@ export default async function DashboardLayout({
                   <ActivityDateSync />
                   <LastPlayedGameTracker />
                   {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
-                  {showProfileChip && <ProfileSwitchChip />}
                   <div
                     className={
                       kidsShellActive
-                        ? "relative isolate flex w-full flex-1 flex-col"
+                        ? `relative isolate flex w-full flex-1 flex-col ${ui.navClearance}`
                         : `relative isolate mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance}`
                     }
                   >
                     {children}
                   </div>
-                  <BottomNav />
+                  {kidsShellActive && kid ? (
+                    <KidsShellNav ageTier={kid.age_tier} />
+                  ) : (
+                    <BottomNav />
+                  )}
                 </div>
               </PullToRefresh>
             </TabNavProvider>

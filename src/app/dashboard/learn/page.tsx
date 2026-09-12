@@ -8,8 +8,13 @@ import { LearnCourseRow } from "@/components/learn/learn-course-row";
 import { LearnCourseTiles, type LearnHubTile } from "@/components/learn/learn-course-tiles";
 import { LearnKidsProgressLink } from "@/components/learn/learn-kids-progress-link";
 import { LearnSecondaryTiles } from "@/components/learn/learn-secondary-tiles";
+import {
+  OlderKidBeginnerCard,
+  OlderKidComingSoonRow,
+  OlderKidSecondaryTiles,
+} from "@/components/learn/older-kid-home";
 import { getHomeTabData } from "@/lib/cache/tab-page-cache";
-import { fetchLearnContent } from "@/lib/learning/load-learn-content";
+import { fetchLearnContent, filterLessonsForCourse } from "@/lib/learning/load-learn-content";
 import {
   canAccessLessonInContext,
   filterLessonsForTrack,
@@ -99,8 +104,11 @@ export default async function LearnPage() {
           preferred_name: profile?.preferred_name ?? null,
           avatar_url: profile?.avatar_url ?? null,
         }}
-        kidAvatarIcon={dashboard.kidAvatarIcon}
-        learnerLevel={dashboard.kidAvatarIcon ? null : onboarding.learnerLevel}
+        kidAvatarIcon={actor.kind === "kid" ? null : dashboard.kidAvatarIcon}
+        avatarInitial={
+          actor.kind === "kid" ? (dashboard.displayName?.charAt(0) ?? "K").toUpperCase() : null
+        }
+        learnerLevel={actor.kind === "kid" ? null : onboarding.learnerLevel}
         unreadNotificationCount={unreadNotificationCount}
         weeklyPoints={dashboard.headerPoints}
         profileHref={dashboard.profileHref}
@@ -180,18 +188,17 @@ export default async function LearnPage() {
   }));
 
   if (actor.kind === "kid") {
-    const tiles: LearnHubTile[] =
-      kidsTiles.length > 0
-        ? kidsTiles
-        : [
-            {
-              id: "more",
-              kind: "static",
-              title: "Your courses",
-              status: "Your class will show here once you're enrolled",
-              tone: "muted",
-            },
-          ];
+    const beginnerCourse = kidsCourses[0] ?? null;
+    const beginnerLessons = beginnerCourse
+      ? filterLessonsForCourse(allLessons, beginnerCourse.id)
+      : [];
+    const beginnerProgress = beginnerCourse
+      ? summarizeCourseProgress(beginnerLessons, completionMap)
+      : null;
+    const beginnerPercent =
+      beginnerProgress && beginnerProgress.totalLessons > 0
+        ? Math.round((beginnerProgress.completedLessons / beginnerProgress.totalLessons) * 100)
+        : null;
 
     return (
       <div className={ui.page}>
@@ -206,9 +213,22 @@ export default async function LearnPage() {
           }}
         >
           {greeting}
-          <LearnCourseTiles tiles={tiles} />
-          <div className="mt-3">
-            <LearnCertificatesRow />
+          <div className="space-y-3">
+            <OlderKidBeginnerCard
+              level1Href={beginnerCourse ? kidsCourseLearnPath(beginnerCourse.id) : null}
+              level1Percent={beginnerPercent}
+            />
+            <OlderKidComingSoonRow
+              title="Intermediate"
+              courseLevel="kids_intermediate"
+              interestRegistered={registeredInterest.has("kids_intermediate")}
+            />
+            <OlderKidComingSoonRow
+              title="Advanced"
+              courseLevel="kids_advanced"
+              interestRegistered={registeredInterest.has("kids_advanced")}
+            />
+            <OlderKidSecondaryTiles />
           </div>
         </HomeStreakProvider>
       </div>

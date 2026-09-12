@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 
 const DEFAULT_KID_AVATAR = "Star";
-const DEFAULT_KID_AGE_TIER = "independent";
+const DEFAULT_KID_AGE_TIER = "juniors";
 
 function normalizeKidName(name: string): string {
   return name.trim().replace(/\s+/g, " ");
