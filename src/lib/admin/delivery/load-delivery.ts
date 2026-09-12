@@ -34,6 +34,7 @@ import type {
   DeliveryTestimonialRow,
   DeliveryTutorRow,
 } from "@/lib/admin/delivery/types";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { packageStatusLabel, type PackageInstanceStatus } from "@/lib/admin/package-status";
 import {
   isFeedbackToReview,
@@ -265,14 +266,9 @@ export async function loadDeliverySnapshot(
   );
 
   const emailByUserId = new Map<string, string>();
-  for (let page = 1; page <= 5; page += 1) {
-    const { data } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-    const users = data?.users ?? [];
-    for (const user of users) {
-      const email = user.email?.trim().toLowerCase();
-      if (email) emailByUserId.set(user.id, email);
-    }
-    if (users.length < 1000) break;
+  for (const [userId, email] of await loadEmailsByUserId(supabase, null)) {
+    const normalized = email?.trim().toLowerCase();
+    if (normalized) emailByUserId.set(userId, normalized);
   }
 
   const courseName = (rel: unknown): string | null => {

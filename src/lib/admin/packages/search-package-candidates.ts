@@ -1,5 +1,6 @@
 import "server-only";
 
+import { loadEmailToUserIdMap } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -23,27 +24,6 @@ type NotionRosterCacheEntry = {
 
 function matchesQuery(value: string | null | undefined, query: string): boolean {
   return Boolean(value?.toLowerCase().includes(query));
-}
-
-async function loadEmailToUserIdMap(supabase: SupabaseClient): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  let page = 1;
-
-  while (true) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) throw new Error(error.message);
-
-    for (const user of data.users) {
-      if (user.email) {
-        map.set(user.email.trim().toLowerCase(), user.id);
-      }
-    }
-
-    if (data.users.length < 200) break;
-    page += 1;
-  }
-
-  return map;
 }
 
 async function loadNotionLeadCandidates(

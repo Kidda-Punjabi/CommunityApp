@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 
 export type CohortMemberOverview = {
@@ -90,7 +91,7 @@ export async function loadCohortsOverview(
   const [
     { data: memberRows },
     { data: profileRows },
-    { data: authData },
+    emailById,
     { data: enrollmentRows },
     { data: groupPackages },
   ] = await Promise.all([
@@ -102,7 +103,7 @@ export async function loadCohortsOverview(
           .is("left_at", null)
       : Promise.resolve({ data: [] }),
     supabase.from("profiles").select("id, full_name, preferred_name, avatar_url"),
-    supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    loadEmailsByUserId(supabase, null),
     groupCourseIds.length > 0
       ? supabase
           .from("course_enrollments")
@@ -126,9 +127,6 @@ export async function loadCohortsOverview(
         .neq("status", "cancelled")
     : { data: [] };
 
-  const emailById = new Map(
-    (authData?.users ?? []).map((u) => [u.id, u.email ?? null] as const)
-  );
   const labelById = new Map(
     (profileRows ?? []).map((p) => [
       p.id,

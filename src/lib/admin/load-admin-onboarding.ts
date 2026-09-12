@@ -8,6 +8,7 @@ import {
 } from "@/lib/admin/onboarding/types";
 import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin/package-status";
 import type { OnboardingChecklistRow } from "@/lib/admin/packages/types";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -146,16 +147,7 @@ async function loadEmails(
   supabase: SupabaseClient,
   userIds: string[]
 ): Promise<Map<string, string | null>> {
-  const emailById = new Map<string, string | null>();
-  if (userIds.length === 0) return emailById;
-
-  const { data } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  for (const user of data?.users ?? []) {
-    if (userIds.includes(user.id)) {
-      emailById.set(user.id, user.email ?? null);
-    }
-  }
-  return emailById;
+  return loadEmailsByUserId(supabase, userIds);
 }
 
 type ResolvedRun = {

@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAdminFromActions, type ActionResult } from "@/app/admin/content/actions";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { ASSIGNABLE_STAFF_ROLES, APP_ROLE_LABELS, type AppRole } from "@/lib/auth/admin-access";
 import { hasAnyRole } from "@/lib/auth/profile-roles";
 import { getDisplayName } from "@/lib/profile/display-name";
@@ -332,15 +333,7 @@ export async function loadStaffProfilesForAdmin(): Promise<StaffProfileRow[]> {
 
   if (profilesError) throw new Error(profilesError.message);
 
-  const { data: authData, error: authError } = await supabase.auth.admin.listUsers({
-    page: 1,
-    perPage: 1000,
-  });
-  if (authError) throw new Error(authError.message);
-
-  const emailById = new Map(
-    authData.users.map((user) => [user.id, user.email ?? null] as const)
-  );
+  const emailById = await loadEmailsByUserId(supabase, userIds);
 
   return (profiles ?? [])
     .map((profile) => ({
@@ -382,10 +375,7 @@ export async function loadAdminTutorPanelData(): Promise<{
     errors.staffMembers = e instanceof Error ? e.message : "Failed to load staff.";
   }
 
-  const { data: authData } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  const emailById = new Map(
-    (authData?.users ?? []).map((user) => [user.id, user.email ?? null] as const)
-  );
+  const emailById = await loadEmailsByUserId(supabase, null);
 
   const { data: profileRows } = await supabase
     .from("profiles")

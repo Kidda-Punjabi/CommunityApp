@@ -1,6 +1,7 @@
 "use server";
 
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import {
   verifiedDiscountCode,
@@ -71,13 +72,7 @@ export async function loadAdminStudentDiscountRequests(): Promise<{
       (profiles ?? []).map((profile) => [profile.id as string, profile])
     );
 
-    const emailResults = await Promise.all(
-      userIds.map(async (userId) => {
-        const { data } = await service.auth.admin.getUserById(userId);
-        return [userId, data.user?.email ?? null] as const;
-      })
-    );
-    const emailMap = new Map(emailResults);
+    const emailMap = await loadEmailsByUserId(service, userIds);
 
     const requests: AdminStudentDiscountRequest[] = typedRows.map((row) => {
       const profile = profileMap.get(row.user_id);

@@ -7,6 +7,7 @@ import { isCalendarEventExcluded } from "@/lib/calendar/exclusions";
 import type { StudentEnrollmentContext } from "@/lib/calendar/session-visibility";
 import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import { calendarSyncRangeStart } from "@/lib/calendar/constants";
+import { loadAdminProfilesWithEmail } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -95,29 +96,14 @@ async function listAuthUsersForLookup(
   const userIdSet = new Set(userIds);
   if (normalizedEmails.size === 0 && userIdSet.size === 0) return [];
 
+  const rows = await loadAdminProfilesWithEmail(supabase, null);
   const matched = new Map<string, { id: string; email?: string | null }>();
-
-  for (let page = 1; page <= 15; page++) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) throw error;
-    if (!data.users.length) break;
-
-    for (const user of data.users) {
-      const email = user.email ? normalizeEmail(user.email) : "";
-      if (userIdSet.has(user.id) || (email && normalizedEmails.has(email))) {
-        matched.set(user.id, user);
-      }
+  for (const row of rows) {
+    const email = row.email ? normalizeEmail(row.email) : "";
+    if (userIdSet.has(row.id) || (email && normalizedEmails.has(email))) {
+      matched.set(row.id, { id: row.id, email: row.email });
     }
-
-    const allTutorsFound = [...userIdSet].every((id) => matched.has(id));
-    const allEmailsFound = [...normalizedEmails].every((lookupEmail) =>
-      [...matched.values()].some(
-        (user) => user.email && normalizeEmail(user.email) === lookupEmail
-      )
-    );
-    if ((allTutorsFound && allEmailsFound) || data.users.length < 200) break;
   }
-
   return [...matched.values()];
 }
 
