@@ -3,6 +3,7 @@
 import { fetchAdminDashboard } from "@/app/admin/content/home-actions";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
 import { AdminAcquisitionDashboard } from "@/components/admin/acquisition/admin-acquisition-dashboard";
+import { AdminSalesReportPanel } from "@/components/admin/acquisition/admin-sales-report-panel";
 import { AdminDashboardGrid } from "@/components/admin/admin-dashboard-cards";
 import { AdminDeliverySection } from "@/components/admin/delivery/admin-delivery-section";
 import { AdminFetchErrors } from "@/components/admin/admin-fetch-errors";
@@ -72,7 +73,10 @@ export function AdminHomeContent() {
             <AdminDashboardGrid cards={cards} loading={loadingDashboard} />
           </>
         ) : activeTab === "acquisition" ? (
-          <AdminAcquisitionDashboard />
+          <div className="space-y-6">
+            <AdminSalesReportPanel />
+            <AdminAcquisitionDashboard />
+          </div>
         ) : activeTab === "delivery" ? (
           <AdminDeliverySection />
         ) : (
