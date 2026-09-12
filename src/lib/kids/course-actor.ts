@@ -9,6 +9,10 @@ export type CourseActor =
  * Resolve the active course actor from kid_session_context.
  * Never uses a client-supplied kid_profile_id — only the server session row,
  * verified against kid_profiles.parent_user_id.
+ *
+ * Dashboard layout calls loadKidSession first, which upserts the cookie into
+ * kid_session_context, so this stays cookie-safe without importing next/headers
+ * (this module is also used from client components).
  */
 export async function resolveCourseActor(
   _supabase: SupabaseClient,
@@ -67,5 +71,5 @@ export function homeworkWrite(
   if (actor.kind === "kid") {
     return { ...rest, student_id: null, kid_profile_id: actor.kidProfileId };
   }
-  return { ...rest, student_id: actor.userId, kid_profile_id: null };
+    return { ...rest, student_id: actor.userId, kid_profile_id: null };
 }
