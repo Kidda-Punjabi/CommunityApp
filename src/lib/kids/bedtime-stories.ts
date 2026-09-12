@@ -63,7 +63,7 @@ function mapStory(
 export async function loadKidBedtimeStoriesForParent(
   supabase: SupabaseClient,
   parentUserId: string,
-  ageTier?: KidAgeTier | null
+  ageTier?: KidAgeTier | string | null
 ): Promise<{ stories: KidBedtimeStory[]; parentIsPremium: boolean; tableReady: boolean }> {
   const parentIsPremium = await parentHasPremiumAccess(supabase, parentUserId);
 
