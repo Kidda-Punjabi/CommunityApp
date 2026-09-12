@@ -1,6 +1,7 @@
 import { Week1BaselineForm } from "@/components/feedback/week1-baseline-form";
 import { canAccessLessonInContext } from "@/lib/learning/learn-access";
 import { loadFeedbackContext } from "@/lib/feedback/load-feedback-context";
+import { actorFilter, resolveCourseActor } from "@/lib/kids/course-actor";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -61,10 +62,12 @@ export default async function Week1StartingPointPage({ params }: PageProps) {
     notFound();
   }
 
+  const actor = await resolveCourseActor(supabase, user.id);
+  const filter = actorFilter(actor);
   const { data: existing } = await supabase
     .from("feedback_submissions")
     .select("id")
-    .eq("user_id", user.id)
+    .eq(filter.column, filter.value)
     .eq("lesson_id", lessonId)
     .eq("form_variant", "week1")
     .limit(1)

@@ -3,6 +3,7 @@ import {
   createNotionFeedbackPage,
 } from "@/lib/feedback/notion";
 import type { FeedbackContext, FeedbackSubmitPayload } from "@/lib/feedback/types";
+import { feedbackWrite, resolveCourseActor } from "@/lib/kids/course-actor";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const COMMUNITY_FEEDBACK_ALREADY_SUBMITTED =
@@ -47,10 +48,15 @@ export async function saveFeedbackSubmission(
     throw new Error("A class session is required.");
   }
 
+  const actorFields =
+    userId && !isGuest
+      ? feedbackWrite(await resolveCourseActor(supabase, userId), {})
+      : { user_id: userId, kid_profile_id: null };
+
   const { data: row, error: insertError } = await supabase
     .from("feedback_submissions")
     .insert({
-      user_id: userId,
+      ...actorFields,
       is_guest: isGuest,
       lesson_id: lessonId,
       session_id: sessionId,

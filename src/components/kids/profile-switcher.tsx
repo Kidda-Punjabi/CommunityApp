@@ -25,6 +25,8 @@ type ProfileSwitcherProps = {
   allowCreate?: boolean;
   /** When false, tapping the parent card still confirms "continue as parent" (first-run picker). */
   pickedWhoThisSession?: boolean;
+  /** Profile settings screen: start collapsed instead of a wall of large avatars. */
+  collapsedByDefault?: boolean;
 };
 
 export function ProfileSwitcher({
@@ -34,6 +36,7 @@ export function ProfileSwitcher({
   activeKidProfileId = null,
   allowCreate = true,
   pickedWhoThisSession = true,
+  collapsedByDefault = false,
 }: ProfileSwitcherProps) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
@@ -42,6 +45,7 @@ export function ProfileSwitcher({
   const [parentPinOpen, setParentPinOpen] = useState(false);
   const [pinLoading, setPinLoading] = useState(false);
   const [switchingKidId, setSwitchingKidId] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(!collapsedByDefault);
   const kidActive = activeKidProfileId !== null;
   const parentIsCurrent = !kidActive;
 
@@ -133,78 +137,189 @@ export function ProfileSwitcher({
     return <TabPageSkeleton rows={5} />;
   }
 
+  const compact = collapsedByDefault;
+  const currentKid = kidProfiles.find((kid) => kid.id === activeKidProfileId) ?? null;
+
   return (
-    <div className="flex flex-col items-center">
-      <div className="flex flex-wrap items-start justify-center gap-x-8 gap-y-8">
+    <div className={cn("flex flex-col", compact ? "items-stretch" : "items-center")}>
+      {compact && !listOpen ? (
         <button
           type="button"
-          onClick={handleParentCard}
-          aria-current={parentIsCurrent ? "true" : undefined}
-          className={cn(pressableClass, "group flex w-28 flex-col items-center")}
+          onClick={() => setListOpen(true)}
+          className={cn(ui.listRow, "w-full text-left")}
         >
           <span
             className={cn(
-              "flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold ring-2 transition group-hover:ring-offset-2 group-hover:ring-offset-zinc-50",
-              ui.avatarParent,
-              parentIsCurrent
-                ? "ring-violet-600 ring-offset-2 ring-offset-zinc-50"
-                : "ring-transparent group-hover:ring-violet-600"
+              ui.listRowIcon,
+              currentKid ? ui.avatarKid : ui.avatarParent,
+              "text-base font-semibold text-white"
             )}
           >
-            {parentName.charAt(0).toUpperCase()}
+            {currentKid ? (
+              <KidLucideIcon name={currentKid.avatar_icon} className="h-6 w-6" />
+            ) : (
+              parentName.charAt(0).toUpperCase()
+            )}
           </span>
-          <span className="mt-3 text-center text-sm font-semibold text-zinc-900">{parentName}</span>
-          <span className="mt-0.5 text-center text-xs font-medium text-violet-600">
-            {parentIsCurrent ? "Current · Parent" : "Parent account"}
+          <span className="min-w-0 flex-1">
+            <span className="block font-heading font-semibold text-zinc-900">Switch profile</span>
+            <span className="mt-0.5 block text-sm text-zinc-500">
+              {kidProfiles.length} kid{kidProfiles.length === 1 ? "" : "s"} on this account
+            </span>
           </span>
         </button>
+      ) : null}
 
-        {kidProfiles.map((kid) => {
-          const isCurrent = activeKidProfileId === kid.id;
-          return (
-            <button
-              key={kid.id}
-              type="button"
-              onClick={() => void switchToKid(kid.id)}
-              disabled={switchingKidId !== null}
-              aria-current={isCurrent ? "true" : undefined}
-              className={cn(pressableClass, "group flex w-28 flex-col items-center")}
-            >
-              <span
-                className={cn(
-                  "flex h-24 w-24 items-center justify-center rounded-full ring-2 transition group-hover:ring-offset-2 group-hover:ring-offset-zinc-50",
-                  ui.avatarKid,
-                  isCurrent
-                    ? "ring-sky-500 ring-offset-2 ring-offset-zinc-50"
-                    : "ring-transparent group-hover:ring-sky-400"
-                )}
+      {listOpen ? (
+        <>
+          {compact ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleParentCard}
+                aria-current={parentIsCurrent ? "true" : undefined}
+                className={cn(ui.listRow, "w-full text-left")}
               >
-                <KidLucideIcon name={kid.avatar_icon} className="h-12 w-12" />
-              </span>
-              <span className="mt-3 text-center text-sm font-semibold text-zinc-900">{kid.name}</span>
-              <span className="mt-0.5 text-center text-xs font-medium text-sky-700">
-                {isCurrent ? "Current" : "Kid profile"}
-              </span>
-            </button>
-          );
-        })}
+                <span
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-bold",
+                    ui.avatarParent
+                  )}
+                >
+                  {parentName.charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-heading font-semibold text-zinc-900">{parentName}</span>
+                  <span className="mt-0.5 block text-sm text-zinc-500">
+                    {parentIsCurrent ? "Current · Parent" : "Parent account"}
+                  </span>
+                </span>
+              </button>
 
-        {allowCreate && (
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className={cn(
-              pressableClass,
-              "group flex w-24 flex-col items-center text-zinc-400 hover:text-zinc-500"
-            )}
-          >
-            <span className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 text-3xl font-light transition group-hover:border-zinc-400">
-              +
-            </span>
-            <span className="mt-3 text-center text-xs font-medium">Add profile</span>
-          </button>
-        )}
-      </div>
+              {kidProfiles.map((kid) => {
+                const isCurrent = activeKidProfileId === kid.id;
+                return (
+                  <button
+                    key={kid.id}
+                    type="button"
+                    onClick={() => void switchToKid(kid.id)}
+                    disabled={switchingKidId !== null}
+                    aria-current={isCurrent ? "true" : undefined}
+                    className={cn(ui.listRow, "w-full text-left")}
+                  >
+                    <span
+                      className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
+                        ui.avatarKid
+                      )}
+                    >
+                      <KidLucideIcon name={kid.avatar_icon} className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-heading font-semibold text-zinc-900">{kid.name}</span>
+                      <span className="mt-0.5 block text-sm text-zinc-500">
+                        {isCurrent ? "Current" : "Kid profile"}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+
+              {allowCreate ? (
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(true)}
+                  className={cn(ui.listRow, "w-full text-left text-zinc-500")}
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-dashed border-zinc-300 text-lg font-light">
+                    +
+                  </span>
+                  <span className="font-heading font-semibold text-zinc-700">Add profile</span>
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => setListOpen(false)}
+                className="px-1 pt-1 text-left text-xs font-semibold text-violet-600"
+              >
+                Hide profiles
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-start justify-center gap-x-8 gap-y-8">
+              <button
+                type="button"
+                onClick={handleParentCard}
+                aria-current={parentIsCurrent ? "true" : undefined}
+                className={cn(pressableClass, "group flex w-28 flex-col items-center")}
+              >
+                <span
+                  className={cn(
+                    "flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold ring-2 transition group-hover:ring-offset-2 group-hover:ring-offset-zinc-50",
+                    ui.avatarParent,
+                    parentIsCurrent
+                      ? "ring-violet-600 ring-offset-2 ring-offset-zinc-50"
+                      : "ring-transparent group-hover:ring-violet-600"
+                  )}
+                >
+                  {parentName.charAt(0).toUpperCase()}
+                </span>
+                <span className="mt-3 text-center text-sm font-semibold text-zinc-900">{parentName}</span>
+                <span className="mt-0.5 text-center text-xs font-medium text-violet-600">
+                  {parentIsCurrent ? "Current · Parent" : "Parent account"}
+                </span>
+              </button>
+
+              {kidProfiles.map((kid) => {
+                const isCurrent = activeKidProfileId === kid.id;
+                return (
+                  <button
+                    key={kid.id}
+                    type="button"
+                    onClick={() => void switchToKid(kid.id)}
+                    disabled={switchingKidId !== null}
+                    aria-current={isCurrent ? "true" : undefined}
+                    className={cn(pressableClass, "group flex w-28 flex-col items-center")}
+                  >
+                    <span
+                      className={cn(
+                        "flex h-24 w-24 items-center justify-center rounded-full ring-2 transition group-hover:ring-offset-2 group-hover:ring-offset-zinc-50",
+                        ui.avatarKid,
+                        isCurrent
+                          ? "ring-sky-500 ring-offset-2 ring-offset-zinc-50"
+                          : "ring-transparent group-hover:ring-sky-400"
+                      )}
+                    >
+                      <KidLucideIcon name={kid.avatar_icon} className="h-12 w-12" />
+                    </span>
+                    <span className="mt-3 text-center text-sm font-semibold text-zinc-900">{kid.name}</span>
+                    <span className="mt-0.5 text-center text-xs font-medium text-sky-700">
+                      {isCurrent ? "Current" : "Kid profile"}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {allowCreate && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(true)}
+                  className={cn(
+                    pressableClass,
+                    "group flex w-24 flex-col items-center text-zinc-400 hover:text-zinc-500"
+                  )}
+                >
+                  <span className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 text-3xl font-light transition group-hover:border-zinc-400">
+                    +
+                  </span>
+                  <span className="mt-3 text-center text-xs font-medium">Add profile</span>
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      ) : null}
 
       {error && <p className="mt-8 text-sm text-red-600">{error}</p>}
 

@@ -304,3 +304,10 @@ export function findStudentPackageForTrack(
   if (matches.length === 1) return matches[0];
   return matches.find((pkg) => pkg.status === "active") ?? matches[0];
 }
+
+export function findStudentPackageForCourse(
+  packages: StudentPackage[],
+  courseId: string
+): StudentPackage | null {
+  return packages.find((pkg) => pkg.courseId === courseId) ?? null;
+}

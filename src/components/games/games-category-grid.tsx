@@ -2,6 +2,7 @@ import type { GameCatalogEntry } from "@/lib/games/catalog";
 import { GameGridTile } from "@/components/games/game-grid-tile";
 import { GamesHorizontalRow } from "@/components/games/games-horizontal-row";
 import { isGameUnlockedForTier } from "@/lib/games/premium-gating";
+import type { ReactNode } from "react";
 
 type GamesCategoryGridProps = {
   title: string;
@@ -9,6 +10,7 @@ type GamesCategoryGridProps = {
   personalBests: Record<string, number>;
   isPremium?: boolean;
   hasFoundationalAccess?: boolean;
+  extraTiles?: ReactNode;
 };
 
 export function GamesCategoryGrid({
@@ -17,6 +19,7 @@ export function GamesCategoryGrid({
   personalBests,
   isPremium = false,
   hasFoundationalAccess = false,
+  extraTiles = null,
 }: GamesCategoryGridProps) {
   return (
     <GamesHorizontalRow title={title}>
@@ -28,6 +31,7 @@ export function GamesCategoryGrid({
           locked={!isGameUnlockedForTier(game.type, isPremium, hasFoundationalAccess)}
         />
       ))}
+      {extraTiles}
     </GamesHorizontalRow>
   );
 }

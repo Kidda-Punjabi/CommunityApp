@@ -76,8 +76,11 @@ export function ParentKidsProgressDetail({
               <h2 className="font-heading text-lg font-semibold text-zinc-900">
                 {course.courseName}
               </h2>
+              <p className="mt-0.5 text-sm font-medium text-zinc-700">Level 1</p>
               <p className="mt-0.5 text-sm text-zinc-500">
                 Week {course.currentWeek} of {course.totalWeeks}
+                {" · "}Homework {course.homeworkDone}/{course.homeworkDue}
+                {" · "}Attendance {course.attendancePresent}/{course.attendanceDue}
               </p>
             </div>
             <ol className="space-y-3">

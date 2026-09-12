@@ -1,12 +1,8 @@
 import { LockedCertificateRow } from "@/components/learn/locked-certificate-row";
 import { BackLink } from "@/components/navigation/back-link";
 import { NavLink } from "@/components/ui/nav-link";
-import { resolveCourseActor } from "@/lib/kids/course-actor";
-import {
-  CERTIFICATE_FORMAT_FOOTNOTE,
-  certificatesForLearnActor,
-} from "@/lib/learn/certificate-mock";
 import { fetchAccessibleKidsCourses, kidsCourseLearnPath } from "@/lib/learning/kids-courses";
+import { loadCertificateLadder } from "@/lib/learn/load-certificate-ladder";
 import { pressableClass } from "@/lib/ui/pressable";
 import { cn, ui } from "@/lib/ui/styles";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
@@ -23,13 +19,8 @@ export default async function CertificatesPage() {
   if (!session) redirect("/login");
 
   const { supabase, user } = session;
-  const [actor, kidsCourses] = await Promise.all([
-    resolveCourseActor(supabase, user.id),
-    fetchAccessibleKidsCourses(supabase, user.id),
-  ]);
-
-  const certificates = certificatesForLearnActor({
-    isKid: actor.kind === "kid",
+  const kidsCourses = await fetchAccessibleKidsCourses(supabase, user.id);
+  const ladder = await loadCertificateLadder(supabase, user.id, {
     kidsCourseHref: kidsCourses[0] ? kidsCourseLearnPath(kidsCourses[0].id) : null,
   });
 
@@ -39,12 +30,14 @@ export default async function CertificatesPage() {
       <div className="mb-6 mt-4">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Certificates</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Track the certificates you can earn as you move through Kidda courses.
+          {ladder.isKid
+            ? "Certificates for this profile, split by level."
+            : "Track the certificates you can earn as you move through Kidda courses."}
         </p>
       </div>
 
       <div className="space-y-3">
-        {certificates.map((cert) => {
+        {ladder.items.map((cert) => {
           if (cert.status === "locked") {
             return (
               <LockedCertificateRow
@@ -84,16 +77,21 @@ export default async function CertificatesPage() {
               {cert.awardedOn ? (
                 <p className="mt-3 text-xs text-zinc-500">Awarded {cert.awardedOn}</p>
               ) : (
-                <p className="mt-3 text-xs text-zinc-500">Continue your current course to unlock this.</p>
+                <p className="mt-3 text-xs text-zinc-500">
+                  Continue your current course to unlock this.
+                </p>
               )}
             </NavLink>
           );
         })}
       </div>
 
-      <p className="mt-8 text-center text-xs leading-relaxed text-zinc-500">
-        {CERTIFICATE_FORMAT_FOOTNOTE}
-      </p>
+      {ladder.showSharedFormatFootnote ? (
+        <p className="mt-8 text-center text-xs leading-relaxed text-zinc-500">
+          The same Kidda certificate is awarded whether you learn as an adult or a child, in a group
+          or 1-to-1.
+        </p>
+      ) : null}
     </div>
   );
 }

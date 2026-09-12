@@ -187,7 +187,7 @@ export async function fetchLessonCompletionMap(
     const { data } = await supabase
       .from("flashcard_progress")
       .select("flashcard_id, confidence")
-      .eq("user_id", userId)
+      .eq(filter.column, filter.value)
       .in("flashcard_id", cardIds);
     flashcardProgress = data ?? [];
   }

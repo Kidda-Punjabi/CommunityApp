@@ -1,5 +1,6 @@
 import "server-only";
 
+import { deriveCohortCurrentWeek } from "@/lib/calendar/cohort-week-progress";
 import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
@@ -123,7 +124,7 @@ export async function loadParentKidsCourseProgress(
     ];
 
     const today = new Date().toISOString().slice(0, 10);
-    const [{ data: cohortUnlockRows }, { data: studentUnlockRows }, { data: logRows }] =
+    const [{ data: cohortUnlockRows }, { data: studentUnlockRows }, { data: logRows }, { data: sessionRows }, { data: cohortRows }] =
       await Promise.all([
         groupCohortIds.length
           ? unlockDb
@@ -142,6 +143,15 @@ export async function loadParentKidsCourseProgress(
               .in("cohort_id", groupCohortIds)
               .not("lesson_id", "is", null)
               .lte("lesson_date", today)
+          : Promise.resolve({ data: [] as never[] }),
+        groupCohortIds.length
+          ? unlockDb
+              .from("tutor_scheduled_sessions")
+              .select("cohort_id, starts_at, week_number, status")
+              .in("cohort_id", groupCohortIds)
+          : Promise.resolve({ data: [] as never[] }),
+        groupCohortIds.length
+          ? unlockDb.from("cohorts").select("id, start_date").in("id", groupCohortIds)
           : Promise.resolve({ data: [] as never[] }),
       ]);
 
@@ -172,6 +182,25 @@ export async function loadParentKidsCourseProgress(
       happenedByCohort.set(cohortId, set);
     }
 
+    const sessionsByCohort = new Map<
+      string,
+      Array<{ starts_at: string; week_number?: number | null; status?: string | null }>
+    >();
+    for (const row of sessionRows ?? []) {
+      const cohortId = row.cohort_id as string | null;
+      if (!cohortId) continue;
+      const list = sessionsByCohort.get(cohortId) ?? [];
+      list.push({
+        starts_at: row.starts_at as string,
+        week_number: (row.week_number as number | null) ?? null,
+        status: (row.status as string | null) ?? null,
+      });
+      sessionsByCohort.set(cohortId, list);
+    }
+    const startDateByCohort = new Map(
+      (cohortRows ?? []).map((row) => [row.id as string, (row.start_date as string | null) ?? null])
+    );
+
     const courses: ParentKidCourseSummary[] = [];
 
     for (const enrollment of enrollmentRows) {
@@ -194,7 +223,12 @@ export async function loadParentKidsCourseProgress(
         .order("lesson_number");
 
       const lessonIds = (lessons ?? []).map((row) => row.id as string);
-      const [{ data: homeworkRows }, { data: attendanceRows }] = await Promise.all([
+      const [
+        { data: homeworkRows },
+        { data: parentHomeworkRows },
+        { data: attendanceRows },
+        { data: parentAttendanceRows },
+      ] = await Promise.all([
         lessonIds.length
           ? supabase
               .from("homework_submissions")
@@ -205,18 +239,42 @@ export async function loadParentKidsCourseProgress(
           : Promise.resolve({ data: [] as never[] }),
         lessonIds.length
           ? supabase
+              .from("homework_submissions")
+              .select("lesson_id, status, tutor_comment, submitted_at")
+              .eq("student_id", parentUserId)
+              .is("kid_profile_id", null)
+              .eq("is_practice", false)
+              .in("lesson_id", lessonIds)
+          : Promise.resolve({ data: [] as never[] }),
+        lessonIds.length
+          ? supabase
               .from("cohort_lesson_attendance")
               .select("lesson_id, attended, tutor_note")
               .eq("kid_profile_id", profile.id)
               .in("lesson_id", lessonIds)
           : Promise.resolve({ data: [] as never[] }),
+        lessonIds.length && cohortId
+          ? supabase
+              .from("cohort_lesson_attendance")
+              .select("lesson_id, attended, tutor_note")
+              .eq("student_id", parentUserId)
+              .is("kid_profile_id", null)
+              .eq("cohort_id", cohortId)
+              .in("lesson_id", lessonIds)
+          : Promise.resolve({ data: [] as never[] }),
       ]);
 
       const homeworkByLesson = new Map(
-        (homeworkRows ?? []).map((row) => [row.lesson_id as string, row])
+        [...(parentHomeworkRows ?? []), ...(homeworkRows ?? [])].map((row) => [
+          row.lesson_id as string,
+          row,
+        ])
       );
       const attendanceByLesson = new Map(
-        (attendanceRows ?? []).map((row) => [row.lesson_id as string, row])
+        [...(parentAttendanceRows ?? []), ...(attendanceRows ?? [])].map((row) => [
+          row.lesson_id as string,
+          row,
+        ])
       );
 
       const groupUnlocked = cohortId ? unlockedByCohort.get(cohortId) : undefined;
@@ -278,16 +336,11 @@ export async function loadParentKidsCourseProgress(
         });
       }
 
-      const unlockedNumbers = lessonProgress
-        .filter((lesson) => lesson.unlocked)
-        .map((lesson) => lesson.lessonNumber);
-      const happenedNumbers = lessonProgress
-        .filter((lesson) => lesson.happened)
-        .map((lesson) => lesson.lessonNumber);
-      const currentWeek = Math.max(
-        0,
-        ...(unlockedNumbers.length > 0 ? unlockedNumbers : happenedNumbers)
-      );
+      const currentWeek = deriveCohortCurrentWeek({
+        startDateIso: cohortId ? startDateByCohort.get(cohortId) ?? null : null,
+        totalWeeks: lessonProgress.length,
+        sessions: cohortId ? (sessionsByCohort.get(cohortId) ?? []) : [],
+      });
       const dueLessons = lessonProgress.filter((lesson) => lesson.happened);
 
       courses.push({

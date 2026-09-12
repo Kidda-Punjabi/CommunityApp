@@ -1,7 +1,13 @@
 -- Parent "how your kids are doing" summary.
 -- Mirrors get_course_progress: SECURITY DEFINER, auth.uid() must be the kid's parent.
+--
+-- Course level 1/2/3 is NOT stored on course_enrollments. Kids Beginners is the
+-- only live kids course, so enrolled kids are labelled Level 1. Do not invent
+-- an enrolment column here.
 
-CREATE OR REPLACE FUNCTION public.get_kid_progress_summary(p_kid_profile_id UUID)
+DROP FUNCTION IF EXISTS public.get_kid_progress_summary(UUID);
+
+CREATE FUNCTION public.get_kid_progress_summary(p_kid_profile_id UUID)
 RETURNS TABLE (
   kid_profile_id UUID,
   kid_name TEXT,
@@ -9,6 +15,12 @@ RETURNS TABLE (
   course_id UUID,
   course_name TEXT,
   course_level TEXT,
+  current_level_number INTEGER,
+  current_level_label TEXT,
+  current_week INTEGER,
+  total_weeks INTEGER,
+  homework_done INTEGER,
+  homework_due INTEGER,
   attendance_present INTEGER,
   attendance_total INTEGER,
   outstanding_homework_title TEXT,
@@ -29,12 +41,21 @@ DECLARE
   v_course_name TEXT;
   v_course_level TEXT;
   v_cohort_id UUID;
+  v_start_date TIMESTAMPTZ;
   v_present INTEGER := 0;
   v_total INTEGER := 0;
   v_hw_title TEXT;
   v_hw_due DATE;
+  v_hw_done INTEGER := 0;
+  v_hw_due_count INTEGER := 0;
   v_note TEXT;
   v_note_at TIMESTAMPTZ;
+  v_total_weeks INTEGER := 0;
+  v_current_week INTEGER := 0;
+  v_stored_week INTEGER;
+  v_elapsed INTEGER := 0;
+  v_level_number INTEGER;
+  v_level_label TEXT;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'Unauthorized';
@@ -49,13 +70,57 @@ BEGIN
     RAISE EXCEPTION 'Unauthorized';
   END IF;
 
-  SELECT ce.course_id, co.name, co.required_tier::TEXT, ce.cohort_id
-  INTO v_course_id, v_course_name, v_course_level, v_cohort_id
+  SELECT ce.course_id, co.name, co.required_tier::TEXT, ce.cohort_id, c.start_date
+  INTO v_course_id, v_course_name, v_course_level, v_cohort_id, v_start_date
   FROM public.course_enrollments ce
   JOIN public.courses co ON co.id = ce.course_id
+  LEFT JOIN public.cohorts c ON c.id = ce.cohort_id
   WHERE ce.kid_profile_id = p_kid_profile_id
   ORDER BY ce.created_at DESC
   LIMIT 1;
+
+  IF v_course_id IS NOT NULL THEN
+    -- Only live kids course is Level 1. Enrolment has no 1/2/3 column.
+    v_level_number := 1;
+    v_level_label := 'Level 1';
+  END IF;
+
+  SELECT COUNT(*)::INTEGER
+  INTO v_total_weeks
+  FROM public.lessons l
+  WHERE v_course_id IS NOT NULL
+    AND l.course_id = v_course_id;
+
+  SELECT s.week_number
+  INTO v_stored_week
+  FROM public.tutor_scheduled_sessions s
+  WHERE v_cohort_id IS NOT NULL
+    AND s.cohort_id = v_cohort_id
+    AND COALESCE(s.status, '') <> 'cancelled'
+    AND s.week_number IS NOT NULL
+    AND s.starts_at >= NOW()
+  ORDER BY s.starts_at ASC
+  LIMIT 1;
+
+  SELECT COUNT(*)::INTEGER
+  INTO v_elapsed
+  FROM public.tutor_scheduled_sessions s
+  WHERE v_cohort_id IS NOT NULL
+    AND s.cohort_id = v_cohort_id
+    AND COALESCE(s.status, '') <> 'cancelled'
+    AND s.starts_at <= NOW();
+
+  IF v_course_id IS NULL THEN
+    v_current_week := 0;
+  ELSIF v_stored_week IS NOT NULL THEN
+    v_current_week := LEAST(v_stored_week, GREATEST(v_total_weeks, 1));
+  ELSIF v_start_date IS NOT NULL AND (v_start_date AT TIME ZONE 'UTC')::date > CURRENT_DATE THEN
+    v_current_week := 1;
+  ELSIF v_elapsed > 0 THEN
+    v_current_week := LEAST(v_elapsed, GREATEST(v_total_weeks, 1));
+  ELSE
+    v_current_week := 1;
+  END IF;
 
   -- Prefer kid_profile_id. Also accept older parent-keyed rows that belong to
   -- this kid's course/cohort (XOR actor columns). Never mix in the parent's
@@ -74,8 +139,42 @@ BEGIN
        AND a.cohort_id = v_cohort_id
      );
 
+  SELECT COUNT(DISTINCT log.lesson_id)::INTEGER
+  INTO v_hw_due_count
+  FROM public.cohort_lesson_log_entries log
+  WHERE v_cohort_id IS NOT NULL
+    AND log.cohort_id = v_cohort_id
+    AND log.lesson_id IS NOT NULL
+    AND log.lesson_date <= CURRENT_DATE
+    AND COALESCE(log.status, '') <> 'Cancelled';
+
+  SELECT COUNT(DISTINCT hs.lesson_id)::INTEGER
+  INTO v_hw_done
+  FROM public.homework_submissions hs
+  JOIN public.lessons hl ON hl.id = hs.lesson_id
+  WHERE hs.is_practice = false
+    AND v_course_id IS NOT NULL
+    AND hl.course_id = v_course_id
+    AND (
+      hs.kid_profile_id = p_kid_profile_id
+      OR (
+        hs.kid_profile_id IS NULL
+        AND hs.student_id = v_parent
+      )
+    )
+    AND (
+      v_cohort_id IS NULL
+      OR EXISTS (
+        SELECT 1
+        FROM public.cohort_lesson_log_entries log
+        WHERE log.cohort_id = v_cohort_id
+          AND log.lesson_id = hs.lesson_id
+          AND log.lesson_date <= CURRENT_DATE
+          AND COALESCE(log.status, '') <> 'Cancelled'
+      )
+    );
+
   -- Outstanding = earliest happened lesson with no non-practice submission.
-  -- Due date comes from the lesson log date (homework_submissions has no due column).
   SELECT l.title, log.lesson_date
   INTO v_hw_title, v_hw_due
   FROM public.cohort_lesson_log_entries log
@@ -149,6 +248,12 @@ BEGIN
   course_id := v_course_id;
   course_name := v_course_name;
   course_level := v_course_level;
+  current_level_number := v_level_number;
+  current_level_label := v_level_label;
+  current_week := v_current_week;
+  total_weeks := v_total_weeks;
+  homework_done := v_hw_done;
+  homework_due := v_hw_due_count;
   attendance_present := v_present;
   attendance_total := v_total;
   outstanding_homework_title := v_hw_title;

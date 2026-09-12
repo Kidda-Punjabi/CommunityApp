@@ -5,6 +5,7 @@ import { HubLinkTile } from "@/components/games/hub-link-tile";
 import type { GameCatalogEntry } from "@/lib/games/catalog";
 import { BATTLE_GAME_HUB_ENTRIES, GROUP_GAME_HUB_ENTRIES } from "@/lib/games/hub-config";
 import { isGameUnlockedForTier } from "@/lib/games/premium-gating";
+import type { ReactNode } from "react";
 
 type GamesHubProps = {
   vocabularyGames: GameCatalogEntry[];
@@ -13,6 +14,7 @@ type GamesHubProps = {
   isPremium?: boolean;
   hasFoundationalAccess?: boolean;
   hideGrammar?: boolean;
+  extraVocabularyTiles?: ReactNode;
 };
 
 export function GamesHub({
@@ -22,6 +24,7 @@ export function GamesHub({
   isPremium = false,
   hasFoundationalAccess = false,
   hideGrammar = false,
+  extraVocabularyTiles = null,
 }: GamesHubProps) {
   return (
     <div className="space-y-6">
@@ -35,6 +38,7 @@ export function GamesHub({
         personalBests={personalBests}
         isPremium={isPremium}
         hasFoundationalAccess={hasFoundationalAccess}
+        extraTiles={extraVocabularyTiles}
       />
 
       {!hideGrammar && grammarGames.length > 0 ? (

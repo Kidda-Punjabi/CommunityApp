@@ -5,9 +5,19 @@ import { cn } from "@/lib/ui/styles";
 import { ChevronRight, ClipboardList } from "lucide-react";
 import { NavLink } from "@/components/ui/nav-link";
 
+function weekLabel(row: ParentKidProgressSummary): string | null {
+  if (!row.courseName || row.totalWeeks <= 0) return null;
+  return `Week ${row.currentWeek} of ${row.totalWeeks}`;
+}
+
+function homeworkLabel(row: ParentKidProgressSummary): string {
+  if (row.homeworkDue <= 0) return "Homework 0/0";
+  return `Homework ${row.homeworkDone}/${row.homeworkDue}`;
+}
+
 function attendanceLabel(row: ParentKidProgressSummary): string {
-  if (row.attendanceTotal <= 0) return "No attendance yet";
-  return `${row.attendancePresent}/${row.attendanceTotal} attended`;
+  if (row.attendanceTotal <= 0) return "Attendance 0/0";
+  return `Attendance ${row.attendancePresent}/${row.attendanceTotal}`;
 }
 
 export function LearnKidsProgressLink({
@@ -36,17 +46,26 @@ export function LearnKidsProgressLink({
           </span>
         ) : (
           <span className="mt-1.5 block space-y-1.5">
-            {summaries.map((row) => (
-              <span key={row.kidProfileId} className="flex items-center gap-2 text-[11px] font-medium text-emerald-900/85">
-                <KidLucideIcon name={row.avatarIcon} className="h-3.5 w-3.5 shrink-0" />
-                <span className="min-w-0 truncate">
-                  {row.kidName}
-                  {row.courseName ? ` · ${row.courseName}` : " · Not enrolled yet"}
-                  {" · "}
-                  {attendanceLabel(row)}
+            {summaries.map((row) => {
+              const week = weekLabel(row);
+              return (
+                <span
+                  key={row.kidProfileId}
+                  className="flex items-center gap-2 text-[11px] font-medium text-emerald-900/85"
+                >
+                  <KidLucideIcon name={row.avatarIcon} className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 truncate">
+                    {row.kidName}
+                    {row.courseName ? ` · ${row.courseName}` : " · Not enrolled yet"}
+                    {row.currentLevelLabel ? ` · ${row.currentLevelLabel}` : ""}
+                    {week ? ` · ${week}` : ""}
+                    {row.courseName
+                      ? ` · ${homeworkLabel(row)} · ${attendanceLabel(row)}`
+                      : ""}
+                  </span>
                 </span>
-              </span>
-            ))}
+              );
+            })}
           </span>
         )}
       </span>
