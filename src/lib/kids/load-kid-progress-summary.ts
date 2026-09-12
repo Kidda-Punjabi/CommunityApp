@@ -9,6 +9,12 @@ export type ParentKidProgressSummary = {
   courseId: string | null;
   courseName: string | null;
   courseLevel: string | null;
+  currentLevelNumber: number | null;
+  currentLevelLabel: string | null;
+  currentWeek: number;
+  totalWeeks: number;
+  homeworkDone: number;
+  homeworkDue: number;
   attendancePresent: number;
   attendanceTotal: number;
   outstandingHomeworkTitle: string | null;
@@ -24,6 +30,12 @@ type RpcRow = {
   course_id: string | null;
   course_name: string | null;
   course_level: string | null;
+  current_level_number: number | null;
+  current_level_label: string | null;
+  current_week: number | null;
+  total_weeks: number | null;
+  homework_done: number | null;
+  homework_due: number | null;
   attendance_present: number | null;
   attendance_total: number | null;
   outstanding_homework_title: string | null;
@@ -40,6 +52,12 @@ function mapRow(row: RpcRow): ParentKidProgressSummary {
     courseId: row.course_id,
     courseName: row.course_name,
     courseLevel: row.course_level,
+    currentLevelNumber: row.current_level_number,
+    currentLevelLabel: row.current_level_label,
+    currentWeek: row.current_week ?? 0,
+    totalWeeks: row.total_weeks ?? 0,
+    homeworkDone: row.homework_done ?? 0,
+    homeworkDue: row.homework_due ?? 0,
     attendancePresent: row.attendance_present ?? 0,
     attendanceTotal: row.attendance_total ?? 0,
     outstandingHomeworkTitle: row.outstanding_homework_title,

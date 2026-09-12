@@ -372,7 +372,7 @@ export async function getHomeDashboardData(
       .select(
         "flashcard_id, confidence, last_reviewed_at, flashcards(id, lesson_id, deck_id, lessons(id, title, lesson_number))"
       )
-      .eq("user_id", userId),
+      .eq(progressFilter.column, progressFilter.value),
     supabase.from("lessons").select("id, is_free").eq("is_free", true),
     supabase
       .from("lessons")

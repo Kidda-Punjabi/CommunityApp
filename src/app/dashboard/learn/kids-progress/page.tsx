@@ -4,6 +4,8 @@ import { requireNoActiveKidProfile } from "@/lib/kids/guards";
 import { loadKidProgressSummariesForParent } from "@/lib/kids/load-kid-progress-summary";
 import { ui } from "@/lib/ui/styles";
 
+export const dynamic = "force-dynamic";
+
 export default async function KidsProgressPage() {
   const { user, supabase } = await requireNoActiveKidProfile();
   const rows = await loadKidProgressSummariesForParent(supabase, user.id);

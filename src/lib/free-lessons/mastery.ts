@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  actorFilter,
+  actorOnConflict,
+  resolveCourseActor,
+  topicMasteryWrite,
+} from "@/lib/kids/course-actor";
+import {
   advanceMasteryAfterPass,
   computeStageFills,
   decodeMasteryUnits,
@@ -80,10 +86,12 @@ export async function fetchTopicMasteryMap(
 ): Promise<Map<string, TopicMasteryRow>> {
   if (lessonIds.length === 0) return new Map();
 
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   const { data, error } = await supabase
     .from("topic_mastery")
     .select("lesson_id, mastery_level, progress_percent, stage, depth")
-    .eq("user_id", userId)
+    .eq(filter.column, filter.value)
     .in("lesson_id", lessonIds);
 
   if (error) {
@@ -156,19 +164,19 @@ export async function recordTopicActivityResult(
     );
   }
 
+  const actor = await resolveCourseActor(supabase, userId);
   const units = clampUnits(masteryUnits(stage, depth));
-  const payload = {
-    user_id: userId,
+  const payload = topicMasteryWrite(actor, {
     lesson_id: lessonId,
     mastery_level: units,
     progress_percent: progressPercent,
     stage,
     depth,
-  };
+  });
 
-  const { error } = await supabase
-    .from("topic_mastery")
-    .upsert(payload, { onConflict: "user_id,lesson_id" });
+  const { error } = await supabase.from("topic_mastery").upsert(payload, {
+    onConflict: actorOnConflict(actor, "user_id,lesson_id", "kid_profile_id,lesson_id"),
+  });
 
   if (error) throw error;
 

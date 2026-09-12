@@ -1,11 +1,10 @@
 import { LearnLessonList } from "@/components/learn-lesson-list";
-import { KidsCohortPlacementCard } from "@/components/learn/kids-cohort-placement-card";
+import { PackageHubPanel } from "@/components/packages/package-hub-panel";
 import { fetchLearnContent, filterLessonsForCourse } from "@/lib/learning/load-learn-content";
 import {
   fetchAccessibleKidsCourses,
   fetchKidsCourseLessonUnlockMap,
 } from "@/lib/learning/kids-courses";
-import { formatKidsCohortOpenDate } from "@/lib/learning/kids-cohort-display";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { fetchLessonCompletionMap, summarizeCourseProgress } from "@/lib/progress/lesson-completion";
 import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
@@ -16,7 +15,16 @@ import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submiss
 import { fetchFeedbackSubmittedLessonIds } from "@/lib/feedback/load-feedback-history";
 import { buildScheduleSessionByLessonId } from "@/lib/calendar/lesson-schedule-map";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
+import {
+  deriveCohortCurrentWeek,
+  formatStartedWeekProgressLine,
+} from "@/lib/calendar/cohort-week-progress";
 import { loadStudentCohortHomeworkCompletedMap } from "@/lib/lessons/load-student-cohort-homework-completed";
+import { loadStudentCohortCourseStats } from "@/lib/lessons/load-student-cohort-course-stats";
+import {
+  findStudentPackageForCourse,
+  loadStudentPackages,
+} from "@/lib/packages/load-student-packages";
 import { createClient } from "@/lib/supabase/server";
 import { lessonHomeworkPath } from "@/lib/tutoring/homework-href";
 import { notFound, redirect } from "next/navigation";
@@ -47,20 +55,28 @@ export default async function KidsCourseLearnPage({
   const course = kidsCourses.find((row) => row.id === courseId);
   if (!course) notFound();
 
-  const [access, allLessons, lessonProgressMap, flashcardProgressMap, quizProgressMap] =
-    await Promise.all([
-      getCourseAccessContext(supabase, user),
-      fetchLearnContent(supabase),
-      fetchLessonProgressMap(supabase, user.id),
-      fetchFlashcardProgressMap(supabase, user.id),
-      fetchQuizProgressMap(supabase, user.id),
-    ]);
+  const [
+    access,
+    allLessons,
+    lessonProgressMap,
+    flashcardProgressMap,
+    quizProgressMap,
+    studentPackages,
+  ] = await Promise.all([
+    getCourseAccessContext(supabase, user),
+    fetchLearnContent(supabase),
+    fetchLessonProgressMap(supabase, user.id),
+    fetchFlashcardProgressMap(supabase, user.id),
+    fetchQuizProgressMap(supabase, user.id),
+    loadStudentPackages(supabase, user),
+  ]);
 
   const lessons = filterLessonsForCourse(allLessons, courseId).sort(
     (a, b) => a.lesson_number - b.lesson_number
   );
   const lessonIds = lessons.map((lesson) => lesson.id);
   const courseIds = [courseId];
+  const studentPackage = findStudentPackageForCourse(studentPackages, courseId);
 
   const [
     completionMap,
@@ -69,6 +85,7 @@ export default async function KidsCourseLearnPage({
     homeworkMap,
     feedbackSubmittedLessonIds,
     upcomingLoad,
+    cohortCourseStats,
     cohortHomeworkCompletedMap,
   ] = await Promise.all([
     fetchLessonCompletionMap(supabase, user.id, lessons),
@@ -80,6 +97,7 @@ export default async function KidsCourseLearnPage({
       includePast: true,
       courseIds,
     }),
+    loadStudentCohortCourseStats(supabase, user.id, courseIds),
     loadStudentCohortHomeworkCompletedMap(supabase, user.id, courseIds, lessonIds),
   ]);
 
@@ -89,11 +107,25 @@ export default async function KidsCourseLearnPage({
     lessons,
     courseIds
   );
+  const storedWeekSessions = upcomingLoad.sessions.filter(
+    (session) => session.cohort_id === studentPackage?.cohortId
+  );
+  const cohortProgressLine = studentPackage
+    ? formatStartedWeekProgressLine({
+        startDateIso: studentPackage.cohortStartDate,
+        currentWeek: deriveCohortCurrentWeek({
+          startDateIso: studentPackage.cohortStartDate,
+          totalWeeks: lessons.length,
+          sessions: storedWeekSessions,
+        }),
+        totalWeeks: lessons.length,
+      })
+    : null;
 
   return (
     <LearnLessonList
-      title={course.name}
-      subtitle={`${lessons.length} lesson${lessons.length === 1 ? "" : "s"} in this course.`}
+      title="Beginners Course"
+      subtitle=""
       lessons={lessons}
       access={access}
       progressMap={lessonProgressMap}
@@ -106,12 +138,14 @@ export default async function KidsCourseLearnPage({
         total: courseProgress.totalLessons,
       }}
       staffSection={
-        <KidsCohortPlacementCard
-          cohortName={course.cohortName}
-          weeklyLabel={course.weeklyLabel}
-          startDateLabel={course.startDate ? formatKidsCohortOpenDate(course.startDate) : null}
-          gated={course.gated}
-        />
+        studentPackage ? (
+          <PackageHubPanel
+            pkg={studentPackage}
+            cohortStats={cohortCourseStats}
+            cohortProgressLine={cohortProgressLine}
+            showGroupReschedule
+          />
+        ) : null
       }
       contentUnlockedMap={contentUnlockedMap}
       honorContentUnlockMap
@@ -123,6 +157,7 @@ export default async function KidsCourseLearnPage({
       homeworkFocusLessonId={homeworkFocusLessonId ?? null}
       catchupReturn={catchupReturn ?? null}
       scheduleSessionByLessonId={scheduleSessionByLessonId}
+      statusLegendPosition="top"
     />
   );
 }

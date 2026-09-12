@@ -4,6 +4,12 @@ import {
   tryAwardLessonCompletionPoints,
 } from "@/lib/leaderboard/points";
 import { learningProductForFlashcard } from "@/lib/learning/learning-product";
+import {
+  actorFilter,
+  actorOnConflict,
+  flashcardProgressWrite,
+  resolveCourseActor,
+} from "@/lib/kids/course-actor";
 
 export type FlashcardConfidence = "confident" | "not_confident";
 
@@ -24,10 +30,12 @@ export async function fetchFlashcardProgressMap(
   userId: string,
   flashcardIds?: string[]
 ): Promise<Map<string, FlashcardProgressRow>> {
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   let query = supabase
     .from("flashcard_progress")
     .select("flashcard_id, confidence")
-    .eq("user_id", userId);
+    .eq(filter.column, filter.value);
 
   if (flashcardIds?.length) {
     query = query.in("flashcard_id", flashcardIds);
@@ -54,11 +62,13 @@ export async function saveFlashcardConfidence(
   flashcardId: string,
   confidence: FlashcardConfidence
 ): Promise<SaveFlashcardConfidenceResult> {
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   const [{ data: existing }, { data: flashcard }] = await Promise.all([
     supabase
       .from("flashcard_progress")
       .select("confidence")
-      .eq("user_id", userId)
+      .eq(filter.column, filter.value)
       .eq("flashcard_id", flashcardId)
       .maybeSingle(),
     supabase.from("flashcards").select("lesson_id").eq("id", flashcardId).maybeSingle(),
@@ -67,13 +77,18 @@ export async function saveFlashcardConfidence(
   const wasConfident = existing?.confidence === "confident";
 
   const { error } = await supabase.from("flashcard_progress").upsert(
-    {
-      user_id: userId,
+    flashcardProgressWrite(actor, {
       flashcard_id: flashcardId,
       confidence,
       last_reviewed_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,flashcard_id" }
+    }),
+    {
+      onConflict: actorOnConflict(
+        actor,
+        "user_id,flashcard_id",
+        "kid_profile_id,flashcard_id"
+      ),
+    }
   );
 
   if (error) throw error;

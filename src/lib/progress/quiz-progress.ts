@@ -162,10 +162,12 @@ export async function isQuizLevelUnlocked(
 
   if (!previousQuiz) return true;
 
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   const { data: progress } = await supabase
     .from("quiz_progress")
     .select("completed")
-    .eq("user_id", userId)
+    .eq(filter.column, filter.value)
     .eq("quiz_id", previousQuiz.id)
     .maybeSingle();
 

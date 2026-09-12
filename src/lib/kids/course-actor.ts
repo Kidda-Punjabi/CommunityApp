@@ -84,5 +84,37 @@ export function homeworkWrite(
   if (actor.kind === "kid") {
     return { ...rest, student_id: null, kid_profile_id: actor.kidProfileId };
   }
-    return { ...rest, student_id: actor.userId, kid_profile_id: null };
+  return { ...rest, student_id: actor.userId, kid_profile_id: null };
+}
+
+export function topicMasteryWrite(
+  actor: CourseActor,
+  rest: Record<string, unknown>
+): Record<string, unknown> {
+  return lessonProgressWrite(actor, rest);
+}
+
+export function flashcardProgressWrite(
+  actor: CourseActor,
+  rest: Record<string, unknown>
+): Record<string, unknown> {
+  return lessonProgressWrite(actor, rest);
+}
+
+export function feedbackWrite(
+  actor: CourseActor,
+  rest: Record<string, unknown>
+): Record<string, unknown> {
+  if (actor.kind === "kid") {
+    return { ...rest, user_id: null, kid_profile_id: actor.kidProfileId };
+  }
+  return { ...rest, user_id: actor.userId, kid_profile_id: null };
+}
+
+export function actorOnConflict(
+  actor: CourseActor,
+  userColumns: string,
+  kidColumns: string
+): string {
+  return actor.kind === "kid" ? kidColumns : userColumns;
 }

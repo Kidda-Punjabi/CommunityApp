@@ -1,7 +1,6 @@
 import { GamesHub } from "@/components/games/games-hub";
-import { KidBedtimeStoriesPanel } from "@/components/kids/kid-bedtime-stories-panel";
+import { HubLinkTile } from "@/components/games/hub-link-tile";
 import { getGamesTabData } from "@/lib/cache/tab-page-cache";
-import { loadKidBedtimeStoriesForParent } from "@/lib/kids/bedtime-stories";
 import { usesKidsShell } from "@/lib/kids/constants";
 import { loadKidSession } from "@/lib/kids/session";
 import { GAME_CATALOG } from "@/lib/games/catalog";
@@ -31,9 +30,6 @@ export default async function GamesPage() {
   ]);
   const olderKid =
     kidSession.activeKidProfile && !usesKidsShell(kidSession.activeKidProfile.age_tier);
-  const bedtimeStories = olderKid
-    ? await loadKidBedtimeStoriesForParent(session.supabase, session.user.id)
-    : null;
 
   const englishMode = isEnglishGamesScope(scope);
   const hasFoundationalAccess = hasTierAccess(courseAccess, "foundational");
@@ -65,16 +61,6 @@ export default async function GamesPage() {
         </p>
       </div>
 
-      {bedtimeStories ? (
-        <div className="mb-6">
-          <KidBedtimeStoriesPanel
-            stories={bedtimeStories.stories}
-            parentIsPremium={bedtimeStories.parentIsPremium}
-            tableReady={bedtimeStories.tableReady}
-          />
-        </div>
-      ) : null}
-
       <GamesHub
         vocabularyGames={vocabularyGames}
         grammarGames={grammarGames}
@@ -82,6 +68,15 @@ export default async function GamesPage() {
         isPremium={isPremium}
         hasFoundationalAccess={hasFoundationalAccess}
         hideGrammar={englishMode}
+        extraVocabularyTiles={
+          olderKid ? (
+            <HubLinkTile
+              title="Bedtime Stories"
+              emoji="🌙"
+              href="/dashboard/games/bedtime-stories"
+            />
+          ) : null
+        }
       />
     </div>
   );

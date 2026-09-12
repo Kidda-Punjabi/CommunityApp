@@ -51,23 +51,26 @@ export function ParentKidsProgressList({
                 {row.courseName ? (
                   <>
                     <p className="mt-0.5 text-sm text-zinc-600">{row.courseName}</p>
-                    {row.courseLevel && row.courseLevel !== "private" ? (
+                    {row.currentLevelLabel ? (
                       <p className="mt-0.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
-                        {row.courseLevel}
+                        {row.currentLevelLabel}
+                      </p>
+                    ) : null}
+                    {row.totalWeeks > 0 ? (
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        Week {row.currentWeek} of {row.totalWeeks}
                       </p>
                     ) : null}
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-600">
                       <span className="inline-flex items-center gap-1">
                         <CalendarCheck className="h-3.5 w-3.5 text-zinc-400" aria-hidden />
-                        {row.attendanceTotal > 0
-                          ? `Attendance ${row.attendancePresent}/${row.attendanceTotal}`
-                          : "No attendance yet"}
+                        {`Attendance ${row.attendancePresent}/${row.attendanceTotal}`}
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Notebook className="h-3.5 w-3.5 text-zinc-400" aria-hidden />
                         {row.outstandingHomeworkTitle
                           ? `Due${dueLabel ? ` ${dueLabel}` : ""}: ${row.outstandingHomeworkTitle}`
-                          : "No outstanding homework"}
+                          : `Homework ${row.homeworkDone}/${row.homeworkDue}`}
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <MessageSquareText className="h-3.5 w-3.5 text-zinc-400" aria-hidden />

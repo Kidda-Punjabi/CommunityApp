@@ -110,6 +110,37 @@ export function resolveCohortProgressCurrentWeek(params: {
   return cohortHasStarted(params.startDateIso, params.storedWeek, params.nowMs) ? null : 1;
 }
 
+/**
+ * Current week for parent kid-progress cards when stored week_number is often null.
+ * Prefer the next upcoming session's week_number; else elapsed scheduled sessions;
+ * else week 1 if the cohort has not started (never a hardcoded 0 for an enrolled kid).
+ */
+export function deriveCohortCurrentWeek(params: {
+  startDateIso: string | null | undefined;
+  totalWeeks: number;
+  sessions: Array<{ starts_at: string; week_number?: number | null; status?: string | null }>;
+  nowMs?: number;
+}): number {
+  const nowMs = params.nowMs ?? Date.now();
+  const cap = Math.max(params.totalWeeks, 1);
+  const stored = currentWeekFromStoredWeekNumber(params.sessions, nowMs)?.week ?? null;
+  if (stored != null) return Math.min(stored, cap);
+
+  const resolved = resolveCohortProgressCurrentWeek({
+    startDateIso: params.startDateIso,
+    storedWeek: stored,
+    nowMs,
+  });
+  if (resolved != null) return Math.min(resolved, cap);
+
+  const elapsed = params.sessions.filter(
+    (session) =>
+      session.status !== "cancelled" && new Date(session.starts_at).getTime() <= nowMs
+  ).length;
+  if (elapsed <= 0) return 1;
+  return Math.min(elapsed, cap);
+}
+
 export function formatStartedWeekProgressLine(params: {
   startDateIso: string | null | undefined;
   currentWeek: number | null | undefined;

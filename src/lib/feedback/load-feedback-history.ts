@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { actorFilter, resolveCourseActor } from "@/lib/kids/course-actor";
 
 export type FeedbackHistoryEntry = {
   id: string;
@@ -17,12 +18,14 @@ export async function loadFeedbackHistoryForLesson(
   userId: string,
   lessonId: string
 ): Promise<FeedbackHistoryEntry[]> {
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   const { data, error } = await supabase
     .from("feedback_submissions")
     .select(
       "id, learning_relevance, tutor_effectiveness, confidence, understanding, speaking, comments, overall_score, submitted_at"
     )
-    .eq("user_id", userId)
+    .eq(filter.column, filter.value)
     .eq("lesson_id", lessonId)
     .neq("form_variant", "week1")
     .order("submitted_at", { ascending: false });
@@ -50,10 +53,12 @@ export async function fetchFeedbackSubmittedLessonIds(
 ): Promise<Set<string>> {
   if (lessonIds.length === 0) return new Set();
 
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   const { data, error } = await supabase
     .from("feedback_submissions")
     .select("lesson_id")
-    .eq("user_id", userId)
+    .eq(filter.column, filter.value)
     .in("lesson_id", lessonIds)
     .neq("form_variant", "week1")
     .not("lesson_id", "is", null);

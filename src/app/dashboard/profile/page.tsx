@@ -116,6 +116,7 @@ export default async function ProfilePage() {
             hasPin={kidSession.hasPin}
             parentName={displayName || "Parent"}
             activeKidProfileId={null}
+            collapsedByDefault
           />
         </section>
       )}

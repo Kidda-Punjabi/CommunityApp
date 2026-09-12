@@ -10,6 +10,7 @@ import {
 } from "@/lib/feedback/load-feedback-context";
 import type { FeedbackContext } from "@/lib/feedback/types";
 import { formatSessionWhenUk } from "@/lib/calendar/uk-display-time";
+import { actorFilter, resolveCourseActor } from "@/lib/kids/course-actor";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -146,10 +147,12 @@ async function loadSubmittedSessionIds(
 ): Promise<Set<string>> {
   if (sessionIds.length === 0) return new Set();
 
+  const actor = await resolveCourseActor(supabase, userId);
+  const filter = actorFilter(actor);
   const { data, error } = await supabase
     .from("feedback_submissions")
     .select("session_id")
-    .eq("user_id", userId)
+    .eq(filter.column, filter.value)
     .in("session_id", sessionIds)
     .not("session_id", "is", null);
 
