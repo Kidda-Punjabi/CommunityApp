@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resolveCourseActor } from "@/lib/kids/course-actor";
 import {
   learningProductForLesson,
   type LearningProduct,
@@ -64,8 +63,12 @@ export async function awardWeeklyPoints(
     data: { user },
   } = await supabase.auth.getUser();
   if (user) {
-    const actor = await resolveCourseActor(supabase, user.id);
-    if (actor.kind === "kid") return 0;
+    const { data: context } = await supabase
+      .from("kid_session_context")
+      .select("active_kid_profile_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (context?.active_kid_profile_id) return 0;
   }
 
   const date = activityDate ?? getLocalActivityDate();
