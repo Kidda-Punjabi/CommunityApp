@@ -1,24 +1,12 @@
 import { ParentKidsProgressList } from "@/components/kids/parent-kids-progress-list";
 import { BackLink } from "@/components/navigation/back-link";
 import { requireNoActiveKidProfile } from "@/lib/kids/guards";
-import { loadParentKidsCourseProgress } from "@/lib/kids/load-parent-course-progress";
-import type { KidProfile } from "@/lib/kids/types";
+import { loadKidProgressSummariesForParent } from "@/lib/kids/load-kid-progress-summary";
 import { ui } from "@/lib/ui/styles";
 
 export default async function KidsProgressPage() {
   const { user, supabase } = await requireNoActiveKidProfile();
-
-  const { data: kidProfiles } = await supabase
-    .from("kid_profiles")
-    .select("*")
-    .eq("parent_user_id", user.id)
-    .order("created_at", { ascending: true });
-
-  const rows = await loadParentKidsCourseProgress(
-    supabase,
-    user.id,
-    (kidProfiles ?? []) as KidProfile[]
-  );
+  const rows = await loadKidProgressSummariesForParent(supabase, user.id);
 
   return (
     <div className={ui.page}>

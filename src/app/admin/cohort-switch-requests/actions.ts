@@ -495,10 +495,24 @@ export async function createAdminCohortReschedule(input: {
       target.endsAt
     )} · ${target.name}.`;
 
-    const { error: notifyError } = await supabase.rpc("_create_notification", {
+    const { data: parentKids } = await supabase
+      .from("cohort_members")
+      .select("kid_profile_id, kid_profiles!inner(parent_user_id)")
+      .eq("cohort_id", fromSession.cohort_id)
+      .is("left_at", null)
+      .not("kid_profile_id", "is", null);
+    const kidMatch = (parentKids ?? []).find((row) => {
+      const rel = row.kid_profiles as { parent_user_id?: string } | { parent_user_id?: string }[] | null;
+      const parentId = Array.isArray(rel) ? rel[0]?.parent_user_id : rel?.parent_user_id;
+      return parentId === studentId;
+    });
+    const kidProfileId = (kidMatch?.kid_profile_id as string | null) ?? null;
+
+    const { error: notifyError } = await supabase.rpc("notify_student_event_as_staff", {
       p_user_id: studentId,
+      p_kid_profile_id: kidProfileId,
       p_type: "cohort_switch_resolved",
-      p_actor_user_id: null,
+      p_actor_user_id: adminUser.id,
       p_payload: {
         session_id: toSessionId,
         request_id: inserted.id,
