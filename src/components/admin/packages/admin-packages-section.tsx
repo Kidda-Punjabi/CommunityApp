@@ -16,11 +16,17 @@ import { PackageRosterCell } from "@/components/admin/packages/package-roster-ce
 import { PackageLessonProgressCell } from "@/components/admin/packages/package-lesson-progress-cell";
 import { PackageTutorCell } from "@/components/admin/packages/package-tutor-cell";
 import { PackageCalendarCell } from "@/components/admin/packages/package-calendar-cell";
+import { AdminKidsPurchaseGrantQueue } from "@/components/admin/packages/admin-kids-purchase-grant-queue";
 import {
   AdminPackagesBoardHeader,
   readStoredActiveViewId,
   storeActiveViewId,
 } from "@/components/admin/packages/admin-packages-view-tabs";
+import { fetchKidsPurchaseGrantQueue } from "@/app/admin/packages/kids-purchase-queue-actions";
+import {
+  isKidsPurchaseQueueViewId,
+  KIDS_PURCHASE_QUEUE_VIEW_ID,
+} from "@/lib/admin/kids-purchase-grant-queue-types";
 import type {
   AdminPackageKind,
   AdminPackageListRow,
@@ -173,10 +179,17 @@ function groupRows(
   return groups;
 }
 
-export function AdminPackagesSection() {
+export function AdminPackagesSection({
+  initialViewId = null,
+}: {
+  initialViewId?: string | null;
+}) {
   const [rows, setRows] = useState<AdminPackageListRow[]>([]);
   const [savedViews, setSavedViews] = useState<AdminSavedView[]>([]);
-  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [activeViewId, setActiveViewId] = useState<string | null>(
+    isKidsPurchaseQueueViewId(initialViewId) ? KIDS_PURCHASE_QUEUE_VIEW_ID : null
+  );
+  const [kidsPurchaseQueueCount, setKidsPurchaseQueueCount] = useState<number | null>(null);
   const [baselineConfig, setBaselineConfig] = useState<PackagesViewConfig | null>(null);
   const [config, setConfig] = useState<PackagesViewConfig>(DEFAULT_PACKAGES_VIEW_CONFIG);
   const [error, setError] = useState<string | null>(null);
@@ -205,10 +218,11 @@ export function AdminPackagesSection() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [list, views, formOptions] = await Promise.all([
+      const [list, views, formOptions, kidsQueue] = await Promise.all([
         fetchAdminPackagesList(),
         fetchPackagesSavedViews(),
         fetchPackageFormOptions(),
+        fetchKidsPurchaseGrantQueue(),
       ]);
       if (cancelled) return;
       setRows(list.rows);
@@ -217,18 +231,27 @@ export function AdminPackagesSection() {
       const viewsList = views.views;
       setSavedViews(viewsList);
       setViewsError(views.error ?? null);
+      setKidsPurchaseQueueCount(kidsQueue.rows.length);
 
-      const storedViewId = readStoredActiveViewId();
-      const storedView = storedViewId
-        ? viewsList.find((view) => view.id === storedViewId) ?? null
-        : null;
-      if (storedView) {
-        setActiveViewId(storedView.id);
-        setConfig(storedView.config);
-        setBaselineConfig(storedView.config);
-      } else {
-        setActiveViewId(null);
+      const storedViewId = isKidsPurchaseQueueViewId(initialViewId)
+        ? KIDS_PURCHASE_QUEUE_VIEW_ID
+        : readStoredActiveViewId();
+      if (isKidsPurchaseQueueViewId(storedViewId)) {
+        setActiveViewId(KIDS_PURCHASE_QUEUE_VIEW_ID);
+        storeActiveViewId(KIDS_PURCHASE_QUEUE_VIEW_ID);
         setBaselineConfig(null);
+      } else {
+        const storedView = storedViewId
+          ? viewsList.find((view) => view.id === storedViewId) ?? null
+          : null;
+        if (storedView) {
+          setActiveViewId(storedView.id);
+          setConfig(storedView.config);
+          setBaselineConfig(storedView.config);
+        } else {
+          setActiveViewId(null);
+          setBaselineConfig(null);
+        }
       }
 
       setLoading(false);
@@ -236,7 +259,7 @@ export function AdminPackagesSection() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialViewId]);
 
   useEffect(() => {
     function handleVisibility() {
@@ -281,10 +304,24 @@ export function AdminPackagesSection() {
     setNewViewName("");
   }
 
+  function selectKidsPurchaseQueue() {
+    setActiveViewId(KIDS_PURCHASE_QUEUE_VIEW_ID);
+    storeActiveViewId(KIDS_PURCHASE_QUEUE_VIEW_ID);
+    setShowNewViewForm(false);
+    setNewViewName("");
+  }
+
   async function refreshViews(preferredActiveId?: string | null) {
     const views = await fetchPackagesSavedViews();
     setSavedViews(views.views);
     setViewsError(views.error ?? null);
+
+    if (
+      preferredActiveId === undefined &&
+      isKidsPurchaseQueueViewId(activeViewId)
+    ) {
+      return;
+    }
 
     const nextActiveId =
       preferredActiveId !== undefined
@@ -328,7 +365,7 @@ export function AdminPackagesSection() {
   }
 
   function handleSaveActiveView() {
-    if (!activeViewId) return;
+    if (!activeViewId || isKidsPurchaseQueueViewId(activeViewId)) return;
 
     startTransition(async () => {
       const result = await updatePackagesSavedView(activeViewId, { config });
@@ -407,9 +444,13 @@ export function AdminPackagesSection() {
           onDeleteView={handleDeleteView}
           onReset={resetFilters}
           onNewPackage={() => setShowCreate(true)}
+          onSelectKidsPurchaseQueue={selectKidsPurchaseQueue}
+          kidsPurchaseQueueCount={kidsPurchaseQueueCount}
         />
 
-        {loading ? (
+        {isKidsPurchaseQueueViewId(activeViewId) ? (
+          <AdminKidsPurchaseGrantQueue />
+        ) : loading ? (
           <p className="px-4 py-8 text-sm text-zinc-500">Loading packages…</p>
         ) : (
           <div className="space-y-0">
