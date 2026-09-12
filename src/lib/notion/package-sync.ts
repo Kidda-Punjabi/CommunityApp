@@ -1,5 +1,6 @@
 import type { PackageInstanceStatus } from "@/lib/admin/package-status";
 import { normalizeCalendarDateFromIso } from "@/lib/admin/package-schedule";
+import { cohortCapacityForInsert, cohortCapacitySyncPatch } from "@/lib/notion/notion-capacity";
 import { readNotionStartDateDetails } from "@/lib/notion/notion-start-date";
 import { countNotionConfirmedRelations } from "@/lib/notion/package-roster-sync";
 import {
@@ -249,6 +250,7 @@ export function cohortPullPatchFromNotionPage(
     start_day_of_week: readNotionStartDayOfWeek(page),
     ...(page.status ? { status: page.status } : {}),
     ...cohortWeeklySessionPatchFromNotionPage(page),
+    ...cohortCapacitySyncPatch(page.rawProperties),
   };
   const tutorId = tutorIdFromNotionPackagePage(page, byNotionUserId);
   if (tutorId !== undefined) {
@@ -908,6 +910,9 @@ export async function createOrUpdateCohortFromNotionPage(
     start_day_of_week: startDay,
     active: true,
     ...cohortWeeklySessionPatchFromNotionPage(page),
+    ...(existingId
+      ? cohortCapacitySyncPatch(page.rawProperties)
+      : { capacity: cohortCapacityForInsert(page.rawProperties) }),
   };
   const mappedTutorId = tutorIdFromNotionPackagePage(page, byNotionUserId);
   if (!isManualTutorSource(existingTutorSource)) {
