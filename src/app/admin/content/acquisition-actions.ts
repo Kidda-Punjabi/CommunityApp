@@ -7,7 +7,6 @@ import type {
   AcquisitionSnapshot,
 } from "@/lib/admin/acquisition/types";
 
-export const maxDuration = 60;
 
 export type { AcquisitionRangeId, AcquisitionSnapshot };
 
