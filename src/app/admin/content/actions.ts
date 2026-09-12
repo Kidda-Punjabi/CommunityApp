@@ -1340,13 +1340,6 @@ export async function searchAdminMembers(
       }
     }
 
-    for (const user of authData.users) {
-      const existing = byId.get(user.id);
-      if (existing && user.email) {
-        existing.email = user.email;
-      }
-    }
-
     await attachProfileRoles(supabase, byId);
 
     return { results: [...byId.values()].slice(0, 25) };
