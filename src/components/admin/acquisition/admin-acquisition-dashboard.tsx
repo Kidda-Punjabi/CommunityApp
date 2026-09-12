@@ -1,6 +1,5 @@
 "use client";
 
-import { fetchAcquisitionDashboard } from "@/app/admin/content/acquisition-actions";
 import type {
   AcquisitionRangeId,
   AcquisitionSnapshot,
@@ -173,20 +172,33 @@ export function AdminAcquisitionDashboard() {
 
   const fetchSnapshot = useCallback(
     async (nextRange: AcquisitionRangeId, from?: string, to?: string) => {
-      const timeout = new Promise<{ error: string }>((resolve) => {
-        setTimeout(
-          () => resolve({ error: "Acquisition timed out. Try again — pipeline sources may be slow." }),
-          28_000
-        );
-      });
-      return Promise.race([
-        fetchAcquisitionDashboard({
-          rangeId: nextRange,
-          from: nextRange === "custom" ? from : undefined,
-          to: nextRange === "custom" ? to : undefined,
-        }),
-        timeout,
-      ]);
+      const params = new URLSearchParams({ rangeId: nextRange });
+      if (nextRange === "custom" && from && to) {
+        params.set("from", from);
+        params.set("to", to);
+      }
+      try {
+        const response = await fetch(`/api/admin/acquisition?${params.toString()}`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(25_000),
+        });
+        const payload = (await response.json()) as {
+          snapshot?: AcquisitionSnapshot;
+          error?: string;
+        };
+        if (!response.ok) {
+          return { error: payload.error ?? `Acquisition failed (${response.status})` };
+        }
+        return payload;
+      } catch (error) {
+        const name = error instanceof Error ? error.name : "";
+        if (name === "TimeoutError" || name === "AbortError") {
+          return { error: "Acquisition timed out. Try again — pipeline sources may be slow." };
+        }
+        return {
+          error: error instanceof Error ? error.message : "Failed to load acquisition.",
+        };
+      }
     },
     []
   );
