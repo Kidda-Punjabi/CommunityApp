@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getHomeDashboardData } from "@/lib/dashboard/home-data";
 import { getCurrentWeekStart } from "@/lib/leaderboard/week";
+import { resolveCourseActor } from "@/lib/kids/course-actor";
 import { loadUnreadNotificationCount } from "@/lib/notifications/load-notifications";
 import { loadOnboardingProfile } from "@/lib/progression/load-user-progression";
 import { getUserActivityDate } from "@/lib/progress/server-activity-date";
@@ -28,13 +29,16 @@ export const getHomeTabData = cache(async (userId: string) => {
 
   const activityDate = await getUserActivityDate();
   const currentWeekStart = getCurrentWeekStart(activityDate);
+  const actor = await resolveCourseActor(supabase, userId);
 
   const [dashboard, profile, onboarding, unreadNotificationCount] =
     await Promise.all([
       getHomeDashboardData(supabase, user),
       loadEditableProfile(supabase, userId),
       loadOnboardingProfile(supabase, userId),
-      loadUnreadNotificationCount(supabase, userId),
+      loadUnreadNotificationCount(supabase, userId, {
+        kidProfileId: actor.kind === "kid" ? actor.kidProfileId : null,
+      }),
     ]);
 
   return {

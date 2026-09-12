@@ -12,6 +12,7 @@ import {
   getCohortCheckoutRemainingSpots,
   getCohortRemainingSpots,
 } from "@/lib/group-purchase/cohort-capacity";
+import { insertRoutedNotifications } from "@/lib/notifications/insert-notifications";
 import { packageSlugFromCheckoutKey } from "@/lib/stripe/sync-student-packages-from-payment";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
@@ -256,6 +257,20 @@ export async function completeGroupPurchaseAfterPayment(
       });
       tutorNotified = true;
     }
+  }
+
+  if (params.kidProfileId) {
+    await insertRoutedNotifications(supabase, {
+      type: "cohort_new_student",
+      kidProfileId: params.kidProfileId,
+      parentUserId: params.userId,
+      actorUserId: cohort.tutor_id,
+      payload: {
+        cohort_id: cohortId,
+        cohort_name: cohort.name,
+        student_package_id: params.studentPackageId,
+      },
+    });
   }
 
   const { data: existingChecklist } = await supabase
