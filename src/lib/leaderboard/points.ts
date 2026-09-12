@@ -8,6 +8,18 @@ import { fetchLessonCompletionMap } from "@/lib/progress/lesson-completion";
 import { notifyActivityRewards, notifyXpEarned } from "@/lib/points/notify-points-earned";
 import { getCurrentWeekStart } from "./week";
 
+async function activeKidProfileId(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("kid_session_context")
+    .select("active_kid_profile_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return (data?.active_kid_profile_id as string | null) ?? null;
+}
+
 export function quizAttemptPoints(scorePercent: number): number {
   const pct = Math.max(0, Math.min(100, Math.round(scorePercent)));
   return 10 + Math.floor(pct / 10);
@@ -62,14 +74,7 @@ export async function awardWeeklyPoints(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) {
-    const { data: context } = await supabase
-      .from("kid_session_context")
-      .select("active_kid_profile_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (context?.active_kid_profile_id) return 0;
-  }
+  if (user && (await activeKidProfileId(supabase, user.id))) return 0;
 
   const date = activityDate ?? getLocalActivityDate();
   const { error } = await supabase.rpc("award_weekly_points", {
@@ -189,12 +194,12 @@ export async function tryAwardLessonCompletionPoints(
   } = await supabase.auth.getUser();
   if (!user) return 0;
 
-  const actor = await resolveCourseActor(supabase, user.id);
-  if (actor.kind === "kid") {
+  const kidProfileId = await activeKidProfileId(supabase, user.id);
+  if (kidProfileId) {
     return tryAwardKidLessonCompletionXp(
       supabase,
       user.id,
-      actor.kidProfileId,
+      kidProfileId,
       lessonId
     );
   }
