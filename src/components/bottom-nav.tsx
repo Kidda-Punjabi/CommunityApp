@@ -4,6 +4,7 @@ import { NavLink } from "@/components/ui/nav-link";
 import { useKidSession } from "@/components/kids/kid-session-provider";
 import { usePathname } from "next/navigation";
 import { useTabNav } from "@/components/navigation/tab-nav-provider";
+import { usesKidsShell } from "@/lib/kids/constants";
 import { tabIdFromHref } from "@/lib/navigation/tab-nav";
 
 type NavItem = {
@@ -150,7 +151,7 @@ export function BottomNav() {
     return null;
   }
 
-  if (pathname === "/dashboard/profile/kids") {
+  if (activeKidProfile && usesKidsShell(activeKidProfile.age_tier)) {
     return null;
   }
 

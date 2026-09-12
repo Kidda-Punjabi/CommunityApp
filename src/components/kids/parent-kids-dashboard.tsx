@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { KidLucideIcon } from "@/components/kids/kid-lucide-icon";
 import { PinPad } from "@/components/kids/pin-pad";
+import { kidAgeTierLabel } from "@/lib/kids/constants";
+import { kidUsesStickerRewards } from "@/lib/kids/load-kid-content";
 import type { ParentKidCourseProgress } from "@/lib/kids/load-parent-course-progress";
 import type { KidProgressSummary } from "@/lib/kids/types";
 
@@ -77,7 +79,7 @@ export function ParentKidsDashboard({
 function KidSummaryCard({ summary }: { summary: KidProgressSummary }) {
   const [editing, setEditing] = useState(false);
   const { profile } = summary;
-  const usesStickers = profile.age_tier !== "independent";
+  const usesStickers = kidUsesStickerRewards(profile.age_tier);
 
   async function handleDelete() {
     if (!confirm(`Remove ${profile.name}'s profile?`)) return;
@@ -93,7 +95,7 @@ function KidSummaryCard({ summary }: { summary: KidProgressSummary }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-zinc-900">{profile.name}</p>
-          <p className="text-xs capitalize text-zinc-500">{profile.age_tier.replace("_", " ")}</p>
+          <p className="text-xs text-zinc-500">{kidAgeTierLabel(profile.age_tier)}</p>
         </div>
         <button
           type="button"

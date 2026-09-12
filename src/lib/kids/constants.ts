@@ -27,12 +27,29 @@ export const KID_AVATAR_ICONS = [
 export type KidAvatarIcon = (typeof KID_AVATAR_ICONS)[number];
 
 export const KID_AGE_TIERS = [
-  { value: "pre_reader" as const, label: "Pre-reader (3–6)", description: "Pictures and audio, minimal reading" },
-  { value: "early_reader" as const, label: "Early reader (7–10)", description: "Simple text games and flashcards" },
-  { value: "independent" as const, label: "Independent (11+)", description: "Full app experience (no forum)" },
-];
+  { value: "kids" as const, label: "Kids", description: "6 & under" },
+  { value: "juniors" as const, label: "Juniors", description: "7–9" },
+  { value: "preteens" as const, label: "Preteens", description: "10–12" },
+  { value: "teens" as const, label: "Teens", description: "13–15" },
+] as const;
 
 export type KidAgeTier = (typeof KID_AGE_TIERS)[number]["value"];
+
+const AGE_TIER_LABELS: Record<string, string> = {
+  kids: "Kids",
+  juniors: "Juniors",
+  preteens: "Preteens",
+  teens: "Teens",
+  little_ones: "Kids",
+  pre_reader: "Kids",
+  early_reader: "Juniors",
+  pre_teen: "Preteens",
+  independent: "Teens",
+};
+
+export function kidAgeTierLabel(ageTier: string): string {
+  return AGE_TIER_LABELS[ageTier] ?? ageTier.replaceAll("_", " ");
+}
 
 /**
  * Free-taste bedtime stories for parents without Premium.
@@ -100,11 +117,12 @@ export function isKidAvatarIcon(value: string): value is KidAvatarIcon {
 }
 
 export function isKidAgeTier(value: string): value is KidAgeTier {
-  return value === "pre_reader" || value === "early_reader" || value === "independent";
+  return value === "kids" || value === "juniors" || value === "preteens" || value === "teens";
 }
 
-export function usesKidsShell(ageTier: KidAgeTier): boolean {
-  return ageTier === "pre_reader" || ageTier === "early_reader";
+/** Play/Stickers shell: Kids (6 & under) plus legacy 6-and-under slugs. */
+export function usesKidsShell(ageTier: string): boolean {
+  return ageTier === "kids" || ageTier === "little_ones" || ageTier === "pre_reader";
 }
 
 export function tagMatchesKidFriendly(tags: string[] | null | undefined): boolean {

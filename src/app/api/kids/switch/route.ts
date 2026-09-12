@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
-  isKidAgeTier,
   KID_PROFILE_COOKIE,
   usesKidsShell,
 } from "@/lib/kids/constants";
@@ -36,7 +35,7 @@ export async function POST(request: Request) {
     .eq("parent_user_id", user.id)
     .single();
 
-  if (!kid || !isKidAgeTier(kid.age_tier)) {
+  if (!kid) {
     return NextResponse.json({ error: "Kid profile not found." }, { status: 404 });
   }
 

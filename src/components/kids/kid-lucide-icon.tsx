@@ -1,7 +1,7 @@
 import {
   Cat, Dog, Rabbit, Bird, Fish, Rocket, Star, Rainbow, Sun, Moon, Heart, Flower2,
   Sparkles, Trophy, Medal, Crown, Gem, Music, Smile, ThumbsUp, PartyPopper, Balloon,
-  Cake, Apple, Cherry, TreePine, Cloud, Zap, Wand2, Footprints,
+  Cake, Apple, Cherry, TreePine, Cloud, Zap, Wand2, Footprints, User,
   type LucideIcon,
 } from "lucide-react";
 import type { KidAvatarIcon } from "@/lib/kids/constants";
@@ -9,7 +9,7 @@ import type { KidAvatarIcon } from "@/lib/kids/constants";
 const ICON_MAP: Record<string, LucideIcon> = {
   Cat, Dog, Rabbit, Bird, Fish, Rocket, Star, Rainbow, Sun, Moon, Heart, Flower2,
   Sparkles, Trophy, Medal, Crown, Gem, Music, Smile, ThumbsUp, PartyPopper, Balloon,
-  Cake, Apple, Cherry, TreePine, Cloud, Zap, Wand2, Footprints,
+  Cake, Apple, Cherry, TreePine, Cloud, Zap, Wand2, Footprints, User,
 };
 
 export function KidLucideIcon({

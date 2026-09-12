@@ -7,7 +7,7 @@ import { useState, useTransition } from "react";
 
 type RegisterInterestButtonProps = {
   courseTitle: string;
-  courseLevel: "intermediate" | "advanced";
+  courseLevel: "intermediate" | "advanced" | "kids_intermediate" | "kids_advanced";
   className?: string;
   compact?: boolean;
   initiallyRegistered?: boolean;

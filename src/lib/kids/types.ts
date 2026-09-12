@@ -5,7 +5,7 @@ export type KidProfile = {
   parent_user_id: string;
   name: string;
   avatar_icon: KidAvatarIcon;
-  age_tier: KidAgeTier;
+  age_tier: KidAgeTier | string;
   total_xp?: number;
   created_at: string;
   updated_at: string;

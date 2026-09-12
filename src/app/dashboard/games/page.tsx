@@ -1,5 +1,9 @@
 import { GamesHub } from "@/components/games/games-hub";
+import { KidBedtimeStoriesPanel } from "@/components/kids/kid-bedtime-stories-panel";
 import { getGamesTabData } from "@/lib/cache/tab-page-cache";
+import { loadKidBedtimeStoriesForParent } from "@/lib/kids/bedtime-stories";
+import { usesKidsShell } from "@/lib/kids/constants";
+import { loadKidSession } from "@/lib/kids/session";
 import { GAME_CATALOG } from "@/lib/games/catalog";
 import { FREE_GAME_UNLOCK_COUNT } from "@/lib/games/premium-gating";
 import {
@@ -18,12 +22,18 @@ export default async function GamesPage() {
   const session = await getCachedAuthSession();
   if (!session) redirect("/login");
 
-  const [personalBests, isPremium, scope, courseAccess] = await Promise.all([
+  const [personalBests, isPremium, scope, courseAccess, kidSession] = await Promise.all([
     getGamesTabData(session.user.id),
     hasPremiumAccess(session.supabase, session.user.id),
     resolveGamesContentScope(session.supabase, session.user.id),
     getCachedCourseAccess(session.supabase, session.user),
+    loadKidSession(session.user.id),
   ]);
+  const olderKid =
+    kidSession.activeKidProfile && !usesKidsShell(kidSession.activeKidProfile.age_tier);
+  const bedtimeStories = olderKid
+    ? await loadKidBedtimeStoriesForParent(session.supabase, session.user.id)
+    : null;
 
   const englishMode = isEnglishGamesScope(scope);
   const hasFoundationalAccess = hasTierAccess(courseAccess, "foundational");
@@ -54,6 +64,16 @@ export default async function GamesPage() {
                 : `Free includes the first ${FREE_GAME_UNLOCK_COUNT} games. Premium unlocks the full catalogue.`}
         </p>
       </div>
+
+      {bedtimeStories ? (
+        <div className="mb-6">
+          <KidBedtimeStoriesPanel
+            stories={bedtimeStories.stories}
+            parentIsPremium={bedtimeStories.parentIsPremium}
+            tableReady={bedtimeStories.tableReady}
+          />
+        </div>
+      ) : null}
 
       <GamesHub
         vocabularyGames={vocabularyGames}

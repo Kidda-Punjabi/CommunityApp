@@ -1,5 +1,4 @@
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
-import { KidsShellNav } from "@/components/kids/kids-shell-nav";
 import { loadKidSession } from "@/lib/kids/session";
 import { usesKidsShell } from "@/lib/kids/constants";
 import { createClient } from "@/lib/supabase/server";
@@ -21,10 +20,9 @@ export default async function KidsLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <div className="flex min-h-dvh w-full flex-1 flex-col bg-gradient-to-b from-sky-100 via-violet-50 to-amber-50 pb-24">
+    <div className="flex min-h-0 w-full flex-1 flex-col">
       <FloatingSoundToggle placement="top-left" />
       <div className="mx-auto w-full max-w-lg flex-1 px-4 pt-12">{children}</div>
-      <KidsShellNav ageTier={kid.age_tier} />
     </div>
   );
 }

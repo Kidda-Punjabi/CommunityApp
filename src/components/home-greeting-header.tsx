@@ -12,6 +12,7 @@ type HomeGreetingHeaderProps = {
   displayName: string | null;
   profile: ProfileNameFields & { avatar_url?: string | null };
   kidAvatarIcon?: KidAvatarIcon | null;
+  avatarInitial?: string | null;
   learnerLevel?: number | null;
   unreadNotificationCount: number;
   weeklyPoints: number;
@@ -22,6 +23,7 @@ export function HomeGreetingHeader({
   displayName,
   profile,
   kidAvatarIcon,
+  avatarInitial,
   learnerLevel,
   unreadNotificationCount,
   weeklyPoints,
@@ -31,7 +33,16 @@ export function HomeGreetingHeader({
     <header className="mb-4">
       <div className="flex items-start gap-4">
         <Link href={profileHref} className="shrink-0" aria-label="Profile">
-          {kidAvatarIcon ? (
+          {avatarInitial ? (
+            <span
+              className={cn(
+                "flex h-16 w-16 items-center justify-center rounded-full text-xl font-bold",
+                ui.avatarKid
+              )}
+            >
+              {avatarInitial}
+            </span>
+          ) : kidAvatarIcon ? (
             <span
               className={cn(
                 "flex h-16 w-16 items-center justify-center rounded-full",

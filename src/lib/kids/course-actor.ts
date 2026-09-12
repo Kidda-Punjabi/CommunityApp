@@ -1,3 +1,4 @@
+import { loadKidSession } from "@/lib/kids/session";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type CourseActor =
@@ -10,32 +11,18 @@ export type CourseActor =
  * verified against kid_profiles.parent_user_id.
  */
 export async function resolveCourseActor(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   parentUserId: string
 ): Promise<CourseActor> {
-  const { data: context } = await supabase
-    .from("kid_session_context")
-    .select("active_kid_profile_id")
-    .eq("user_id", parentUserId)
-    .maybeSingle();
-
-  const kidProfileId = context?.active_kid_profile_id as string | null | undefined;
-  if (!kidProfileId) {
+  const session = await loadKidSession(parentUserId);
+  if (!session.activeKidProfile) {
     return { kind: "user", userId: parentUserId, kidProfileId: null };
   }
-
-  const { data: kid } = await supabase
-    .from("kid_profiles")
-    .select("id")
-    .eq("id", kidProfileId)
-    .eq("parent_user_id", parentUserId)
-    .maybeSingle();
-
-  if (!kid?.id) {
-    return { kind: "user", userId: parentUserId, kidProfileId: null };
-  }
-
-  return { kind: "kid", userId: parentUserId, kidProfileId: kid.id };
+  return {
+    kind: "kid",
+    userId: parentUserId,
+    kidProfileId: session.activeKidProfile.id,
+  };
 }
 
 export function actorFilter(
