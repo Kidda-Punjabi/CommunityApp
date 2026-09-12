@@ -1,35 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getStaffFacingName, resolveStudentLabel } from "@/lib/profile/display-name";
 import type {
   TutorCohortMatchCandidate,
   TutorStudentMatchCandidate,
 } from "@/lib/calendar/match-events";
 
-const EMAIL_LOOKUP_CHUNK_SIZE = 20;
-
 async function loadEmailsForUserIds(
   adminClient: SupabaseClient,
   userIds: string[]
 ): Promise<Map<string, string>> {
   const emailByUserId = new Map<string, string>();
-  const uniqueIds = [...new Set(userIds)];
-  if (uniqueIds.length === 0) return emailByUserId;
-
-  for (let index = 0; index < uniqueIds.length; index += EMAIL_LOOKUP_CHUNK_SIZE) {
-    const chunk = uniqueIds.slice(index, index + EMAIL_LOOKUP_CHUNK_SIZE);
-    const results = await Promise.all(
-      chunk.map(async (userId) => {
-        const { data, error } = await adminClient.auth.admin.getUserById(userId);
-        if (error || !data.user?.email) return null;
-        return [userId, data.user.email.toLowerCase()] as const;
-      })
-    );
-
-    for (const entry of results) {
-      if (entry) emailByUserId.set(entry[0], entry[1]);
-    }
+  const rows = await loadEmailsByUserId(adminClient, userIds);
+  for (const [userId, email] of rows) {
+    if (email) emailByUserId.set(userId, email.toLowerCase());
   }
-
   return emailByUserId;
 }
 

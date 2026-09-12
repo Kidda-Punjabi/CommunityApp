@@ -5,6 +5,7 @@ import type {
   AdminPaymentsQuery,
   AdminPaymentsResult,
 } from "@/lib/stripe/admin-payment-types";
+import { loadAdminProfilesWithEmail } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { tiersFromLineItems } from "@/lib/stripe/sync-purchases";
@@ -69,20 +70,14 @@ async function buildEmailToUserMap(
 
   const supabase = createServiceRoleClient();
   const emailSet = new Set(normalized);
-  const matchedUsers: Array<{ id: string; email: string }> = [];
-
-  for (let page = 1; page <= 15; page++) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
-    if (error || !data.users.length) break;
-
-    for (const user of data.users) {
-      const email = user.email?.trim().toLowerCase();
-      if (!email || !emailSet.has(email)) continue;
-      matchedUsers.push({ id: user.id, email });
-    }
-
-    if (matchedUsers.length >= normalized.length || data.users.length < 200) break;
-  }
+  const rows = await loadAdminProfilesWithEmail(supabase, null);
+  const matchedUsers = rows
+    .map((row) => {
+      const email = row.email?.trim().toLowerCase();
+      if (!email || !emailSet.has(email)) return null;
+      return { id: row.id, email };
+    })
+    .filter((row): row is { id: string; email: string } => Boolean(row));
 
   if (matchedUsers.length === 0) return result;
 

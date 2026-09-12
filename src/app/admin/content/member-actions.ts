@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAdminFromActions, type ActionResult } from "@/app/admin/content/actions";
+import { loadAdminProfilesWithEmail, loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { ASSIGNABLE_STAFF_ROLES, type AppRole } from "@/lib/auth/admin-access";
 import { hasAnyRole } from "@/lib/auth/profile-roles";
 import { findCoursesForTier } from "@/lib/membership/courses";
@@ -79,25 +80,23 @@ export async function listAdminMembers(
       const safeQuery = sanitized.replace(/[%_]/g, "");
       if (!safeQuery) return { members: [] };
 
-      const { data: authData, error: authError } = await supabase.auth.admin.listUsers({
-        page: 1,
-        perPage: 1000,
-      });
-      if (authError) return { members: [], error: authError.message };
+      const [authRows, { data: profiles }] = await Promise.all([
+        loadAdminProfilesWithEmail(supabase, null),
+        supabase
+          .from("profiles")
+          .select("id, full_name, preferred_name, avatar_url")
+          .or(`full_name.ilike.%${safeQuery}%,preferred_name.ilike.%${safeQuery}%`)
+          .limit(50),
+      ]);
 
       const byId = new Map<string, AdminMemberListItem>();
-
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, preferred_name, avatar_url")
-        .or(`full_name.ilike.%${safeQuery}%,preferred_name.ilike.%${safeQuery}%`)
-        .limit(50);
+      const emailById = new Map(authRows.map((row) => [row.id, row.email ?? null] as const));
+      const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
 
       for (const profile of profiles ?? []) {
-        const authUser = authData.users.find((user) => user.id === profile.id);
         byId.set(profile.id, {
           userId: profile.id,
-          email: authUser?.email ?? null,
+          email: emailById.get(profile.id) ?? null,
           displayName: getDisplayName(profile) ?? "Member",
           avatarUrl: profile.avatar_url,
           accessTiers: [],
@@ -106,18 +105,18 @@ export async function listAdminMembers(
         });
       }
 
-      for (const user of authData.users) {
-        if (!user.email?.toLowerCase().includes(safeQuery)) continue;
-        if (byId.has(user.id)) {
-          byId.get(user.id)!.email = user.email;
+      for (const row of authRows) {
+        if (!row.email?.toLowerCase().includes(safeQuery)) continue;
+        if (byId.has(row.id)) {
+          byId.get(row.id)!.email = row.email;
           continue;
         }
-        const profile = profiles?.find((row) => row.id === user.id);
-        byId.set(user.id, {
-          userId: user.id,
-          email: user.email,
-          displayName: getDisplayName(profile ?? null) ?? user.email ?? "Member",
-          avatarUrl: profile?.avatar_url ?? null,
+        const profile = profileById.get(row.id);
+        byId.set(row.id, {
+          userId: row.id,
+          email: row.email,
+          displayName: getDisplayName(profile ?? null) ?? row.email ?? "Member",
+          avatarUrl: profile?.avatar_url ?? row.avatar_url ?? null,
           accessTiers: [],
           membershipTier: "free",
           subscriptionStatus: null,
@@ -143,13 +142,12 @@ export async function listAdminMembers(
     }
 
     const perPage = 50;
-    const { data: authData, error: authError } = await supabase.auth.admin.listUsers({
-      page,
-      perPage,
-    });
-    if (authError) return { members: [], error: authError.message };
-
-    const users = authData.users;
+    const authRows = await loadAdminProfilesWithEmail(supabase, null);
+    const sorted = [...authRows].sort((a, b) =>
+      (b.auth_created_at ?? "").localeCompare(a.auth_created_at ?? "")
+    );
+    const start = (Math.max(1, page) - 1) * perPage;
+    const users = sorted.slice(start, start + perPage);
     const userIds = users.map((user) => user.id);
     if (userIds.length === 0) return { members: [] };
 
@@ -171,7 +169,7 @@ export async function listAdminMembers(
         userId: user.id,
         email: user.email ?? null,
         displayName: getDisplayName(profile ?? null) ?? user.email ?? "Member",
-        avatarUrl: profile?.avatar_url ?? null,
+        avatarUrl: profile?.avatar_url ?? user.avatar_url ?? null,
         accessTiers: [...(tiersByUser.get(user.id) ?? [])],
         membershipTier: premium?.membershipTier ?? "free",
         subscriptionStatus: premium?.subscriptionStatus ?? null,
@@ -196,7 +194,7 @@ export async function loadAdminMemberDetail(
     const supabase = await requireAdminFromActions();
 
     const [
-      { data: authUser, error: authError },
+      emailById,
       { data: profile },
       { data: accessRows },
       { data: enrollmentRows },
@@ -204,7 +202,7 @@ export async function loadAdminMemberDetail(
       { data: cohortMemberRows },
       { data: membership },
     ] = await Promise.all([
-      supabase.auth.admin.getUserById(userId),
+      loadEmailsByUserId(supabase, [userId]),
       supabase
         .from("profiles")
         .select("id, full_name, preferred_name, avatar_url, membership_tier")
@@ -230,7 +228,7 @@ export async function loadAdminMemberDetail(
         .maybeSingle(),
     ]);
 
-    if (authError) return { detail: null, error: authError.message };
+    const memberEmail = emailById.get(userId) ?? null;
 
     const accessCourseIds = new Set((accessRows ?? []).map((row) => row.course_id));
     const courseList = courses ?? [];
@@ -286,9 +284,9 @@ export async function loadAdminMemberDetail(
     return {
       detail: {
         userId,
-        email: authUser.user.email ?? null,
+        email: memberEmail,
         displayName:
-          getDisplayName(profile ?? null) ?? authUser.user.email ?? "Member",
+          getDisplayName(profile ?? null) ?? memberEmail ?? "Member",
         avatarUrl: profile?.avatar_url ?? null,
         membershipTier: (profile?.membership_tier as string) ?? "free",
         subscriptionStatus: (membership?.status as string) ?? null,

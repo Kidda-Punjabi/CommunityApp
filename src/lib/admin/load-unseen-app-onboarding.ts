@@ -2,6 +2,7 @@ import "server-only";
 
 import { ASSIGNABLE_STAFF_ROLES } from "@/lib/auth/admin-access";
 import type { UnseenAppOnboardingRow } from "@/lib/admin/unseen-app-onboarding-types";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getStaffFacingName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -13,20 +14,7 @@ async function loadEmailsById(
   supabase: SupabaseClient,
   userIds: string[]
 ): Promise<Map<string, string | null>> {
-  const wanted = new Set(userIds);
-  const emailById = new Map<string, string | null>();
-  if (wanted.size === 0) return emailById;
-
-  for (let page = 1; page <= 10 && emailById.size < wanted.size; page += 1) {
-    const { data } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-    const users = data?.users ?? [];
-    for (const user of users) {
-      if (!wanted.has(user.id)) continue;
-      emailById.set(user.id, user.email ?? null);
-    }
-    if (users.length < 1000) break;
-  }
-  return emailById;
+  return loadEmailsByUserId(supabase, userIds);
 }
 
 export async function loadUnseenAppOnboarding(supabase: SupabaseClient): Promise<{

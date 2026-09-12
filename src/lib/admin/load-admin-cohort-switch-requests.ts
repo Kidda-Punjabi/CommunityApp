@@ -3,6 +3,7 @@ import "server-only";
 import { loadAlternateCohortSessions } from "@/lib/calendar/load-alternate-cohort-sessions";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type { AlternateCohortOption, CohortSwitchRequestStatus } from "@/lib/calendar/types";
+import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -87,7 +88,7 @@ export async function loadAdminCohortSwitchRequests(
       ),
     ] as string[];
 
-    const [{ data: profiles }, { data: cohorts }, { data: toSessions }, authUsers] =
+    const [{ data: profiles }, { data: cohorts }, { data: toSessions }, emailById] =
       await Promise.all([
         supabase
           .from("profiles")
@@ -102,7 +103,7 @@ export async function loadAdminCohortSwitchRequests(
               .select("id, starts_at, ends_at, tutor_id, title, week_number")
               .in("id", toSessionIds)
           : Promise.resolve({ data: [] }),
-        supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+        loadEmailsByUserId(supabase, studentIds),
       ]);
 
     const toTutorIds = [
@@ -144,11 +145,6 @@ export async function loadAdminCohortSwitchRequests(
           weekNumber: asWeekNumber(s.week_number),
         },
       ])
-    );
-    const emailById = new Map(
-      (authUsers.data?.users ?? [])
-        .filter((u) => u.email)
-        .map((u) => [u.id, u.email!] as const)
     );
 
     const rows: AdminCohortSwitchRequestRow[] = [];
