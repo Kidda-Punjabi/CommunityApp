@@ -1,5 +1,6 @@
 "use server";
 
+import { resolveCourseActor } from "@/lib/kids/course-actor";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -21,7 +22,15 @@ export async function markNotificationRead(notificationId: string): Promise<Acti
 
 export async function markAllNotificationsRead(): Promise<ActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("mark_all_notifications_read");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const actor = await resolveCourseActor(supabase, user.id);
+  const { error } = await supabase.rpc("mark_all_notifications_read", {
+    p_kid_profile_id: actor.kind === "kid" ? actor.kidProfileId : null,
+  });
 
   if (error) return { error: error.message };
 

@@ -75,6 +75,10 @@ function notificationHref(item: NotificationItem): string | null {
     return "/dashboard/tutor/calendar";
   }
 
+  if (item.type === "certificate_issued") {
+    return "/dashboard/learn/certificates";
+  }
+
   return null;
 }
 

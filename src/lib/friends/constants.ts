@@ -15,7 +15,8 @@ export type NotificationType =
   | "cohort_switch_requested"
   | "cohort_switch_resolved"
   | "lesson_reschedule_requested"
-  | "lesson_reschedule_resolved";
+  | "lesson_reschedule_resolved"
+  | "certificate_issued";
 
 export type FriendRequestStatus = "pending" | "accepted" | "declined";
 

@@ -63,9 +63,12 @@ function isMissingNotificationsSchema(message: string): boolean {
 export async function loadNotifications(
   supabase: SupabaseClient,
   userId: string,
-  limit = 50
+  options?: { kidProfileId?: string | null; limit?: number }
 ): Promise<NotificationItem[]> {
-  const { data, error } = await supabase
+  const limit = options?.limit ?? 50;
+  const kidProfileId = options?.kidProfileId?.trim() || null;
+
+  let query = supabase
     .from("notifications")
     .select(
       `
@@ -77,8 +80,13 @@ export async function loadNotifications(
       payload,
       actor:actor_user_id (full_name, preferred_name, avatar_url)
     `
-    )
-    .eq("user_id", userId)
+    );
+
+  query = kidProfileId
+    ? query.eq("kid_profile_id", kidProfileId)
+    : query.eq("user_id", userId);
+
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -148,13 +156,18 @@ export async function loadNotifications(
 
 export async function loadUnreadNotificationCount(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  options?: { kidProfileId?: string | null }
 ): Promise<number> {
+  const kidProfileId = options?.kidProfileId?.trim() || null;
   let query = supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
     .is("read_at", null);
+
+  query = kidProfileId
+    ? query.eq("kid_profile_id", kidProfileId)
+    : query.eq("user_id", userId);
 
   for (const type of ADMIN_ONLY_NOTIFICATION_TYPES) {
     query = query.neq("type", type);
@@ -322,6 +335,10 @@ export function notificationSummary(item: NotificationItem): string {
       return when
         ? `Reschedule declined for ${sessionTitle} (${when})`
         : `Reschedule declined for ${sessionTitle}`;
+    }
+    case "certificate_issued": {
+      const level = String(item.payload.level ?? "course");
+      return `Your ${level} certificate is ready`;
     }
     default: {
       const title = item.payload.title;
