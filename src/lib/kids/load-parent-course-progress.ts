@@ -34,6 +34,7 @@ export type ParentKidLessonProgress = {
 export type ParentKidCourseSummary = {
   courseId: string;
   courseName: string;
+  currentLevelNumber: number | null;
   currentWeek: number;
   totalWeeks: number;
   homeworkDone: number;
@@ -111,7 +112,7 @@ export async function loadParentKidsCourseProgress(
   for (const profile of profiles) {
     const { data: enrollments } = await supabase
       .from("course_enrollments")
-      .select("course_id, cohort_id, delivery_mode, courses(name)")
+      .select("course_id, cohort_id, delivery_mode, level_number, courses(name)")
       .eq("kid_profile_id", profile.id);
 
     const enrollmentRows = enrollments ?? [];
@@ -346,6 +347,8 @@ export async function loadParentKidsCourseProgress(
       courses.push({
         courseId,
         courseName,
+        currentLevelNumber:
+          typeof enrollment.level_number === "number" ? enrollment.level_number : null,
         currentWeek,
         totalWeeks: lessonProgress.length,
         homeworkDone: dueLessons.filter((lesson) => lesson.homeworkStatus !== "not_submitted")

@@ -1,9 +1,7 @@
 -- Parent "how your kids are doing" summary.
 -- Mirrors get_course_progress: SECURITY DEFINER, auth.uid() must be the kid's parent.
 --
--- Course level 1/2/3 is NOT stored on course_enrollments. Kids Beginners is the
--- only live kids course, so enrolled kids are labelled Level 1. Do not invent
--- an enrolment column here.
+-- current_level_label comes from course_enrollments.level_number (1–3, kids only).
 
 DROP FUNCTION IF EXISTS public.get_kid_progress_summary(UUID);
 
@@ -70,8 +68,8 @@ BEGIN
     RAISE EXCEPTION 'Unauthorized';
   END IF;
 
-  SELECT ce.course_id, co.name, co.required_tier::TEXT, ce.cohort_id, c.start_date
-  INTO v_course_id, v_course_name, v_course_level, v_cohort_id, v_start_date
+  SELECT ce.course_id, co.name, co.required_tier::TEXT, ce.cohort_id, c.start_date, ce.level_number
+  INTO v_course_id, v_course_name, v_course_level, v_cohort_id, v_start_date, v_level_number
   FROM public.course_enrollments ce
   JOIN public.courses co ON co.id = ce.course_id
   LEFT JOIN public.cohorts c ON c.id = ce.cohort_id
@@ -79,10 +77,8 @@ BEGIN
   ORDER BY ce.created_at DESC
   LIMIT 1;
 
-  IF v_course_id IS NOT NULL THEN
-    -- Only live kids course is Level 1. Enrolment has no 1/2/3 column.
-    v_level_number := 1;
-    v_level_label := 'Level 1';
+  IF v_level_number IS NOT NULL THEN
+    v_level_label := 'Level ' || v_level_number::TEXT;
   END IF;
 
   SELECT COUNT(*)::INTEGER

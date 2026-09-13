@@ -43,7 +43,8 @@ function stageTheme(id: LearnCourseLevelId) {
 function kidSlotsForStage(
   stage: "beginner" | "intermediate" | "advanced",
   rows: CertificateRow[],
-  kidsCourseHref: string | null
+  kidsCourseHref: string | null,
+  currentLevelNumber: number | null
 ): CertificateLadderItem[] {
   const theme = stageTheme(stage === "beginner" ? "beginners" : stage);
   const earnedByLevel = new Map(
@@ -54,11 +55,14 @@ function kidSlotsForStage(
 
   return KID_LEVELS.map((levelNumber) => {
     const earned = earnedByLevel.get(levelNumber) ?? null;
-    const previousEarned = levelNumber === 1 ? true : earnedByLevel.has(levelNumber - 1);
     let status: CertificateLadderItem["status"] = "locked";
     if (earned) status = "earned";
-    else if (stage === "beginner" && levelNumber === 1) status = "in_progress";
-    else if (previousEarned && stage === "beginner") status = "locked";
+    else if (
+      stage === "beginner" &&
+      (currentLevelNumber == null ? levelNumber === 1 : levelNumber === currentLevelNumber)
+    ) {
+      status = "in_progress";
+    }
 
     const lockedHint =
       status === "locked"
@@ -103,29 +107,41 @@ export async function loadCertificateLadder(
   }
 
   const filter = actorFilter(actor);
-  const { data, error } = await supabase
-    .from("certificates")
-    .select("id, level, kid_level_number, issued_at")
-    .eq(filter.column, filter.value);
+  const [{ data, error }, { data: enrollment }] = await Promise.all([
+    supabase
+      .from("certificates")
+      .select("id, level, kid_level_number, issued_at")
+      .eq(filter.column, filter.value),
+    supabase
+      .from("course_enrollments")
+      .select("level_number")
+      .eq("kid_profile_id", actor.kidProfileId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   if (error) {
     console.error("[certificates] kid load failed:", error.message);
   }
 
+  const currentLevelNumber =
+    typeof enrollment?.level_number === "number" ? enrollment.level_number : null;
   const rows = (data ?? []) as CertificateRow[];
   const items = [
-    ...kidSlotsForStage("beginner", rows, options.kidsCourseHref),
-    ...kidSlotsForStage("intermediate", rows, options.kidsCourseHref).map((item) =>
-      item.status === "earned"
-        ? item
-        : {
-            ...item,
-            status: "locked" as const,
-            href: null,
-            lockedHint: item.lockedHint ?? "Coming soon",
-          }
+    ...kidSlotsForStage("beginner", rows, options.kidsCourseHref, currentLevelNumber),
+    ...kidSlotsForStage("intermediate", rows, options.kidsCourseHref, currentLevelNumber).map(
+      (item) =>
+        item.status === "earned"
+          ? item
+          : {
+              ...item,
+              status: "locked" as const,
+              href: null,
+              lockedHint: item.lockedHint ?? "Coming soon",
+            }
     ),
-    ...kidSlotsForStage("advanced", rows, options.kidsCourseHref).map((item) =>
+    ...kidSlotsForStage("advanced", rows, options.kidsCourseHref, currentLevelNumber).map((item) =>
       item.status === "earned"
         ? item
         : {

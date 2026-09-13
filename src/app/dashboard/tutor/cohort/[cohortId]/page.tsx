@@ -1,4 +1,5 @@
 import { TutorLessonManager } from "@/components/tutor/tutor-lesson-manager";
+import { KidLevelCertificatePanel } from "@/components/tutor/kid-level-certificate-panel";
 import { loadTutorCohortLessons } from "@/lib/tutoring/load-tutor-dashboard";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -57,7 +58,7 @@ export default async function TutorCohortPage({ params }: TutorCohortPageProps) 
           <ul className="mt-2 flex flex-wrap gap-2">
             {data.members.map((member) => (
               <li
-                key={member.userId}
+                key={member.key}
                 className="rounded-full bg-violet-50 px-3 py-1 text-sm font-medium text-violet-800"
               >
                 {member.name}
@@ -66,6 +67,8 @@ export default async function TutorCohortPage({ params }: TutorCohortPageProps) 
           </ul>
         </div>
       )}
+
+      <KidLevelCertificatePanel kids={data.kidCertificates} />
 
       <TutorLessonManager
         lessons={data.lessons}
