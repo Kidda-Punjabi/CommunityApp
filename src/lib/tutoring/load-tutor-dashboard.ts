@@ -856,6 +856,19 @@ export async function loadTutorCohortLessons(
     const name = kid.name?.trim();
     if (name) kidNameById.set(kid.id, name);
   }
+  if (memberKidIds.length > 0 && kidNameById.size < memberKidIds.length) {
+    const { client } = tryCreateServiceRoleClient();
+    if (client) {
+      const { data: adminKids } = await client
+        .from("kid_profiles")
+        .select("id, name")
+        .in("id", memberKidIds);
+      for (const kid of adminKids ?? []) {
+        const name = kid.name?.trim();
+        if (name && !kidNameById.has(kid.id)) kidNameById.set(kid.id, name);
+      }
+    }
+  }
 
   const members: { key: string; name: string }[] = [];
   for (const userId of memberUserIds) {
