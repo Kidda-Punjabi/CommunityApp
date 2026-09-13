@@ -5,6 +5,10 @@ import {
   studentNameFromPackageRunName,
 } from "@/lib/profile/display-name";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
+import {
+  certificateStageForCourse,
+  type KidLevelCertificateCandidate,
+} from "@/lib/learn/kid-level-certificate";
 import { canManageCohort } from "@/lib/tutoring/tutor-access";
 import { isStoredSessionExcluded } from "@/lib/calendar/exclusions";
 import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
@@ -223,10 +227,12 @@ export async function loadTutorDashboard(
     cohortIds.length > 0
       ? supabase
           .from("cohort_members")
-          .select("cohort_id, user_id")
+          .select("cohort_id, user_id, kid_profile_id")
           .in("cohort_id", cohortIds)
           .is("left_at", null)
-      : Promise.resolve({ data: [] as { cohort_id: string; user_id: string }[] }),
+      : Promise.resolve({
+          data: [] as { cohort_id: string; user_id: string | null; kid_profile_id: string | null }[],
+        }),
     supabase.from("package_instances").select("id, name, course_id, status").eq("tutor_id", tutorId),
     studentIds.length > 0
       ? supabase
@@ -287,7 +293,7 @@ export async function loadTutorDashboard(
   if (allCohortIds.length > cohortIds.length) {
     const { data: extraMembers } = await supabase
       .from("cohort_members")
-      .select("cohort_id, user_id")
+      .select("cohort_id, user_id, kid_profile_id")
       .in("cohort_id", allCohortIds)
       .is("left_at", null);
     membersByCohortFromDb = extraMembers ?? [];
@@ -297,7 +303,11 @@ export async function loadTutorDashboard(
   applyProfileNames(nameById, profiles);
 
   const cohortMemberUserIds = [
-    ...new Set(membersByCohortFromDb.map((member) => member.user_id)),
+    ...new Set(
+      membersByCohortFromDb
+        .map((member) => member.user_id)
+        .filter((id): id is string => Boolean(id))
+    ),
   ];
   const missingProfileIds = cohortMemberUserIds.filter((id) => !studentIds.includes(id));
 
@@ -330,6 +340,24 @@ export async function loadTutorDashboard(
       }
     }
   }
+  const cohortMemberKidIds = [
+    ...new Set(
+      membersByCohortFromDb
+        .map((member) => member.kid_profile_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const missingKidIds = cohortMemberKidIds.filter((id) => !kidNameById.has(id));
+  if (missingKidIds.length > 0) {
+    const { data: extraKids } = await supabase
+      .from("kid_profiles")
+      .select("id, name")
+      .in("id", missingKidIds);
+    for (const kid of extraKids ?? []) {
+      const name = kid.name?.trim();
+      if (name) kidNameById.set(kid.id, name);
+    }
+  }
   const packageNameByStudentId = instanceNameByStudentId({
     oneToOneCourseIds,
     instances: instanceRows,
@@ -346,7 +374,11 @@ export async function loadTutorDashboard(
   const membersByCohort = new Map<string, string[]>();
   for (const member of membersByCohortFromDb) {
     const list = membersByCohort.get(member.cohort_id) ?? [];
-    list.push(resolveStudentLabel(nameById.get(member.user_id)));
+    if (member.kid_profile_id) {
+      list.push(kidNameById.get(member.kid_profile_id) ?? "Student");
+    } else if (member.user_id) {
+      list.push(resolveStudentLabel(nameById.get(member.user_id)));
+    }
     membersByCohort.set(member.cohort_id, list);
   }
 
@@ -721,7 +753,8 @@ export async function loadTutorCohortLessons(
 ): Promise<{
   cohortName: string;
   courseName: string;
-  members: { userId: string; name: string }[];
+  members: { key: string; name: string }[];
+  kidCertificates: KidLevelCertificateCandidate[];
   lessons: TutorLessonRow[];
 } | null> {
   const allowed = await canManageCohort(supabase, tutorId, cohortId);
@@ -729,7 +762,7 @@ export async function loadTutorCohortLessons(
 
   const { data: cohort, error: cohortError } = await supabase
     .from("cohorts")
-    .select("id, name, course_id, courses(name)")
+    .select("id, name, course_id, courses(name, content_track, required_tier)")
     .eq("id", cohortId)
     .maybeSingle();
 
@@ -737,13 +770,15 @@ export async function loadTutorCohortLessons(
 
   let cohortName = cohort?.name ?? "Cohort";
   let courseId = cohort?.course_id ?? null;
-  let courseName =
-    (Array.isArray(cohort?.courses) ? cohort.courses[0] : cohort?.courses)?.name ?? null;
+  const courseJoin = Array.isArray(cohort?.courses) ? cohort.courses[0] : cohort?.courses;
+  let courseName = courseJoin?.name ?? null;
+  let courseTrack = courseJoin?.content_track ?? null;
+  let courseTier = courseJoin?.required_tier ?? null;
 
   if (!courseId) {
     const { data: enrollment } = await supabase
       .from("course_enrollments")
-      .select("course_id, courses(name)")
+      .select("course_id, courses(name, content_track, required_tier)")
       .eq("tutor_id", tutorId)
       .eq("cohort_id", cohortId)
       .limit(1)
@@ -752,40 +787,130 @@ export async function loadTutorCohortLessons(
     if (!enrollment) return null;
 
     courseId = enrollment.course_id;
-    const course = Array.isArray(enrollment.courses)
+    const enrolledCourse = Array.isArray(enrollment.courses)
       ? enrollment.courses[0]
       : enrollment.courses;
-    courseName = course?.name ?? "Course";
+    courseName = enrolledCourse?.name ?? "Course";
+    courseTrack = enrolledCourse?.content_track ?? null;
+    courseTier = enrolledCourse?.required_tier ?? null;
   }
 
-  const [{ data: lessons }, { data: unlocks }, { data: recordings }, { data: memberRows }] =
-    await Promise.all([
-      supabase
-        .from("lessons")
-        .select("id, lesson_number, title")
-        .eq("course_id", courseId)
-        .order("lesson_number"),
-      supabase.from("cohort_lesson_unlocks").select("lesson_id").eq("cohort_id", cohortId),
-      supabase.from("lesson_recordings").select("id, lesson_id, storage_path").eq("cohort_id", cohortId),
-      supabase
-        .from("cohort_members")
-        .select("user_id")
-        .eq("cohort_id", cohortId)
-        .is("left_at", null),
-    ]);
+  const [
+    { data: lessons },
+    { data: unlocks },
+    { data: recordings },
+    { data: memberRows },
+    { data: enrollmentRows },
+  ] = await Promise.all([
+    supabase
+      .from("lessons")
+      .select("id, lesson_number, title")
+      .eq("course_id", courseId)
+      .order("lesson_number"),
+    supabase.from("cohort_lesson_unlocks").select("lesson_id").eq("cohort_id", cohortId),
+    supabase.from("lesson_recordings").select("id, lesson_id, storage_path").eq("cohort_id", cohortId),
+    supabase
+      .from("cohort_members")
+      .select("user_id, kid_profile_id")
+      .eq("cohort_id", cohortId)
+      .is("left_at", null),
+    supabase
+      .from("course_enrollments")
+      .select("id, user_id, kid_profile_id, level_number")
+      .eq("cohort_id", cohortId),
+  ]);
 
-  const memberIds = (memberRows ?? []).map((row) => row.user_id);
-  const { data: profiles } =
-    memberIds.length > 0
-      ? await supabase
+  const memberUserIds = [
+    ...new Set(
+      (memberRows ?? [])
+        .map((row) => row.user_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const memberKidIds = [
+    ...new Set(
+      [
+        ...((memberRows ?? []).map((row) => row.kid_profile_id as string | null)),
+        ...((enrollmentRows ?? []).map((row) => row.kid_profile_id as string | null)),
+      ].filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  const [{ data: profiles }, { data: kids }] = await Promise.all([
+    memberUserIds.length > 0
+      ? supabase
           .from("profiles")
           .select("id, full_name, preferred_name")
-          .in("id", memberIds)
-      : { data: [] };
+          .in("id", memberUserIds)
+      : Promise.resolve({ data: [] as ProfileNameRow[] }),
+    memberKidIds.length > 0
+      ? supabase.from("kid_profiles").select("id, name").in("id", memberKidIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string | null }> }),
+  ]);
 
   const nameById = new Map<string, string>();
   applyProfileNames(nameById, profiles);
-  await refillMissingProfileNames(nameById, memberIds);
+  await refillMissingProfileNames(nameById, memberUserIds);
+  const kidNameById = new Map<string, string>();
+  for (const kid of kids ?? []) {
+    const name = kid.name?.trim();
+    if (name) kidNameById.set(kid.id, name);
+  }
+
+  const members: { key: string; name: string }[] = [];
+  for (const userId of memberUserIds) {
+    members.push({ key: `user:${userId}`, name: nameById.get(userId) ?? "Member" });
+  }
+  for (const kidId of memberKidIds) {
+    members.push({
+      key: `kid:${kidId}`,
+      name: kidNameById.get(kidId) ?? "Student",
+    });
+  }
+  members.sort((a, b) => a.name.localeCompare(b.name));
+
+  const certificateStage = certificateStageForCourse({
+    content_track: courseTrack,
+    required_tier: courseTier,
+    name: courseName,
+  });
+
+  const kidEnrollmentIds = (enrollmentRows ?? [])
+    .map((row) => row.kid_profile_id as string | null)
+    .filter((id): id is string => Boolean(id));
+
+  const { data: certificateRows } =
+    certificateStage && kidEnrollmentIds.length > 0
+      ? await supabase
+          .from("certificates")
+          .select("kid_profile_id, kid_level_number")
+          .eq("level", certificateStage)
+          .in("kid_profile_id", kidEnrollmentIds)
+      : { data: [] as Array<{ kid_profile_id: string; kid_level_number: number | null }> };
+
+  const issuedKeys = new Set(
+    (certificateRows ?? [])
+      .filter((row) => row.kid_level_number != null)
+      .map((row) => `${row.kid_profile_id}:${row.kid_level_number}`)
+  );
+
+  const kidCertificates: KidLevelCertificateCandidate[] = [];
+  if (certificateStage) {
+    for (const row of enrollmentRows ?? []) {
+      const kidProfileId = row.kid_profile_id as string | null;
+      const levelNumber = row.level_number as number | null;
+      if (!kidProfileId || levelNumber == null) continue;
+      kidCertificates.push({
+        enrollmentId: row.id as string,
+        kidProfileId,
+        kidName: kidNameById.get(kidProfileId) ?? "Student",
+        levelNumber,
+        certificateStage,
+        alreadyIssued: issuedKeys.has(`${kidProfileId}:${levelNumber}`),
+      });
+    }
+    kidCertificates.sort((a, b) => a.kidName.localeCompare(b.kidName));
+  }
 
   const unlockedIds = new Set((unlocks ?? []).map((row) => row.lesson_id));
   const recordingByLesson = new Map(
@@ -795,10 +920,8 @@ export async function loadTutorCohortLessons(
   return {
     cohortName,
     courseName: courseName ?? "Course",
-    members: memberIds.map((userId) => ({
-      userId,
-      name: nameById.get(userId) ?? "Member",
-    })),
+    members,
+    kidCertificates,
     lessons: (lessons ?? []).map((lesson) => {
       const recording = recordingByLesson.get(lesson.id);
       return {
