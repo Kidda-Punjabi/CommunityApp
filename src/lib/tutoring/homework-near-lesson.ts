@@ -2,10 +2,16 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
+import { KIDS_CONTENT_TRACK } from "@/lib/learning/kids-courses";
+import {
+  homeworkTimingStateFromStartsAt as kidsHomeworkTimingStateFromStartsAt,
+  isKidsHomeworkClassSession,
+  type HomeworkTimingState,
+} from "@/lib/tutoring/homework-timing";
 
 const NEAR_LESSON_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-export type HomeworkTimingState = "on_time" | "late" | "post_lesson" | "unknown";
+export type { HomeworkTimingState };
 
 /**
  * Resolve the live session start time that corresponds to this homework lesson.
@@ -140,12 +146,116 @@ export async function getHomeworkTimingState(
   return homeworkTimingStateFromStartsAt(startsAt, now);
 }
 
+export async function findKidsNextHomeworkLessonStartsAt(
+  supabase: SupabaseClient,
+  studentId: string,
+  lessonId: string,
+  kidProfileId?: string | null
+): Promise<string | null> {
+  const thisStartsAt = await findHomeworkLessonSessionStartsAt(
+    supabase,
+    studentId,
+    lessonId,
+    kidProfileId
+  );
+  if (!thisStartsAt) return null;
+
+  const { data: lesson } = await supabase
+    .from("lessons")
+    .select("course_id")
+    .eq("id", lessonId)
+    .maybeSingle();
+  const courseId = (lesson?.course_id as string | null) ?? null;
+  if (!courseId) return null;
+
+  const actor = kidProfileId
+    ? ({ kind: "kid" as const, userId: studentId, kidProfileId })
+    : await resolveCourseActor(supabase, studentId);
+  const enrollmentFilter =
+    actor.kind === "kid"
+      ? { column: "kid_profile_id" as const, value: actor.kidProfileId }
+      : { column: "user_id" as const, value: actor.userId };
+
+  const { data: enrollment } = await supabase
+    .from("course_enrollments")
+    .select("cohort_id")
+    .eq(enrollmentFilter.column, enrollmentFilter.value)
+    .eq("course_id", courseId)
+    .maybeSingle();
+
+  const cohortId = (enrollment?.cohort_id as string | null) ?? null;
+  if (!cohortId) return null;
+
+  const { data: sessions } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, title, starts_at, course_id, match_method")
+    .eq("cohort_id", cohortId)
+    .eq("status", "scheduled")
+    .neq("match_method", "unmatched")
+    .neq("match_method", "title_name")
+    .gt("starts_at", thisStartsAt)
+    .order("starts_at", { ascending: true })
+    .limit(40);
+
+  const next = (sessions ?? []).find((row) =>
+    isKidsHomeworkClassSession({
+      title: row.title as string | null,
+      match_method: row.match_method as string | null,
+      course_id: (row.course_id as string | null) ?? null,
+      kidsCourseId: courseId,
+    })
+  );
+  return (next?.starts_at as string | null | undefined) ?? null;
+}
+
+export type HomeworkSubmissionTiming = {
+  state: HomeworkTimingState;
+  nextLessonStartsAt: string | null;
+  usesKidsNextLesson: boolean;
+};
+
+/** Student homework-page banner only. Adults stay on this-lesson timing. */
+export async function getHomeworkSubmissionTiming(
+  supabase: SupabaseClient,
+  studentId: string,
+  lessonId: string,
+  now: Date = new Date(),
+  kidProfileId?: string | null
+): Promise<HomeworkSubmissionTiming> {
+  const { data: lesson } = await supabase
+    .from("lessons")
+    .select("course_id, courses(content_track)")
+    .eq("id", lessonId)
+    .maybeSingle();
+
+  const course = Array.isArray(lesson?.courses) ? lesson?.courses[0] : lesson?.courses;
+  if ((course as { content_track?: string | null } | null)?.content_track !== KIDS_CONTENT_TRACK) {
+    return {
+      state: await getHomeworkTimingState(supabase, studentId, lessonId, now, kidProfileId),
+      nextLessonStartsAt: null,
+      usesKidsNextLesson: false,
+    };
+  }
+
+  const nextLessonStartsAt = await findKidsNextHomeworkLessonStartsAt(
+    supabase,
+    studentId,
+    lessonId,
+    kidProfileId
+  );
+  return {
+    state: kidsHomeworkTimingStateFromStartsAt(nextLessonStartsAt, now),
+    nextLessonStartsAt,
+    usesKidsNextLesson: true,
+  };
+}
+
 /** True when the student should see a non-blocking late or post-lesson warning. */
 export async function shouldWarnHomeworkNearLesson(
   supabase: SupabaseClient,
   studentId: string,
   lessonId: string
 ): Promise<boolean> {
-  const state = await getHomeworkTimingState(supabase, studentId, lessonId);
-  return state === "late" || state === "post_lesson";
+  const timing = await getHomeworkSubmissionTiming(supabase, studentId, lessonId);
+  return timing.state === "late" || timing.state === "post_lesson";
 }

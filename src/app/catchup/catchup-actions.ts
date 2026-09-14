@@ -5,7 +5,7 @@ import { awardQuizAttemptPoints } from "@/lib/leaderboard/points";
 import type { TextHomeworkAnswer } from "@/lib/catchup/load-segment-questions";
 import { homeworkStorageClient } from "@/lib/tutoring/homework-storage";
 import { homeworkTimingWarningMessage } from "@/lib/tutoring/homework-submissions";
-import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
+import { getHomeworkSubmissionTiming } from "@/lib/tutoring/homework-near-lesson";
 import { homeworkWrite, resolveCourseActor } from "@/lib/kids/course-actor";
 import { persistTextHomework } from "@/lib/tutoring/submit-homework";
 import { revalidatePath } from "next/cache";
@@ -62,10 +62,13 @@ export async function getCatchupHomeworkNearLessonWarning(
 
     if (!user) return { nearLessonWarning: null, timingState: null };
 
-    const state = await getHomeworkTimingState(supabase, user.id, lessonId);
+    const timing = await getHomeworkSubmissionTiming(supabase, user.id, lessonId);
     return {
-      nearLessonWarning: homeworkTimingWarningMessage(state),
-      timingState: state,
+      nearLessonWarning: homeworkTimingWarningMessage(timing.state, {
+        nextLessonStartsAt: timing.nextLessonStartsAt,
+        usesKidsNextLesson: timing.usesKidsNextLesson,
+      }),
+      timingState: timing.state,
     };
   } catch {
     return { nearLessonWarning: null, timingState: null };
