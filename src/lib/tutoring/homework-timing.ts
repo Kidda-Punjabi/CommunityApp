@@ -47,3 +47,18 @@ export function formatKidsNextLessonWarning(startsAt: string): string {
   });
   return `Your next lesson is on ${date} at ${time}. Submit before then to guarantee it's reviewed — after that it's up to your tutor.`;
 }
+
+/** Calendar day of the next class in UK time, for parent “Due [date]” labels. */
+export function homeworkDueDateFromNextLessonStartsAt(
+  startsAt: string | null | undefined
+): string | null {
+  if (!startsAt) return null;
+  const start = new Date(startsAt);
+  if (Number.isNaN(start.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: UK_DISPLAY_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(start);
+}
