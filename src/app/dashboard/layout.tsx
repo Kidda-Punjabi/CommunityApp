@@ -36,11 +36,11 @@ export default async function DashboardLayout({
   }
 
   const { supabase, user } = session;
-  const [access, onboarding, kidSession, soundSettings, pendingCourseTours] =
+  const kidSession = await loadKidSession(user.id);
+  const [access, onboarding, soundSettings, pendingCourseTours] =
     await Promise.all([
       getCachedCourseAccess(supabase, user),
       getCachedOnboardingProfile(supabase, user.id),
-      loadKidSession(user.id),
       loadSoundSettings(supabase, user.id),
       loadPendingCourseResourceTours(user.id),
     ]);

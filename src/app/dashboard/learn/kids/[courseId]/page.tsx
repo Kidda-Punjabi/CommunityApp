@@ -76,6 +76,11 @@ export default async function KidsCourseLearnPage({
   );
   const lessonIds = lessons.map((lesson) => lesson.id);
   const courseIds = [courseId];
+  const kidsAccess = {
+    ...access,
+    unlockedCourseIds: new Set([...access.unlockedCourseIds, courseId]),
+    isFreeOnly: false,
+  };
   const studentPackage = findStudentPackageForCourse(studentPackages, courseId);
 
   const [
@@ -127,7 +132,7 @@ export default async function KidsCourseLearnPage({
       title={course.name}
       subtitle=""
       lessons={lessons}
-      access={access}
+      access={kidsAccess}
       progressMap={lessonProgressMap}
       flashcardProgressMap={flashcardProgressMap}
       quizProgressMap={quizProgressMap}
