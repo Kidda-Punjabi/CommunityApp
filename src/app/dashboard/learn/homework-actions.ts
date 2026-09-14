@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveCourseActor } from "@/lib/kids/course-actor";
 import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
 import { persistVoiceHomework } from "@/lib/tutoring/submit-homework";
+import { homeworkStorageClient } from "@/lib/tutoring/homework-storage";
 import {
   createHomeworkPlaybackUrl,
   homeworkTimingWarningMessage,
@@ -39,7 +40,17 @@ export async function getHomeworkPlaybackUrl(
 
     if (!user) return { error: "You must be signed in." };
 
-    const playbackUrl = await createHomeworkPlaybackUrl(supabase, storagePath);
+    const { data: readable } = await supabase
+      .from("homework_submissions")
+      .select("id")
+      .eq("storage_path", storagePath)
+      .maybeSingle();
+    if (!readable) return { error: "Could not load audio." };
+
+    const playbackUrl = await createHomeworkPlaybackUrl(
+      homeworkStorageClient(supabase),
+      storagePath
+    );
     if (!playbackUrl) return { error: "Could not load audio." };
 
     return { playbackUrl };
