@@ -14,7 +14,7 @@ import {
   loadHomeworkTestStudent,
   loadHomeworkTestStudents,
 } from "@/lib/admin/load-homework-test";
-import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
+import { getHomeworkSubmissionTiming } from "@/lib/tutoring/homework-near-lesson";
 import {
   createHomeworkPlaybackUrl,
   fetchFormalHomeworkForActor,
@@ -150,7 +150,7 @@ export async function getAdminHomeworkNearLessonWarning(
     if (!studentId && !kidProfileId) {
       return { nearLessonWarning: null, timingState: null };
     }
-    const state = await getHomeworkTimingState(
+    const timing = await getHomeworkSubmissionTiming(
       supabase,
       studentId ?? kidProfileId ?? "",
       lessonId,
@@ -158,8 +158,11 @@ export async function getAdminHomeworkNearLessonWarning(
       kidProfileId
     );
     return {
-      nearLessonWarning: homeworkTimingWarningMessage(state),
-      timingState: state,
+      nearLessonWarning: homeworkTimingWarningMessage(timing.state, {
+        nextLessonStartsAt: timing.nextLessonStartsAt,
+        usesKidsNextLesson: timing.usesKidsNextLesson,
+      }),
+      timingState: timing.state,
     };
   } catch {
     return { nearLessonWarning: null, timingState: null };

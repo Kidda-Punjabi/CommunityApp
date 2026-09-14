@@ -5,6 +5,7 @@ import {
   type CourseActor,
 } from "@/lib/kids/course-actor";
 import { getDisplayName } from "@/lib/profile/display-name";
+import { formatKidsNextLessonWarning } from "@/lib/tutoring/homework-timing";
 
 export type HomeworkSubmissionStatus = "pending_review" | "reviewed";
 export type HomeworkSubmissionType = "voice" | "text";
@@ -68,9 +69,15 @@ export const HOMEWORK_POST_LESSON_WARNING =
   "This lesson has already taken place. You can still submit your homework, but whether it gets marked is completely up to your tutor — there's a good chance it won't be reviewed.";
 
 export function homeworkTimingWarningMessage(
-  state: "on_time" | "late" | "post_lesson" | "unknown" | null | undefined
+  state: "on_time" | "late" | "post_lesson" | "unknown" | null | undefined,
+  options?: { nextLessonStartsAt?: string | null; usesKidsNextLesson?: boolean }
 ): string | null {
-  if (state === "late") return HOMEWORK_NEAR_LESSON_WARNING;
+  if (state === "late") {
+    if (options?.usesKidsNextLesson && options.nextLessonStartsAt) {
+      return formatKidsNextLessonWarning(options.nextLessonStartsAt);
+    }
+    return HOMEWORK_NEAR_LESSON_WARNING;
+  }
   if (state === "post_lesson") return HOMEWORK_POST_LESSON_WARNING;
   return null;
 }

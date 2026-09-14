@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { resolveCourseActor } from "@/lib/kids/course-actor";
-import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
+import { getHomeworkSubmissionTiming } from "@/lib/tutoring/homework-near-lesson";
 import { persistVoiceHomework } from "@/lib/tutoring/submit-homework";
 import { homeworkStorageClient } from "@/lib/tutoring/homework-storage";
 import {
@@ -70,10 +70,13 @@ export async function getHomeworkNearLessonWarning(
 
     if (!user) return { nearLessonWarning: null, timingState: null };
 
-    const state = await getHomeworkTimingState(supabase, user.id, lessonId);
+    const timing = await getHomeworkSubmissionTiming(supabase, user.id, lessonId);
     return {
-      nearLessonWarning: homeworkTimingWarningMessage(state),
-      timingState: state,
+      nearLessonWarning: homeworkTimingWarningMessage(timing.state, {
+        nextLessonStartsAt: timing.nextLessonStartsAt,
+        usesKidsNextLesson: timing.usesKidsNextLesson,
+      }),
+      timingState: timing.state,
     };
   } catch {
     // Soft warning only — never block submission if lookup fails.
