@@ -1,6 +1,6 @@
 import { getCourseRequiredTier, type PaidCourseTier } from "@/lib/membership/access";
 import type { CourseRecord } from "@/lib/membership/courses";
-import { findCoursesForTier } from "@/lib/membership/courses";
+import { findCoursesForTier, isPublicLearnCourse } from "@/lib/membership/courses";
 import type { CourseAccessContext } from "@/lib/membership/unlocked";
 import type { LearnTrack } from "@/lib/learning/learn-catalog";
 import { isPrivateAccessCourse } from "@/lib/learning/private-courses";
@@ -70,6 +70,9 @@ export function canAccessLessonInContext(
 
   const course = access.courses.find((item) => item.id === lesson.course_id);
   if (!course) return false;
+  // Private / unlisted courses (Kids Beginners, Learn English) are grant-gated
+  // by course_id. Do not map them onto Foundational/Beginners membership.
+  if (!isPublicLearnCourse(course)) return false;
 
   const tier = getCourseRequiredTier(course);
   return hasTierAccess(access, tier);

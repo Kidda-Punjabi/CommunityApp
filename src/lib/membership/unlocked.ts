@@ -77,6 +77,21 @@ export async function getCourseAccessContext(
   user: User
 ): Promise<CourseAccessContext> {
   const courses = await fetchCourses(supabase);
+  const actor = await resolveCourseActor(supabase, user.id);
+
+  // Kid sessions use that child's course_access / enrollments only.
+  // Admin view-as and parent Beginners grants map onto the public adult
+  // catalog and would otherwise paywall content_track=kids courses.
+  if (actor.kind === "kid") {
+    const unlockedCourseIds = await getUserUnlockedCourseIds(supabase, user.id);
+    return {
+      unlockedCourseIds,
+      courses,
+      isFreeOnly: unlockedCourseIds.size === 0,
+      viewAs: null,
+    };
+  }
+
   const viewAsState = await readViewAsState(user);
 
   if (viewAsState.mode === "override") {
