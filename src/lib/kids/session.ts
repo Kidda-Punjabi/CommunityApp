@@ -89,7 +89,8 @@ export async function syncKidSessionContext(
   });
 }
 
-/** Switch the active learner to a child the parent owns. Homework and Learn then use kid_profile_id. */
+/** Switch the active learner to a child the parent owns. Homework and Learn then use kid_profile_id.
+ *  Must run in a Route Handler or Server Action — `cookies().set` is illegal in RSC. */
 export async function activateKidProfileSession(
   userId: string,
   kidProfileId: string
