@@ -13,9 +13,10 @@ import {
 } from "@/lib/calendar/cohort-week-progress";
 import type { AlternateCohortOption, StudentScheduledSession } from "@/lib/calendar/types";
 import { filterLessonsForTrack } from "@/lib/learning/learn-access";
-import { fetchLearnContent } from "@/lib/learning/load-learn-content";
+import { fetchLearnContent, filterLessonsForCourse } from "@/lib/learning/load-learn-content";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import {
+  findStudentPackageForCourse,
   findStudentPackageForTrack,
   loadStudentPackages,
   type StudentPackage,
@@ -33,7 +34,7 @@ export type SwitchCohortAlternateCard = {
 };
 
 export type SwitchCohortPageData = {
-  trackId: SwitchCohortTrackId;
+  trackId: SwitchCohortTrackId | "kids";
   backHref: string;
   sourceSession: StudentScheduledSession | null;
   current: {
@@ -71,25 +72,17 @@ function toAlternateCard(
   };
 }
 
-export async function loadSwitchCohortPage(
+async function buildSwitchCohortPageFromPackage(
   supabase: SupabaseClient,
-  user: User,
-  trackId: SwitchCohortTrackId
-): Promise<SwitchCohortPageData | null> {
-  const [access, studentPackages, allLessons] = await Promise.all([
-    getCourseAccessContext(supabase, user),
-    loadStudentPackages(supabase, user),
-    fetchLearnContent(supabase),
-  ]);
-
-  const pkg: StudentPackage | null = findStudentPackageForTrack(studentPackages, trackId);
-  if (!pkg || pkg.deliveryMode !== "group" || !pkg.cohortId) return null;
-
-  const lessons = filterLessonsForTrack(allLessons, access.courses, pkg.tier);
-  const totalWeeks = lessons.length;
+  pkg: StudentPackage,
+  params: {
+    trackId: SwitchCohortPageData["trackId"];
+    backHref: string;
+    totalWeeks: number;
+  }
+): Promise<SwitchCohortPageData> {
   const nowMs = Date.now();
   const source = pkg.groupRescheduleSession;
-
   const storedWeek =
     source?.week_number ??
     currentWeekFromStoredWeekNumber(
@@ -111,14 +104,14 @@ export async function loadSwitchCohortPage(
     progressLine: formatStartedWeekProgressLine({
       startDateIso: pkg.cohortStartDate,
       currentWeek,
-      totalWeeks,
+      totalWeeks: params.totalWeeks,
     }),
   };
 
   if (!source) {
     return {
-      trackId,
-      backHref: `/dashboard/learn/${trackId}`,
+      trackId: params.trackId,
+      backHref: params.backHref,
       sourceSession: null,
       current,
       alternates: [],
@@ -130,12 +123,12 @@ export async function loadSwitchCohortPage(
 
   const rawAlternates = await loadAlternateCohortSessionsForSource(supabase, source);
   const alternates = pickSwitchCohortOptions(
-    rawAlternates.map((option) => toAlternateCard(option, totalWeeks, nowMs))
+    rawAlternates.map((option) => toAlternateCard(option, params.totalWeeks, nowMs))
   );
 
   return {
-    trackId,
-    backHref: `/dashboard/learn/${trackId}`,
+    trackId: params.trackId,
+    backHref: params.backHref,
     sourceSession: source,
     current,
     alternates,
@@ -143,4 +136,47 @@ export async function loadSwitchCohortPage(
     lockedReason: source.cohortSwitchLockedReason,
     isShortNotice: source.isShortNoticeCohortSwitch,
   };
+}
+
+export async function loadSwitchCohortPage(
+  supabase: SupabaseClient,
+  user: User,
+  trackId: SwitchCohortTrackId
+): Promise<SwitchCohortPageData | null> {
+  const [access, studentPackages, allLessons] = await Promise.all([
+    getCourseAccessContext(supabase, user),
+    loadStudentPackages(supabase, user),
+    fetchLearnContent(supabase),
+  ]);
+
+  const pkg: StudentPackage | null = findStudentPackageForTrack(studentPackages, trackId);
+  if (!pkg || pkg.deliveryMode !== "group" || !pkg.cohortId) return null;
+
+  const lessons = filterLessonsForTrack(allLessons, access.courses, pkg.tier);
+  return buildSwitchCohortPageFromPackage(supabase, pkg, {
+    trackId,
+    backHref: `/dashboard/learn/${trackId}`,
+    totalWeeks: lessons.length,
+  });
+}
+
+export async function loadKidsSwitchCohortPage(
+  supabase: SupabaseClient,
+  user: User,
+  courseId: string
+): Promise<SwitchCohortPageData | null> {
+  const [studentPackages, allLessons] = await Promise.all([
+    loadStudentPackages(supabase, user),
+    fetchLearnContent(supabase),
+  ]);
+
+  const pkg = findStudentPackageForCourse(studentPackages, courseId);
+  if (!pkg || pkg.deliveryMode !== "group" || !pkg.cohortId) return null;
+
+  const lessons = filterLessonsForCourse(allLessons, courseId);
+  return buildSwitchCohortPageFromPackage(supabase, pkg, {
+    trackId: "kids",
+    backHref: `/dashboard/learn/kids/${courseId}`,
+    totalWeeks: lessons.length,
+  });
 }

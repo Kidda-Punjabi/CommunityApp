@@ -7,6 +7,11 @@ import {
 } from "@/lib/admin/load-admin-cohort-switch-requests";
 import { addAttendeeToGoogleCalendarEvent } from "@/lib/calendar/google-calendar-api";
 import { loadAlternateCohortSessionsForSource } from "@/lib/calendar/load-alternate-cohort-sessions";
+import {
+  KIDS_COHORT_AGE_GROUP_MISMATCH,
+  kidsCohortsShareAgeGroup,
+} from "@/lib/calendar/kids-cohort-age-group";
+import { KIDS_CONTENT_TRACK } from "@/lib/learning/kids-courses";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import {
   getValidTutorAccessToken,
@@ -132,12 +137,32 @@ export async function resolveAdminCohortSwitchRequest(input: {
 
     const { data: request, error: requestError } = await supabase
       .from("cohort_switch_requests")
-      .select("id, status, student_id, to_session_id, to_cohort_id")
+      .select("id, status, student_id, to_session_id, to_cohort_id, from_cohort_id")
       .eq("id", input.requestId)
       .maybeSingle();
 
     if (requestError || !request) return { error: "Request not found." };
     if (request.status !== "pending") return { error: "Already resolved." };
+
+    if (input.decision === "approved") {
+      const fromCohortId = (request.from_cohort_id as string | null) ?? null;
+      const toCohortId = (request.to_cohort_id as string | null) ?? null;
+      if (fromCohortId && toCohortId) {
+        const { data: switchCohorts } = await supabase
+          .from("cohorts")
+          .select("id, age_group, courses(content_track)")
+          .in("id", [fromCohortId, toCohortId]);
+        const fromRow = (switchCohorts ?? []).find((row) => row.id === fromCohortId);
+        const toRow = (switchCohorts ?? []).find((row) => row.id === toCohortId);
+        const course = Array.isArray(fromRow?.courses) ? fromRow?.courses[0] : fromRow?.courses;
+        if (
+          course?.content_track === KIDS_CONTENT_TRACK &&
+          !kidsCohortsShareAgeGroup(fromRow?.age_group, toRow?.age_group)
+        ) {
+          return { error: KIDS_COHORT_AGE_GROUP_MISMATCH };
+        }
+      }
+    }
 
     let calendarWarning: string | undefined;
     let invited = false;

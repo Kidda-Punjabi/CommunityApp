@@ -6,6 +6,8 @@ import {
   resolveCohortSwitchWeekNumber,
 } from "@/lib/calendar/cohort-switch-candidates";
 import { NO_MATCHING_ALTERNATE_SESSION_COPY } from "@/lib/calendar/constants";
+import { kidsCohortsShareAgeGroup } from "@/lib/calendar/kids-cohort-age-group";
+import { KIDS_CONTENT_TRACK } from "@/lib/learning/kids-courses";
 import type { AlternateCohortOption, ScheduledSessionRow } from "@/lib/calendar/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -26,6 +28,7 @@ type CohortMeta = {
   active: boolean;
   status: string | null;
   start_date: string | null;
+  age_group: string | null;
 };
 
 /**
@@ -56,22 +59,26 @@ export async function loadAlternateCohortSessions(
   const nowIso = new Date(nowMs).toISOString();
   const courseIds = [...new Set(groupSources.map((session) => session.course_id as string))];
 
-  const [{ data: cohortRows, error: cohortError }, { data: sessionRows, error: sessionError }] =
-    await Promise.all([
-      admin
-        .from("cohorts")
-        .select("id, name, tutor_id, course_id, active, status, start_date")
-        .in("course_id", courseIds)
-        .eq("active", true),
-      admin
-        .from("tutor_scheduled_sessions")
-        .select("*")
-        .in("course_id", courseIds)
-        .not("cohort_id", "is", null)
-        .eq("status", "scheduled")
-        .gte("starts_at", nowIso)
-        .order("starts_at", { ascending: true }),
-    ]);
+  const [
+    { data: cohortRows, error: cohortError },
+    { data: sessionRows, error: sessionError },
+    { data: courseRows, error: courseError },
+  ] = await Promise.all([
+    admin
+      .from("cohorts")
+      .select("id, name, tutor_id, course_id, active, status, start_date, age_group")
+      .in("course_id", courseIds)
+      .eq("active", true),
+    admin
+      .from("tutor_scheduled_sessions")
+      .select("*")
+      .in("course_id", courseIds)
+      .not("cohort_id", "is", null)
+      .eq("status", "scheduled")
+      .gte("starts_at", nowIso)
+      .order("starts_at", { ascending: true }),
+    admin.from("courses").select("id, content_track").in("id", courseIds),
+  ]);
 
   if (cohortError) {
     console.error("loadAlternateCohortSessions cohorts:", cohortError.message);
@@ -81,6 +88,16 @@ export async function loadAlternateCohortSessions(
     console.error("loadAlternateCohortSessions sessions:", sessionError.message);
     return result;
   }
+  if (courseError) {
+    console.error("loadAlternateCohortSessions courses:", courseError.message);
+    return result;
+  }
+
+  const kidsCourseIds = new Set(
+    (courseRows ?? [])
+      .filter((course) => course.content_track === KIDS_CONTENT_TRACK)
+      .map((course) => course.id as string)
+  );
 
   const activeCohorts = ((cohortRows ?? []) as CohortMeta[]).filter(
     (cohort) => cohort.active && isActiveCohortSwitchStatus(cohort.status)
@@ -118,9 +135,22 @@ export async function loadAlternateCohortSessions(
       continue;
     }
 
-    const matches = candidates.filter((candidate) =>
-      isAlternateCohortSwitchSession(source, candidate, { nowMs })
+    const sourceCohort = source.cohort_id ? cohortById.get(source.cohort_id) : undefined;
+    const restrictKidsAgeGroup = Boolean(
+      source.course_id && kidsCourseIds.has(source.course_id)
     );
+
+    const matches = candidates.filter((candidate) => {
+      if (!isAlternateCohortSwitchSession(source, candidate, { nowMs })) return false;
+      if (!restrictKidsAgeGroup) return true;
+      const candidateCohort = candidate.cohort_id
+        ? cohortById.get(candidate.cohort_id)
+        : undefined;
+      return kidsCohortsShareAgeGroup(
+        sourceCohort?.age_group,
+        candidateCohort?.age_group
+      );
+    });
     const seenCohorts = new Set<string>();
     const optionsForSource: AlternateCohortOption[] = [];
     for (const candidate of matches) {

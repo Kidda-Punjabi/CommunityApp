@@ -11,6 +11,11 @@ import {
 } from "@/lib/calendar/reschedule-limit";
 import { loadAlternateCohortSessionsForSource } from "@/lib/calendar/load-alternate-cohort-sessions";
 import { SWITCH_COHORT_SUCCESS_COPY } from "@/lib/calendar/cohort-week-progress";
+import {
+  KIDS_COHORT_AGE_GROUP_MISMATCH,
+  kidsCohortsShareAgeGroup,
+} from "@/lib/calendar/kids-cohort-age-group";
+import { KIDS_CONTENT_TRACK } from "@/lib/learning/kids-courses";
 import { attachLessonLabelsToSessions } from "@/lib/calendar/session-lesson-labels";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
@@ -294,12 +299,33 @@ export async function requestCohortSwitch(
 
   const { data: targetCohort } = await adminClient
     .from("cohorts")
-    .select("id, active, status")
+    .select("id, active, status, age_group")
     .eq("id", targetSession.cohort_id)
     .maybeSingle();
 
   if (!targetCohort?.active || !isActiveCohortSwitchStatus(targetCohort.status)) {
     return { error: "That cohort is not currently available." };
+  }
+
+  if (session.course_id) {
+    const [{ data: course }, { data: sourceCohort }] = await Promise.all([
+      adminClient
+        .from("courses")
+        .select("content_track")
+        .eq("id", session.course_id)
+        .maybeSingle(),
+      adminClient
+        .from("cohorts")
+        .select("age_group")
+        .eq("id", session.cohort_id)
+        .maybeSingle(),
+    ]);
+    if (
+      course?.content_track === KIDS_CONTENT_TRACK &&
+      !kidsCohortsShareAgeGroup(sourceCohort?.age_group, targetCohort.age_group)
+    ) {
+      return { error: KIDS_COHORT_AGE_GROUP_MISMATCH };
+    }
   }
 
   const { data: existing } = await supabase
@@ -371,6 +397,9 @@ export async function requestCohortSwitch(
   revalidatePath("/dashboard/learn");
   revalidatePath("/dashboard/learn/beginners/switch-cohort");
   revalidatePath("/dashboard/learn/foundational/switch-cohort");
+  if (session.course_id) {
+    revalidatePath(`/dashboard/learn/kids/${session.course_id}/switch-cohort`);
+  }
   revalidatePath("/admin/content");
   revalidatePath("/admin/cohort-switch-requests");
   const copyVariant = String(formData.get("copy_variant") ?? "").trim();

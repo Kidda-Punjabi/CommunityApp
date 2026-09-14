@@ -268,3 +268,7 @@ export async function fetchKidsCourseLessonUnlockMap(
 export function kidsCourseLearnPath(courseId: string) {
   return `/dashboard/learn/kids/${courseId}`;
 }
+
+export function kidsCourseSwitchCohortPath(courseId: string) {
+  return `/dashboard/learn/kids/${courseId}/switch-cohort`;
+}
