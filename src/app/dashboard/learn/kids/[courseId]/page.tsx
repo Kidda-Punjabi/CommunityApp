@@ -1,9 +1,11 @@
 import { LearnLessonList } from "@/components/learn-lesson-list";
+import { SwitchCohortLink } from "@/components/learn/switch-cohort-link";
 import { PackageHubPanel } from "@/components/packages/package-hub-panel";
 import { fetchLearnContent, filterLessonsForCourse } from "@/lib/learning/load-learn-content";
 import {
   fetchAccessibleKidsCourses,
   fetchKidsCourseLessonUnlockMap,
+  kidsCourseSwitchCohortPath,
 } from "@/lib/learning/kids-courses";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { fetchLessonCompletionMap, summarizeCourseProgress } from "@/lib/progress/lesson-completion";
@@ -148,8 +150,13 @@ export default async function KidsCourseLearnPage({
             pkg={studentPackage}
             cohortStats={cohortCourseStats}
             cohortProgressLine={cohortProgressLine}
-            showGroupReschedule
+            showGroupReschedule={false}
           />
+        ) : null
+      }
+      footerSection={
+        studentPackage?.deliveryMode === "group" && studentPackage.cohortId ? (
+          <SwitchCohortLink href={kidsCourseSwitchCohortPath(courseId)} variant="button" />
         ) : null
       }
       contentUnlockedMap={contentUnlockedMap}
