@@ -2,7 +2,7 @@ import { ParentKidsProgressDetail } from "@/components/kids/parent-kids-progress
 import { BackLink } from "@/components/navigation/back-link";
 import { kidHomeHref } from "@/lib/kids/load-kid-content";
 import { loadParentKidsCourseProgress } from "@/lib/kids/load-parent-course-progress";
-import { activateKidProfileSession, loadKidSession } from "@/lib/kids/session";
+import { loadKidSession } from "@/lib/kids/session";
 import type { KidProfile } from "@/lib/kids/types";
 import { kidsCourseLearnPath } from "@/lib/learning/kids-courses";
 import { createClient } from "@/lib/supabase/server";
@@ -50,10 +50,10 @@ export default async function KidsProgressDetailPage({
 
   const courseId = progress.courses[0]?.courseId ?? null;
   if (courseId) {
-    if (!kidSession.activeKidProfile) {
-      await activateKidProfileSession(user.id, kidProfileId);
+    if (kidSession.activeKidProfile?.id === kidProfileId) {
+      redirect(kidsCourseLearnPath(courseId));
     }
-    redirect(kidsCourseLearnPath(courseId));
+    redirect(`/dashboard/learn/kids-progress/${kidProfileId}/enter`);
   }
 
   return (
