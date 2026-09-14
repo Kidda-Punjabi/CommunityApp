@@ -13,7 +13,7 @@ import { fetchQuizProgressMap } from "@/lib/progress/quiz-progress";
 import { fetchLessonRecordingsForUser } from "@/lib/tutoring/lesson-content-access";
 import { fetchHomeworkSubmissionsForUser } from "@/lib/tutoring/homework-submissions";
 import { fetchFeedbackSubmittedLessonIds } from "@/lib/feedback/load-feedback-history";
-import { buildScheduleSessionByLessonId } from "@/lib/calendar/lesson-schedule-map";
+import { buildKidsScheduleSessionByLessonId } from "@/lib/calendar/lesson-schedule-map";
 import { loadStudentUpcomingSessions } from "@/lib/calendar/load-sessions";
 import {
   deriveCohortCurrentWeek,
@@ -102,7 +102,7 @@ export default async function KidsCourseLearnPage({
   ]);
 
   const courseProgress = summarizeCourseProgress(lessons, completionMap);
-  const scheduleSessionByLessonId = buildScheduleSessionByLessonId(
+  const scheduleSessionByLessonId = buildKidsScheduleSessionByLessonId(
     upcomingLoad.sessions,
     lessons,
     courseIds
@@ -124,7 +124,7 @@ export default async function KidsCourseLearnPage({
 
   return (
     <LearnLessonList
-      title="Beginners Course"
+      title={course.name}
       subtitle=""
       lessons={lessons}
       access={access}

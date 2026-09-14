@@ -4,6 +4,7 @@ import {
   studentActorFilter,
   type CourseActor,
 } from "@/lib/kids/course-actor";
+import { getDisplayName } from "@/lib/profile/display-name";
 
 export type HomeworkSubmissionStatus = "pending_review" | "reviewed";
 export type HomeworkSubmissionType = "voice" | "text";
@@ -99,6 +100,15 @@ export function homeworkSubmitErrorMessage(error: {
   return error.message?.trim() || "Failed to submit homework.";
 }
 
+export function homeworkReviewDisplayName(input: {
+  kidName?: string | null;
+  student?: { full_name?: string | null; preferred_name?: string | null } | null;
+}): string {
+  const kidName = input.kidName?.trim();
+  if (kidName) return kidName;
+  return getDisplayName(input.student) ?? "Student";
+}
+
 const HOMEWORK_VIEW_SELECT =
   "id, lesson_id, storage_path, mime_type, duration_seconds, submission_type, text_answers, status, approved, tutor_comment, submitted_at";
 
@@ -185,6 +195,7 @@ export async function loadPendingHomeworkReviews(
       `
       id,
       student_id,
+      kid_profile_id,
       lesson_id,
       storage_path,
       mime_type,
@@ -193,6 +204,7 @@ export async function loadPendingHomeworkReviews(
       text_answers,
       submitted_at,
       student:student_id (full_name, preferred_name),
+      kid_profile:kid_profile_id (name),
       lesson:lesson_id (title, lesson_number)
     `
     )
@@ -205,7 +217,6 @@ export async function loadPendingHomeworkReviews(
     throw error;
   }
 
-  const { getDisplayName } = await import("@/lib/profile/display-name");
   const { loadHomeworkTextQuestionsForLesson } = await import(
     "@/lib/catchup/load-segment-questions"
   );
@@ -217,9 +228,11 @@ export async function loadPendingHomeworkReviews(
   const rows = await Promise.all(
     (data ?? []).map(async (row) => {
       const student = Array.isArray(row.student) ? row.student[0] : row.student;
+      const kidProfile = Array.isArray(row.kid_profile) ? row.kid_profile[0] : row.kid_profile;
       const lesson = Array.isArray(row.lesson) ? row.lesson[0] : row.lesson;
       const lessonId = row.lesson_id as string;
-      const studentId = row.student_id as string;
+      const kidProfileId = (row.kid_profile_id as string | null) ?? null;
+      const studentId = ((row.student_id as string | null) ?? kidProfileId ?? "") as string;
       const submittedAt = row.submitted_at as string;
       const submissionType: HomeworkSubmissionType =
         row.submission_type === "text" ? "text" : "voice";
@@ -237,7 +250,8 @@ export async function loadPendingHomeworkReviews(
       const lessonStartsAt = await findHomeworkLessonSessionStartsAt(
         supabase,
         studentId,
-        lessonId
+        lessonId,
+        kidProfileId
       );
       const timingState = homeworkTimingStateFromStartsAt(
         lessonStartsAt,
@@ -247,7 +261,10 @@ export async function loadPendingHomeworkReviews(
       return {
         id: row.id as string,
         studentId,
-        studentName: getDisplayName(student) ?? "Student",
+        studentName: homeworkReviewDisplayName({
+          kidName: (kidProfile as { name?: string | null } | null)?.name,
+          student: student as { full_name?: string | null; preferred_name?: string | null } | null,
+        }),
         lessonId,
         lessonTitle: (lesson?.title as string) ?? "Lesson",
         lessonNumber: (lesson?.lesson_number as number) ?? 0,

@@ -6,6 +6,7 @@ import {
   studentActorFilter,
   type CourseActor,
 } from "@/lib/kids/course-actor";
+import { homeworkStorageClient } from "@/lib/tutoring/homework-storage";
 import {
   HOMEWORK_ALREADY_SUBMITTED_MESSAGE,
   HOMEWORK_RECORDINGS_BUCKET,
@@ -50,7 +51,8 @@ export async function persistVoiceHomework(input: {
     extension
   );
 
-  const { error: uploadError } = await supabase.storage
+  const storage = homeworkStorageClient(supabase);
+  const { error: uploadError } = await storage.storage
     .from(HOMEWORK_RECORDINGS_BUCKET)
     .upload(storagePath, file, {
       contentType: file.type || "audio/webm",
@@ -74,7 +76,7 @@ export async function persistVoiceHomework(input: {
   );
 
   if (insertError) {
-    await supabase.storage.from(HOMEWORK_RECORDINGS_BUCKET).remove([storagePath]);
+    await storage.storage.from(HOMEWORK_RECORDINGS_BUCKET).remove([storagePath]);
     return { error: homeworkSubmitErrorMessage(insertError) };
   }
 

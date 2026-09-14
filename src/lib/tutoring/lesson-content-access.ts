@@ -4,7 +4,7 @@ import {
 } from "@/lib/learning/learn-access";
 import { isPrivateAccessCourse } from "@/lib/learning/private-courses";
 import { canAccessAdminPanel } from "@/lib/auth/admin-access";
-import { actorFilter, resolveCourseActor } from "@/lib/kids/course-actor";
+import { actorFilter, resolveCourseActor, type CourseActor } from "@/lib/kids/course-actor";
 import type { CourseAccessContext } from "@/lib/membership/unlocked";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -221,6 +221,15 @@ async function fetchAlternateCohortByLessonId(
   return preferred;
 }
 
+async function recordingsQueryClient(
+  userClient: SupabaseClient,
+  actor: CourseActor
+): Promise<SupabaseClient> {
+  if (actor.kind !== "kid") return userClient;
+  const { tryCreateServiceRoleClient } = await import("@/lib/supabase/admin-server");
+  return tryCreateServiceRoleClient().client ?? userClient;
+}
+
 export async function fetchLessonRecordingsForUser(
   supabase: SupabaseClient,
   userId: string,
@@ -230,8 +239,9 @@ export async function fetchLessonRecordingsForUser(
   if (lessonIds.length === 0) return map;
 
   const actor = await resolveCourseActor(supabase, userId);
+  const db = await recordingsQueryClient(supabase, actor);
   const filter = actorFilter(actor);
-  const { data: enrollmentRows } = await supabase
+  const { data: enrollmentRows } = await db
     .from("course_enrollments")
     .select("course_id, delivery_mode, cohort_id")
     .eq(filter.column, filter.value);
@@ -253,13 +263,15 @@ export async function fetchLessonRecordingsForUser(
   const allCohortIds = [...new Set([...homeCohortIds, ...alternateCohortIds])];
 
   const [{ data: studentRecordings }, { data: cohortRecordings }] = await Promise.all([
-    supabase
-      .from("lesson_recordings")
-      .select("id, lesson_id, storage_path, title, cohort_id")
-      .eq("student_id", userId)
-      .in("lesson_id", lessonIds),
+    actor.kind === "kid"
+      ? Promise.resolve({ data: [] as RecordingRow[] })
+      : db
+          .from("lesson_recordings")
+          .select("id, lesson_id, storage_path, title, cohort_id")
+          .eq("student_id", userId)
+          .in("lesson_id", lessonIds),
     allCohortIds.length > 0
-      ? supabase
+      ? db
           .from("lesson_recordings")
           .select("id, lesson_id, storage_path, title, cohort_id")
           .in("cohort_id", allCohortIds)
@@ -313,7 +325,7 @@ export async function fetchLessonRecordingsForUser(
 
   // 4) Lesson log recording URLs as fallback (prefer alternate cohort, then home).
   if (allCohortIds.length > 0) {
-    const { data: logRows } = await supabase
+    const { data: logRows } = await db
       .from("cohort_lesson_log_entries")
       .select("id, lesson_id, cohort_id, recording_url")
       .in("cohort_id", allCohortIds)
