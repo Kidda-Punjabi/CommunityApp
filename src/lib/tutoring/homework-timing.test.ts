@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   formatKidsNextLessonWarning,
+  homeworkDueDateFromNextLessonStartsAt,
   homeworkTimingStateFromStartsAt,
   isKidsHomeworkClassSession,
 } from "./homework-timing";
@@ -66,5 +67,18 @@ describe("formatKidsNextLessonWarning", () => {
     assert.match(message, /Monday 21 September/);
     assert.match(message, /17:00/);
     assert.match(message, /Submit before then to guarantee it's reviewed/);
+  });
+});
+
+describe("homeworkDueDateFromNextLessonStartsAt", () => {
+  it("uses the UK calendar day of the next Circle class", () => {
+    assert.equal(
+      homeworkDueDateFromNextLessonStartsAt("2026-09-21T16:00:00.000Z"),
+      "2026-09-21"
+    );
+  });
+
+  it("is null when there is no next lesson", () => {
+    assert.equal(homeworkDueDateFromNextLessonStartsAt(null), null);
   });
 });

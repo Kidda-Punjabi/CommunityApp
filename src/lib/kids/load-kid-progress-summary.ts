@@ -1,6 +1,9 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
+import { findKidsNextHomeworkLessonStartsAt } from "@/lib/tutoring/homework-near-lesson";
+import { homeworkDueDateFromNextLessonStartsAt } from "@/lib/tutoring/homework-timing";
 
 export type ParentKidProgressSummary = {
   kidProfileId: string;
@@ -67,9 +70,38 @@ function mapRow(row: RpcRow): ParentKidProgressSummary {
   };
 }
 
+async function applyKidsNextLessonDueDate(
+  supabase: SupabaseClient,
+  parentUserId: string,
+  summary: ParentKidProgressSummary
+): Promise<ParentKidProgressSummary> {
+  if (!summary.outstandingHomeworkTitle || !summary.courseId) return summary;
+
+  const { data: lesson } = await supabase
+    .from("lessons")
+    .select("id")
+    .eq("course_id", summary.courseId)
+    .eq("title", summary.outstandingHomeworkTitle)
+    .maybeSingle();
+  if (!lesson?.id) return summary;
+
+  const db = tryCreateServiceRoleClient().client ?? supabase;
+  const nextStartsAt = await findKidsNextHomeworkLessonStartsAt(
+    db,
+    parentUserId,
+    lesson.id as string,
+    summary.kidProfileId
+  );
+  return {
+    ...summary,
+    outstandingHomeworkDueAt: homeworkDueDateFromNextLessonStartsAt(nextStartsAt),
+  };
+}
+
 export async function loadKidProgressSummary(
   supabase: SupabaseClient,
-  kidProfileId: string
+  kidProfileId: string,
+  parentUserId?: string
 ): Promise<ParentKidProgressSummary | null> {
   const { data, error } = await supabase.rpc("get_kid_progress_summary", {
     p_kid_profile_id: kidProfileId,
@@ -79,7 +111,20 @@ export async function loadKidProgressSummary(
     return null;
   }
   const row = Array.isArray(data) ? (data[0] as RpcRow | undefined) : (data as RpcRow | null);
-  return row ? mapRow(row) : null;
+  if (!row) return null;
+
+  const summary = mapRow(row);
+  const parentId =
+    parentUserId ??
+    (
+      await supabase
+        .from("kid_profiles")
+        .select("parent_user_id")
+        .eq("id", kidProfileId)
+        .maybeSingle()
+    ).data?.parent_user_id;
+  if (!parentId) return summary;
+  return applyKidsNextLessonDueDate(supabase, parentId as string, summary);
 }
 
 export async function loadKidProgressSummariesForParent(
@@ -94,6 +139,8 @@ export async function loadKidProgressSummariesForParent(
 
   if (!kids?.length) return [];
 
-  const rows = await Promise.all(kids.map((kid) => loadKidProgressSummary(supabase, kid.id)));
+  const rows = await Promise.all(
+    kids.map((kid) => loadKidProgressSummary(supabase, kid.id, parentUserId))
+  );
   return rows.filter((row): row is ParentKidProgressSummary => row !== null);
 }
