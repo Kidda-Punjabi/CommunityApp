@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { awardQuizAttemptPoints } from "@/lib/leaderboard/points";
 import type { TextHomeworkAnswer } from "@/lib/catchup/load-segment-questions";
+import { homeworkStorageClient } from "@/lib/tutoring/homework-storage";
 import { homeworkTimingWarningMessage } from "@/lib/tutoring/homework-submissions";
 import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
 import { homeworkWrite, resolveCourseActor } from "@/lib/kids/course-actor";
@@ -126,7 +127,8 @@ export async function submitPracticeRecordingAction(
     const extension = file.name.split(".").pop() || "webm";
     const storagePath = `${lessonId}/${actor.kind === "kid" ? actor.kidProfileId : user.id}/practice-${Date.now()}.${extension}`;
 
-    const { error: uploadError } = await supabase.storage
+    const storage = homeworkStorageClient(supabase);
+    const { error: uploadError } = await storage.storage
       .from("homework-recordings")
       .upload(storagePath, file, {
         contentType: file.type || "audio/webm",
@@ -150,7 +152,7 @@ export async function submitPracticeRecordingAction(
     );
 
     if (insertError) {
-      await supabase.storage.from("homework-recordings").remove([storagePath]);
+      await storage.storage.from("homework-recordings").remove([storagePath]);
       return { error: insertError.message };
     }
 

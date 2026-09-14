@@ -89,6 +89,17 @@ export async function syncKidSessionContext(
   });
 }
 
+/** Switch the active learner to a child the parent owns. Homework and Learn then use kid_profile_id. */
+export async function activateKidProfileSession(
+  userId: string,
+  kidProfileId: string
+): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(KID_PROFILE_COOKIE, kidProfileId, kidProfileCookieOptions());
+  markWhoIsLearningPicked(cookieStore);
+  await syncKidSessionContext(userId, kidProfileId);
+}
+
 export function kidProfileCookieOptions(maxAgeSeconds = 60 * 60 * 24 * 30) {
   return {
     httpOnly: true,

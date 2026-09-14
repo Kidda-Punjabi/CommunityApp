@@ -1,10 +1,13 @@
 import { ParentKidsProgressDetail } from "@/components/kids/parent-kids-progress-detail";
 import { BackLink } from "@/components/navigation/back-link";
-import { requireNoActiveKidProfile } from "@/lib/kids/guards";
+import { kidHomeHref } from "@/lib/kids/load-kid-content";
 import { loadParentKidsCourseProgress } from "@/lib/kids/load-parent-course-progress";
+import { activateKidProfileSession, loadKidSession } from "@/lib/kids/session";
 import type { KidProfile } from "@/lib/kids/types";
+import { kidsCourseLearnPath } from "@/lib/learning/kids-courses";
+import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +19,19 @@ export default async function KidsProgressDetailPage({
   params,
 }: KidsProgressDetailPageProps) {
   const { kidProfileId } = await params;
-  const { user, supabase } = await requireNoActiveKidProfile();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const kidSession = await loadKidSession(user.id);
+  if (
+    kidSession.activeKidProfile &&
+    kidSession.activeKidProfile.id !== kidProfileId
+  ) {
+    redirect(kidHomeHref(kidSession.activeKidProfile.age_tier));
+  }
 
   const { data: kid } = await supabase
     .from("kid_profiles")
@@ -32,6 +47,14 @@ export default async function KidsProgressDetailPage({
   ]);
 
   if (!progress) notFound();
+
+  const courseId = progress.courses[0]?.courseId ?? null;
+  if (courseId) {
+    if (!kidSession.activeKidProfile) {
+      await activateKidProfileSession(user.id, kidProfileId);
+    }
+    redirect(kidsCourseLearnPath(courseId));
+  }
 
   return (
     <div className={ui.page}>
