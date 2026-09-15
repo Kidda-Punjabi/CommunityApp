@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { TestimonialBookingWidget } from "@/components/feedback/testimonial-booking-widget";
+import { PublicCohortSelect } from "@/components/public-forms/public-cohort-select";
 import {
   FUTURE_SUPPORT_OPTIONS,
   STANDARD_RATING_FIELDS,
@@ -190,22 +191,13 @@ export function LessonFeedbackForm({
                 <label className="text-xs uppercase tracking-wide text-zinc-400" htmlFor="public-cohort">
                   Cohort
                 </label>
-                <select
+                <PublicCohortSelect
                   id="public-cohort"
                   value={cohort}
-                  onChange={(event) => setCohort(event.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-                  required
-                >
-                  <option value="">
-                    {guestSubmit.cohortPlaceholder ?? "Select your cohort"}
-                  </option>
-                  {guestSubmit.cohorts.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCohort}
+                  cohorts={guestSubmit.cohorts}
+                  placeholder={guestSubmit.cohortPlaceholder ?? "Select your cohort"}
+                />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs uppercase tracking-wide text-zinc-400" htmlFor="public-tutor">

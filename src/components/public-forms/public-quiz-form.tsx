@@ -5,19 +5,36 @@ import { PublicFormFrame } from "@/components/public-forms/public-form-frame";
 import type { PublicQuizView } from "@/components/public-forms/public-quiz-types";
 import type { GuestIdentity } from "@/lib/public-forms/guest";
 import { QuizPlayer } from "@/components/quiz-player";
+import { publicCohortAudienceFromCourseName } from "@/lib/public-forms/options";
 
 export function PublicQuizForm({
   slug,
   heading,
   quiz,
+  cohorts,
+  tutors,
 }: {
   slug: string;
   heading: { kicker: string; title: string; intro: string };
   quiz: PublicQuizView;
+  cohorts: string[];
+  tutors: string[];
 }) {
   return (
-    <PublicFormFrame heading={heading}>
-      {(identity) => <PublicQuizRun slug={slug} identity={identity} quiz={quiz} />}
+    <PublicFormFrame
+      heading={heading}
+      courseOptions={{
+        cohorts,
+        tutors,
+        cohortPlaceholder:
+          publicCohortAudienceFromCourseName(quiz.courseName) === "kids"
+            ? "Select your Kids Circle or 1-1"
+            : "Select your cohort",
+      }}
+    >
+      {(identity) => (
+        <PublicQuizRun slug={slug} identity={identity} quiz={quiz} />
+      )}
     </PublicFormFrame>
   );
 }
@@ -51,6 +68,8 @@ function PublicQuizRun({
             fullName: identity.fullName,
             email: identity.email,
             phone: identity.phone,
+            cohort: identity.cohort,
+            tutor: identity.tutor,
             score: scorePercent,
           }),
         });

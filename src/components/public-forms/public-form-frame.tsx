@@ -1,14 +1,19 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { PublicGuestGate } from "@/components/public-forms/public-guest-gate";
+import {
+  PublicGuestGate,
+  type PublicGuestCourseOptions,
+} from "@/components/public-forms/public-guest-gate";
 import type { GuestIdentity } from "@/lib/public-forms/guest";
 
 export function PublicFormFrame({
   heading,
+  courseOptions,
   children,
 }: {
   heading: { kicker: string; title: string; intro: string };
+  courseOptions?: PublicGuestCourseOptions;
   children: (identity: GuestIdentity) => ReactNode;
 }) {
   const [identity, setIdentity] = useState<GuestIdentity | null>(null);
@@ -21,7 +26,11 @@ export function PublicFormFrame({
       <h1 className="mt-1 text-2xl font-bold text-zinc-900">{heading.title}</h1>
       <p className="mt-2 text-sm text-zinc-600">{heading.intro}</p>
       <div className="mt-6">
-        {!identity ? <PublicGuestGate onContinue={setIdentity} /> : children(identity)}
+        {!identity ? (
+          <PublicGuestGate onContinue={setIdentity} courseOptions={courseOptions} />
+        ) : (
+          children(identity)
+        )}
       </div>
     </div>
   );

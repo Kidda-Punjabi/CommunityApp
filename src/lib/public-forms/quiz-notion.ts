@@ -36,9 +36,11 @@ export function weekSelectFromQuizTitle(title: string): string | null {
   return recap ? `Week ${recap[1]}` : null;
 }
 
-/** Test Scores Cohort select: "Cohort 42" or "1-1 Class". */
+/** Test Scores Cohort select: "Cohort 42", "Kids Circle 1", or "1-1 Class". */
 export function cohortSelectFromPackageName(name: string): string | null {
   const trimmed = name.trim();
+  const kids = trimmed.match(/kids\s*circle\s*(\d+)/i);
+  if (kids) return `Kids Circle ${kids[1]}`;
   const cohort = trimmed.match(/cohort\s*(\d+)/i);
   if (cohort) return `Cohort ${cohort[1]}`;
   if (/\b1\s*-\s*1\b|\bone[\s-]?to[\s-]?one\b/i.test(trimmed)) return "1-1 Class";
