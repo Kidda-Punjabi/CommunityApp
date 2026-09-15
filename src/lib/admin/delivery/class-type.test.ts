@@ -19,7 +19,7 @@ describe("classTypeFromEnrollment", () => {
     assert.equal(classTypeFromEnrollment("Beginners Course", "group"), "beginner_group");
     assert.equal(classTypeFromEnrollment("Beginners Course", "one_to_one"), "one_to_one");
     assert.equal(classTypeFromEnrollment("Foundational Course", "one_to_one"), "foundational");
-    assert.equal(classTypeFromEnrollment("Kids Beginners Course", "group"), null);
+    assert.equal(classTypeFromEnrollment("Kids Beginners Course (Level 1)", "group"), null);
   });
 });
 

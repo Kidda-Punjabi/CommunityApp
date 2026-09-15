@@ -318,7 +318,7 @@ const BEGINNERS_CONTENT: ProductPageContent = {
     {
       question: "Can children join the course?",
       answer:
-        "This cohort is designed for adults. Children aged 10–12 should join the Kids Beginners Course instead.",
+        "This cohort is designed for adults. Children aged 10–12 should join the Kids Beginners Course (Level 1) instead.",
     },
     {
       question: "Will I actually be able to hold a conversation by the end?",

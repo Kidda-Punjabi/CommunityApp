@@ -16,7 +16,7 @@ const courses = [
   },
   {
     id: KIDS_BEGINNERS,
-    name: "Kids Beginners Course",
+    name: "Kids Beginners Course (Level 1)",
     required_tier: "private",
     is_public: true,
   },
