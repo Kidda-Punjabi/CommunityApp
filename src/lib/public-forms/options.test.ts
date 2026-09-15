@@ -9,6 +9,7 @@ import {
   isPublicFeedbackTutor,
   mergePublicSelectOptions,
   mergePublicTutorOptions,
+  publicCohortAudienceFromCourse,
   publicCohortAudienceFromCourseName,
 } from "./options";
 
@@ -32,55 +33,79 @@ describe("public form tutor options", () => {
 });
 
 describe("public form cohort options", () => {
-  it("covers adult beginners through Cohort 50 and Kids Circle 1–2", () => {
+  it("covers beginners through 50, Kids Circles, and Group Foundational 1–10", () => {
     const names = buildPublicCohortFallback();
     assert.ok(names.includes("Cohort 45"));
-    assert.ok(names.includes("Cohort 46"));
     assert.ok(names.includes(`Cohort ${PUBLIC_ADULT_COHORT_MAX}`));
     assert.ok(names.includes("Kids Circle 1"));
-    assert.ok(names.includes("Kids Circle 2"));
+    assert.ok(names.includes("Group Foundational 1"));
+    assert.ok(names.includes("Group Foundational 10"));
+    assert.ok(names.includes("1-1"));
+    assert.equal(names.includes("1-1 Class"), false);
+    assert.equal(names.includes("N/A"), false);
+    assert.equal(names.includes("Foundational Course"), false);
   });
 
-  it("canonicalizes lowercase Notion cohort names and keeps later numbers", () => {
-    const names = mergePublicSelectOptions(["cohort 23", "Cohort 43"], ["Cohort 46", "Week 8"]);
-    assert.ok(names.includes("Cohort 23"));
-    assert.equal(names.includes("cohort 23"), false);
+  it("merges 1-1 Class into 1-1 and drops N/A", () => {
+    const names = mergePublicSelectOptions(["1-1"], ["1-1 Class", "N/A", "Cohort 46"]);
+    assert.deepEqual(
+      names.filter((name) => name === "1-1" || name === "1-1 Class" || name === "N/A"),
+      ["1-1"]
+    );
     assert.ok(names.includes("Cohort 46"));
-    assert.equal(names.includes("Week 8"), false);
   });
 
-  it("keeps adult forms on adult cohorts and kids forms on Kids Circle plus 1-1", () => {
+  it("keeps each course type on its own cohort list", () => {
     const all = buildPublicCohortFallback();
-    const adult = filterPublicCohortsForAudience(all, "adult");
+    const beginners = filterPublicCohortsForAudience(all, "beginners");
+    const foundational = filterPublicCohortsForAudience(all, "foundational");
     const kids = filterPublicCohortsForAudience(all, "kids");
 
-    assert.ok(adult.includes("Cohort 45"));
-    assert.ok(adult.includes("Cohort 46"));
-    assert.ok(adult.includes(`Cohort ${PUBLIC_ADULT_COHORT_MAX}`));
-    assert.ok(adult.includes("1-1"));
-    assert.ok(adult.includes("Foundational Course"));
-    assert.equal(adult.includes("Kids Circle 1"), false);
+    assert.ok(beginners.includes("Cohort 46"));
+    assert.ok(beginners.includes("1-1"));
+    assert.ok(beginners.includes("Community"));
+    assert.equal(beginners.includes("Kids Circle 1"), false);
+    assert.equal(beginners.includes("Group Foundational 1"), false);
+
+    assert.ok(foundational.includes("Group Foundational 1"));
+    assert.ok(foundational.includes("Group Foundational 10"));
+    assert.ok(foundational.includes("1-1"));
+    assert.equal(foundational.includes("Cohort 46"), false);
+    assert.equal(foundational.includes("Kids Circle 1"), false);
 
     assert.ok(kids.includes("Kids Circle 1"));
     assert.ok(kids.includes("Kids Circle 2"));
     assert.ok(kids.includes("1-1"));
-    assert.ok(kids.includes("1-1 Class"));
+    assert.equal(kids.includes("1-1 Class"), false);
     assert.equal(kids.includes("Cohort 46"), false);
-    assert.equal(kids.includes("Foundational Course"), false);
-    assert.equal(publicCohortAudienceFromCourseName("Beginners Course"), "adult");
+    assert.equal(kids.includes("Group Foundational 1"), false);
+    assert.equal(kids.includes("Community"), false);
+
+    assert.equal(publicCohortAudienceFromCourseName("Beginners Course"), "beginners");
+    assert.equal(publicCohortAudienceFromCourseName("Foundational Course"), "foundational");
     assert.equal(publicCohortAudienceFromCourseName("Kids Beginners Course"), "kids");
     assert.equal(
-      publicCohortAudienceFromCourseName("Kids Beginners Course (Level 1)"),
+      publicCohortAudienceFromCourse({
+        courseName: "Beginners Course",
+        contentTrack: "kids",
+      }),
       "kids"
     );
   });
 
-  it("labels 1-1 on kids lists instead of Other", () => {
-    const groups = groupPublicCohortOptions(["1-1", "1-1 Class", "Kids Circle 1"]);
+  it("groups 1-1 separately from Kids Circle and Group Foundational", () => {
+    const groups = groupPublicCohortOptions([
+      "1-1",
+      "Cohort 46",
+      "Group Foundational 1",
+      "Kids Circle 1",
+    ]);
     assert.deepEqual(
       groups.map((group) => [group.label, group.options]),
       [
-        ["1-1", ["1-1", "1-1 Class"]],
+        ["1-1", ["1-1"]],
+        ["Beginners cohorts", ["Cohort 46"]],
+        ["Group Foundational", ["Group Foundational 1"]],
         ["Kids Circle", ["Kids Circle 1"]],
       ]
     );

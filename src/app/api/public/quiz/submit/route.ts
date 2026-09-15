@@ -3,7 +3,7 @@ import { lookupPublicFormLinkBySlug } from "@/lib/public-forms/links";
 import { savePublicQuizAttempt } from "@/lib/public-forms/save-public-quiz-attempt";
 import { loadPublicFormSelectOptions } from "@/lib/public-forms/load-cohort-options";
 import { loadPublicQuizById } from "@/lib/public-forms/load-quiz";
-import { isPublicFeedbackTutor, publicCohortAudienceFromCourseName } from "@/lib/public-forms/options";
+import { isPublicFeedbackTutor, publicCohortAudienceFromCourse } from "@/lib/public-forms/options";
 import { createServiceRoleClient, getServiceRoleConfigError } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
 
@@ -49,7 +49,10 @@ export async function POST(request: Request) {
   const cohort = typeof raw.cohort === "string" ? raw.cohort.trim() : "";
   const tutor = typeof raw.tutor === "string" ? raw.tutor.trim() : "";
   const { cohorts, tutors } = await loadPublicFormSelectOptions(
-    publicCohortAudienceFromCourseName(quiz.courseName)
+    publicCohortAudienceFromCourse({
+      courseName: quiz.courseName,
+      contentTrack: quiz.contentTrack,
+    })
   );
   if (!cohort || !cohorts.includes(cohort)) {
     return NextResponse.json({ error: "Please choose a valid cohort." }, { status: 400 });

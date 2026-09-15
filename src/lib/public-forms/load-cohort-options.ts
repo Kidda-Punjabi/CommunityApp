@@ -51,9 +51,7 @@ async function loadNotionFeedbackSelects(): Promise<NotionFeedbackSelects> {
   }
 }
 
-export async function loadPublicFormSelectOptions(
-  audience: PublicCohortAudience = "adult"
-): Promise<{
+export async function loadPublicFormSelectOptions(audience: PublicCohortAudience): Promise<{
   cohorts: string[];
   tutors: string[];
 }> {
@@ -68,13 +66,13 @@ export async function loadPublicFormSelectOptions(
 }
 
 export async function loadPublicCohortOptions(
-  audience: PublicCohortAudience = "adult"
+  audience: PublicCohortAudience
 ): Promise<string[]> {
   const { cohorts } = await loadPublicFormSelectOptions(audience);
   return cohorts;
 }
 
 export async function loadPublicTutorOptions(): Promise<string[]> {
-  const { tutors } = await loadPublicFormSelectOptions();
-  return tutors;
+  const live = await loadNotionFeedbackSelects();
+  return mergePublicTutorOptions(PUBLIC_FEEDBACK_TUTOR_OPTIONS, live.tutor);
 }

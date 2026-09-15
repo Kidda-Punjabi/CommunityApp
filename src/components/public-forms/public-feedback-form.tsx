@@ -6,6 +6,11 @@ import { PublicFormFrame } from "@/components/public-forms/public-form-frame";
 import type { FeedbackContext } from "@/lib/feedback/types";
 import type { PublicFeedbackTarget } from "@/lib/public-forms/feedback-target";
 import type { GuestIdentity } from "@/lib/public-forms/guest";
+import {
+  cohortsForPublicForm,
+  publicCohortAudienceFromCourse,
+  publicCohortPlaceholder,
+} from "@/lib/public-forms/options";
 import { uploadPublicFeedbackPhoto } from "@/lib/public-forms/upload-public-photo";
 
 export function PublicFeedbackForm({
@@ -59,19 +64,17 @@ function PublicFeedbackRun({
   tutors: string[];
   testimonialCalendarUrl?: string | null;
 }) {
+  const audience = publicCohortAudienceFromCourse({ courseName: context.course });
   const guestSubmit = {
     slug,
     submitUrl: "/api/public/feedback/submit",
     fullName: identity.fullName,
     email: identity.email,
     phone: identity.phone,
-    cohorts,
+    cohorts: cohortsForPublicForm(cohorts, audience),
     tutors,
     uploadPhoto: (file: File) => uploadPublicFeedbackPhoto(slug, file),
-    cohortPlaceholder:
-      context.course === "Foundational Course"
-        ? "Select 1-1 or your cohort number"
-        : undefined,
+    cohortPlaceholder: publicCohortPlaceholder(audience),
   };
 
   const filledContext: FeedbackContext = {

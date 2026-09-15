@@ -2,6 +2,7 @@ export type PublicQuizView = {
   quizId: string;
   quizTitle: string;
   courseName: string;
+  contentTrack?: string | null;
   lessonNumber: number | null;
   questions: Array<{
     id: string;
