@@ -1,6 +1,9 @@
 import { validateGuestIdentity } from "@/lib/public-forms/guest";
 import { lookupPublicFormLinkBySlug } from "@/lib/public-forms/links";
 import { savePublicQuizAttempt } from "@/lib/public-forms/save-public-quiz-attempt";
+import { loadPublicFormSelectOptions } from "@/lib/public-forms/load-cohort-options";
+import { loadPublicQuizById } from "@/lib/public-forms/load-quiz";
+import { isPublicFeedbackTutor, publicCohortAudienceFromCourseName } from "@/lib/public-forms/options";
 import { createServiceRoleClient, getServiceRoleConfigError } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
 
@@ -38,6 +41,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
+  const quiz = await loadPublicQuizById(link.targetId);
+  if (!quiz) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  const cohort = typeof raw.cohort === "string" ? raw.cohort.trim() : "";
+  const tutor = typeof raw.tutor === "string" ? raw.tutor.trim() : "";
+  const { cohorts, tutors } = await loadPublicFormSelectOptions(
+    publicCohortAudienceFromCourseName(quiz.courseName)
+  );
+  if (!cohort || !cohorts.includes(cohort)) {
+    return NextResponse.json({ error: "Please choose a valid cohort." }, { status: 400 });
+  }
+  if (!isPublicFeedbackTutor(tutor, tutors)) {
+    return NextResponse.json({ error: "Please choose your tutor." }, { status: 400 });
+  }
+
   const configError = getServiceRoleConfigError();
   if (configError) {
     return NextResponse.json({ error: "Unable to save your score." }, { status: 500 });
@@ -51,6 +71,8 @@ export async function POST(request: Request) {
       phone: identity.identity.phone,
       quizId: link.targetId,
       score,
+      cohort,
+      tutor,
     });
   } catch (error) {
     console.error(

@@ -2,8 +2,9 @@ import { PublicFormLoader } from "@/components/public-forms/public-form-loader";
 import type { FeedbackContext } from "@/lib/feedback/types";
 import { parsePublicFeedbackTarget, publicFeedbackCopy } from "@/lib/public-forms/feedback-target";
 import { lookupPublicFormLinkBySlug } from "@/lib/public-forms/links";
-import { loadPublicCohortOptions } from "@/lib/public-forms/load-cohort-options";
+import { loadPublicFormSelectOptions } from "@/lib/public-forms/load-cohort-options";
 import { loadCourseLessonId, loadPublicQuizById } from "@/lib/public-forms/load-quiz";
+import { publicCohortAudienceFromCourseName } from "@/lib/public-forms/options";
 import { getTestimonialCalendarUrl } from "@/lib/ghl/testimonial-calendar";
 import { notFound } from "next/navigation";
 
@@ -22,6 +23,10 @@ export default async function PublicFormPage({ params }: PageProps) {
     const quiz = await loadPublicQuizById(link.targetId);
     if (!quiz) notFound();
 
+    const { cohorts, tutors } = await loadPublicFormSelectOptions(
+      publicCohortAudienceFromCourseName(quiz.courseName)
+    );
+
     return (
       <PublicFormLoader
         formType="quiz"
@@ -32,6 +37,8 @@ export default async function PublicFormPage({ params }: PageProps) {
           intro: "Answer each question. Your score is saved at the end.",
         }}
         quiz={quiz}
+        cohorts={cohorts}
+        tutors={tutors}
       />
     );
   }
@@ -39,8 +46,8 @@ export default async function PublicFormPage({ params }: PageProps) {
   const target = parsePublicFeedbackTarget(link.targetId);
   if (!target) notFound();
 
-  const [cohorts, lessonId] = await Promise.all([
-    loadPublicCohortOptions(),
+  const [{ cohorts, tutors }, lessonId] = await Promise.all([
+    loadPublicFormSelectOptions(publicCohortAudienceFromCourseName(target.course)),
     loadCourseLessonId(target.course, target.lessonNumber),
   ]);
 
@@ -68,6 +75,7 @@ export default async function PublicFormPage({ params }: PageProps) {
       target={target}
       context={context}
       cohorts={cohorts}
+      tutors={tutors}
       testimonialCalendarUrl={
         target.formVariant === "week12" ? getTestimonialCalendarUrl() : null
       }

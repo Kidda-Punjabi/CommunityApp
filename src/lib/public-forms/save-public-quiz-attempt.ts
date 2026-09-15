@@ -13,6 +13,8 @@ export type PublicQuizAttemptInput = {
   phone: string;
   quizId: string;
   score: number;
+  cohort?: string | null;
+  tutor?: string | null;
 };
 
 export type PublicQuizAttemptRow = {
@@ -47,7 +49,8 @@ async function loadQuizScoreContext(
 
 export async function syncPublicQuizAttemptToNotion(
   supabase: SupabaseClient,
-  row: PublicQuizAttemptRow
+  row: PublicQuizAttemptRow,
+  submitted?: { cohort?: string | null; tutor?: string | null }
 ): Promise<{ notionSynced: boolean; notionError?: string }> {
   try {
     const context = await loadQuizScoreContext(supabase, row.quiz_id);
@@ -68,9 +71,9 @@ export async function syncPublicQuizAttemptToNotion(
       studentScore: studentScoreFromPercent(row.score, context.maxScore),
       maxScore: context.maxScore,
       submittedAt: new Date(row.submitted_at),
-      cohort: student.cohort,
+      cohort: submitted?.cohort?.trim() || student.cohort,
       week: weekSelectFromQuizTitle(context.quizTitle),
-      tutor: student.tutor,
+      tutor: submitted?.tutor?.trim() || student.tutor,
     });
     const { pageId } = await createNotionTestScorePage(properties);
 
@@ -128,7 +131,10 @@ export async function savePublicQuizAttempt(
     throw new Error(insertError?.message ?? "Failed to save quiz score.");
   }
 
-  const synced = await syncPublicQuizAttemptToNotion(supabase, row);
+  const synced = await syncPublicQuizAttemptToNotion(supabase, row, {
+    cohort: input.cohort,
+    tutor: input.tutor,
+  });
   return {
     attemptId: row.id,
     notionSynced: synced.notionSynced,

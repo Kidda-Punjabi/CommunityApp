@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { WEEK1_BASELINE_FIELDS } from "@/lib/feedback/constants";
 import type { FeedbackContext } from "@/lib/feedback/types";
+import { PublicCohortSelect } from "@/components/public-forms/public-cohort-select";
 import type { GuestFeedbackSubmitConfig } from "@/lib/public-forms/guest-submit";
 import { ui } from "@/lib/ui/styles";
 
@@ -128,20 +129,12 @@ export function Week1BaselineForm({ context, lessonId, guestSubmit }: Week1Basel
                 <label className="text-xs uppercase tracking-wide text-zinc-400" htmlFor="week1-cohort">
                   Cohort
                 </label>
-                <select
+                <PublicCohortSelect
                   id="week1-cohort"
                   value={cohort}
-                  onChange={(event) => setCohort(event.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
-                  required
-                >
-                  <option value="">Select your cohort</option>
-                  {guestSubmit.cohorts.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCohort}
+                  cohorts={guestSubmit.cohorts}
+                />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs uppercase tracking-wide text-zinc-400" htmlFor="week1-tutor">

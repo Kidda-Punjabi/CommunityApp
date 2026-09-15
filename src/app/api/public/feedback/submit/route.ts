@@ -4,9 +4,9 @@ import { saveFeedbackSubmission } from "@/lib/feedback/save-feedback";
 import { parsePublicFeedbackTarget } from "@/lib/public-forms/feedback-target";
 import { validateGuestIdentity } from "@/lib/public-forms/guest";
 import { lookupPublicFormLinkBySlug } from "@/lib/public-forms/links";
-import { loadPublicCohortOptions } from "@/lib/public-forms/load-cohort-options";
+import { loadPublicFormSelectOptions } from "@/lib/public-forms/load-cohort-options";
 import { loadCourseLessonId } from "@/lib/public-forms/load-quiz";
-import { isPublicFeedbackTutor } from "@/lib/public-forms/options";
+import { isPublicFeedbackTutor, publicCohortAudienceFromCourseName } from "@/lib/public-forms/options";
 import { createServiceRoleClient, getServiceRoleConfigError } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
 
@@ -38,9 +38,6 @@ export async function POST(request: Request) {
   if (!cohort) {
     return NextResponse.json({ error: "Please choose your cohort." }, { status: 400 });
   }
-  if (!isPublicFeedbackTutor(tutor)) {
-    return NextResponse.json({ error: "Please choose your tutor." }, { status: 400 });
-  }
 
   const link = await lookupPublicFormLinkBySlug(slug);
   if (!link || link.formType !== "feedback") {
@@ -52,9 +49,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
-  const cohorts = await loadPublicCohortOptions();
+  const { cohorts, tutors } = await loadPublicFormSelectOptions(
+    publicCohortAudienceFromCourseName(target.course)
+  );
   if (!cohorts.includes(cohort)) {
     return NextResponse.json({ error: "Please choose a valid cohort." }, { status: 400 });
+  }
+  if (!isPublicFeedbackTutor(tutor, tutors)) {
+    return NextResponse.json({ error: "Please choose your tutor." }, { status: 400 });
   }
 
   const parsed = parseFeedbackSubmitBody({

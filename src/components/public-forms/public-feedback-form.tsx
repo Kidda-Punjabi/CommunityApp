@@ -6,7 +6,6 @@ import { PublicFormFrame } from "@/components/public-forms/public-form-frame";
 import type { FeedbackContext } from "@/lib/feedback/types";
 import type { PublicFeedbackTarget } from "@/lib/public-forms/feedback-target";
 import type { GuestIdentity } from "@/lib/public-forms/guest";
-import { PUBLIC_FEEDBACK_TUTOR_OPTIONS } from "@/lib/public-forms/options";
 import { uploadPublicFeedbackPhoto } from "@/lib/public-forms/upload-public-photo";
 
 export function PublicFeedbackForm({
@@ -15,6 +14,7 @@ export function PublicFeedbackForm({
   target,
   context,
   cohorts,
+  tutors,
   testimonialCalendarUrl,
 }: {
   slug: string;
@@ -22,6 +22,7 @@ export function PublicFeedbackForm({
   target: PublicFeedbackTarget;
   context: FeedbackContext;
   cohorts: string[];
+  tutors: string[];
   testimonialCalendarUrl?: string | null;
 }) {
   return (
@@ -33,6 +34,7 @@ export function PublicFeedbackForm({
           target={target}
           context={context}
           cohorts={cohorts}
+          tutors={tutors}
           testimonialCalendarUrl={testimonialCalendarUrl}
         />
       )}
@@ -46,6 +48,7 @@ function PublicFeedbackRun({
   target,
   context,
   cohorts,
+  tutors,
   testimonialCalendarUrl,
 }: {
   slug: string;
@@ -53,6 +56,7 @@ function PublicFeedbackRun({
   target: PublicFeedbackTarget;
   context: FeedbackContext;
   cohorts: string[];
+  tutors: string[];
   testimonialCalendarUrl?: string | null;
 }) {
   const guestSubmit = {
@@ -62,7 +66,7 @@ function PublicFeedbackRun({
     email: identity.email,
     phone: identity.phone,
     cohorts,
-    tutors: PUBLIC_FEEDBACK_TUTOR_OPTIONS,
+    tutors,
     uploadPhoto: (file: File) => uploadPublicFeedbackPhoto(slug, file),
     cohortPlaceholder:
       context.course === "Foundational Course"

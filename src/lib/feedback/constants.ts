@@ -13,6 +13,7 @@ export const NOTION_TUTOR_OPTIONS = [
   "Arshdeep Kaur",
   "Mankeerat Kaur",
   "Tarnjot Kaur",
+  "Navjit Kaur",
 ] as const;
 
 export const FUTURE_SUPPORT_OPTIONS = [

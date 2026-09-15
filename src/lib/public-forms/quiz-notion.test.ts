@@ -105,6 +105,8 @@ describe("cohortSelectFromPackageName", () => {
       "1-1 Class"
     );
     assert.equal(cohortSelectFromPackageName("Kidda - Cohort 42"), "Cohort 42");
+    assert.equal(cohortSelectFromPackageName("Kidda - Kids Circle 1"), "Kids Circle 1");
+    assert.equal(cohortSelectFromPackageName("Kids Circle 2"), "Kids Circle 2");
   });
 });
 

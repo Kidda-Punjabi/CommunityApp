@@ -22,6 +22,8 @@ type PublicFormLoaderProps =
       slug: string;
       heading: { kicker: string; title: string; intro: string };
       quiz: PublicQuizView;
+      cohorts: string[];
+      tutors: string[];
     }
   | {
       formType: "feedback";
@@ -30,12 +32,21 @@ type PublicFormLoaderProps =
       target: PublicFeedbackTarget;
       context: FeedbackContext;
       cohorts: string[];
+      tutors: string[];
       testimonialCalendarUrl?: string | null;
     };
 
 export function PublicFormLoader(props: PublicFormLoaderProps) {
   if (props.formType === "quiz") {
-    return <PublicQuizForm slug={props.slug} heading={props.heading} quiz={props.quiz} />;
+    return (
+      <PublicQuizForm
+        slug={props.slug}
+        heading={props.heading}
+        quiz={props.quiz}
+        cohorts={props.cohorts}
+        tutors={props.tutors}
+      />
+    );
   }
 
   return (
@@ -45,6 +56,7 @@ export function PublicFormLoader(props: PublicFormLoaderProps) {
       target={props.target}
       context={props.context}
       cohorts={props.cohorts}
+      tutors={props.tutors}
       testimonialCalendarUrl={props.testimonialCalendarUrl}
     />
   );

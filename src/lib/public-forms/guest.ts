@@ -2,6 +2,8 @@ export type GuestIdentity = {
   fullName: string;
   email: string;
   phone: string;
+  cohort?: string;
+  tutor?: string;
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
