@@ -40,7 +40,7 @@ describe("pickDefaultHomeworkTestCourseId", () => {
       pickDefaultHomeworkTestCourseId([
         { id: "foundational", name: "Foundational Course", requiredTier: "foundational" },
         beginners,
-        { id: "kids", name: "Kids Beginners Course", requiredTier: "beginners" },
+        { id: "kids", name: "Kids Beginners Course (Level 1)", requiredTier: "beginners" },
       ]),
       "beginners"
     );

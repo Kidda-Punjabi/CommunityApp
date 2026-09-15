@@ -12,7 +12,7 @@ describe("certificateStageForCourse", () => {
       certificateStageForCourse({
         content_track: "kids",
         required_tier: "private",
-        name: "Kids Beginners Course",
+        name: "Kids Beginners Course (Level 1)",
       }),
       "beginner"
     );

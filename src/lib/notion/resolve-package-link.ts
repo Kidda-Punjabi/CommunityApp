@@ -1,3 +1,4 @@
+import { KIDS_BEGINNERS_COURSE_NAME } from "@/lib/learning/kids-beginners";
 import { plainTextFromRichText, selectName } from "@/lib/notion/client";
 import { startDayFromCalendarIso } from "@/lib/admin/package-schedule";
 
@@ -47,7 +48,7 @@ export type PackageLinkSkipReason =
 
 function inferCourseFromTitle(title: string): string | null {
   if (/kids\s*circle/i.test(title) || (/kids/i.test(title) && /beginner/i.test(title))) {
-    return "Kids Beginners Course";
+    return KIDS_BEGINNERS_COURSE_NAME;
   }
   if (/beginner/i.test(title)) return "Beginners Course";
   if (/foundational|refresher/i.test(title)) return "Foundational Course";
@@ -69,7 +70,7 @@ export function readNotionCourseLabel(page: NotionPackageLinkInput): string | nu
 
   if (deliveryType?.toLowerCase() === "foundational course") return "Foundational Course";
   if (deliveryType?.toLowerCase() === "community") return "Kidda Community";
-  if (fromTitle === "Kids Beginners Course") return fromTitle;
+  if (fromTitle === KIDS_BEGINNERS_COURSE_NAME) return fromTitle;
 
   if (fromProperty && fromTitle && fromProperty.trim().toLowerCase() !== fromTitle.toLowerCase()) {
     const propertyLower = fromProperty.toLowerCase();

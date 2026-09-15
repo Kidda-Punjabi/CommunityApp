@@ -1,5 +1,5 @@
 /**
- * Idempotent seed: Kids Beginners Course (ages 10–12).
+ * Idempotent seed: Kids Beginners Course (Level 1) (ages 10–12).
  *
  * Creates the course, 12 empty lesson shells (slides/recordings/flashcards come later),
  * the group package, and points existing "Kids Circle" cohorts at this course.

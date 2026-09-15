@@ -1,4 +1,4 @@
-export const KIDS_BEGINNERS_COURSE_NAME = "Kids Beginners Course";
+export const KIDS_BEGINNERS_COURSE_NAME = "Kids Beginners Course (Level 1)";
 export const KIDS_BEGINNERS_PACKAGE_SLUG = "beginners-kids-group";
 export const KIDS_BEGINNERS_CHECKOUT_KEY = "beginners-kids-group";
 
