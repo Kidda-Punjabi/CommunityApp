@@ -186,6 +186,13 @@ export async function saveCohortLessonAttendance(
             "id",
             marks.map((m) => m.studentId)
           );
+        const { data: kids } = await admin
+          .from("kid_profiles")
+          .select("id, name")
+          .in(
+            "id",
+            marks.map((m) => m.studentId)
+          );
         const nameById = new Map(
           (profiles ?? []).map((profile) => {
             const name =
@@ -195,6 +202,10 @@ export async function saveCohortLessonAttendance(
             return [profile.id as string, name] as const;
           })
         );
+        for (const kid of kids ?? []) {
+          const name = (kid.name as string | null)?.trim();
+          if (kid.id && name) nameById.set(kid.id as string, name);
+        }
 
         const leadMatches = await matchStudentsToNotionLeads(
           admin,

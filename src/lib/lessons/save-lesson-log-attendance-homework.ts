@@ -1,7 +1,7 @@
 import "server-only";
 
 import { resolveCurriculumLessonForLogEntry } from "@/lib/lessons/lesson-log-roster";
-import { kidProfileIdsInCohort } from "@/lib/tutoring/cohort-attendance";
+import { kidProfileIdsInCohort, loadKidProfileNames } from "@/lib/tutoring/cohort-attendance";
 import {
   matchStudentsToNotionLeads,
   pushLessonLogAttendanceHomeworkToNotion,
@@ -164,13 +164,19 @@ export async function saveLessonLogAttendanceHomework(
     }
   }
 
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, full_name, preferred_name")
-    .in(
-      "id",
+  const [{ data: profiles }, kidNames] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, full_name, preferred_name")
+      .in(
+        "id",
+        options.marks.map((m) => m.studentId)
+      ),
+    loadKidProfileNames(
+      supabase,
       options.marks.map((m) => m.studentId)
-    );
+    ),
+  ]);
 
   const nameById = new Map(
     (profiles ?? []).map((profile) => {
@@ -181,6 +187,9 @@ export async function saveLessonLogAttendanceHomework(
       return [profile.id as string, name] as const;
     })
   );
+  for (const [kidId, name] of kidNames) {
+    nameById.set(kidId, name);
+  }
 
   const matches = await matchStudentsToNotionLeads(
     supabase,

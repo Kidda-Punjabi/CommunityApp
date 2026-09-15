@@ -5,6 +5,12 @@ import {
   resolveCurriculumLessonForCohortLogEntry,
 } from "@/lib/lessons/lesson-log-lesson-link";
 import { matchStudentsToNotionLeads } from "@/lib/notion/lesson-log-attendance-sync";
+import {
+  cohortIsKidsCourse,
+  loadKidProfileNames,
+  loadKidsByParentUserId,
+} from "@/lib/tutoring/cohort-attendance";
+import { resolveCohortRosterActors } from "@/lib/tutoring/cohort-attendance-roster";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type LessonLogRosterStudent = {
@@ -103,41 +109,47 @@ export async function loadLessonLogRosterContext(
     entry.id
   );
 
-  const [{ data: memberRows }, attendanceResult, homeworkResult] = await Promise.all([
-    supabase
-      .from("cohort_members")
-      .select("user_id, kid_profile_id")
-      .eq("cohort_id", entry.cohort_id)
-      .is("left_at", null),
-    curriculum
-      ? supabase
-          .from("cohort_lesson_attendance")
-          .select("student_id, kid_profile_id, attended")
-          .eq("cohort_id", entry.cohort_id)
-          .eq("lesson_id", curriculum.lessonId)
-      : Promise.resolve({
-          data: [] as Array<{
-            student_id: string | null;
-            kid_profile_id: string | null;
-            attended: boolean;
-          }>,
-          error: null,
-        }),
-    curriculum
-      ? supabase
-          .from("cohort_lesson_homework")
-          .select("student_id, kid_profile_id, completed")
-          .eq("cohort_id", entry.cohort_id)
-          .eq("lesson_id", curriculum.lessonId)
-      : Promise.resolve({
-          data: [] as Array<{
-            student_id: string | null;
-            kid_profile_id: string | null;
-            completed: boolean;
-          }>,
-          error: null,
-        }),
-  ]);
+  const [{ data: memberRows }, { data: enrollmentRows }, attendanceResult, homeworkResult, isKidsCourse] =
+    await Promise.all([
+      supabase
+        .from("cohort_members")
+        .select("user_id, kid_profile_id, left_at")
+        .eq("cohort_id", entry.cohort_id),
+      supabase
+        .from("course_enrollments")
+        .select("user_id, kid_profile_id")
+        .eq("cohort_id", entry.cohort_id)
+        .eq("delivery_mode", "group"),
+      curriculum
+        ? supabase
+            .from("cohort_lesson_attendance")
+            .select("student_id, kid_profile_id, attended")
+            .eq("cohort_id", entry.cohort_id)
+            .eq("lesson_id", curriculum.lessonId)
+        : Promise.resolve({
+            data: [] as Array<{
+              student_id: string | null;
+              kid_profile_id: string | null;
+              attended: boolean;
+            }>,
+            error: null,
+          }),
+      curriculum
+        ? supabase
+            .from("cohort_lesson_homework")
+            .select("student_id, kid_profile_id, completed")
+            .eq("cohort_id", entry.cohort_id)
+            .eq("lesson_id", curriculum.lessonId)
+        : Promise.resolve({
+            data: [] as Array<{
+              student_id: string | null;
+              kid_profile_id: string | null;
+              completed: boolean;
+            }>,
+            error: null,
+          }),
+      cohortIsKidsCourse(supabase, entry.cohort_id),
+    ]);
 
   if (attendanceResult.error && !isMissingAttendanceSchema(attendanceResult.error.message)) {
     return { error: attendanceResult.error.message };
@@ -186,24 +198,39 @@ export async function loadLessonLogRosterContext(
     }
   }
 
-  const activeUserIds = new Set<string>();
-  const activeKidIds = new Set<string>();
-  for (const row of memberRows ?? []) {
-    if (row.user_id) activeUserIds.add(row.user_id as string);
-    if (row.kid_profile_id) activeKidIds.add(row.kid_profile_id as string);
-  }
-  const rosterUserIds = new Set<string>([...activeUserIds]);
-  const rosterKidIds = new Set<string>([...activeKidIds]);
-  for (const row of attendanceResult.data ?? []) {
-    if (row.kid_profile_id) rosterKidIds.add(row.kid_profile_id as string);
-    else if (row.student_id) rosterUserIds.add(row.student_id as string);
-  }
-  for (const row of homeworkResult.data ?? []) {
-    if (row.kid_profile_id) rosterKidIds.add(row.kid_profile_id as string);
-    else if (row.student_id) rosterUserIds.add(row.student_id as string);
-  }
+  const parentUserIds = [
+    ...new Set(
+      [...(memberRows ?? []), ...(enrollmentRows ?? [])]
+        .map((row) => row.user_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const kidsByParentUserId = await loadKidsByParentUserId(supabase, parentUserIds);
+  const actors = resolveCohortRosterActors({
+    isKidsCourse,
+    members: (memberRows ?? []).map((row) => ({
+      userId: (row.user_id as string | null) ?? null,
+      kidProfileId: (row.kid_profile_id as string | null) ?? null,
+      leftAt: (row.left_at as string | null) ?? null,
+    })),
+    enrollments: (enrollmentRows ?? []).map((row) => ({
+      userId: (row.user_id as string | null) ?? null,
+      kidProfileId: (row.kid_profile_id as string | null) ?? null,
+    })),
+    extraActors: [
+      ...(attendanceResult.data ?? []).map((row) => ({
+        userId: (row.student_id as string | null) ?? null,
+        kidProfileId: (row.kid_profile_id as string | null) ?? null,
+      })),
+      ...(homeworkResult.data ?? []).map((row) => ({
+        userId: (row.student_id as string | null) ?? null,
+        kidProfileId: (row.kid_profile_id as string | null) ?? null,
+      })),
+    ],
+    kidsByParentUserId,
+  });
 
-  if (rosterUserIds.size === 0 && rosterKidIds.size === 0) {
+  if (actors.rosterUserIds.size === 0 && actors.rosterKidIds.size === 0) {
     return {
       cohortId: entry.cohort_id,
       lessonLogEntryId: entry.id,
@@ -216,12 +243,12 @@ export async function loadLessonLogRosterContext(
     };
   }
 
-  const [{ data: profiles }, { data: kids }] = await Promise.all([
-    rosterUserIds.size
+  const [{ data: profiles }, kidNames] = await Promise.all([
+    actors.rosterUserIds.size
       ? supabase
           .from("profiles")
           .select("id, full_name, preferred_name, notion_lead_page_id")
-          .in("id", [...rosterUserIds])
+          .in("id", [...actors.rosterUserIds])
       : Promise.resolve({
           data: [] as Array<{
             id: string;
@@ -230,18 +257,16 @@ export async function loadLessonLogRosterContext(
             notion_lead_page_id: string | null;
           }>,
         }),
-    rosterKidIds.size
-      ? supabase.from("kid_profiles").select("id, name").in("id", [...rosterKidIds])
-      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    loadKidProfileNames(supabase, [...actors.rosterKidIds]),
   ]);
 
   const baseStudents = [
-    ...[...rosterUserIds].map((studentId) => {
+    ...[...actors.rosterUserIds].map((studentId) => {
       const profile = (profiles ?? []).find((row) => row.id === studentId);
       return {
         studentId,
         studentName: getDisplayName(profile) ?? "Student",
-        isActiveMember: activeUserIds.has(studentId),
+        isActiveMember: actors.activeUserIds.has(studentId),
         attended: attendanceByActor.has(studentId)
           ? (attendanceByActor.get(studentId) as boolean)
           : null,
@@ -251,12 +276,11 @@ export async function loadLessonLogRosterContext(
         notionLeadPageId: profile?.notion_lead_page_id ?? null,
       };
     }),
-    ...[...rosterKidIds].map((kidId) => {
-      const kid = (kids ?? []).find((row) => row.id === kidId);
+    ...[...actors.rosterKidIds].map((kidId) => {
       return {
         studentId: kidId,
-        studentName: kid?.name || "Student",
-        isActiveMember: activeKidIds.has(kidId),
+        studentName: kidNames.get(kidId) || "Student",
+        isActiveMember: actors.activeKidIds.has(kidId),
         attended: attendanceByActor.has(kidId)
           ? (attendanceByActor.get(kidId) as boolean)
           : null,

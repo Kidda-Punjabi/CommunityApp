@@ -89,8 +89,45 @@ export async function matchStudentsToNotionLeads(
   students: Array<{ studentId: string; studentName: string }>
 ): Promise<LessonLogStudentLeadMatch[]> {
   const matches: LessonLogStudentLeadMatch[] = [];
+  const unresolvedIds = students
+    .map((student) => student.studentId)
+    .filter((id) => id.trim());
+
+  const parentByKidId = new Map<string, string>();
+  if (unresolvedIds.length > 0) {
+    const { data: kids } = await supabase
+      .from("kid_profiles")
+      .select("id, parent_user_id")
+      .in("id", unresolvedIds);
+    for (const kid of kids ?? []) {
+      if (kid.id && kid.parent_user_id) {
+        parentByKidId.set(kid.id as string, kid.parent_user_id as string);
+      }
+    }
+    if (parentByKidId.size < unresolvedIds.length) {
+      const { tryCreateServiceRoleClient } = await import("@/lib/supabase/admin-server");
+      const admin = tryCreateServiceRoleClient().client;
+      if (admin) {
+        const missing = unresolvedIds.filter((id) => !parentByKidId.has(id));
+        const { data: adminKids } = await admin
+          .from("kid_profiles")
+          .select("id, parent_user_id")
+          .in("id", missing);
+        for (const kid of adminKids ?? []) {
+          if (kid.id && kid.parent_user_id) {
+            parentByKidId.set(kid.id as string, kid.parent_user_id as string);
+          }
+        }
+      }
+    }
+  }
+
   for (const student of students) {
-    const resolved = await resolveLeadPageIdByAppUserId(supabase, student.studentId);
+    let resolved = await resolveLeadPageIdByAppUserId(supabase, student.studentId);
+    const parentUserId = parentByKidId.get(student.studentId);
+    if (!resolved.ok && parentUserId) {
+      resolved = await resolveLeadPageIdByAppUserId(supabase, parentUserId);
+    }
     if (resolved.ok) {
       matches.push({
         studentId: student.studentId,
