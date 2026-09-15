@@ -5,18 +5,24 @@ import { PublicFormFrame } from "@/components/public-forms/public-form-frame";
 import type { PublicQuizView } from "@/components/public-forms/public-quiz-types";
 import type { GuestIdentity } from "@/lib/public-forms/guest";
 import { QuizPlayer } from "@/components/quiz-player";
-import { publicCohortAudienceFromCourseName } from "@/lib/public-forms/options";
+import {
+  cohortsForPublicForm,
+  publicCohortPlaceholder,
+  type PublicCohortAudience,
+} from "@/lib/public-forms/options";
 
 export function PublicQuizForm({
   slug,
   heading,
   quiz,
+  audience,
   cohorts,
   tutors,
 }: {
   slug: string;
   heading: { kicker: string; title: string; intro: string };
   quiz: PublicQuizView;
+  audience: PublicCohortAudience;
   cohorts: string[];
   tutors: string[];
 }) {
@@ -24,12 +30,9 @@ export function PublicQuizForm({
     <PublicFormFrame
       heading={heading}
       courseOptions={{
-        cohorts,
+        cohorts: cohortsForPublicForm(cohorts, audience),
         tutors,
-        cohortPlaceholder:
-          publicCohortAudienceFromCourseName(quiz.courseName) === "kids"
-            ? "Select your Kids Circle or 1-1"
-            : "Select your cohort",
+        cohortPlaceholder: publicCohortPlaceholder(audience),
       }}
     >
       {(identity) => (

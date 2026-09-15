@@ -4,7 +4,7 @@ import { parsePublicFeedbackTarget, publicFeedbackCopy } from "@/lib/public-form
 import { lookupPublicFormLinkBySlug } from "@/lib/public-forms/links";
 import { loadPublicFormSelectOptions } from "@/lib/public-forms/load-cohort-options";
 import { loadCourseLessonId, loadPublicQuizById } from "@/lib/public-forms/load-quiz";
-import { publicCohortAudienceFromCourseName } from "@/lib/public-forms/options";
+import { publicCohortAudienceFromCourse } from "@/lib/public-forms/options";
 import { getTestimonialCalendarUrl } from "@/lib/ghl/testimonial-calendar";
 import { notFound } from "next/navigation";
 
@@ -23,9 +23,11 @@ export default async function PublicFormPage({ params }: PageProps) {
     const quiz = await loadPublicQuizById(link.targetId);
     if (!quiz) notFound();
 
-    const { cohorts, tutors } = await loadPublicFormSelectOptions(
-      publicCohortAudienceFromCourseName(quiz.courseName)
-    );
+    const audience = publicCohortAudienceFromCourse({
+      courseName: quiz.courseName,
+      contentTrack: quiz.contentTrack,
+    });
+    const { cohorts, tutors } = await loadPublicFormSelectOptions(audience);
 
     return (
       <PublicFormLoader
@@ -37,6 +39,7 @@ export default async function PublicFormPage({ params }: PageProps) {
           intro: "Answer each question. Your score is saved at the end.",
         }}
         quiz={quiz}
+        audience={audience}
         cohorts={cohorts}
         tutors={tutors}
       />
@@ -47,7 +50,7 @@ export default async function PublicFormPage({ params }: PageProps) {
   if (!target) notFound();
 
   const [{ cohorts, tutors }, lessonId] = await Promise.all([
-    loadPublicFormSelectOptions(publicCohortAudienceFromCourseName(target.course)),
+    loadPublicFormSelectOptions(publicCohortAudienceFromCourse({ courseName: target.course })),
     loadCourseLessonId(target.course, target.lessonNumber),
   ]);
 

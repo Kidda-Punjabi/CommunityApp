@@ -9,6 +9,7 @@ export type PublicQuizPayload = {
   quizId: string;
   quizTitle: string;
   courseName: string;
+  contentTrack: string | null;
   lessonNumber: number | null;
   questions: Array<{
     id: string;
@@ -35,7 +36,7 @@ export async function loadPublicQuizById(quizId: string): Promise<PublicQuizPayl
 
   const { data: quiz, error: quizError } = await client
     .from("quizzes")
-    .select("id, title, level_number, courses(name)")
+    .select("id, title, level_number, courses(name, content_track)")
     .eq("id", quizId)
     .maybeSingle();
 
@@ -52,11 +53,13 @@ export async function loadPublicQuizById(quizId: string): Promise<PublicQuizPayl
   if (questionsError || !questions?.length) return null;
 
   const course = Array.isArray(quiz.courses) ? quiz.courses[0] : quiz.courses;
+  const courseRow = course as { name?: string; content_track?: string | null } | null;
 
   return {
     quizId: quiz.id,
     quizTitle: quiz.title,
-    courseName: (course as { name?: string } | null)?.name ?? "Beginners Course",
+    courseName: courseRow?.name ?? "Beginners Course",
+    contentTrack: courseRow?.content_track ?? null,
     lessonNumber: quiz.level_number ?? null,
     questions,
   };

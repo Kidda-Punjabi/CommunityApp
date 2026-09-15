@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import type { FeedbackContext } from "@/lib/feedback/types";
 import type { PublicFeedbackTarget } from "@/lib/public-forms/feedback-target";
 import type { PublicQuizView } from "@/components/public-forms/public-quiz-types";
+import type { PublicCohortAudience } from "@/lib/public-forms/options";
 
 const PublicQuizForm = dynamic(
   () => import("@/components/public-forms/public-quiz-form").then((mod) => mod.PublicQuizForm),
@@ -22,6 +23,7 @@ type PublicFormLoaderProps =
       slug: string;
       heading: { kicker: string; title: string; intro: string };
       quiz: PublicQuizView;
+      audience: PublicCohortAudience;
       cohorts: string[];
       tutors: string[];
     }
@@ -43,6 +45,7 @@ export function PublicFormLoader(props: PublicFormLoaderProps) {
         slug={props.slug}
         heading={props.heading}
         quiz={props.quiz}
+        audience={props.audience}
         cohorts={props.cohorts}
         tutors={props.tutors}
       />
