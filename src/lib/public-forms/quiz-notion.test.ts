@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   buildNotionTestScoreProperties,
   cohortSelectFromPackageName,
+  resolveTestScoresDatabaseId,
   studentScoreFromPercent,
   weekSelectFromQuizTitle,
 } from "./quiz-notion";
@@ -61,6 +62,31 @@ describe("buildNotionTestScoreProperties", () => {
     assert.deepEqual(properties.Cohort, { select: { name: "Public Form" } });
     assert.deepEqual(properties.Week, { select: { name: "Week 8" } });
     assert.deepEqual(properties.Tutor, { select: { name: "Arshdeep Kaur" } });
+  });
+
+  it("omits Course when the name is not a Test Scores select option", () => {
+    const properties = buildNotionTestScoreProperties({
+      fullName: "Guest",
+      email: "guest@example.com",
+      courseName: "Kids Beginners Course (Level 1)",
+      studentScore: 8,
+      maxScore: 10,
+      submittedAt: new Date("2026-09-14T00:00:00.000Z"),
+    });
+    assert.equal(properties.Course, undefined);
+  });
+});
+
+describe("resolveTestScoresDatabaseId", () => {
+  it("maps the collection data-source id to the API database id", () => {
+    assert.equal(
+      resolveTestScoresDatabaseId("334b5ac4-29c6-803d-9c25-000b060b3061"),
+      "334b5ac4-29c6-80f7-8a39-fa3dcc73d89e"
+    );
+    assert.equal(
+      resolveTestScoresDatabaseId("334b5ac4-29c6-80f7-8a39-fa3dcc73d89e"),
+      "334b5ac4-29c6-80f7-8a39-fa3dcc73d89e"
+    );
   });
 });
 

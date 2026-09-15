@@ -33,6 +33,8 @@ loadEnvFile(".env.local");
 loadEnvFile(".env");
 
 const dryRun = process.argv.includes("--dry-run");
+const limitArg = process.argv.find((arg) => arg.startsWith("--limit="));
+const limit = limitArg ? Number(limitArg.slice("--limit=".length)) : null;
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -49,14 +51,21 @@ async function main() {
     .order("submitted_at", { ascending: true });
 
   if (error) throw new Error(error.message);
-  if (!rows?.length) {
+  const pending = rows ?? [];
+  const batch =
+    Number.isFinite(limit) && (limit as number) > 0
+      ? pending.slice(0, limit as number)
+      : pending;
+  if (!batch.length) {
     console.log("No public quiz attempts need Notion backfill.");
     return;
   }
 
-  console.log(`Found ${rows.length} attempt(s) to sync${dryRun ? " (dry run)" : ""}.`);
+  console.log(
+    `Found ${pending.length} attempt(s) to sync; processing ${batch.length}${dryRun ? " (dry run)" : ""}.`
+  );
 
-  for (const row of rows as PublicQuizAttemptRow[]) {
+  for (const row of batch as PublicQuizAttemptRow[]) {
     console.log(`\n• ${row.id} — ${row.full_name} score=${row.score}`);
     if (dryRun) continue;
 

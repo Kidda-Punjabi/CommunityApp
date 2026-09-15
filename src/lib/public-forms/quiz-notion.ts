@@ -1,5 +1,9 @@
 const NOTION_API_VERSION = "2022-06-28";
-const DEFAULT_TEST_SCORES_DATA_SOURCE_ID = "334b5ac4-29c6-803d-9c25-000b060b3061";
+/** Notion API 2022-06-28 parent.database_id — not the data-source id. */
+const DEFAULT_TEST_SCORES_DATABASE_ID = "334b5ac4-29c6-80f7-8a39-fa3dcc73d89e";
+/** Collection data-source id (Notion 2025+). Passing this as database_id 404s. */
+const TEST_SCORES_DATA_SOURCE_ID = "334b5ac4-29c6-803d-9c25-000b060b3061";
+const TEST_SCORES_COURSE_OPTIONS = new Set(["Beginners Course"]);
 
 type NotionPropertyValue =
   | { title: Array<{ text: { content: string } }> }
@@ -53,13 +57,15 @@ export function buildNotionTestScoreProperties(
     },
     "Student Score": { number: fields.studentScore },
     "Max Score": { number: fields.maxScore },
-    Course: {
-      select: { name: fields.courseName },
-    },
     Date: {
       date: { start: fields.submittedAt.toISOString() },
     },
   };
+
+  const course = fields.courseName.trim();
+  if (TEST_SCORES_COURSE_OPTIONS.has(course)) {
+    properties.Course = { select: { name: course } };
+  }
 
   if (fields.cohort?.trim()) {
     properties.Cohort = { select: { name: fields.cohort.trim() } };
@@ -74,12 +80,18 @@ export function buildNotionTestScoreProperties(
   return properties;
 }
 
+export function resolveTestScoresDatabaseId(configuredId?: string | null): string {
+  const id = configuredId?.trim() || DEFAULT_TEST_SCORES_DATABASE_ID;
+  return id === TEST_SCORES_DATA_SOURCE_ID ? DEFAULT_TEST_SCORES_DATABASE_ID : id;
+}
+
 export async function createNotionTestScorePage(
   properties: Record<string, NotionPropertyValue>
 ): Promise<{ pageId: string }> {
   const apiKey = process.env.NOTION_API_KEY;
-  const databaseId =
-    process.env.NOTION_TEST_SCORES_DATA_SOURCE_ID?.trim() || DEFAULT_TEST_SCORES_DATA_SOURCE_ID;
+  const databaseId = resolveTestScoresDatabaseId(
+    process.env.NOTION_TEST_SCORES_DATA_SOURCE_ID
+  );
 
   if (!apiKey || !databaseId) {
     throw new Error("Notion Test Scores integration is not configured.");
