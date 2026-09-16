@@ -8,21 +8,19 @@ import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
-import { gameDeckHubHref, shuffleArray } from "@/lib/flashcards/utils";
-import { shuffleSeeded } from "@/lib/challenges/seeded-random";
+import { gameDeckHubHref } from "@/lib/flashcards/utils";
+import {
+  MATCH_PAIRS_PER_SCREEN,
+  buildMatchTileChunks,
+  matchGameSeconds,
+  type MatchTile,
+} from "@/lib/flashcards/match-rounds";
 import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
 import type { ChallengePlayContext } from "@/lib/challenges/types";
 
-const GAME_SECONDS = 60;
-
-type Tile = {
-  id: string;
-  cardId: string;
-  text: string;
-  romanised: string | null;
-};
+const CHUNK_ADVANCE_MS = 400;
 
 type FlashcardMatchModeProps = {
   deck: FlashcardDeckContext;
@@ -40,14 +38,17 @@ export function FlashcardMatchMode({
   onKidsComplete,
 }: FlashcardMatchModeProps) {
   const deckHubHref = gameDeckHubHref("match");
+  const gameSeconds = matchGameSeconds(deck.cards.length);
 
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
-  const [secondsLeft, setSecondsLeft] = useState(GAME_SECONDS);
+  const [secondsLeft, setSecondsLeft] = useState(gameSeconds);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
   const [matchedCardIds, setMatchedCardIds] = useState<Set<string>>(new Set());
   const [wrongTileId, setWrongTileId] = useState<string | null>(null);
   const [pairsMatched, setPairsMatched] = useState(0);
-  const [elapsedSeconds, setElapsedSeconds] = useState(GAME_SECONDS);
+  const [elapsedSeconds, setElapsedSeconds] = useState(gameSeconds);
+  const [chunkIndex, setChunkIndex] = useState(0);
+  const [tileChunks, setTileChunks] = useState<MatchTile[][]>([]);
   const [result, setResult] = useState<{
     isNewBest: boolean;
     currentBest: number;
@@ -62,7 +63,8 @@ export function FlashcardMatchMode({
   const kidsCompleteRef = useRef(false);
   const { playSound } = useAudioManager();
 
-  const [tiles, setTiles] = useState<Tile[]>([]);
+  const tiles = tileChunks[chunkIndex] ?? [];
+  const totalChunks = tileChunks.length;
 
   const challengeFinish = useChallengeFinish({
     challengeId: challenge?.id,
@@ -77,27 +79,6 @@ export function FlashcardMatchMode({
     },
     enabled: phase === "finished" && Boolean(challenge),
   });
-
-  function buildTiles() {
-    const list: Tile[] = [];
-    for (const card of deck.cards) {
-      list.push({
-        id: `${card.id}-front`,
-        cardId: card.id,
-        text: card.front_text,
-        romanised: card.romanised,
-      });
-      list.push({
-        id: `${card.id}-back`,
-        cardId: card.id,
-        text: card.back_text,
-        romanised: card.romanised,
-      });
-    }
-    return challenge?.config.seed != null
-      ? shuffleSeeded(list, challenge.config.seed)
-      : shuffleArray(list);
-  }
 
   useEffect(() => {
     if (challenge && phase === "ready") {
@@ -134,8 +115,8 @@ export function FlashcardMatchMode({
     savedRef.current = true;
 
     const timeUsed = startedAtRef.current
-      ? Math.min(GAME_SECONDS, Math.ceil((Date.now() - startedAtRef.current) / 1000))
-      : GAME_SECONDS;
+      ? Math.min(gameSeconds, Math.ceil((Date.now() - startedAtRef.current) / 1000))
+      : gameSeconds;
     setElapsedSeconds(timeUsed);
 
     const persist = async () => {
@@ -180,7 +161,7 @@ export function FlashcardMatchMode({
     };
 
     void persist();
-  }, [phase, pairsMatched, deck.deckName, deck.cards.length, initialBestScore]);
+  }, [phase, pairsMatched, deck.deckName, deck.cards.length, initialBestScore, gameSeconds, kidsMode]);
 
   useEffect(() => {
     if (pairsMatched === deck.cards.length && phase === "playing") {
@@ -188,12 +169,32 @@ export function FlashcardMatchMode({
     }
   }, [pairsMatched, deck.cards.length, phase]);
 
+  useEffect(() => {
+    if (phase !== "playing" || totalChunks === 0) return;
+    const chunk = tileChunks[chunkIndex];
+    if (!chunk || chunk.length === 0) return;
+    if (chunkIndex >= totalChunks - 1) return;
+
+    const cardIds = [...new Set(chunk.map((tile) => tile.cardId))];
+    const chunkComplete = cardIds.every((id) => matchedCardIds.has(id));
+    if (!chunkComplete) return;
+
+    const timeout = window.setTimeout(() => {
+      setChunkIndex((current) => current + 1);
+      setSelectedTileId(null);
+      setWrongTileId(null);
+    }, CHUNK_ADVANCE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [phase, matchedCardIds, chunkIndex, tileChunks, totalChunks]);
+
   function startGame() {
     savedRef.current = false;
     kidsCompleteRef.current = false;
-    setTiles(buildTiles());
+    setTileChunks(buildMatchTileChunks(deck.cards, challenge?.config.seed));
+    setChunkIndex(0);
     setPhase("playing");
-    setSecondsLeft(GAME_SECONDS);
+    setSecondsLeft(gameSeconds);
     setSelectedTileId(null);
     setMatchedCardIds(new Set());
     setWrongTileId(null);
@@ -204,7 +205,7 @@ export function FlashcardMatchMode({
     startedAtRef.current = Date.now();
   }
 
-  function handleTileClick(tile: Tile) {
+  function handleTileClick(tile: MatchTile) {
     if (phase !== "playing") return;
     if (matchedCardIds.has(tile.cardId)) return;
     if (wrongTileId) return;
@@ -254,7 +255,10 @@ export function FlashcardMatchMode({
           </p>
           <h1 className="mt-1 text-2xl font-bold text-zinc-900">{deck.lessonTitle}</h1>
           <p className="mt-2 text-sm text-zinc-500">
-            Match front and back pairs as fast as you can in {GAME_SECONDS} seconds.
+            Match front and back pairs as fast as you can in {gameSeconds} seconds
+            {deck.cards.length > MATCH_PAIRS_PER_SCREEN
+              ? ` · words appear in sets of ${MATCH_PAIRS_PER_SCREEN} pairs.`
+              : "."}
           </p>
         </div>
 
@@ -307,8 +311,13 @@ export function FlashcardMatchMode({
           {pairsMatched} matched · {secondsLeft}s left
         </p>
       </div>
+      {totalChunks > 0 ? (
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          Set {chunkIndex + 1} of {totalChunks}
+        </p>
+      ) : null}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div key={chunkIndex} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {tiles.map((tile) => {
           const isMatched = matchedCardIds.has(tile.cardId);
           const isSelected = selectedTileId === tile.id;
@@ -318,6 +327,7 @@ export function FlashcardMatchMode({
             <button
               key={tile.id}
               type="button"
+              data-card-id={tile.cardId}
               disabled={isMatched}
               onClick={() => handleTileClick(tile)}
               className={`min-h-24 rounded-xl border px-3 py-3 text-left text-sm font-medium transition-colors ${

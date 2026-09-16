@@ -11,9 +11,9 @@ const TUTORIALS: Record<TutorialId, GameTutorialContent> = {
     id: "match",
     title: "How to play Match",
     steps: [
-      "You'll see Punjabi words and English meanings shuffled into a grid.",
+      "You'll see Punjabi words and English meanings in small sets of up to four pairs.",
       "Tap one tile, then tap its match. Correct pairs clear; wrong picks flash briefly.",
-      "You have 60 seconds — match as many pairs as you can before time runs out.",
+      "You have 10 seconds per pair for the whole deck — match as many as you can before time runs out.",
     ],
   },
   memory_grid: {
