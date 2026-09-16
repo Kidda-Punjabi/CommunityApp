@@ -52,14 +52,13 @@ export default async function LessonHomeworkPage({ params, searchParams }: PageP
   const requiredTier = (courseRow as { required_tier: string } | null)?.required_tier;
   const backHref = learnHomeworkBackHref(requiredTier, lessonId, lesson.course_id);
 
-  const [segment, submissionMap] = await Promise.all([
+  const [segment, submissionMap, questions] = await Promise.all([
     loadHomeworkSegmentForLesson(supabase, lessonId),
     fetchHomeworkSubmissionsForUser(supabase, user.id, [lessonId]),
+    loadHomeworkQuestionsForLesson(supabase, lessonId),
   ]);
 
   const submissionType = segment?.submissionType ?? "voice";
-  const questions =
-    submissionType === "text" ? await loadHomeworkQuestionsForLesson(supabase, lessonId) : [];
   const submission = submissionMap.get(lessonId) ?? null;
   const taskDescription =
     segment?.activityInstructions?.trim() ||
@@ -80,7 +79,24 @@ export default async function LessonHomeworkPage({ params, searchParams }: PageP
         <p className="mt-3 text-base text-zinc-800">{taskDescription}</p>
       </div>
 
-      {submissionType === "text" ? (
+      {questions.length > 0 && submissionType !== "text" ? (
+        <ol className={`${ui.card} mt-6 space-y-3`}>
+          {questions.map((question) => (
+            <li key={question.id} className="text-base text-zinc-800">
+              <span className="font-semibold tabular-nums">{question.questionNumber}.</span>{" "}
+              {question.promptEnglish}
+            </li>
+          ))}
+        </ol>
+      ) : questions.length === 0 ? (
+        <div className={`${ui.card} mt-6`}>
+          <p className="text-sm text-zinc-600">
+            No homework questions have been added for this lesson yet.
+          </p>
+        </div>
+      ) : null}
+
+      {submissionType === "text" && questions.length > 0 ? (
         <div className="mt-6">
           <HomeworkTextForm
             lessonId={lessonId}
@@ -88,7 +104,7 @@ export default async function LessonHomeworkPage({ params, searchParams }: PageP
             existingSubmission={submission}
           />
         </div>
-      ) : (
+      ) : submissionType !== "text" ? (
         <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-10 mt-6 rounded-3xl border border-zinc-200/80 bg-white/95 p-4 shadow-[0_8px_32px_-8px_rgba(24,24,27,0.18)] backdrop-blur">
           <p className="text-sm font-semibold text-zinc-900">
             {submission ? "Your homework" : "Record homework"}
@@ -99,7 +115,7 @@ export default async function LessonHomeworkPage({ params, searchParams }: PageP
             variant="embedded"
           />
         </div>
-      )}
+      ) : null}
 
       {catchupReturn ? (
         <div className="mt-4">

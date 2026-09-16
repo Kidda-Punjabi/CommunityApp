@@ -55,7 +55,8 @@ export async function loadHomeworkQuestionsForLesson(
   const { data: segments, error: segmentError } = await supabase
     .from("lesson_segments")
     .select("id")
-    .eq("lesson_id", lessonId);
+    .eq("lesson_id", lessonId)
+    .eq("activity_type", "homework");
 
   if (segmentError) {
     if (isMissingTable(segmentError.message, "lesson_segments")) return [];

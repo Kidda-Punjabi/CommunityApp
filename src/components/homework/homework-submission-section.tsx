@@ -269,18 +269,12 @@ function HomeworkRecorderBody({
     <div className={variant === "standalone" ? "mt-3" : "pt-2"}>
       {intro ? <p className="text-sm text-zinc-600">{intro}</p> : null}
 
-      {nearLessonWarning ? (
-        <div className={variant === "standalone" ? "mt-3" : "mb-3"}>
-          <NearLessonWarningBanner message={nearLessonWarning} tone={timingTone} />
-        </div>
-      ) : null}
-
       {recorder.state === "idle" ? (
         <button
           type="button"
           onClick={() => void recorder.startRecording()}
           className={
-            variant === "standalone" || nearLessonWarning || description
+            variant === "standalone" || intro
               ? `mt-3 ${ui.btnSecondary}`
               : ui.btnSecondary
           }
@@ -328,6 +322,12 @@ function HomeworkRecorderBody({
               {pending ? "Submitting…" : "Submit homework"}
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {nearLessonWarning ? (
+        <div className="mt-3">
+          <NearLessonWarningBanner message={nearLessonWarning} tone={timingTone} />
         </div>
       ) : null}
 
