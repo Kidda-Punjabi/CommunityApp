@@ -12,6 +12,10 @@ import {
 } from "@/lib/notion/client";
 import { omitLessonLogManualFieldsFromPullPatch } from "@/lib/notion/lesson-log-field-source";
 import {
+  mergeLessonLogPagesById,
+  nextLessonLogWatermark,
+} from "@/lib/notion/lesson-log-watermark";
+import {
   formatLessonLogWriteError,
   logLessonLogWriteFailure,
 } from "@/lib/lessons/lesson-log-write-error";
@@ -42,8 +46,8 @@ export type ParsedLessonLogPage = {
   reviewed: boolean;
 };
 
-const LESSON_LOG_PULL_CURSOR_VIEW_TYPE = "notion_lesson_log_pull_cursor";
-const LESSON_LOG_PULL_CURSOR_NAME = "cohort_lesson_log_entries";
+export const LESSON_LOG_PULL_CURSOR_VIEW_TYPE = "notion_lesson_log_pull_cursor";
+export const LESSON_LOG_PULL_CURSOR_NAME = "cohort_lesson_log_entries";
 
 const LESSON_LOG_STATUSES = new Set(["Scheduled", "Completed", "Cancelled"]);
 
@@ -156,7 +160,12 @@ export async function queryNotionLessonLogPagesEditedAfter(
   return pages;
 }
 
-async function loadLessonLogPullCursor(
+type LessonLogPullCursorConfig = {
+  lastEditedTime?: string;
+  savedAt?: string;
+};
+
+async function loadLessonLogPullCursorRaw(
   supabase: SupabaseClient
 ): Promise<string | null> {
   const { data } = await supabase
@@ -166,9 +175,116 @@ async function loadLessonLogPullCursor(
     .eq("name", LESSON_LOG_PULL_CURSOR_NAME)
     .maybeSingle();
 
-  const cursor = (data?.config as { lastEditedTime?: string } | null)?.lastEditedTime;
-  if (!cursor?.trim()) return null;
+  const cursor = (data?.config as LessonLogPullCursorConfig | null)?.lastEditedTime;
+  return cursor?.trim() || null;
+}
+
+async function loadLessonLogPullCursor(
+  supabase: SupabaseClient
+): Promise<string | null> {
+  const cursor = await loadLessonLogPullCursorRaw(supabase);
+  if (!cursor) return null;
   return new Date(new Date(cursor).getTime() - 3000).toISOString();
+}
+
+function failuresTableMissing(error: { message?: string } | null | undefined): boolean {
+  return Boolean(error?.message?.includes("notion_lesson_log_sync_failures"));
+}
+
+async function recordLessonLogSyncFailure(
+  supabase: SupabaseClient,
+  pageId: string,
+  lastEditedTime: string,
+  message: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { data: existing } = await supabase
+    .from("notion_lesson_log_sync_failures")
+    .select("retry_count")
+    .eq("notion_page_id", pageId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("notion_lesson_log_sync_failures")
+      .update({
+        last_edited_time: lastEditedTime,
+        error: message.slice(0, 1000),
+        retry_count: (existing.retry_count ?? 0) + 1,
+        last_failed_at: now,
+      })
+      .eq("notion_page_id", pageId);
+    if (error && !failuresTableMissing(error)) {
+      console.error("[notion lesson-log] failed to update failure row:", error.message);
+    }
+    return;
+  }
+
+  const { error } = await supabase.from("notion_lesson_log_sync_failures").insert({
+    notion_page_id: pageId,
+    last_edited_time: lastEditedTime,
+    error: message.slice(0, 1000),
+    retry_count: 0,
+    first_failed_at: now,
+    last_failed_at: now,
+  });
+  if (error && !failuresTableMissing(error)) {
+    console.error("[notion lesson-log] failed to insert failure row:", error.message);
+  }
+}
+
+async function clearLessonLogSyncFailure(
+  supabase: SupabaseClient,
+  pageId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("notion_lesson_log_sync_failures")
+    .delete()
+    .eq("notion_page_id", pageId);
+  if (error && !failuresTableMissing(error)) {
+    console.error("[notion lesson-log] failed to clear failure row:", error.message);
+  }
+}
+
+async function loadFailedLessonLogPages(
+  supabase: SupabaseClient
+): Promise<ParsedLessonLogPage[]> {
+  const { data, error } = await supabase
+    .from("notion_lesson_log_sync_failures")
+    .select("notion_page_id")
+    .order("last_failed_at", { ascending: true })
+    .limit(100);
+
+  if (error) {
+    if (!failuresTableMissing(error)) {
+      console.error("[notion lesson-log] failed to load failure rows:", error.message);
+    }
+    return [];
+  }
+
+  const pages: ParsedLessonLogPage[] = [];
+  for (const row of data ?? []) {
+    const pageId = String(row.notion_page_id ?? "").trim();
+    if (!pageId) continue;
+    try {
+      pages.push(await fetchNotionLessonLogPage(pageId));
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error ? fetchError.message : "Failed to reload Notion page.";
+      console.error(`[notion lesson-log] retry fetch failed page=${pageId}:`, message);
+      await recordLessonLogSyncFailure(supabase, pageId, new Date().toISOString(), message);
+    }
+  }
+  return pages;
+}
+
+export async function fetchNotionLessonLogPage(pageId: string): Promise<ParsedLessonLogPage> {
+  const raw = await notionJson<{
+    id: string;
+    last_edited_time: string;
+    properties: Record<string, unknown>;
+  }>(`/pages/${pageId}`);
+  return parseNotionLessonLogPage(raw);
 }
 
 async function saveLessonLogPullCursor(
@@ -177,15 +293,23 @@ async function saveLessonLogPullCursor(
 ): Promise<void> {
   const { data: existing } = await supabase
     .from("admin_saved_views")
-    .select("id")
+    .select("id, config")
     .eq("view_type", LESSON_LOG_PULL_CURSOR_VIEW_TYPE)
     .eq("name", LESSON_LOG_PULL_CURSOR_NAME)
     .maybeSingle();
 
+  const previous = (existing?.config as LessonLogPullCursorConfig | null) ?? {};
+  if (previous.lastEditedTime === lastEditedTime) return;
+
+  const config: LessonLogPullCursorConfig = {
+    lastEditedTime,
+    savedAt: new Date().toISOString(),
+  };
+
   if (existing?.id) {
     await supabase
       .from("admin_saved_views")
-      .update({ config: { lastEditedTime } })
+      .update({ config })
       .eq("id", existing.id);
     return;
   }
@@ -206,7 +330,7 @@ async function saveLessonLogPullCursor(
   await supabase.from("admin_saved_views").insert({
     name: LESSON_LOG_PULL_CURSOR_NAME,
     view_type: LESSON_LOG_PULL_CURSOR_VIEW_TYPE,
-    config: { lastEditedTime },
+    config,
     created_by: createdBy,
   });
 }
@@ -343,16 +467,39 @@ export async function upsertLessonLogEntryFromNotion(
   return "upserted";
 }
 
+export async function retryLessonLogPageFromNotion(
+  supabase: SupabaseClient,
+  pageId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const id = pageId.trim();
+  if (!id) return { ok: false, error: "Notion page id is required." };
+  try {
+    const page = await fetchNotionLessonLogPage(id);
+    await upsertLessonLogEntryFromNotion(supabase, page);
+    await clearLessonLogSyncFailure(supabase, id);
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Retry failed.";
+    await recordLessonLogSyncFailure(supabase, id, new Date().toISOString(), message);
+    return { ok: false, error: message };
+  }
+}
+
 export async function pullLessonLogFromNotion(
   supabase: SupabaseClient,
   options?: { fullSync?: boolean }
-): Promise<{ pulled: number; skipped: number; errors: string[] }> {
-  const cursor = options?.fullSync ? null : await loadLessonLogPullCursor(supabase);
-  const pages = await queryNotionLessonLogPagesEditedAfter(cursor);
+): Promise<{ pulled: number; skipped: number; errors: string[]; retried: number }> {
+  const storedWatermark = options?.fullSync ? null : await loadLessonLogPullCursorRaw(supabase);
+  const queryAfter = options?.fullSync ? null : await loadLessonLogPullCursor(supabase);
+  const incremental = await queryNotionLessonLogPagesEditedAfter(queryAfter);
+  const retries = options?.fullSync ? [] : await loadFailedLessonLogPages(supabase);
+  const pages = mergeLessonLogPagesById(incremental, retries);
   let pulled = 0;
   let skipped = 0;
   const errors: string[] = [];
-  let maxEdited = cursor;
+  const successfulTimes: string[] = [];
+  const retryIds = new Set(retries.map((page) => page.pageId));
+  let retried = 0;
 
   for (let i = 0; i < pages.length; i += 25) {
     const chunk = pages.slice(i, i + 25);
@@ -372,20 +519,35 @@ export async function pullLessonLogFromNotion(
     );
 
     for (const item of results) {
-      if (item.error) errors.push(item.error);
-      else if (item.result === "upserted") pulled += 1;
-      else skipped += 1;
-      if (!maxEdited || item.page.lastEditedTime > maxEdited) {
-        maxEdited = item.page.lastEditedTime;
+      if (item.error) {
+        errors.push(item.error);
+        await recordLessonLogSyncFailure(
+          supabase,
+          item.page.pageId,
+          item.page.lastEditedTime,
+          item.error
+        );
+        continue;
       }
+      await clearLessonLogSyncFailure(supabase, item.page.pageId);
+      if (item.result === "upserted") pulled += 1;
+      else skipped += 1;
+      successfulTimes.push(item.page.lastEditedTime);
+      if (retryIds.has(item.page.pageId)) retried += 1;
     }
   }
 
-  if (maxEdited && maxEdited !== cursor) {
-    await saveLessonLogPullCursor(supabase, maxEdited);
+  const nextWatermark = nextLessonLogWatermark(storedWatermark, successfulTimes);
+  if (nextWatermark && nextWatermark !== storedWatermark) {
+    await saveLessonLogPullCursor(supabase, nextWatermark);
   }
 
-  return { pulled, skipped, errors };
+  return {
+    pulled,
+    skipped,
+    errors,
+    retried,
+  };
 }
 
 export type CreateLessonLogInput = {

@@ -500,8 +500,8 @@ export async function pushPackageInstanceToNotion(
   }
 }
 
-const PACKAGE_PULL_CURSOR_VIEW_TYPE = "notion_package_pull_cursor";
-const PACKAGE_PULL_CURSOR_NAME = "package_instances";
+export const PACKAGE_PULL_CURSOR_VIEW_TYPE = "notion_package_pull_cursor";
+export const PACKAGE_PULL_CURSOR_NAME = "package_instances";
 
 export async function loadPackagePullCursor(
   supabase: SupabaseClient
@@ -526,15 +526,20 @@ export async function savePackagePullCursor(
 ): Promise<void> {
   const { data: existing } = await supabase
     .from("admin_saved_views")
-    .select("id")
+    .select("id, config")
     .eq("view_type", PACKAGE_PULL_CURSOR_VIEW_TYPE)
     .eq("name", PACKAGE_PULL_CURSOR_NAME)
     .maybeSingle();
 
+  const previous = (existing?.config as { lastEditedTime?: string; savedAt?: string } | null) ?? {};
+  if (previous.lastEditedTime === lastEditedTime) return;
+
+  const config = { lastEditedTime, savedAt: new Date().toISOString() };
+
   if (existing?.id) {
     await supabase
       .from("admin_saved_views")
-      .update({ config: { lastEditedTime } })
+      .update({ config })
       .eq("id", existing.id);
     return;
   }
@@ -555,7 +560,7 @@ export async function savePackagePullCursor(
   await supabase.from("admin_saved_views").insert({
     name: PACKAGE_PULL_CURSOR_NAME,
     view_type: PACKAGE_PULL_CURSOR_VIEW_TYPE,
-    config: { lastEditedTime },
+    config,
     created_by: createdBy,
   });
 }

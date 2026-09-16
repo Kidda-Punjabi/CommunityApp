@@ -61,12 +61,13 @@ function appUserIdFromPage(page: NotionLeadPage): string | null {
   return value || null;
 }
 
-const LEADS_CACHE_PULL_CURSOR_VIEW_TYPE = "notion_leads_cache_pull_cursor";
-const LEADS_CACHE_PULL_CURSOR_NAME = "notion_leads_cache";
+export const LEADS_CACHE_PULL_CURSOR_VIEW_TYPE = "notion_leads_cache_pull_cursor";
+export const LEADS_CACHE_PULL_CURSOR_NAME = "notion_leads_cache";
 
 type LeadsCachePullCursorConfig = {
   lastEditedTime?: string;
   lastFullSyncAt?: string;
+  savedAt?: string;
 };
 
 async function loadLeadsCachePullCursor(
@@ -97,6 +98,9 @@ async function saveLeadsCachePullCursor(
     ...((existing?.config as LeadsCachePullCursorConfig | null) ?? {}),
     ...config,
   };
+  if (config.lastEditedTime && (existing?.config as LeadsCachePullCursorConfig | null)?.lastEditedTime !== config.lastEditedTime) {
+    nextConfig.savedAt = new Date().toISOString();
+  }
 
   if (existing?.id) {
     await supabase.from("admin_saved_views").update({ config: nextConfig }).eq("id", existing.id);
@@ -883,7 +887,16 @@ async function logLeadLinkConflict(
     details?: string;
   }
 ): Promise<void> {
-  await supabase.from("notion_lead_link_conflicts").insert({
+  const { data: existing } = await supabase
+    .from("notion_lead_link_conflicts")
+    .select("id")
+    .eq("profile_id", input.profileId)
+    .eq("resolved", false)
+    .maybeSingle();
+
+  if (existing?.id) return;
+
+  const { error } = await supabase.from("notion_lead_link_conflicts").insert({
     profile_id: input.profileId,
     existing_notion_page_id: input.existingNotionPageId,
     attempted_notion_page_id: input.attemptedNotionPageId,
@@ -891,7 +904,12 @@ async function logLeadLinkConflict(
     details:
       input.details ??
       "A second Notion lead row matched this profile email but the profile is already linked to a different lead page.",
+    resolved: false,
   });
+  if (error) {
+    if (error.code === "23505") return;
+    console.error("[notion lead link] failed to insert conflict:", error.message);
+  }
 }
 
 /**
@@ -1033,6 +1051,7 @@ export async function loadLeadLinkAdminSnapshot(supabase: SupabaseClient): Promi
     supabase
       .from("notion_lead_link_conflicts")
       .select("*")
+      .eq("resolved", false)
       .order("created_at", { ascending: false })
       .limit(50),
   ]);

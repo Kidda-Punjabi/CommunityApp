@@ -725,6 +725,68 @@ export async function resolveLeadPurchaseGrantQueueItem(
   return { success: `Granted ${target.label}.` };
 }
 
+export async function retryLeadPurchaseGrantQueueItem(
+  supabase: SupabaseClient,
+  input: { queueId: string; resolvedBy: string }
+): Promise<{ error?: string; success?: string }> {
+  const { data: row, error: loadError } = await supabase
+    .from("notion_lead_purchase_grant_queue")
+    .select("id, profile_id, notion_lead_page_id, resolved")
+    .eq("id", input.queueId)
+    .maybeSingle();
+
+  if (loadError) return { error: loadError.message };
+  if (!row) return { error: "Queue item not found." };
+  if (row.resolved) return { error: "Already resolved." };
+
+  const profileId = String(row.profile_id ?? "").trim();
+  const leadPageId = String(row.notion_lead_page_id ?? "").trim();
+  if (!profileId || !leadPageId) {
+    return { error: "Queue item is missing a profile or Notion lead page." };
+  }
+
+  const result = await grantAccessFromLinkedLeadPackages(supabase, profileId, leadPageId);
+  const [{ count: memberCount }, { count: packageCount }] = await Promise.all([
+    supabase
+      .from("cohort_members")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", profileId)
+      .is("left_at", null),
+    supabase
+      .from("student_packages")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", profileId)
+      .eq("status", "confirmed"),
+  ]);
+  const hasAccess = (memberCount ?? 0) > 0 || (packageCount ?? 0) > 0;
+
+  if (result.granted > 0 || hasAccess) {
+    const { error } = await supabase
+      .from("notion_lead_purchase_grant_queue")
+      .update({
+        resolved: true,
+        resolved_at: new Date().toISOString(),
+        resolved_by: input.resolvedBy,
+        resolution_note:
+          result.granted > 0
+            ? `Retry granted ${result.granted} package${result.granted === 1 ? "" : "s"}.`
+            : "Retry found existing cohort membership or confirmed package.",
+      })
+      .eq("id", input.queueId)
+      .eq("resolved", false);
+    if (error) return { error: error.message };
+    return {
+      success:
+        result.granted > 0
+          ? `Granted ${result.granted} package${result.granted === 1 ? "" : "s"}.`
+          : "Already has access — marked resolved.",
+    };
+  }
+
+  const reason = result.errors[0] ?? result.details[0] ?? "Still needs a manual grant.";
+  return { error: reason };
+}
+
 export async function loadLeadPurchaseGrantQueue(
   supabase: SupabaseClient
 ): Promise<

@@ -7,6 +7,7 @@ import type {
   DashboardTone,
 } from "@/lib/admin/dashboard/types";
 import { loadEnrollmentGaps } from "@/lib/admin/load-enrollment-gaps";
+import { countSyncHealthAttention } from "@/lib/admin/sync-health/load-sync-health";
 import { loadIncompletePackageChecklists } from "@/lib/admin/load-incomplete-package-checklists";
 import { countPendingCohortChangeRequests } from "@/lib/admin/load-admin-cohort-change-requests";
 import { loadPendingCohortSwitchRequestCreatedAts } from "@/lib/admin/load-admin-cohort-switch-requests";
@@ -410,6 +411,33 @@ async function loadMissingRecordingsCard(
   };
 }
 
+async function loadSyncHealthCard(
+  supabase: SupabaseClient
+): Promise<{ card: AdminDashboardCard; error?: string }> {
+  const result = await countSyncHealthAttention(supabase);
+  const count = result.count;
+  const tone: DashboardTone = result.lastRunFailed
+    ? "urgent"
+    : count === 0
+      ? "ok"
+      : count > 5
+        ? "urgent"
+        : "warning";
+
+  return {
+    card: {
+      id: "sync_health",
+      label: "Sync health",
+      hint: "Cron, watermarks, lesson-log errors, and unresolved Notion conflicts",
+      href: "/admin/sync-health",
+      count,
+      tone,
+      group: "ops",
+    },
+    error: result.error,
+  };
+}
+
 export async function loadAdminDashboard(
   supabase: SupabaseClient
 ): Promise<AdminDashboardSnapshot> {
@@ -429,6 +457,7 @@ export async function loadAdminDashboard(
     monthlyRewards,
     recordings,
     integrity,
+    syncHealth,
   ] = await Promise.all([
     loadCohortsSetupCard(supabase, nowMs),
     loadPendingCohortSwitchRequestCreatedAts(supabase),
@@ -442,6 +471,7 @@ export async function loadAdminDashboard(
     loadMonthlyRewardsAttention(supabase),
     loadMissingRecordingsCard(supabase),
     loadSessionIntegrityCard(supabase),
+    loadSyncHealthCard(supabase),
   ]);
 
   const paymentSetupCount = onboarding.rows.filter((row) => {
@@ -543,6 +573,7 @@ export async function loadAdminDashboard(
     },
     recordings.card,
     integrity.card,
+    syncHealth.card,
   ];
 
   const errors = [
@@ -558,6 +589,7 @@ export async function loadAdminDashboard(
     monthlyRewards.error,
     recordings.error,
     integrity.error,
+    syncHealth.error,
   ].filter(Boolean);
 
   return {

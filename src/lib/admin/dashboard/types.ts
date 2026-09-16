@@ -12,7 +12,8 @@ export type DashboardCardId =
   | "package_onboarding"
   | "monthly_rewards"
   | "missing_recordings"
-  | "session_integrity";
+  | "session_integrity"
+  | "sync_health";
 
 export type AdminDashboardCard = {
   id: DashboardCardId;
