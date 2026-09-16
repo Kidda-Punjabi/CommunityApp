@@ -1,3 +1,4 @@
+import { WEEK1_STARTING_POINT_LESSON_LABEL } from "@/lib/feedback/constants";
 import {
   buildNotionFeedbackProperties,
   createNotionFeedbackPage,
@@ -43,6 +44,12 @@ export async function saveFeedbackSubmission(
   const sessionId = isCommunity ? (payload.sessionId ?? context.sessionId) : null;
   const lessonId = isCommunity ? null : context.lessonId;
   const isGuest = Boolean(options?.isGuest) || userId == null;
+  const lessonLabel =
+    payload.formVariant === "week1"
+      ? WEEK1_STARTING_POINT_LESSON_LABEL
+      : context.lessonLabel;
+  const writeContext =
+    lessonLabel === context.lessonLabel ? context : { ...context, lessonLabel };
 
   if (isCommunity && !sessionId) {
     throw new Error("A class session is required.");
@@ -66,7 +73,7 @@ export async function saveFeedbackSubmission(
       phone: context.phone,
       cohort: context.cohort,
       course: context.course,
-      lesson_label: context.lessonLabel,
+      lesson_label: lessonLabel,
       tutor: context.tutor,
       tutor_unmatched: context.tutorUnmatched,
       learning_relevance: payload.formVariant === "week1" ? null : payload.learningRelevance,
@@ -99,7 +106,7 @@ export async function saveFeedbackSubmission(
   }
 
   try {
-    const properties = buildNotionFeedbackProperties(context, payload, submittedAt);
+    const properties = buildNotionFeedbackProperties(writeContext, payload, submittedAt);
     const { pageId } = await createNotionFeedbackPage(properties);
 
     await supabase

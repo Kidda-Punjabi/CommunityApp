@@ -1,4 +1,8 @@
-import type { FeedbackFormVariant, NotionCourseOption } from "@/lib/feedback/constants";
+import {
+  WEEK1_STARTING_POINT_LESSON_LABEL,
+  type FeedbackFormVariant,
+  type NotionCourseOption,
+} from "@/lib/feedback/constants";
 
 export type PublicFeedbackTarget = {
   targetId: string;
@@ -60,7 +64,13 @@ export function parsePublicFeedbackTarget(targetId: string): PublicFeedbackTarge
     return beginnersTarget(targetId, "standard", 1);
   }
   if (targetId === "week-1-starting-point") {
-    return beginnersTarget(targetId, "week1", 1);
+    return {
+      targetId,
+      formVariant: "week1",
+      lessonNumber: 1,
+      lessonLabel: WEEK1_STARTING_POINT_LESSON_LABEL,
+      course: "Beginners Course",
+    };
   }
 
   const foundational = /^foundational-week-(\d+)$/.exec(targetId);

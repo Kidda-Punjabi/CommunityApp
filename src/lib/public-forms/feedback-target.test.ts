@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { WEEK1_STARTING_POINT_LESSON_LABEL } from "../feedback/constants";
 import { parsePublicFeedbackTarget, publicFeedbackCopy } from "./feedback-target";
 
 describe("parsePublicFeedbackTarget", () => {
-  it("keeps Beginners week 1 starting point, session, mid-course, and week 12 unchanged", () => {
+  it("labels week 1 starting point separately from week 1 session, mid-course, and week 12", () => {
     assert.deepEqual(parsePublicFeedbackTarget("week-1-starting-point"), {
       targetId: "week-1-starting-point",
       formVariant: "week1",
       lessonNumber: 1,
-      lessonLabel: "Lesson 1",
+      lessonLabel: WEEK1_STARTING_POINT_LESSON_LABEL,
       course: "Beginners Course",
     });
     assert.deepEqual(parsePublicFeedbackTarget("week-1-session"), {

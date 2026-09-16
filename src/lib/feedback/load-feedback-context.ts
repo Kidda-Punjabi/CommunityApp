@@ -1,6 +1,7 @@
 import {
   NOTION_COURSE_OPTIONS,
   NOTION_TUTOR_OPTIONS,
+  WEEK1_STARTING_POINT_LESSON_LABEL,
   isWeek12FeedbackForm,
   isWeek1BaselineForm,
   type FeedbackFormVariant,
@@ -230,7 +231,10 @@ export async function loadFeedbackContext(
     phone: options?.phone?.trim() || null,
     cohort: cohortLabel(cohortName),
     course,
-    lessonLabel: lessonLabelFor(course, lessonNumber),
+    lessonLabel:
+      formVariant === "week1"
+        ? WEEK1_STARTING_POINT_LESSON_LABEL
+        : lessonLabelFor(course, lessonNumber),
     lessonNumber,
     tutor: tutorDisplayName,
     notionTutor,

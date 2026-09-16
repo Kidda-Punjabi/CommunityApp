@@ -52,6 +52,9 @@ export type RatingFieldKey = StandardRatingFieldKey | Week12ExtraRatingFieldKey;
 
 export type FeedbackFormVariant = "standard" | "week12" | "community" | "week1";
 
+/** Stored on week1 starting-point submissions so they are not listed as Lesson 1 feedback. */
+export const WEEK1_STARTING_POINT_LESSON_LABEL = "Week 1 - Starting Point";
+
 /** Beginners Course lesson 1 starting-point baseline (separate from session feedback). */
 export const WEEK1_BASELINE_FIELDS = [
   {
