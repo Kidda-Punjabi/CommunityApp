@@ -1,10 +1,12 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import {
   loadHomeworkCohortRoster as fetchHomeworkCohortRoster,
   type HomeworkCohortRosterStudent,
 } from "@/lib/tutoring/homework-submissions";
+import { syncApprovedHomeworkToNotion } from "@/lib/tutoring/sync-approved-homework-to-notion";
 import { canAccessTutorDashboard, canManageCohort } from "@/lib/tutoring/tutor-access";
 import { revalidatePath } from "next/cache";
 import type { HomeworkActionResult } from "@/app/dashboard/learn/homework-actions";
@@ -58,10 +60,36 @@ export async function reviewHomeworkSubmission(
 
     if (error) return { error: error.message };
 
+    let notionNote = "";
+    if (approved) {
+      const { data: submission } = await supabase
+        .from("homework_submissions")
+        .select("student_id, kid_profile_id, lesson_id")
+        .eq("id", submissionId)
+        .maybeSingle();
+      if (submission?.lesson_id) {
+        try {
+          const { client: admin } = tryCreateServiceRoleClient();
+          const writer = admin ?? supabase;
+          const synced = await syncApprovedHomeworkToNotion(writer, {
+            studentId: (submission.student_id as string | null) ?? null,
+            kidProfileId: (submission.kid_profile_id as string | null) ?? null,
+            lessonId: submission.lesson_id as string,
+            markedBy: userId,
+          });
+          notionNote = synced.notionNote;
+        } catch (notionError) {
+          notionNote = ` Notion sync failed: ${
+            notionError instanceof Error ? notionError.message : "unknown error"
+          }.`;
+        }
+      }
+    }
+
     revalidateTutorHomeworkPaths();
     return {
       success: approved
-        ? "Homework approved."
+        ? `Homework approved.${notionNote}`
         : "Feedback sent — the student has been notified.",
     };
   } catch (e) {
