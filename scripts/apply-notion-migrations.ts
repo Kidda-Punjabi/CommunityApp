@@ -44,6 +44,7 @@ async function main() {
   await runSql("supabase/notion-sales-call-sync.sql");
   await runSql("supabase/live-translate-usage.sql");
   await runSql("supabase/photo-translate-usage.sql");
+  await runSql("supabase/notion-lesson-writeback-queue.sql");
   console.log("All Notion migrations applied.");
 }
 
