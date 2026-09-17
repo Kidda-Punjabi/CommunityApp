@@ -111,36 +111,33 @@ export async function syncApprovedHomeworkToNotion(
   }
 
   const now = new Date().toISOString();
-  const homeworkRow = options.kidProfileId
-    ? {
-        cohort_id: cohortId,
-        lesson_id: options.lessonId,
-        student_id: null,
-        kid_profile_id: options.kidProfileId,
-        completed: true,
-        marked_by: options.markedBy,
-        marked_at: now,
-        updated_at: now,
-      }
-    : {
-        cohort_id: cohortId,
-        lesson_id: options.lessonId,
-        student_id: options.studentId,
-        kid_profile_id: null,
-        completed: true,
-        marked_by: options.markedBy,
-        marked_at: now,
-        updated_at: now,
-      };
-
-  const { error: homeworkError } = await supabase.from("cohort_lesson_homework").upsert(
-    homeworkRow,
-    {
-      onConflict: options.kidProfileId
-        ? "cohort_id,lesson_id,kid_profile_id"
-        : "cohort_id,lesson_id,student_id",
-    }
-  );
+  const { error: homeworkError } = options.kidProfileId
+    ? await supabase.from("cohort_lesson_homework").upsert(
+        {
+          cohort_id: cohortId,
+          lesson_id: options.lessonId,
+          student_id: null,
+          kid_profile_id: options.kidProfileId,
+          completed: true,
+          marked_by: options.markedBy,
+          marked_at: now,
+          updated_at: now,
+        },
+        { onConflict: "cohort_id,lesson_id,kid_profile_id" }
+      )
+    : await supabase.from("cohort_lesson_homework").upsert(
+        {
+          cohort_id: cohortId,
+          lesson_id: options.lessonId,
+          student_id: options.studentId,
+          kid_profile_id: null,
+          completed: true,
+          marked_by: options.markedBy,
+          marked_at: now,
+          updated_at: now,
+        },
+        { onConflict: "cohort_id,lesson_id,student_id" }
+      );
   if (homeworkError && !homeworkError.message.toLowerCase().includes("cohort_lesson_homework")) {
     return { notionNote: ` App homework mark failed: ${homeworkError.message}.` };
   }
