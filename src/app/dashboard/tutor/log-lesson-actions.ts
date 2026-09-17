@@ -3,6 +3,7 @@
 import { createLessonLogInNotionAndSupabase } from "@/lib/notion/lesson-log-sync";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveLogLessonCoverOverride } from "@/lib/tutoring/log-lesson-cover";
 import { canAccessTutorDashboard, canManageCohort } from "@/lib/tutoring/tutor-access";
 import { revalidatePath } from "next/cache";
 
@@ -28,6 +29,8 @@ export async function logCohortLessonAction(
   const lessonDate = String(formData.get("lesson_date") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const recordingUrl = String(formData.get("recording_url") ?? "").trim();
+  const isCoverSession = String(formData.get("is_cover_session") ?? "") === "true";
+  const coverTutorId = String(formData.get("cover_tutor_id") ?? "").trim();
 
   if (!cohortId) return { error: "Choose a cohort." };
   if (!lessonDate) return { error: "Choose the lesson date." };
@@ -47,15 +50,40 @@ export async function logCohortLessonAction(
 
   const { client: adminClient, error: adminError } = tryCreateServiceRoleClient();
 
-  let notionTutorUserId: string | null = null;
+  let loggerNotionUserId: string | null = null;
+  let selectedCoverTutorNotionUserId: string | null = null;
   if (adminClient) {
     const { data: tutorMap } = await adminClient
       .from("notion_tutor_map")
       .select("notion_user_id")
       .eq("tutor_id", user.id)
       .maybeSingle();
-    notionTutorUserId = tutorMap?.notion_user_id ?? null;
+    loggerNotionUserId = tutorMap?.notion_user_id ?? null;
+
+    if (isCoverSession) {
+      if (!coverTutorId) {
+        return { error: "Choose who you covered for." };
+      }
+      const { data: coverMap } = await adminClient
+        .from("notion_tutor_map")
+        .select("notion_user_id")
+        .eq("tutor_id", coverTutorId)
+        .maybeSingle();
+      selectedCoverTutorNotionUserId = coverMap?.notion_user_id ?? null;
+      if (!selectedCoverTutorNotionUserId) {
+        return { error: "That tutor isn't linked to a Notion profile." };
+      }
+    }
+  } else if (isCoverSession) {
+    return { error: "Couldn't load tutor profiles. Try again or ask admin." };
   }
+
+  const cover = resolveLogLessonCoverOverride({
+    isCoverSession,
+    selectedCoverTutorNotionUserId,
+    loggerNotionUserId,
+  });
+  if (!cover.ok) return { error: cover.error };
 
   const result = await createLessonLogInNotionAndSupabase(supabase, {
     cohortId,
@@ -63,7 +91,8 @@ export async function logCohortLessonAction(
     notes: notes || null,
     recordingUrl: recordingUrl || null,
     loggedBy: user.id,
-    notionTutorUserId,
+    notionTutorUserId: cover.notionTutorUserId,
+    isCoverSession: cover.isCoverSession,
   });
 
   if (!result.ok) {

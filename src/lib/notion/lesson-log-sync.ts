@@ -399,6 +399,7 @@ export type CreateLessonLogInput = {
   status?: "Scheduled" | "Completed" | "Cancelled" | null;
   loggedBy?: string | null;
   notionTutorUserId?: string | null;
+  isCoverSession?: boolean;
 };
 
 async function resolvePackageNotionPageId(
@@ -603,6 +604,7 @@ function buildLessonLogNotionProperties(options: {
   slidesUrl?: string | null;
   flashcardsUrl?: string | null;
   notionTutorUserId?: string | null;
+  isCoverSession?: boolean;
 }): Record<string, unknown> {
   const properties: Record<string, unknown> = {
     "Lesson Date": { date: { start: options.lessonDate } },
@@ -637,6 +639,9 @@ function buildLessonLogNotionProperties(options: {
     properties["Actual Tutor (New)"] = {
       people: [{ id: options.notionTutorUserId.trim() }],
     };
+  }
+  if (options.isCoverSession !== undefined) {
+    properties["Cover Session?"] = { checkbox: Boolean(options.isCoverSession) };
   }
   return properties;
 }
@@ -721,6 +726,9 @@ function buildLessonLogRowPayload(options: {
     flashcards_url: flashcardsUrl,
     logged_by: loggedBy,
     notion_tutor_user_id: notionTutorUserId,
+    ...(input.isCoverSession !== undefined
+      ? { is_cover_session: Boolean(input.isCoverSession) }
+      : {}),
     notion_sync_status: "synced",
     notion_sync_error: null,
     notion_synced_at: now,
@@ -876,6 +884,7 @@ async function updateExistingLessonLogFromApp(options: {
     slidesUrl: input.slidesUrl,
     flashcardsUrl: input.flashcardsUrl,
     notionTutorUserId: input.notionTutorUserId,
+    isCoverSession: input.isCoverSession,
   });
   const createProperties = buildLessonLogNotionProperties({
     title: existing.lesson_title?.trim() || title,
@@ -888,6 +897,7 @@ async function updateExistingLessonLogFromApp(options: {
     slidesUrl: firstNonEmpty(input.slidesUrl, existing.slides_url),
     flashcardsUrl: firstNonEmpty(input.flashcardsUrl, existing.flashcards_url),
     notionTutorUserId: firstNonEmpty(input.notionTutorUserId, existing.notion_tutor_user_id),
+    isCoverSession: input.isCoverSession,
   });
 
   let notionPageId: string;
@@ -1020,6 +1030,7 @@ async function createOrUpdateLessonLogInNotionAndSupabase(
     slidesUrl: input.slidesUrl,
     flashcardsUrl: input.flashcardsUrl,
     notionTutorUserId: input.notionTutorUserId,
+    isCoverSession: input.isCoverSession,
   });
 
   let notionPageId: string;

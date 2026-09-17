@@ -3,7 +3,7 @@
 import { logCohortLessonAction } from "@/app/dashboard/tutor/log-lesson-actions";
 import { ui } from "@/lib/ui/styles";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 export type LogLessonCohortOption = {
   cohortId: string;
@@ -15,11 +15,20 @@ export type LogLessonExistingEntry = {
   cohortId: string;
   lessonDate: string;
   status: string | null;
+  isCoverSession: boolean;
+  coverTutorId: string | null;
+};
+
+export type LogLessonTutorOption = {
+  tutorId: string;
+  name: string;
 };
 
 type TutorLogLessonFormProps = {
   cohorts: LogLessonCohortOption[];
   existingLogs: LogLessonExistingEntry[];
+  tutors: LogLessonTutorOption[];
+  loggerHasNotionTutorMap: boolean;
   defaultCohortId?: string | null;
 };
 
@@ -42,6 +51,8 @@ function formatLogDate(isoDate: string): string {
 export function TutorLogLessonForm({
   cohorts,
   existingLogs,
+  tutors,
+  loggerHasNotionTutorMap,
   defaultCohortId,
 }: TutorLogLessonFormProps) {
   const router = useRouter();
@@ -50,6 +61,8 @@ export function TutorLogLessonForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [cohortId, setCohortId] = useState(defaultCohortId ?? cohorts[0]?.cohortId ?? "");
   const [lessonDate, setLessonDate] = useState(todayInputValue());
+  const [isCoverLesson, setIsCoverLesson] = useState(false);
+  const [coverTutorId, setCoverTutorId] = useState("");
   const submittingRef = useRef(false);
 
   const logsForCohort = useMemo(
@@ -64,6 +77,16 @@ export function TutorLogLessonForm({
   const alreadyLogged = logsForCohort.find((entry) => entry.lessonDate === lessonDate) ?? null;
   const recentLogs = logsForCohort.slice(0, 5);
 
+  useEffect(() => {
+    if (alreadyLogged?.isCoverSession) {
+      setIsCoverLesson(true);
+      setCoverTutorId(alreadyLogged.coverTutorId ?? "");
+      return;
+    }
+    setIsCoverLesson(false);
+    setCoverTutorId("");
+  }, [alreadyLogged]);
+
   if (cohorts.length === 0) {
     return (
       <div className={ui.emptyState}>
@@ -77,6 +100,11 @@ export function TutorLogLessonForm({
 
   function handleSubmit(formData: FormData) {
     if (submittingRef.current) return;
+    if (isCoverLesson && !coverTutorId) {
+      setError("Choose who you covered for.");
+      setSuccess(null);
+      return;
+    }
     submittingRef.current = true;
     setError(null);
     setSuccess(null);
@@ -183,6 +211,65 @@ export function TutorLogLessonForm({
           className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm"
         />
       </div>
+
+      <label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-3">
+        <input
+          id="is_cover_session"
+          name="is_cover_session"
+          type="checkbox"
+          value="true"
+          checked={isCoverLesson}
+          onChange={(event) => {
+            setIsCoverLesson(event.target.checked);
+            if (!event.target.checked) setCoverTutorId("");
+          }}
+          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-violet-600"
+        />
+        <span>
+          <span className="block text-sm font-medium text-zinc-800">Was this a cover lesson?</span>
+          <span className="mt-0.5 block text-xs text-zinc-500">
+            Tick this if you taught someone else&apos;s class. Actual Tutor in Notion will be set to
+            the tutor you pick, not you.
+          </span>
+        </span>
+      </label>
+
+      {isCoverLesson ? (
+        <div>
+          <label htmlFor="cover_tutor_id" className="text-sm font-medium text-zinc-700">
+            Tutor you covered for
+          </label>
+          {tutors.length === 0 ? (
+            <p className="mt-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              No Notion tutor profiles are available to pick from. Ask admin to check{" "}
+              <span className="font-medium">notion_tutor_map</span>.
+            </p>
+          ) : (
+            <select
+              id="cover_tutor_id"
+              name="cover_tutor_id"
+              required
+              value={coverTutorId}
+              onChange={(event) => setCoverTutorId(event.target.value)}
+              className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm"
+            >
+              <option value="">Choose a tutor</option>
+              {tutors.map((tutor) => (
+                <option key={tutor.tutorId} value={tutor.tutorId}>
+                  {tutor.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      ) : null}
+
+      {!loggerHasNotionTutorMap && !isCoverLesson ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Your account isn&apos;t linked to a Notion tutor profile — Actual Tutor will be left
+          blank.
+        </p>
+      ) : null}
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
