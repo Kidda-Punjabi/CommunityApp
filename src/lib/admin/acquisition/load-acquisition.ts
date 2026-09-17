@@ -275,7 +275,8 @@ async function resolvePaymentLinkProducts(plinkIds: string[]): Promise<Map<strin
               if (typeof product === "string") productId = product;
               else if (product && typeof product === "object") {
                 productId = product.id ?? null;
-                productName = typeof product.name === "string" ? product.name : null;
+                productName =
+                  "name" in product && typeof product.name === "string" ? product.name : null;
               }
             }
             paymentLinkProductCache.set(id, { priceId, productId, productName });
