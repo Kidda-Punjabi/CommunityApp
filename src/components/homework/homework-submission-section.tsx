@@ -8,6 +8,7 @@ import {
   submitHomeworkRecording,
   type HomeworkActionResult,
 } from "@/app/dashboard/learn/homework-actions";
+import { HomeworkAudioPlayer } from "@/components/homework/homework-audio-player";
 import {
   formatRecordingDuration,
   recordingExtensionForBlob,
@@ -44,44 +45,6 @@ function homeworkSubtitle(submission: HomeworkSubmissionView | null): string {
     return "Submitted, awaiting review";
   }
   return "Not submitted yet · Record a short voice note for your tutor after your session";
-}
-
-function HomeworkAudioPlayback({
-  storagePath,
-  loadPlaybackUrl,
-}: {
-  storagePath: string;
-  loadPlaybackUrl: (storagePath: string) => Promise<HomeworkActionResult>;
-}) {
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    loadPlaybackUrl(storagePath).then((result) => {
-      if (cancelled) return;
-      if (result.playbackUrl) {
-        setAudioUrl(result.playbackUrl);
-      } else {
-        setError(result.error ?? "Could not load recording.");
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [loadPlaybackUrl, storagePath]);
-
-  if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
-  }
-
-  if (!audioUrl) {
-    return <p className="text-sm text-zinc-500">Loading recording…</p>;
-  }
-
-  return <audio controls src={audioUrl} className="w-full" preload="metadata" />;
 }
 
 function NearLessonWarningBanner({
@@ -219,8 +182,9 @@ function HomeworkRecorderBody({
         ) : null}
         {localSubmission.storagePath ? (
           <div className="mt-3">
-            <HomeworkAudioPlayback
+            <HomeworkAudioPlayer
               storagePath={localSubmission.storagePath}
+              durationSeconds={localSubmission.durationSeconds}
               loadPlaybackUrl={loadPlaybackUrl}
             />
           </div>
@@ -249,8 +213,9 @@ function HomeworkRecorderBody({
         ) : null}
         {localSubmission.storagePath ? (
           <div className="mt-3">
-            <HomeworkAudioPlayback
+            <HomeworkAudioPlayer
               storagePath={localSubmission.storagePath}
+              durationSeconds={localSubmission.durationSeconds}
               loadPlaybackUrl={loadPlaybackUrl}
             />
           </div>

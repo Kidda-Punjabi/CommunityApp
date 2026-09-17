@@ -2,10 +2,8 @@
 
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import {
-  getHomeworkPlaybackUrl,
-  reviewHomeworkSubmission,
-} from "@/app/dashboard/tutor/homework-actions";
+import { reviewHomeworkSubmission } from "@/app/dashboard/tutor/homework-actions";
+import { HomeworkAudioPlayer } from "@/components/homework/homework-audio-player";
 import {
   homeworkReviewedKey,
   pendingBadgeLabel,
@@ -53,33 +51,6 @@ function TimingBadge({
       After lesson
     </span>
   );
-}
-
-function ReviewAudioPlayer({ storagePath }: { storagePath: string }) {
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getHomeworkPlaybackUrl(storagePath).then((result) => {
-      if (cancelled) return;
-      if (result.playbackUrl) {
-        setAudioUrl(result.playbackUrl);
-      } else {
-        setError(result.error ?? "Could not load audio.");
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [storagePath]);
-
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
-  if (!audioUrl) return <p className="text-sm text-zinc-500">Loading audio…</p>;
-
-  return <audio controls src={audioUrl} className="w-full" preload="metadata" />;
 }
 
 function HomeworkReviewCard({
@@ -150,7 +121,10 @@ function HomeworkReviewCard({
             })}
           </div>
         ) : submission.storagePath ? (
-          <ReviewAudioPlayer storagePath={submission.storagePath} />
+          <HomeworkAudioPlayer
+            storagePath={submission.storagePath}
+            durationSeconds={submission.durationSeconds}
+          />
         ) : (
           <p className="text-sm text-zinc-500">No recording attached.</p>
         )}
