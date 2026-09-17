@@ -242,6 +242,102 @@ export async function loadCohortAttendanceRoster(
   return roster.sort((a, b) => a.studentName.localeCompare(b.studentName));
 }
 
+export type CohortMembershipRosterStudent = {
+  studentId: string;
+  studentName: string;
+  isActiveMember: boolean;
+};
+
+/**
+ * Full cohort roster from the same membership sources Attendance uses
+ * (course_enrollments + cohort_members, with kids-course overlay). Does not
+ * include historical attendance-only actors.
+ */
+export async function loadCohortMembershipRoster(
+  supabase: SupabaseClient,
+  cohortId: string
+): Promise<CohortMembershipRosterStudent[]> {
+  const [
+    isKidsCourse,
+    { data: memberRows },
+    { data: enrollmentRows, error: enrollmentError },
+  ] = await Promise.all([
+    cohortIsKidsCourse(supabase, cohortId),
+    supabase
+      .from("cohort_members")
+      .select("user_id, kid_profile_id, left_at")
+      .eq("cohort_id", cohortId),
+    supabase
+      .from("course_enrollments")
+      .select("user_id, kid_profile_id")
+      .eq("cohort_id", cohortId)
+      .eq("delivery_mode", "group"),
+  ]);
+
+  if (enrollmentError) throw enrollmentError;
+
+  const parentUserIds = [
+    ...new Set(
+      [...(memberRows ?? []), ...(enrollmentRows ?? [])]
+        .map((row) => row.user_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const kidsByParentUserId = await loadKidsByParentUserId(supabase, parentUserIds);
+  const actors = resolveCohortRosterActors({
+    isKidsCourse,
+    members: (memberRows ?? []).map(asRosterRow),
+    enrollments: (enrollmentRows ?? []).map(asRosterRow),
+    kidsByParentUserId,
+  });
+
+  if (actors.rosterUserIds.size === 0 && actors.rosterKidIds.size === 0) return [];
+
+  const [{ data: profiles }, kidNames] = await Promise.all([
+    actors.rosterUserIds.size
+      ? supabase
+          .from("profiles")
+          .select("id, full_name, preferred_name")
+          .in("id", [...actors.rosterUserIds])
+      : Promise.resolve({
+          data: [] as Array<{
+            id: string;
+            full_name: string | null;
+            preferred_name: string | null;
+          }>,
+        }),
+    loadKidProfileNames(supabase, [...actors.rosterKidIds]),
+  ]);
+
+  const nameById = new Map(
+    (profiles ?? []).map((profile) => [
+      profile.id,
+      getDisplayName(profile) ?? "Student",
+    ] as const)
+  );
+  for (const [kidId, name] of kidNames) {
+    nameById.set(kidId, name);
+  }
+
+  const roster: CohortMembershipRosterStudent[] = [];
+  for (const studentId of actors.rosterUserIds) {
+    roster.push({
+      studentId,
+      studentName: nameById.get(studentId) ?? "Student",
+      isActiveMember: actors.activeUserIds.has(studentId),
+    });
+  }
+  for (const kidId of actors.rosterKidIds) {
+    roster.push({
+      studentId: kidId,
+      studentName: nameById.get(kidId) ?? "Student",
+      isActiveMember: actors.activeKidIds.has(kidId),
+    });
+  }
+
+  return roster.sort((a, b) => a.studentName.localeCompare(b.studentName));
+}
+
 export async function kidProfileIdsInCohort(
   supabase: SupabaseClient,
   cohortId: string

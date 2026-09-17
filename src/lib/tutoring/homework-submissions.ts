@@ -193,13 +193,47 @@ export type PendingHomeworkReviewRow = {
   timingState: "on_time" | "late" | "post_lesson" | "unknown";
 };
 
-export async function loadPendingHomeworkReviews(
-  supabase: SupabaseClient
-): Promise<PendingHomeworkReviewRow[]> {
-  const { data, error } = await supabase
-    .from("homework_submissions")
-    .select(
-      `
+export type HomeworkCohortRosterStudent = {
+  studentId: string;
+  studentName: string;
+  isActiveMember: boolean;
+  pendingSubmission: PendingHomeworkReviewRow | null;
+  reviewedStatus: "approved" | "needs_improvement" | null;
+};
+
+/** Matches attendance: kid_profile_id takes precedence over student_id. */
+export function homeworkRosterActorKey(row: {
+  student_id?: string | null;
+  kid_profile_id?: string | null;
+}): string | null {
+  return row.kid_profile_id ?? row.student_id ?? null;
+}
+
+type HomeworkReviewQueryRow = {
+  id: string;
+  student_id: string | null;
+  kid_profile_id: string | null;
+  lesson_id: string;
+  storage_path: string | null;
+  mime_type: string | null;
+  duration_seconds: number | null;
+  submission_type?: HomeworkSubmissionType | null;
+  text_answers?: Array<{ question_number: number; answer_text: string }> | null;
+  submitted_at: string;
+  status?: HomeworkSubmissionStatus | null;
+  approved?: boolean | null;
+  student?:
+    | { full_name?: string | null; preferred_name?: string | null }
+    | { full_name?: string | null; preferred_name?: string | null }[]
+    | null;
+  kid_profile?: { name?: string | null } | { name?: string | null }[] | null;
+  lesson?:
+    | { title?: string | null; lesson_number?: number | null }
+    | { title?: string | null; lesson_number?: number | null }[]
+    | null;
+};
+
+const HOMEWORK_REVIEW_SELECT = `
       id,
       student_id,
       kid_profile_id,
@@ -210,19 +244,26 @@ export async function loadPendingHomeworkReviews(
       submission_type,
       text_answers,
       submitted_at,
+      status,
+      approved,
       student:student_id (full_name, preferred_name),
       kid_profile:kid_profile_id (name),
       lesson:lesson_id (title, lesson_number)
-    `
-    )
-    .eq("status", "pending_review")
-    .eq("is_practice", false)
-    .order("submitted_at", { ascending: true });
+    `;
 
-  if (error) {
-    if (isMissingHomeworkSchema(error.message)) return [];
-    throw error;
-  }
+async function toPendingHomeworkReviewRow(
+  supabase: SupabaseClient,
+  row: HomeworkReviewQueryRow
+): Promise<PendingHomeworkReviewRow> {
+  const student = Array.isArray(row.student) ? row.student[0] : row.student;
+  const kidProfile = Array.isArray(row.kid_profile) ? row.kid_profile[0] : row.kid_profile;
+  const lesson = Array.isArray(row.lesson) ? row.lesson[0] : row.lesson;
+  const lessonId = row.lesson_id;
+  const kidProfileId = row.kid_profile_id ?? null;
+  const studentId = row.student_id ?? kidProfileId ?? "";
+  const submittedAt = row.submitted_at;
+  const submissionType: HomeworkSubmissionType =
+    row.submission_type === "text" ? "text" : "voice";
 
   const { loadHomeworkTextQuestionsForLesson } = await import(
     "@/lib/catchup/load-segment-questions"
@@ -232,64 +273,126 @@ export async function loadPendingHomeworkReviews(
     homeworkTimingStateFromStartsAt,
   } = await import("@/lib/tutoring/homework-near-lesson");
 
-  const rows = await Promise.all(
-    (data ?? []).map(async (row) => {
-      const student = Array.isArray(row.student) ? row.student[0] : row.student;
-      const kidProfile = Array.isArray(row.kid_profile) ? row.kid_profile[0] : row.kid_profile;
-      const lesson = Array.isArray(row.lesson) ? row.lesson[0] : row.lesson;
-      const lessonId = row.lesson_id as string;
-      const kidProfileId = (row.kid_profile_id as string | null) ?? null;
-      const studentId = ((row.student_id as string | null) ?? kidProfileId ?? "") as string;
-      const submittedAt = row.submitted_at as string;
-      const submissionType: HomeworkSubmissionType =
-        row.submission_type === "text" ? "text" : "voice";
+  const answerKeys =
+    submissionType === "text"
+      ? (await loadHomeworkTextQuestionsForLesson(supabase, lessonId)).map((question) => ({
+          questionNumber: question.questionNumber,
+          promptEnglish: question.promptEnglish,
+          answerRomanised: question.answerRomanised,
+          answerGurmukhi: question.answerGurmukhi,
+        }))
+      : [];
 
-      const answerKeys =
-        submissionType === "text"
-          ? (await loadHomeworkTextQuestionsForLesson(supabase, lessonId)).map((question) => ({
-              questionNumber: question.questionNumber,
-              promptEnglish: question.promptEnglish,
-              answerRomanised: question.answerRomanised,
-              answerGurmukhi: question.answerGurmukhi,
-            }))
-          : [];
+  const lessonStartsAt = await findHomeworkLessonSessionStartsAt(
+    supabase,
+    studentId,
+    lessonId,
+    kidProfileId
+  );
+  const timingState = homeworkTimingStateFromStartsAt(
+    lessonStartsAt,
+    new Date(submittedAt)
+  );
 
-      const lessonStartsAt = await findHomeworkLessonSessionStartsAt(
-        supabase,
-        studentId,
-        lessonId,
-        kidProfileId
-      );
-      const timingState = homeworkTimingStateFromStartsAt(
-        lessonStartsAt,
-        new Date(submittedAt)
-      );
+  return {
+    id: row.id,
+    studentId,
+    studentName: homeworkReviewDisplayName({
+      kidName: kidProfile?.name,
+      student: student ?? null,
+    }),
+    lessonId,
+    lessonTitle: lesson?.title ?? "Lesson",
+    lessonNumber: lesson?.lesson_number ?? 0,
+    submittedAt,
+    submissionType,
+    storagePath: row.storage_path ?? null,
+    mimeType: row.mime_type ?? null,
+    durationSeconds: row.duration_seconds ?? null,
+    textAnswers: row.text_answers ?? null,
+    answerKeys,
+    timingState,
+  };
+}
+
+export async function loadPendingHomeworkReviews(
+  supabase: SupabaseClient
+): Promise<PendingHomeworkReviewRow[]> {
+  const { data, error } = await supabase
+    .from("homework_submissions")
+    .select(HOMEWORK_REVIEW_SELECT)
+    .eq("status", "pending_review")
+    .eq("is_practice", false)
+    .order("submitted_at", { ascending: true });
+
+  if (error) {
+    if (isMissingHomeworkSchema(error.message)) return [];
+    throw error;
+  }
+
+  return Promise.all(
+    ((data ?? []) as HomeworkReviewQueryRow[]).map((row) =>
+      toPendingHomeworkReviewRow(supabase, row)
+    )
+  );
+}
+
+export async function loadHomeworkCohortRoster(
+  supabase: SupabaseClient,
+  cohortId: string,
+  lessonId: string
+): Promise<HomeworkCohortRosterStudent[]> {
+  const { loadCohortMembershipRoster } = await import("@/lib/tutoring/cohort-attendance");
+  const students = await loadCohortMembershipRoster(supabase, cohortId);
+  if (students.length === 0) return [];
+
+  const actorIds = students.map((student) => student.studentId);
+  const { data, error } = await supabase
+    .from("homework_submissions")
+    .select(HOMEWORK_REVIEW_SELECT)
+    .eq("lesson_id", lessonId)
+    .eq("is_practice", false)
+    .or(`student_id.in.(${actorIds.join(",")}),kid_profile_id.in.(${actorIds.join(",")})`);
+
+  if (error) {
+    if (isMissingHomeworkSchema(error.message)) {
+      return students.map((student) => ({
+        ...student,
+        pendingSubmission: null,
+        reviewedStatus: null,
+      }));
+    }
+    throw error;
+  }
+
+  const byActor = new Map<string, HomeworkReviewQueryRow>();
+  for (const row of (data ?? []) as HomeworkReviewQueryRow[]) {
+    const key = homeworkRosterActorKey(row);
+    if (key) byActor.set(key, row);
+  }
+
+  return Promise.all(
+    students.map(async (student) => {
+      const row = byActor.get(student.studentId);
+      if (!row) {
+        return { ...student, pendingSubmission: null, reviewedStatus: null };
+      }
+
+      if (row.status === "reviewed") {
+        return {
+          ...student,
+          pendingSubmission: null,
+          reviewedStatus: row.approved === true ? "approved" : "needs_improvement",
+        };
+      }
 
       return {
-        id: row.id as string,
-        studentId,
-        studentName: homeworkReviewDisplayName({
-          kidName: (kidProfile as { name?: string | null } | null)?.name,
-          student: student as { full_name?: string | null; preferred_name?: string | null } | null,
-        }),
-        lessonId,
-        lessonTitle: (lesson?.title as string) ?? "Lesson",
-        lessonNumber: (lesson?.lesson_number as number) ?? 0,
-        submittedAt,
-        submissionType,
-        storagePath: (row.storage_path as string | null) ?? null,
-        mimeType: (row.mime_type as string | null) ?? null,
-        durationSeconds: (row.duration_seconds as number | null) ?? null,
-        textAnswers:
-          (row.text_answers as Array<{ question_number: number; answer_text: string }> | null) ??
-          null,
-        answerKeys,
-        timingState,
+        ...student,
+        pendingSubmission: await toPendingHomeworkReviewRow(supabase, row),
+        reviewedStatus: null,
       };
     })
   );
-
-  return rows;
 }
 
 export const HOMEWORK_RECORDINGS_BUCKET = "homework-recordings";

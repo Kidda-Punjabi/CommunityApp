@@ -1,15 +1,24 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { loadAttendanceLessons } from "@/app/dashboard/tutor/attendance-actions";
 import {
   getHomeworkPlaybackUrl,
+  loadHomeworkCohortRoster,
   reviewHomeworkSubmission,
 } from "@/app/dashboard/tutor/homework-actions";
-import type { PendingHomeworkReviewRow } from "@/lib/tutoring/homework-submissions";
-import { ui } from "@/lib/ui/styles";
+import type {
+  HomeworkCohortRosterStudent,
+  PendingHomeworkReviewRow,
+} from "@/lib/tutoring/homework-submissions";
+import type { TutorCohortRow } from "@/lib/tutoring/load-tutor-dashboard";
+import { cn, ui } from "@/lib/ui/styles";
+
+type HomeworkReviewTab = "all" | "cohort";
 
 type TutorHomeworkReviewProps = {
   submissions: PendingHomeworkReviewRow[];
+  cohorts?: TutorCohortRow[];
   fullPage?: boolean;
 };
 
@@ -181,15 +190,126 @@ function HomeworkReviewCard({
   );
 }
 
+function HomeworkRosterStatusCard({
+  student,
+}: {
+  student: HomeworkCohortRosterStudent;
+}) {
+  const label =
+    student.reviewedStatus === "approved"
+      ? "Approved"
+      : student.reviewedStatus === "needs_improvement"
+        ? "Needs improvement"
+        : "Not submitted";
+  const badgeClass =
+    student.reviewedStatus === "approved"
+      ? "bg-green-100 text-green-800"
+      : student.reviewedStatus === "needs_improvement"
+        ? "bg-amber-100 text-amber-900"
+        : "bg-zinc-100 text-zinc-600";
+
+  return (
+    <li className={ui.cardBordered}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="font-semibold text-zinc-900">{student.studentName}</p>
+          {!student.isActiveMember && (
+            <p className="mt-1 text-xs text-violet-600">Left cohort — historical</p>
+          )}
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass}`}>
+          {label}
+        </span>
+      </div>
+    </li>
+  );
+}
+
 export function TutorHomeworkReview({
   submissions,
+  cohorts = [],
   fullPage = false,
 }: TutorHomeworkReviewProps) {
+  const [tab, setTab] = useState<HomeworkReviewTab>("all");
   const [rows, setRows] = useState(submissions);
+  const [cohortId, setCohortId] = useState("");
+  const [lessonId, setLessonId] = useState("");
+  const [lessons, setLessons] = useState<
+    Awaited<ReturnType<typeof loadAttendanceLessons>>["lessons"]
+  >([]);
+  const [roster, setRoster] = useState<HomeworkCohortRosterStudent[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const selectedCohort = cohorts.find((cohort) => cohort.cohortId === cohortId) ?? null;
 
   useEffect(() => {
     setRows(submissions);
   }, [submissions]);
+
+  useEffect(() => {
+    if (!selectedCohort) {
+      setLessons([]);
+      setLessonId("");
+      return;
+    }
+
+    let cancelled = false;
+    startTransition(async () => {
+      const result = await loadAttendanceLessons(
+        selectedCohort.cohortId,
+        selectedCohort.courseId
+      );
+      if (cancelled) return;
+      if (result.error) {
+        setError(result.error);
+        setLessons([]);
+        return;
+      }
+      setError(null);
+      setLessons(result.lessons);
+      setLessonId("");
+      setRoster([]);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCohort]);
+
+  useEffect(() => {
+    if (!cohortId || !lessonId) {
+      setRoster([]);
+      return;
+    }
+
+    let cancelled = false;
+    startTransition(async () => {
+      const result = await loadHomeworkCohortRoster(cohortId, lessonId);
+      if (cancelled) return;
+      if (result.error) {
+        setError(result.error);
+        setRoster([]);
+        return;
+      }
+      setError(null);
+      setRoster(result.roster);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cohortId, lessonId]);
+
+  function handleReviewed(submissionId: string) {
+    setRows((current) => current.filter((row) => row.id !== submissionId));
+    if (!cohortId || !lessonId) return;
+    startTransition(async () => {
+      const result = await loadHomeworkCohortRoster(cohortId, lessonId);
+      if (result.error) return;
+      setRoster(result.roster);
+    });
+  }
 
   const list = (
     <>
@@ -215,9 +335,7 @@ export function TutorHomeworkReview({
             <HomeworkReviewCard
               key={submission.id}
               submission={submission}
-              onReviewed={(submissionId) => {
-                setRows((current) => current.filter((row) => row.id !== submissionId));
-              }}
+              onReviewed={handleReviewed}
             />
           ))}
         </ul>
@@ -225,14 +343,109 @@ export function TutorHomeworkReview({
     </>
   );
 
+  const cohortPanel = (
+    <div className="space-y-4">
+      {cohorts.length === 0 ? (
+        <p className="text-sm text-zinc-500">
+          Homework roster is for group classes. No group cohorts are assigned yet.
+        </p>
+      ) : (
+        <>
+          <div className={fullPage ? "grid gap-4" : "grid gap-4 sm:grid-cols-2"}>
+            <label className="block">
+              <span className="text-xs font-medium text-zinc-500">Group cohort</span>
+              <select
+                value={cohortId}
+                onChange={(event) => setCohortId(event.target.value)}
+                className="mt-1.5 block w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+              >
+                <option value="">Select cohort…</option>
+                {cohorts.map((cohort) => (
+                  <option key={cohort.cohortId} value={cohort.cohortId}>
+                    {cohort.cohortName} ({cohort.courseName})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-xs font-medium text-zinc-500">Lesson</span>
+              <select
+                value={lessonId}
+                onChange={(event) => setLessonId(event.target.value)}
+                disabled={!cohortId || lessons.length === 0}
+                className="mt-1.5 block w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 disabled:bg-zinc-50 disabled:text-zinc-400"
+              >
+                <option value="">Select lesson…</option>
+                {lessons.map((lesson) => (
+                  <option key={lesson.id} value={lesson.id}>
+                    Lesson {lesson.lessonNumber}: {lesson.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {lessonId && roster.length > 0 && (
+            <ul className="space-y-4">
+              {roster.map((student) =>
+                student.pendingSubmission ? (
+                  <HomeworkReviewCard
+                    key={student.studentId}
+                    submission={student.pendingSubmission}
+                    onReviewed={handleReviewed}
+                  />
+                ) : (
+                  <HomeworkRosterStatusCard key={student.studentId} student={student} />
+                )
+              )}
+            </ul>
+          )}
+
+          {lessonId && roster.length === 0 && !pending && (
+            <p className="text-sm text-zinc-500">No students in this cohort yet.</p>
+          )}
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </>
+      )}
+    </div>
+  );
+
+  const body = (
+    <>
+      <div className="mb-4 flex gap-2" role="tablist" aria-label="Homework review views">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "all"}
+          onClick={() => setTab("all")}
+          className={cn(tab === "all" ? ui.pillActive : ui.pillInactive)}
+        >
+          All submissions
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "cohort"}
+          onClick={() => setTab("cohort")}
+          className={cn(tab === "cohort" ? ui.pillActive : ui.pillInactive)}
+        >
+          By cohort
+        </button>
+      </div>
+      {tab === "all" ? list : cohortPanel}
+    </>
+  );
+
   if (fullPage) {
-    return list;
+    return body;
   }
 
   return (
     <section className={ui.section}>
       <h2 className={ui.sectionTitle}>Homework review</h2>
-      {list}
+      {body}
     </section>
   );
 }

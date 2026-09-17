@@ -1,7 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
+import {
+  loadHomeworkCohortRoster as fetchHomeworkCohortRoster,
+  type HomeworkCohortRosterStudent,
+} from "@/lib/tutoring/homework-submissions";
+import { canAccessTutorDashboard, canManageCohort } from "@/lib/tutoring/tutor-access";
 import { revalidatePath } from "next/cache";
 import type { HomeworkActionResult } from "@/app/dashboard/learn/homework-actions";
 import { getHomeworkPlaybackUrl } from "@/app/dashboard/learn/homework-actions";
@@ -62,6 +66,25 @@ export async function reviewHomeworkSubmission(
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to review homework." };
+  }
+}
+
+export async function loadHomeworkCohortRoster(
+  cohortId: string,
+  lessonId: string
+): Promise<TutorHomeworkActionResult & { roster: HomeworkCohortRosterStudent[] }> {
+  try {
+    const { supabase, userId } = await requireTutorHomeworkAction();
+    const canManage = await canManageCohort(supabase, userId, cohortId);
+    if (!canManage) throw new Error("You are not the tutor for this cohort.");
+
+    const roster = await fetchHomeworkCohortRoster(supabase, cohortId, lessonId);
+    return { roster };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Failed to load homework roster.",
+      roster: [],
+    };
   }
 }
 
