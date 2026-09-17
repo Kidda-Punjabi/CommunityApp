@@ -5,6 +5,10 @@ import {
   countPendingCohortSwitchRequests,
   loadAdminCohortSwitchRequests,
 } from "@/lib/admin/load-admin-cohort-switch-requests";
+import {
+  buildRescheduleInviteNote,
+  mergeCalendarInviteDescription,
+} from "@/lib/calendar/cohort-switch-invite-copy";
 import { addAttendeeToGoogleCalendarEvent } from "@/lib/calendar/google-calendar-api";
 import { loadAlternateCohortSessionsForSource } from "@/lib/calendar/load-alternate-cohort-sessions";
 import {
@@ -17,7 +21,8 @@ import {
   getValidTutorAccessToken,
   type TutorCalendarConnectionRow,
 } from "@/lib/calendar/tutor-access-token";
-import { getDisplayName } from "@/lib/profile/display-name";
+import { sendTutorCohortSwitchNotifyEmail } from "@/lib/email/send-cohort-switch-tutor-notify";
+import { getDisplayName, getStaffFacingName } from "@/lib/profile/display-name";
 import { revalidatePath } from "next/cache";
 
 const PATH = "/admin/cohort-switch-requests";
@@ -49,6 +54,64 @@ export async function fetchPendingCohortSwitchCount(): Promise<{
   }
 }
 
+function asWeekNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+async function loadSwitchStudentName(
+  supabase: Awaited<ReturnType<typeof requireAdminFromActions>>,
+  params: { studentId: string; fromCohortId: string | null }
+): Promise<string> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, preferred_name")
+    .eq("id", params.studentId)
+    .maybeSingle();
+  const profileName = getStaffFacingName(profile) ?? getDisplayName(profile);
+
+  if (!params.fromCohortId) return profileName ?? "Student";
+
+  const { data: parentKids } = await supabase
+    .from("cohort_members")
+    .select("kid_profile_id, kid_profiles!inner(name, parent_user_id)")
+    .eq("cohort_id", params.fromCohortId)
+    .is("left_at", null)
+    .not("kid_profile_id", "is", null);
+
+  const kidMatch = (parentKids ?? []).find((row) => {
+    const rel =
+      row.kid_profiles as { name?: string; parent_user_id?: string } | { name?: string; parent_user_id?: string }[] | null;
+    const kid = Array.isArray(rel) ? rel[0] : rel;
+    return kid?.parent_user_id === params.studentId;
+  });
+  const kidRel =
+    kidMatch?.kid_profiles as { name?: string } | { name?: string }[] | null | undefined;
+  const kid = Array.isArray(kidRel) ? kidRel[0] : kidRel;
+  const kidName = kid?.name?.trim();
+  if (kidName) return kidName;
+
+  return profileName ?? "Student";
+}
+
+async function loadCurriculumTopicForSession(
+  supabase: Awaited<ReturnType<typeof requireAdminFromActions>>,
+  params: { courseId: string | null; weekNumber: number | null }
+): Promise<string | null> {
+  if (!params.courseId || params.weekNumber == null) return null;
+  const { data: lesson } = await supabase
+    .from("lessons")
+    .select("title")
+    .eq("course_id", params.courseId)
+    .eq("lesson_number", params.weekNumber)
+    .maybeSingle();
+  return lesson?.title?.trim() || null;
+}
+
 async function tryInviteStudentToTargetSession(
   supabase: Awaited<ReturnType<typeof requireAdminFromActions>>,
   params: { toSessionId: string | null; studentId: string }
@@ -62,7 +125,7 @@ async function tryInviteStudentToTargetSession(
 
   const { data: session, error: sessionError } = await supabase
     .from("tutor_scheduled_sessions")
-    .select("id, tutor_id, google_event_id")
+    .select("id, tutor_id, google_event_id, meet_link, week_number, cohort_id")
     .eq("id", params.toSessionId)
     .maybeSingle();
 
@@ -73,10 +136,13 @@ async function tryInviteStudentToTargetSession(
     };
   }
 
-  const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(
-    params.studentId
-  );
-  const studentEmail = authUser.user?.email?.trim();
+  const [{ data: authUser, error: authError }, { data: cohort }] = await Promise.all([
+    supabase.auth.admin.getUserById(params.studentId),
+    session.cohort_id
+      ? supabase.from("cohorts").select("name").eq("id", session.cohort_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const studentEmail = authUser?.user?.email?.trim();
   if (authError || !studentEmail) {
     return {
       invited: false,
@@ -109,7 +175,18 @@ async function tryInviteStudentToTargetSession(
       accessToken,
       connection.calendar_id as string,
       session.google_event_id as string,
-      studentEmail
+      studentEmail,
+      {
+        description: (event) =>
+          mergeCalendarInviteDescription(
+            event.description,
+            buildRescheduleInviteNote({
+              cohortName: (cohort?.name as string | null) ?? null,
+              weekNumber: asWeekNumber(session.week_number),
+              joinLink: (session.meet_link as string | null)?.trim() || event.hangoutLink,
+            })
+          ),
+      }
     );
     return { invited: true };
   } catch (e) {
@@ -119,6 +196,82 @@ async function tryInviteStudentToTargetSession(
       warning: `Approved, but calendar invite failed: ${message}`,
     };
   }
+}
+
+async function tryNotifyDestinationTutor(
+  supabase: Awaited<ReturnType<typeof requireAdminFromActions>>,
+  params: {
+    toSessionId: string | null;
+    studentId: string;
+    fromCohortId: string | null;
+  }
+): Promise<{ sent: boolean; warning?: string }> {
+  if (!params.toSessionId) {
+    return { sent: false };
+  }
+
+  const { data: session, error: sessionError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, tutor_id, cohort_id, course_id, week_number, starts_at, ends_at")
+    .eq("id", params.toSessionId)
+    .maybeSingle();
+
+  if (sessionError || !session) {
+    return {
+      sent: false,
+      warning: "The destination tutor could not be notified (session not found).",
+    };
+  }
+
+  // Group cohort switches only. 1-1 reschedules use lesson_reschedule_requests.
+  if (!session.cohort_id) {
+    return { sent: false };
+  }
+
+  const weekNumber = asWeekNumber(session.week_number);
+  const [{ data: tutorUser, error: tutorAuthError }, studentName, topic, { data: cohort }] =
+    await Promise.all([
+      supabase.auth.admin.getUserById(session.tutor_id as string),
+      loadSwitchStudentName(supabase, {
+        studentId: params.studentId,
+        fromCohortId: params.fromCohortId,
+      }),
+      loadCurriculumTopicForSession(supabase, {
+        courseId: (session.course_id as string | null) ?? null,
+        weekNumber,
+      }),
+      supabase.from("cohorts").select("name").eq("id", session.cohort_id).maybeSingle(),
+    ]);
+
+  const tutorEmail = tutorUser?.user?.email?.trim() ?? null;
+  if (tutorAuthError || !tutorEmail) {
+    return {
+      sent: false,
+      warning: "The destination tutor has no email for a notification.",
+    };
+  }
+
+  const result = await sendTutorCohortSwitchNotifyEmail(tutorEmail, {
+    studentName,
+    weekNumber,
+    topic,
+    cohortName: (cohort?.name as string | null) ?? null,
+    sessionWhen: formatSessionWhen(session.starts_at as string, session.ends_at as string),
+  });
+
+  if (result.error) {
+    console.error("[cohort-switch] tutor notify failed", {
+      sessionId: session.id,
+      tutorId: session.tutor_id,
+      error: result.error,
+    });
+    return {
+      sent: false,
+      warning: `The destination tutor email failed: ${result.error}`,
+    };
+  }
+
+  return { sent: true };
 }
 
 export async function resolveAdminCohortSwitchRequest(input: {
@@ -167,12 +320,22 @@ export async function resolveAdminCohortSwitchRequest(input: {
     let calendarWarning: string | undefined;
     let invited = false;
     if (input.decision === "approved") {
+      const toSessionId = (request.to_session_id as string | null) ?? null;
+      const studentId = request.student_id as string;
       const invite = await tryInviteStudentToTargetSession(supabase, {
-        toSessionId: (request.to_session_id as string | null) ?? null,
-        studentId: request.student_id as string,
+        toSessionId,
+        studentId,
       });
-      calendarWarning = invite.warning;
+      const tutorNotify = await tryNotifyDestinationTutor(supabase, {
+        toSessionId,
+        studentId,
+        fromCohortId: (request.from_cohort_id as string | null) ?? null,
+      });
       invited = invite.invited;
+      calendarWarning = [invite.warning, tutorNotify.warning]
+        .filter((part): part is string => Boolean(part?.trim()))
+        .join(" ");
+      if (!calendarWarning) calendarWarning = undefined;
     }
 
     const responseNote =
@@ -214,9 +377,11 @@ export async function resolveAdminCohortSwitchRequest(input: {
 
     if (input.decision === "approved") {
       return {
-        success: calendarWarning
+        success: invited
           ? calendarWarning
-          : "Approved — student invited to the alternate session calendar.",
+            ? `Approved — student invited to the alternate session calendar. ${calendarWarning}`
+            : "Approved — student invited to the alternate session calendar."
+          : calendarWarning ?? "Approved, but calendar invite failed.",
       };
     }
 
@@ -501,6 +666,14 @@ export async function createAdminCohortReschedule(input: {
       toSessionId,
       studentId,
     });
+    const tutorNotify = await tryNotifyDestinationTutor(supabase, {
+      toSessionId,
+      studentId,
+      fromCohortId: fromSession.cohort_id as string,
+    });
+    const notifyWarning = [invite.warning, tutorNotify.warning]
+      .filter((part): part is string => Boolean(part?.trim()))
+      .join(" ");
     const { error: syncError } = await supabase
       .from("cohort_switch_requests")
       .update(
@@ -558,13 +731,17 @@ export async function createAdminCohortReschedule(input: {
 
     if (!invite.invited) {
       return {
-        success: invite.warning
-          ? `Reschedule recorded. ${invite.warning}`
+        success: notifyWarning
+          ? `Reschedule recorded. ${notifyWarning}`
           : "Reschedule recorded, but the calendar invite could not be sent.",
       };
     }
 
-    return { success: "Student moved — invited to the new session calendar." };
+    return {
+      success: notifyWarning
+        ? `Student moved — invited to the new session calendar. ${notifyWarning}`
+        : "Student moved — invited to the new session calendar.",
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create reschedule." };
   }
