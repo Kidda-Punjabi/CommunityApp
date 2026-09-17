@@ -260,7 +260,8 @@ async function toPendingHomeworkReviewRow(
   const lesson = Array.isArray(row.lesson) ? row.lesson[0] : row.lesson;
   const lessonId = row.lesson_id;
   const kidProfileId = row.kid_profile_id ?? null;
-  const studentId = row.student_id ?? kidProfileId ?? "";
+  const studentId =
+    homeworkRosterActorKey(row) ?? row.student_id ?? kidProfileId ?? "";
   const submittedAt = row.submitted_at;
   const submissionType: HomeworkSubmissionType =
     row.submission_type === "text" ? "text" : "voice";

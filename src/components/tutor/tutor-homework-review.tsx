@@ -1,24 +1,27 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { loadAttendanceLessons } from "@/app/dashboard/tutor/attendance-actions";
+import { ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   getHomeworkPlaybackUrl,
-  loadHomeworkCohortRoster,
   reviewHomeworkSubmission,
 } from "@/app/dashboard/tutor/homework-actions";
-import type {
-  HomeworkCohortRosterStudent,
-  PendingHomeworkReviewRow,
-} from "@/lib/tutoring/homework-submissions";
-import type { TutorCohortRow } from "@/lib/tutoring/load-tutor-dashboard";
+import {
+  homeworkReviewedKey,
+  pendingBadgeLabel,
+  type HomeworkBoardPendingRow,
+  type HomeworkReviewPackage,
+} from "@/lib/tutoring/homework-review-packages";
+import type { PendingHomeworkReviewRow } from "@/lib/tutoring/homework-submissions";
 import { cn, ui } from "@/lib/ui/styles";
 
-type HomeworkReviewTab = "all" | "cohort";
+type HomeworkReviewTab = "pending" | "packages";
+type RosterPill = "awaiting" | "reviewed" | "not_submitted";
 
 type TutorHomeworkReviewProps = {
-  submissions: PendingHomeworkReviewRow[];
-  cohorts?: TutorCohortRow[];
+  submissions: HomeworkBoardPendingRow[];
+  packages?: HomeworkReviewPackage[];
+  reviewedKeys?: string[];
   fullPage?: boolean;
 };
 
@@ -190,128 +193,110 @@ function HomeworkReviewCard({
   );
 }
 
-function HomeworkRosterStatusCard({
-  student,
+function PendingCountBadge({
+  count,
+  active,
 }: {
-  student: HomeworkCohortRosterStudent;
+  count: number;
+  active?: boolean;
 }) {
-  const label =
-    student.reviewedStatus === "approved"
-      ? "Approved"
-      : student.reviewedStatus === "needs_improvement"
-        ? "Needs improvement"
-        : "Not submitted";
-  const badgeClass =
-    student.reviewedStatus === "approved"
-      ? "bg-green-100 text-green-800"
-      : student.reviewedStatus === "needs_improvement"
-        ? "bg-amber-100 text-amber-900"
-        : "bg-zinc-100 text-zinc-600";
-
+  const label = pendingBadgeLabel(count);
+  const upToDate = count <= 0;
   return (
-    <li className={ui.cardBordered}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold text-zinc-900">{student.studentName}</p>
-          {!student.isActiveMember && (
-            <p className="mt-1 text-xs text-violet-600">Left cohort — historical</p>
-          )}
-        </div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass}`}>
-          {label}
-        </span>
-      </div>
-    </li>
+    <span
+      className={cn(
+        "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
+        upToDate
+          ? active
+            ? "bg-white/20 text-white"
+            : "bg-zinc-100 text-zinc-600"
+          : active
+            ? "bg-white text-violet-700"
+            : "bg-amber-100 text-amber-900"
+      )}
+    >
+      {label}
+    </span>
   );
+}
+
+function rosterPill(status: RosterPill): { label: string; className: string } {
+  if (status === "awaiting") {
+    return { label: "Awaiting review", className: "bg-amber-100 text-amber-900" };
+  }
+  if (status === "reviewed") {
+    return { label: "Reviewed", className: "bg-green-100 text-green-800" };
+  }
+  return { label: "Not submitted", className: "bg-zinc-100 text-zinc-600" };
+}
+
+function studentRosterStatus(
+  studentId: string,
+  lessonId: string,
+  packageId: string,
+  pendingRows: HomeworkBoardPendingRow[],
+  reviewed: Set<string>
+): { status: RosterPill; submission: HomeworkBoardPendingRow | null } {
+  const submission =
+    pendingRows.find(
+      (row) =>
+        row.packageId === packageId &&
+        row.lessonId === lessonId &&
+        row.studentId === studentId
+    ) ?? null;
+  if (submission) return { status: "awaiting", submission };
+  if (reviewed.has(homeworkReviewedKey(studentId, lessonId))) {
+    return { status: "reviewed", submission: null };
+  }
+  return { status: "not_submitted", submission: null };
 }
 
 export function TutorHomeworkReview({
   submissions,
-  cohorts = [],
+  packages = [],
+  reviewedKeys = [],
   fullPage = false,
 }: TutorHomeworkReviewProps) {
-  const [tab, setTab] = useState<HomeworkReviewTab>("all");
+  const [tab, setTab] = useState<HomeworkReviewTab>("packages");
   const [rows, setRows] = useState(submissions);
-  const [cohortId, setCohortId] = useState("");
-  const [lessonId, setLessonId] = useState("");
-  const [lessons, setLessons] = useState<
-    Awaited<ReturnType<typeof loadAttendanceLessons>>["lessons"]
-  >([]);
-  const [roster, setRoster] = useState<HomeworkCohortRosterStudent[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  const selectedCohort = cohorts.find((cohort) => cohort.cohortId === cohortId) ?? null;
+  const [reviewed, setReviewed] = useState(() => new Set(reviewedKeys));
+  const [expandedPackageId, setExpandedPackageId] = useState<string | null>(null);
+  const [openLessonKey, setOpenLessonKey] = useState<string | null>(null);
+  const [expandedStudentKey, setExpandedStudentKey] = useState<string | null>(null);
 
   useEffect(() => {
     setRows(submissions);
   }, [submissions]);
 
   useEffect(() => {
-    if (!selectedCohort) {
-      setLessons([]);
-      setLessonId("");
-      return;
+    setReviewed(new Set(reviewedKeys));
+  }, [reviewedKeys]);
+
+  const counts = useMemo(() => {
+    const byPackage: Record<string, number> = {};
+    const byLesson: Record<string, number> = {};
+    for (const row of rows) {
+      byPackage[row.packageId] = (byPackage[row.packageId] ?? 0) + 1;
+      const lessonKey = `${row.packageId}:${row.lessonId}`;
+      byLesson[lessonKey] = (byLesson[lessonKey] ?? 0) + 1;
     }
-
-    let cancelled = false;
-    startTransition(async () => {
-      const result = await loadAttendanceLessons(
-        selectedCohort.cohortId,
-        selectedCohort.courseId
-      );
-      if (cancelled) return;
-      if (result.error) {
-        setError(result.error);
-        setLessons([]);
-        return;
-      }
-      setError(null);
-      setLessons(result.lessons);
-      setLessonId("");
-      setRoster([]);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedCohort]);
-
-  useEffect(() => {
-    if (!cohortId || !lessonId) {
-      setRoster([]);
-      return;
-    }
-
-    let cancelled = false;
-    startTransition(async () => {
-      const result = await loadHomeworkCohortRoster(cohortId, lessonId);
-      if (cancelled) return;
-      if (result.error) {
-        setError(result.error);
-        setRoster([]);
-        return;
-      }
-      setError(null);
-      setRoster(result.roster);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [cohortId, lessonId]);
+    return { global: rows.length, byPackage, byLesson };
+  }, [rows]);
 
   function handleReviewed(submissionId: string) {
-    setRows((current) => current.filter((row) => row.id !== submissionId));
-    if (!cohortId || !lessonId) return;
-    startTransition(async () => {
-      const result = await loadHomeworkCohortRoster(cohortId, lessonId);
-      if (result.error) return;
-      setRoster(result.roster);
+    const row = rows.find((item) => item.id === submissionId);
+    setRows((current) => current.filter((item) => item.id !== submissionId));
+    if (!row) return;
+    const key = homeworkReviewedKey(row.studentId, row.lessonId);
+    setReviewed((current) => {
+      const next = new Set(current);
+      next.add(key);
+      return next;
     });
+    setExpandedStudentKey(null);
   }
 
-  const list = (
+  const pendingList = (
     <>
       {rows.length === 0 ? (
         <div className={fullPage ? ui.emptyState : undefined}>
@@ -343,98 +328,199 @@ export function TutorHomeworkReview({
     </>
   );
 
-  const cohortPanel = (
-    <div className="space-y-4">
-      {cohorts.length === 0 ? (
+  const packagePanel = (
+    <div className="space-y-3">
+      {packages.length === 0 ? (
         <p className="text-sm text-zinc-500">
-          Homework roster is for group classes. No group cohorts are assigned yet.
+          No group or 1-1 packages are assigned yet.
         </p>
       ) : (
-        <>
-          <div className={fullPage ? "grid gap-4" : "grid gap-4 sm:grid-cols-2"}>
-            <label className="block">
-              <span className="text-xs font-medium text-zinc-500">Group cohort</span>
-              <select
-                value={cohortId}
-                onChange={(event) => setCohortId(event.target.value)}
-                className="mt-1.5 block w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+        packages.map((pack) => {
+          const open = expandedPackageId === pack.id;
+          const packagePending = counts.byPackage[pack.id] ?? 0;
+          return (
+            <section
+              key={pack.id}
+              className="overflow-hidden rounded-2xl border border-zinc-200 bg-white"
+            >
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-zinc-50"
+                onClick={() => {
+                  setExpandedPackageId((current) => (current === pack.id ? null : pack.id));
+                  setOpenLessonKey(null);
+                  setExpandedStudentKey(null);
+                }}
+                aria-expanded={open}
               >
-                <option value="">Select cohort…</option>
-                {cohorts.map((cohort) => (
-                  <option key={cohort.cohortId} value={cohort.cohortId}>
-                    {cohort.cohortName} ({cohort.courseName})
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-medium text-zinc-500">Lesson</span>
-              <select
-                value={lessonId}
-                onChange={(event) => setLessonId(event.target.value)}
-                disabled={!cohortId || lessons.length === 0}
-                className="mt-1.5 block w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 disabled:bg-zinc-50 disabled:text-zinc-400"
-              >
-                <option value="">Select lesson…</option>
-                {lessons.map((lesson) => (
-                  <option key={lesson.id} value={lesson.id}>
-                    Lesson {lesson.lessonNumber}: {lesson.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {lessonId && roster.length > 0 && (
-            <ul className="space-y-4">
-              {roster.map((student) =>
-                student.pendingSubmission ? (
-                  <HomeworkReviewCard
-                    key={student.studentId}
-                    submission={student.pendingSubmission}
-                    onReviewed={handleReviewed}
+                <div className="min-w-0">
+                  <p className="font-semibold text-zinc-900">{pack.name}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {pack.courseName}
+                    {pack.kind === "one_to_one" && pack.students.length > 1
+                      ? " · Private class"
+                      : pack.kind === "one_to_one"
+                        ? " · 1-1"
+                        : " · Group"}
+                  </p>
+                </div>
+                <span className="flex items-center gap-2">
+                  <PendingCountBadge count={packagePending} />
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 text-zinc-400 transition-transform",
+                      open && "rotate-180"
+                    )}
                   />
-                ) : (
-                  <HomeworkRosterStatusCard key={student.studentId} student={student} />
-                )
-              )}
-            </ul>
-          )}
+                </span>
+              </button>
 
-          {lessonId && roster.length === 0 && !pending && (
-            <p className="text-sm text-zinc-500">No students in this cohort yet.</p>
-          )}
+              {open ? (
+                <ul className="divide-y divide-zinc-100 border-t border-zinc-100">
+                  {pack.lessons.length === 0 ? (
+                    <li className="px-4 py-3 text-sm text-zinc-500">
+                      No lessons on this course yet.
+                    </li>
+                  ) : (
+                    pack.lessons.map((lesson) => {
+                      const lessonKey = `${pack.id}:${lesson.id}`;
+                      const lessonOpen = openLessonKey === lessonKey;
+                      const lessonPending = counts.byLesson[lessonKey] ?? 0;
+                      return (
+                        <li key={lesson.id}>
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-zinc-50"
+                            onClick={() => {
+                              setOpenLessonKey((current) =>
+                                current === lessonKey ? null : lessonKey
+                              );
+                              setExpandedStudentKey(null);
+                            }}
+                            aria-expanded={lessonOpen}
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-zinc-900">
+                                {lesson.title}
+                              </p>
+                              <p className="mt-0.5 text-xs text-zinc-500">{lesson.weekLabel}</p>
+                            </div>
+                            <PendingCountBadge count={lessonPending} />
+                          </button>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </>
+                          {lessonOpen ? (
+                            <ul className="space-y-2 bg-zinc-50 px-3 pb-3 pt-1">
+                              {pack.students.map((student) => {
+                                const { status, submission } = studentRosterStatus(
+                                  student.studentId,
+                                  lesson.id,
+                                  pack.id,
+                                  rows,
+                                  reviewed
+                                );
+                                const studentKey = `${lessonKey}:${student.studentId}`;
+                                const pill = rosterPill(status);
+                                const awaiting = status === "awaiting" && submission;
+                                const expanded = expandedStudentKey === studentKey;
+
+                                if (!awaiting) {
+                                  return (
+                                    <li
+                                      key={student.studentId}
+                                      className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3"
+                                    >
+                                      <p className="font-medium text-zinc-900">
+                                        {student.studentName}
+                                      </p>
+                                      <span
+                                        className={cn(
+                                          "rounded-full px-2.5 py-1 text-xs font-semibold",
+                                          pill.className
+                                        )}
+                                      >
+                                        {pill.label}
+                                      </span>
+                                    </li>
+                                  );
+                                }
+
+                                return (
+                                  <li key={student.studentId} className="space-y-2">
+                                    <button
+                                      type="button"
+                                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-left hover:bg-zinc-50"
+                                      onClick={() =>
+                                        setExpandedStudentKey((current) =>
+                                          current === studentKey ? null : studentKey
+                                        )
+                                      }
+                                      aria-expanded={expanded}
+                                    >
+                                      <p className="font-medium text-zinc-900">
+                                        {student.studentName}
+                                      </p>
+                                      <span
+                                        className={cn(
+                                          "rounded-full px-2.5 py-1 text-xs font-semibold",
+                                          pill.className
+                                        )}
+                                      >
+                                        {pill.label}
+                                      </span>
+                                    </button>
+                                    {expanded ? (
+                                      <ul>
+                                        <HomeworkReviewCard
+                                          submission={submission}
+                                          onReviewed={handleReviewed}
+                                        />
+                                      </ul>
+                                    ) : null}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          ) : null}
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+              ) : null}
+            </section>
+          );
+        })
       )}
     </div>
   );
 
   const body = (
     <>
-      <div className="mb-4 flex gap-2" role="tablist" aria-label="Homework review views">
+      <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Homework review views">
         <button
           type="button"
           role="tab"
-          aria-selected={tab === "all"}
-          onClick={() => setTab("all")}
-          className={cn(tab === "all" ? ui.pillActive : ui.pillInactive)}
+          aria-selected={tab === "pending"}
+          onClick={() => setTab("pending")}
+          className={cn(
+            "inline-flex items-center gap-2",
+            tab === "pending" ? ui.pillActive : ui.pillInactive
+          )}
         >
-          All submissions
+          Need to review
+          <PendingCountBadge count={counts.global} active={tab === "pending"} />
         </button>
         <button
           type="button"
           role="tab"
-          aria-selected={tab === "cohort"}
-          onClick={() => setTab("cohort")}
-          className={cn(tab === "cohort" ? ui.pillActive : ui.pillInactive)}
+          aria-selected={tab === "packages"}
+          onClick={() => setTab("packages")}
+          className={cn(tab === "packages" ? ui.pillActive : ui.pillInactive)}
         >
-          By cohort
+          By package
         </button>
       </div>
-      {tab === "all" ? list : cohortPanel}
+      {tab === "pending" ? pendingList : packagePanel}
     </>
   );
 
