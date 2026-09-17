@@ -151,16 +151,29 @@ function nextWeeklyOccurrenceOnWeekday(
   return candidate;
 }
 
+/** Curriculum topic for a stored week (`lessons.lesson_number` = session `week_number`). */
+export function resolveLessonTitleForWeek(
+  lessonsOrdered: Array<{ lessonNumber: number; title: string }>,
+  weekNumber: number | null
+): string | null {
+  if (weekNumber == null) return null;
+  const title = lessonsOrdered
+    .find((lesson) => lesson.lessonNumber === weekNumber)
+    ?.title.trim();
+  return title || null;
+}
+
 /** Next curriculum title assuming sequential delivery: lesson_number = completedCount + 1. */
 export function resolveNextLessonTitle(
   lessonsOrdered: Array<{ lessonNumber: number; title: string }>,
   completedCount: number
 ): string | null {
   if (completedCount < 0) return null;
-  const nextNumber = completedCount + 1;
-  const byNumber = lessonsOrdered.find((lesson) => lesson.lessonNumber === nextNumber);
-  if (byNumber) return byNumber.title;
-  return lessonsOrdered[completedCount]?.title ?? null;
+  return (
+    resolveLessonTitleForWeek(lessonsOrdered, completedCount + 1) ??
+    lessonsOrdered[completedCount]?.title ??
+    null
+  );
 }
 
 export function formatLessonProgressLabel(progress: {

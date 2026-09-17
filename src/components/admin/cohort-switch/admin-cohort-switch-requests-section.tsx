@@ -86,7 +86,8 @@ export function AdminCohortSwitchRequestsSection() {
 
 function asWeekNumberLabel(
   weekNumber: number | null,
-  weeksDiffer: boolean
+  weeksDiffer: boolean,
+  topic?: string | null
 ) {
   if (weekNumber == null) {
     return (
@@ -96,9 +97,12 @@ function asWeekNumberLabel(
     );
   }
 
+  const topicLabel = topic?.trim() || null;
+
   return (
     <span className={weeksDiffer ? "font-bold text-amber-700" : undefined}>
       Week {weekNumber}
+      {topicLabel ? ` — ${topicLabel}` : null}
     </span>
   );
 }
@@ -201,7 +205,7 @@ function AdminCohortSwitchCard({
           <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm font-medium text-zinc-900">
             <span>{row.fromCohortName}</span>
             <span className="text-zinc-400">·</span>
-            {asWeekNumberLabel(row.fromWeekNumber, weeksDiffer)}
+            {asWeekNumberLabel(row.fromWeekNumber, weeksDiffer, row.fromTopic)}
           </p>
           {row.fromTutorName ? (
             <p className="text-xs text-zinc-500">Tutor: {row.fromTutorName}</p>
@@ -216,7 +220,7 @@ function AdminCohortSwitchCard({
             <span>{row.toCohortName}</span>
             <span className="text-zinc-400">·</span>
             {row.toSessionId ? (
-              asWeekNumberLabel(row.toWeekNumber, weeksDiffer)
+              asWeekNumberLabel(row.toWeekNumber, weeksDiffer, row.toTopic)
             ) : (
               <span className="text-xs font-medium text-zinc-500">Week not stored</span>
             )}

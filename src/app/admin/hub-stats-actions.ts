@@ -1,24 +1,28 @@
 "use server";
 
 import { fetchAdminCohortChangeRequests } from "@/app/admin/cohort-change-requests/actions";
+import { fetchPendingCohortSwitchCount } from "@/app/admin/cohort-switch-requests/actions";
 import { fetchAdminOnboardingQueue } from "@/app/admin/onboarding/actions";
 import { fetchAdminRescheduleRequests } from "@/app/admin/reschedule-requests/actions";
 
 export async function fetchCohortsHubStats(): Promise<{
   pendingReschedules: number;
   pendingCohortChanges: number;
+  pendingGroupReschedules: number;
   error?: string;
 }> {
-  const [reschedule, cohortChange] = await Promise.all([
+  const [reschedule, cohortChange, groupReschedule] = await Promise.all([
     fetchAdminRescheduleRequests(),
     fetchAdminCohortChangeRequests(),
+    fetchPendingCohortSwitchCount(),
   ]);
   const pendingReschedules = reschedule.rows.filter((row) => row.status === "pending").length;
   const pendingCohortChanges = cohortChange.rows.filter((row) => row.status === "pending").length;
   return {
     pendingReschedules,
     pendingCohortChanges,
-    error: reschedule.error ?? cohortChange.error,
+    pendingGroupReschedules: groupReschedule.count,
+    error: reschedule.error ?? cohortChange.error ?? groupReschedule.error,
   };
 }
 

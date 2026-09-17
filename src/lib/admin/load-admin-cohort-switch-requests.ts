@@ -4,6 +4,8 @@ import { loadAlternateCohortSessions } from "@/lib/calendar/load-alternate-cohor
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import type { AlternateCohortOption, CohortSwitchRequestStatus } from "@/lib/calendar/types";
 import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
+import { resolveLessonTitleForWeek } from "@/lib/lessons/lesson-log-progress";
+import { loadCourseLessonsOrdered } from "@/lib/lessons/load-lesson-log-progress";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -27,11 +29,13 @@ export type AdminCohortSwitchRequestRow = {
   sessionEndsAt: string;
   sessionWhen: string;
   fromWeekNumber: number | null;
+  fromTopic: string | null;
   toSessionId: string | null;
   toSessionStartsAt: string | null;
   toSessionEndsAt: string | null;
   toSessionWhen: string | null;
   toWeekNumber: number | null;
+  toTopic: string | null;
   fromTutorName: string | null;
   toTutorName: string | null;
   /** Other valid switch candidates from the same function students see, excluding the requested session. */
@@ -100,7 +104,7 @@ export async function loadAdminCohortSwitchRequests(
         toSessionIds.length > 0
           ? supabase
               .from("tutor_scheduled_sessions")
-              .select("id, starts_at, ends_at, tutor_id, title, week_number")
+              .select("id, starts_at, ends_at, tutor_id, title, week_number, course_id")
               .in("id", toSessionIds)
           : Promise.resolve({ data: [] }),
         loadEmailsByUserId(supabase, studentIds),
@@ -143,9 +147,25 @@ export async function loadAdminCohortSwitchRequests(
           tutorId: s.tutor_id as string,
           title: s.title as string,
           weekNumber: asWeekNumber(s.week_number),
+          courseId: (s.course_id as string | null) ?? null,
         },
       ])
     );
+
+    const courseIds = [
+      ...new Set(
+        [
+          ...rowsRaw.map((row) => {
+            const session = Array.isArray(row.tutor_scheduled_sessions)
+              ? row.tutor_scheduled_sessions[0]
+              : row.tutor_scheduled_sessions;
+            return session?.course_id as string | undefined;
+          }),
+          ...(toSessions ?? []).map((session) => session.course_id as string | undefined),
+        ].filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const lessonsByCourse = await loadCourseLessonsOrdered(supabase, courseIds);
 
     const rows: AdminCohortSwitchRequestRow[] = [];
     const pendingSources: Array<{
@@ -174,6 +194,15 @@ export async function loadAdminCohortSwitchRequests(
       const toTutor = toTutorId ? profileById.get(toTutorId) : null;
       const fromWeekNumber = asWeekNumber(session.week_number);
       const courseId = (session.course_id as string | null) ?? null;
+      const toCourseId = toSession?.courseId ?? courseId;
+      const fromTopic = resolveLessonTitleForWeek(
+        lessonsByCourse.get(courseId ?? "") ?? [],
+        fromWeekNumber
+      );
+      const toTopic = resolveLessonTitleForWeek(
+        lessonsByCourse.get(toCourseId ?? "") ?? [],
+        toSession?.weekNumber ?? null
+      );
       const sourceCohortId =
         (session.cohort_id as string | null) ?? (row.from_cohort_id as string | null);
       const status = row.status as CohortSwitchRequestStatus;
@@ -214,6 +243,7 @@ export async function loadAdminCohortSwitchRequests(
         sessionEndsAt: session.ends_at,
         sessionWhen: formatSessionWhen(session.starts_at, session.ends_at),
         fromWeekNumber,
+        fromTopic,
         toSessionId: (row.to_session_id as string | null) ?? null,
         toSessionStartsAt: toSession?.startsAt ?? null,
         toSessionEndsAt: toSession?.endsAt ?? null,
@@ -222,6 +252,7 @@ export async function loadAdminCohortSwitchRequests(
             ? formatSessionWhen(toSession.startsAt, toSession.endsAt)
             : null,
         toWeekNumber: toSession?.weekNumber ?? null,
+        toTopic,
         fromTutorName: getDisplayName(fromTutor ?? null),
         toTutorName: getDisplayName(toTutor ?? null),
         alternateCandidates: [],

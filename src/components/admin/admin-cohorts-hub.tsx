@@ -25,6 +25,7 @@ function pendingRequestSummary(count: number | null): string {
 export function AdminCohortsHub() {
   const [pendingReschedules, setPendingReschedules] = useState<number | null>(null);
   const [pendingCohortChanges, setPendingCohortChanges] = useState<number | null>(null);
+  const [pendingGroupReschedules, setPendingGroupReschedules] = useState<number | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export function AdminCohortsHub() {
       if (cancelled) return;
       setPendingReschedules(result.pendingReschedules);
       setPendingCohortChanges(result.pendingCohortChanges);
+      setPendingGroupReschedules(result.pendingGroupReschedules);
       setStatsError(result.error ?? null);
     });
     return () => {
@@ -76,7 +78,9 @@ export function AdminCohortsHub() {
           href="/admin/cohort-switch-requests"
           icon={<ArrowLeftRight className="h-[18px] w-[18px]" />}
           title="Group session reschedules"
-          summary="Approve or decline student requests to join an alternate group session"
+          summary={pendingRequestSummary(pendingGroupReschedules)}
+          count={pendingGroupReschedules}
+          tone={pendingGroupReschedules && pendingGroupReschedules > 0 ? "warning" : "neutral"}
         />
         <AdminHubLinkCard
           href="/admin/cohort-change-requests"
