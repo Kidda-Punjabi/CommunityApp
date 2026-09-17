@@ -258,18 +258,128 @@ export function matchCashDiscrepancy(
   return rows;
 }
 
+export type CashPackageBucket = "group" | "one_to_one" | "community" | "other";
+export type CashAudience = "adults" | "kids" | "unknown";
+
+export type CashClassification = {
+  package: CashPackageBucket;
+  audience: CashAudience;
+};
+
+function normalizePaymentLinkUrl(url: string): string {
+  return url.trim().replace(/\/$/, "").split("?")[0] ?? url;
+}
+
+export function classifyCheckoutKey(
+  checkoutKey: string | null | undefined
+): CashClassification {
+  const key = (checkoutKey ?? "").trim().toLowerCase();
+  if (!key) return { package: "other", audience: "unknown" };
+
+  const kids = key.includes("kids");
+  const audience: CashAudience = kids ? "kids" : "adults";
+
+  if (key === "community" || key.startsWith("community")) {
+    return { package: "community", audience };
+  }
+  if (key.includes("one-to-one") || key.includes("one_to_one") || key.includes("1-1")) {
+    return { package: "one_to_one", audience };
+  }
+  if (key.includes("group") || key === "beginners") {
+    return { package: "group", audience };
+  }
+  if (key.startsWith("foundational") && !key.includes("group")) {
+    return { package: "one_to_one", audience };
+  }
+  return { package: "other", audience: kids ? "kids" : "unknown" };
+}
+
 export function cashBucketFromCheckoutKey(
   checkoutKey: string | null | undefined
-): "group" | "one_to_one" | "community" | "other" {
-  const key = (checkoutKey ?? "").trim().toLowerCase();
-  if (!key) return "other";
-  if (key === "community" || key.startsWith("community")) return "community";
-  if (key.includes("one-to-one") || key.includes("one_to_one") || key.includes("1-1")) {
-    return "one_to_one";
+): CashPackageBucket {
+  return classifyCheckoutKey(checkoutKey).package;
+}
+
+export type CheckoutKeyLookup = {
+  byPlinkId: Map<string, string>;
+  byUrl: Map<string, string>;
+  byPriceId: Map<string, string>;
+};
+
+export function emptyCheckoutKeyLookup(): CheckoutKeyLookup {
+  return {
+    byPlinkId: new Map(),
+    byUrl: new Map(),
+    byPriceId: new Map(),
+  };
+}
+
+export function resolveCheckoutKeyFromRefs(
+  input: {
+    checkoutKey?: string | null;
+    paymentLink?: string | null;
+    paymentLinkUrl?: string | null;
+    priceId?: string | null;
+  },
+  lookup: CheckoutKeyLookup
+): string | null {
+  const direct = input.checkoutKey?.trim();
+  if (direct) return direct;
+
+  const plink = input.paymentLink?.trim() ?? "";
+  if (plink && lookup.byPlinkId.has(plink)) return lookup.byPlinkId.get(plink) ?? null;
+  if (plink.startsWith("https://")) {
+    const fromUrl = lookup.byUrl.get(normalizePaymentLinkUrl(plink));
+    if (fromUrl) return fromUrl;
   }
-  if (key.includes("group") || key === "beginners") return "group";
-  if (key.startsWith("foundational") && !key.includes("group")) return "one_to_one";
-  return "other";
+
+  const url = input.paymentLinkUrl?.trim() ?? "";
+  if (url) {
+    const fromUrl = lookup.byUrl.get(normalizePaymentLinkUrl(url));
+    if (fromUrl) return fromUrl;
+  }
+
+  const priceId = input.priceId?.trim() ?? "";
+  if (priceId && lookup.byPriceId.has(priceId)) return lookup.byPriceId.get(priceId) ?? null;
+  return null;
+}
+
+export function emptyCashBreakdown(): CashBreakdownShape {
+  return {
+    groupPence: 0,
+    oneToOnePence: 0,
+    communityPence: 0,
+    otherPence: 0,
+    adultsPence: 0,
+    kidsPence: 0,
+    unclassifiedAudiencePence: 0,
+  };
+}
+
+export type CashBreakdownShape = {
+  groupPence: number;
+  oneToOnePence: number;
+  communityPence: number;
+  otherPence: number;
+  adultsPence: number;
+  kidsPence: number;
+  unclassifiedAudiencePence: number;
+};
+
+export function addCashToBreakdown(
+  acc: CashBreakdownShape,
+  amountPence: number,
+  classification: CashClassification
+): CashBreakdownShape {
+  if (classification.package === "group") acc.groupPence += amountPence;
+  else if (classification.package === "one_to_one") acc.oneToOnePence += amountPence;
+  else if (classification.package === "community") acc.communityPence += amountPence;
+  else acc.otherPence += amountPence;
+
+  if (classification.audience === "adults") acc.adultsPence += amountPence;
+  else if (classification.audience === "kids") acc.kidsPence += amountPence;
+  else acc.unclassifiedAudiencePence += amountPence;
+  return acc;
 }
 
 export function conversionFromPrevious(

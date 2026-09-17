@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   averageCycleDays,
   cashBucketFromCheckoutKey,
+  classifyCheckoutKey,
   cohortFillStatus,
   conversionFromPrevious,
   countMetric,
@@ -139,7 +140,16 @@ describe("other helpers", () => {
     assert.equal(cashBucketFromCheckoutKey("beginners-group"), "group");
     assert.equal(cashBucketFromCheckoutKey("beginners-one-to-one"), "one_to_one");
     assert.equal(cashBucketFromCheckoutKey("community"), "community");
+    assert.equal(cashBucketFromCheckoutKey("beginners-kids-group"), "group");
     assert.equal(cashBucketFromCheckoutKey(null), "other");
+    assert.deepEqual(classifyCheckoutKey("beginners-kids-group"), {
+      package: "group",
+      audience: "kids",
+    });
+    assert.deepEqual(classifyCheckoutKey("beginners-group"), {
+      package: "group",
+      audience: "adults",
+    });
   });
 
   it("converts pounds to pence", () => {

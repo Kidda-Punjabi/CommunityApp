@@ -6,6 +6,8 @@ export const SALES_REPORT_PRESETS = [
   "custom",
 ] as const;
 
+export const DEFAULT_PIPELINE_AGING_DAYS = 3;
+
 export type SalesReportPreset = (typeof SALES_REPORT_PRESETS)[number];
 
 export type SalesReportRange = {
@@ -38,6 +40,7 @@ export type ComparedNumber = {
 export type SalespersonRow = {
   name: string;
   callsBooked: number;
+  callsShowEligible: number;
   callsTaken: number;
   callsClosed: number;
   closeRate: number | null;
@@ -126,8 +129,11 @@ export type SalesReportHeadline = {
   closeRate: ComparedNumber;
   leadsIn: ComparedNumber;
   callsBooked: ComparedNumber;
+  callsShowEligible?: ComparedNumber;
   bookingRate: ComparedNumber;
   showRate: ComparedNumber;
+  enrolmentCallsBooked?: ComparedNumber;
+  checkInCallsBooked?: ComparedNumber;
 };
 
 export type SalesReport = {

@@ -11,6 +11,12 @@ import {
   productLabel,
   salespersonKey,
 } from "@/lib/admin/sales-report/mapping";
+import {
+  isCheckInCallBooked,
+  isEnrolmentCallBooked,
+  isShowedCall,
+  isShowRateEligible,
+} from "@/lib/admin/sales-calls/show-rate";
 import type {
   AgingRow,
   ComparedNumber,
@@ -32,6 +38,7 @@ import type {
 
 const EMPTY_SALESPERSON: Omit<SalespersonRow, "name" | "revenueRank" | "discountingFlag"> = {
   callsBooked: 0,
+  callsShowEligible: 0,
   callsTaken: 0,
   callsClosed: 0,
   closeRate: null,
@@ -130,7 +137,10 @@ function accumulateSalespeople(
     if (callInRange(call, startYmd, endYmd)) {
       const row = rowFor(name);
       row.callsBooked += 1;
-      if (call.showUp) row.callsTaken += 1;
+      if (isShowRateEligible(call.outcome, call.showUp)) {
+        row.callsShowEligible += 1;
+        if (isShowedCall(call.outcome, call.showUp)) row.callsTaken += 1;
+      }
       if (call.closed) {
         row.callsClosed += 1;
         row.revenueBooked += collectedPounds(call.cashOnCall, call.paidAfterwards);
@@ -154,7 +164,7 @@ function accumulateSalespeople(
 
   for (const row of byName.values()) {
     row.closeRate = rate(row.callsClosed, row.callsTaken);
-    row.showRate = rate(row.callsTaken, row.callsBooked);
+    row.showRate = rate(row.callsTaken, row.callsShowEligible);
     row.aovClosed = row.callsClosed > 0 ? row.revenueBooked / row.callsClosed : null;
   }
 
@@ -165,6 +175,7 @@ function totalsFrom(rows: SalespersonRow[], name = "Team"): SalespersonRow {
   const total = blankSalesperson(name);
   for (const row of rows) {
     total.callsBooked += row.callsBooked;
+    total.callsShowEligible += row.callsShowEligible;
     total.callsTaken += row.callsTaken;
     total.callsClosed += row.callsClosed;
     total.cashOnCallCount += row.cashOnCallCount;
@@ -175,7 +186,7 @@ function totalsFrom(rows: SalespersonRow[], name = "Team"): SalespersonRow {
     total.revenueBooked += row.revenueBooked;
   }
   total.closeRate = rate(total.callsClosed, total.callsTaken);
-  total.showRate = rate(total.callsTaken, total.callsBooked);
+  total.showRate = rate(total.callsTaken, total.callsShowEligible);
   total.aovClosed = total.callsClosed > 0 ? total.revenueBooked / total.callsClosed : null;
   total.revenueRank = 0;
   return total;
@@ -214,7 +225,10 @@ function periodCounts(
   const periodCalls = calls.filter((call) => callInRange(call, startYmd, endYmd));
   const periodLeads = leads.filter((lead) => leadInRange(lead, startYmd, endYmd));
   const booked = periodCalls.length;
-  const taken = periodCalls.filter((call) => call.showUp).length;
+  const showEligible = periodCalls.filter((call) => isShowRateEligible(call.outcome, call.showUp)).length;
+  const taken = periodCalls.filter((call) => isShowedCall(call.outcome, call.showUp)).length;
+  const enrolmentBooked = periodCalls.filter((call) => isEnrolmentCallBooked(call.outcome)).length;
+  const checkInBooked = periodCalls.filter((call) => isCheckInCallBooked(call.outcome)).length;
   const closed = periodCalls.filter((call) => call.closed).length;
   const revenueBooked = periodCalls
     .filter((call) => call.closed)
@@ -225,13 +239,16 @@ function periodCounts(
   return {
     leads: periodLeads.length,
     booked,
+    showEligible,
     taken,
+    enrolmentBooked,
+    checkInBooked,
     closed,
     revenueBooked,
     revenueCollected,
     closeRate: rate(closed, taken),
     bookingRate: rate(booked, periodLeads.length),
-    showRate: rate(taken, booked),
+    showRate: rate(taken, showEligible),
   };
 }
 
@@ -291,7 +308,7 @@ function funnelBySource(
     const source = call.leadPageId ? sourceByLeadId.get(call.leadPageId) ?? null : null;
     const row = rowFor(source);
     row.booked += 1;
-    if (call.showUp) row.showed += 1;
+    if (isShowedCall(call.outcome, call.showUp)) row.showed += 1;
     if (call.closed) row.closed += 1;
   }
 
@@ -448,7 +465,7 @@ function dataQuality(
     gaps.push({
       field: "Outcome",
       rowCount: missingOutcome,
-      note: "Outcome was empty. Rows stay in booked/taken totals and are not treated as lost.",
+      note: "Outcome was empty. Empty outcome with Show Up unchecked is excluded from show rate. Rows stay in booked totals and are not treated as lost.",
     });
   }
 
@@ -533,8 +550,26 @@ export function computeSalesReport(input: {
     closeRate: compared(current.closeRate ?? 0, previous.closeRate, mtd.closeRate, "rate"),
     leadsIn: compared(current.leads, previous.leads, mtd.leads, "count"),
     callsBooked: compared(current.booked, previous.booked, mtd.booked, "count"),
+    callsShowEligible: compared(
+      current.showEligible,
+      previous.showEligible,
+      mtd.showEligible,
+      "count"
+    ),
     bookingRate: compared(current.bookingRate ?? 0, previous.bookingRate, mtd.bookingRate, "rate"),
     showRate: compared(current.showRate ?? 0, previous.showRate, mtd.showRate, "rate"),
+    enrolmentCallsBooked: compared(
+      current.enrolmentBooked,
+      previous.enrolmentBooked,
+      mtd.enrolmentBooked,
+      "count"
+    ),
+    checkInCallsBooked: compared(
+      current.checkInBooked,
+      previous.checkInBooked,
+      mtd.checkInBooked,
+      "count"
+    ),
   };
 
   const salespeople = rankSalespeople([

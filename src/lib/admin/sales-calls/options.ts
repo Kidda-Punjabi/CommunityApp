@@ -1,6 +1,11 @@
+export const CHECK_IN_CALL_BOOKED_OUTCOME = "Check-In Call Booked";
+
+export const CHECK_IN_CALL_BOOKED_HELP =
+  "Use Check-In Call Booked only once the check-in is on the salesperson's calendar, not just intended.";
+
 export const SALES_CALL_OUTCOMES = [
   "Enrolment Call Booked",
-  "Check-In Call Booked",
+  CHECK_IN_CALL_BOOKED_OUTCOME,
   "No Show",
   "Not Interested",
   "Can't Afford",

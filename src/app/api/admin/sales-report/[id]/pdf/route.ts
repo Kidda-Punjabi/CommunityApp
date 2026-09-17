@@ -60,14 +60,18 @@ export async function GET(
   write(`${report.range.label}  |  generated ${formatWhen(report.generatedAt)}`, 10, true);
   y -= 6;
   write(`Revenue collected  ${formatPounds(report.headline.revenueCollected.current)}`, 12, true);
-  write(`Revenue booked  ${formatPounds(report.headline.revenueBooked.current)}`, 12, true);
   write(
     `Close rate  ${formatPercent(report.headline.closeRate.current)}  (${formatCount(report.headline.callsClosed.current)} / ${formatCount(report.headline.callsTaken.current)} taken)`,
     12,
     true
   );
   write(
-    `Show rate  ${formatPercent(report.headline.showRate.current)}   Booking rate  ${formatPercent(report.headline.bookingRate.current)}`,
+    `Show rate  ${formatPercent(report.headline.showRate.current)}  (${formatCount(report.headline.callsTaken.current)} / ${formatCount(report.headline.callsShowEligible?.current ?? report.headline.callsBooked.current)} eligible)`,
+    11,
+    true
+  );
+  write(
+    `Enrolment calls booked  ${formatCount(report.headline.enrolmentCallsBooked?.current ?? 0)}   Check-ins booked  ${formatCount(report.headline.checkInCallsBooked?.current ?? 0)}`,
     11,
     true
   );

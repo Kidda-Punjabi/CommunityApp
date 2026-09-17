@@ -184,6 +184,70 @@ describe("computeSalesReport", () => {
     assert.equal(report.salespeople[0].closeRate, 0.5);
   });
 
+  it("excludes cancelled, rescheduled, and empty unfilled rows from show rate", () => {
+    const report = computeSalesReport({
+      range,
+      generatedAt: "2026-09-10T12:00:00.000Z",
+      agingDays: 3,
+      productCatalogueAvailable: false,
+      leads: [],
+      calls: [
+        call({
+          pageId: "showed-closed",
+          salespersonName: "Adnan Arsalani",
+          callDate: "2026-09-02",
+          showUp: false,
+          outcome: "Closed",
+          closed: true,
+        }),
+        call({
+          pageId: "no-show",
+          salespersonName: "Adnan Arsalani",
+          callDate: "2026-09-03",
+          showUp: true,
+          outcome: "No Show",
+        }),
+        call({
+          pageId: "cancelled",
+          salespersonName: "Adnan Arsalani",
+          callDate: "2026-09-04",
+          showUp: true,
+          outcome: "Cancelled",
+        }),
+        call({
+          pageId: "empty",
+          salespersonName: "Adnan Arsalani",
+          callDate: "2026-09-05",
+          showUp: false,
+          outcome: null,
+        }),
+        call({
+          pageId: "enrolment",
+          salespersonName: "Adnan Arsalani",
+          callDate: "2026-09-06",
+          showUp: false,
+          outcome: "Enrolment Call Booked",
+        }),
+        call({
+          pageId: "check-in",
+          salespersonName: "Adnan Arsalani",
+          callDate: "2026-09-07",
+          showUp: false,
+          outcome: "Check-In Call Booked",
+        }),
+      ],
+    });
+
+    assert.equal(report.headline.callsBooked.current, 6);
+    assert.equal(report.headline.callsShowEligible?.current, 4);
+    assert.equal(report.headline.callsTaken.current, 3);
+    assert.equal(report.headline.showRate.current, 3 / 4);
+    assert.equal(report.headline.enrolmentCallsBooked?.current, 1);
+    assert.equal(report.headline.checkInCallsBooked?.current, 1);
+    assert.equal(report.salespeople[0].showRate, 3 / 4);
+    assert.equal(report.teamTotals.showRate, 3 / 4);
+  });
+
   it("groups salespeople from Person names dynamically and flags missing Person/Outcome", () => {
     const report = computeSalesReport({
       range,

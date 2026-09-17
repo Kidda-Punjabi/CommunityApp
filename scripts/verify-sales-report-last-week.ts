@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { computeSalesReport } from "../src/lib/admin/sales-report/compute";
 import { resolveSalesReportRange, ymdInInclusiveRange } from "../src/lib/admin/sales-report/date-range";
 import { collectedPounds } from "../src/lib/admin/sales-report/mapping";
+import { isShowedCall } from "../src/lib/admin/sales-calls/show-rate";
 import { fetchSalesReportNotionData } from "../src/lib/admin/sales-report/notion";
 import type { SalesReport } from "../src/lib/admin/sales-report/types";
 
@@ -38,7 +39,7 @@ async function main() {
   const report = computeSalesReport({
     range,
     generatedAt,
-    agingDays: 7,
+    agingDays: 3,
     calls: fetched.calls,
     leads: fetched.leads,
     productCatalogueAvailable: fetched.productCatalogueAvailable,
@@ -54,7 +55,7 @@ async function main() {
       ymdInInclusiveRange(call.callDate, range.startYmd, range.endYmd) &&
       (namedPerson ? call.salespersonName === namedPerson.name : false)
   );
-  const taken = named.filter((call) => call.showUp).length;
+  const taken = named.filter((call) => isShowedCall(call.outcome, call.showUp)).length;
   const closed = named.filter((call) => call.closed).length;
   const handPerson = namedPerson;
 
@@ -80,7 +81,7 @@ async function main() {
       range_start: range.startYmd,
       range_end: range.endYmd,
       range_label: range.label,
-      aging_days: 7,
+      aging_days: 3,
       generated_at: generatedAt,
       generated_by: null,
       source_fetched_at: fetched.fetchedAt,

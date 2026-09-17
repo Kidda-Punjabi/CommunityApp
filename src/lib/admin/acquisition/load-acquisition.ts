@@ -6,11 +6,14 @@ import {
   type ResolvedAcquisitionRange,
 } from "@/lib/admin/acquisition/date-range";
 import {
+  addCashToBreakdown,
   averageCycleDays,
-  cashBucketFromCheckoutKey,
+  classifyCheckoutKey,
   cohortFillStatus,
   conversionFromPrevious,
   countMetric,
+  emptyCashBreakdown,
+  emptyCheckoutKeyLookup,
   isTestCohortName,
   isUnworkedPipelineStage,
   matchCashDiscrepancy,
@@ -19,9 +22,11 @@ import {
   penceToPounds,
   poundsToPence,
   rateMetric,
+  resolveCheckoutKeyFromRefs,
   salesVelocityPoundsPerDay,
   shortCohortLabel,
   timeToFillDays,
+  type CheckoutKeyLookup,
   type MatchablePayment,
 } from "@/lib/admin/acquisition/metrics";
 import type {
@@ -32,6 +37,12 @@ import type {
   FunnelStage,
   UpcomingCohortRow,
 } from "@/lib/admin/acquisition/types";
+import {
+  isCheckInCallBooked,
+  isEnrolmentCallBooked,
+  isShowedCall,
+  isShowRateEligible,
+} from "@/lib/admin/sales-calls/show-rate";
 import { weekdayNameInTimezone, UK_DISPLAY_TIMEZONE } from "@/lib/calendar/uk-display-time";
 import { GhlApiError } from "@/lib/ghl/client";
 import {
@@ -41,6 +52,7 @@ import {
 } from "@/lib/ghl/opportunities";
 import { NOTION_LEADS_DATA_SOURCE_ID, notionJson } from "@/lib/notion/client";
 import { CHECKOUT_CONFIGS } from "@/lib/products/checkout";
+import { getStripe } from "@/lib/stripe/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type SalesCallRow = {
@@ -49,6 +61,7 @@ type SalesCallRow = {
   payment_date: string | null;
   show_up: boolean;
   closed: boolean;
+  outcome: string | null;
   cash_on_call: number | null;
   paid_afterwards: number | null;
   lead_notion_page_id: string | null;
@@ -66,7 +79,8 @@ type StripeEventRow = {
 
 type ClassifiedStripePayment = MatchablePayment & {
   date: string;
-  bucket: "group" | "one_to_one" | "community" | "other";
+  package: "group" | "one_to_one" | "community" | "other";
+  audience: "adults" | "kids" | "unknown";
 };
 
 function readNumber(value: unknown): number | null {
@@ -130,7 +144,7 @@ async function fetchSalesCalls(
       const { data, error } = await supabase
         .from("sales_calls")
         .select(
-          "id, call_date, payment_date, show_up, closed, cash_on_call, paid_afterwards, lead_notion_page_id, notes"
+          "id, call_date, payment_date, show_up, closed, outcome, cash_on_call, paid_afterwards, lead_notion_page_id, notes"
         )
         .gte(column, fromIso)
         .range(offset, offset + pageSize - 1);
@@ -172,23 +186,97 @@ async function fetchStripeEvents(
 }
 
 function paymentLinkIdFromUnknown(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const match = value.match(/plink_[A-Za-z0-9]+/);
-  return match?.[0] ?? null;
-}
-
-function checkoutKeyFromEnvPaymentLink(plinkId: string | null): string | null {
-  if (!plinkId) return null;
-  for (const config of CHECKOUT_CONFIGS) {
-    const raw = process.env[config.paymentLinkEnv]?.trim() ?? "";
-    if (raw.includes(plinkId)) return config.key;
+  if (typeof value === "string") {
+    const match = value.match(/plink_[A-Za-z0-9]+/);
+    return match?.[0] ?? null;
   }
-  const oneToOne = process.env.STRIPE_PAYMENT_LINK_ONE_TO_ONE_SESSION_PLINK_ID?.trim();
-  if (oneToOne === plinkId) return "one-to-one-session";
+  if (value && typeof value === "object") {
+    const record = value as { id?: unknown };
+    return paymentLinkIdFromUnknown(record.id);
+  }
   return null;
 }
 
-function classifyStripeEvents(events: StripeEventRow[]): ClassifiedStripePayment[] {
+function paymentLinkUrlFromUnknown(value: unknown): string | null {
+  if (typeof value === "string" && value.startsWith("https://")) return value;
+  if (value && typeof value === "object") {
+    const record = value as { url?: unknown };
+    if (typeof record.url === "string" && record.url.startsWith("https://")) return record.url;
+  }
+  return null;
+}
+
+function priceIdFromUnknown(value: unknown): string | null {
+  if (typeof value === "string" && value.startsWith("price_")) return value;
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.id === "string" && record.id.startsWith("price_")) return record.id;
+  if (record.price) return priceIdFromUnknown(record.price);
+  return null;
+}
+
+function priceIdFromSession(summary: Record<string, unknown>, raw: Record<string, unknown>): string | null {
+  const metadata = (raw.metadata as Record<string, unknown> | undefined) ?? {};
+  const fromMeta =
+    readString(summary.price_id) ||
+    readString(metadata.price_id) ||
+    readString(metadata.stripe_price_id);
+  if (fromMeta?.startsWith("price_")) return fromMeta;
+  const lineItems = raw.line_items as { data?: unknown[] } | undefined;
+  const firstItem = lineItems?.data?.[0];
+  return priceIdFromUnknown(firstItem);
+}
+
+function checkoutKeyLookupFromEnv(): CheckoutKeyLookup {
+  const lookup = emptyCheckoutKeyLookup();
+  for (const config of CHECKOUT_CONFIGS) {
+    const url = process.env[config.paymentLinkEnv]?.trim() ?? "";
+    if (url.startsWith("https://")) {
+      lookup.byUrl.set(url.trim().replace(/\/$/, "").split("?")[0] ?? url, config.key);
+    }
+    const plink = url.match(/plink_[A-Za-z0-9]+/);
+    if (plink) lookup.byPlinkId.set(plink[0], config.key);
+    const price = process.env[config.priceIdEnv]?.trim() ?? "";
+    if (price.startsWith("price_")) lookup.byPriceId.set(price, config.key);
+  }
+  const oneToOne = process.env.STRIPE_PAYMENT_LINK_ONE_TO_ONE_SESSION_PLINK_ID?.trim();
+  if (oneToOne?.startsWith("plink_")) lookup.byPlinkId.set(oneToOne, "one-to-one-session");
+  return lookup;
+}
+
+async function enrichCheckoutKeyLookup(lookup: CheckoutKeyLookup): Promise<CheckoutKeyLookup> {
+  if (lookup.byUrl.size === 0) return lookup;
+  try {
+    const stripe = getStripe();
+    let startingAfter: string | undefined;
+    for (let page = 0; page < 5; page += 1) {
+      const list = await stripe.paymentLinks.list({
+        limit: 100,
+        active: true,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      for (const link of list.data) {
+        if (!link.url) continue;
+        const normalized = link.url.trim().replace(/\/$/, "").split("?")[0] ?? link.url;
+        const key = lookup.byUrl.get(normalized);
+        if (key) lookup.byPlinkId.set(link.id, key);
+      }
+      if (!list.has_more || list.data.length === 0) break;
+      startingAfter = list.data[list.data.length - 1]?.id;
+    }
+  } catch (error) {
+    console.warn(
+      "[acquisition] Could not resolve Stripe payment link ids:",
+      error instanceof Error ? error.message : error
+    );
+  }
+  return lookup;
+}
+
+function classifyStripeEvents(
+  events: StripeEventRow[],
+  lookup: CheckoutKeyLookup
+): ClassifiedStripePayment[] {
   const checkout = events.filter((event) => event.event_type === "checkout.session.completed");
   const invoices = events.filter((event) => event.event_type === "invoice.paid");
   const payments: ClassifiedStripePayment[] = [];
@@ -213,17 +301,31 @@ function classifyStripeEvents(events: StripeEventRow[]): ClassifiedStripePayment
     seenSessions.add(sessionId);
 
     const mode = readString(raw.mode);
-    const checkoutKey =
-      readString(summary.checkout_key) ||
-      readString((raw.metadata as Record<string, unknown> | undefined)?.checkout_key);
+    const metadata = (raw.metadata as Record<string, unknown> | undefined) ?? {};
+    const checkoutKey = resolveCheckoutKeyFromRefs(
+      {
+        checkoutKey:
+          readString(summary.checkout_key) || readString(metadata.checkout_key),
+        paymentLink:
+          paymentLinkIdFromUnknown(summary.payment_link) ??
+          paymentLinkIdFromUnknown(raw.payment_link),
+        paymentLinkUrl:
+          paymentLinkUrlFromUnknown(summary.payment_link) ??
+          paymentLinkUrlFromUnknown(raw.payment_link),
+        priceId: priceIdFromSession(summary, raw),
+      },
+      lookup
+    );
     const bookingId =
       readString(summary.one_to_one_booking_id) ||
-      readString((raw.metadata as Record<string, unknown> | undefined)?.one_to_one_booking_id);
-    const plink = paymentLinkIdFromUnknown(summary.payment_link) ?? paymentLinkIdFromUnknown(raw.payment_link);
-    const fromLink = checkoutKeyFromEnvPaymentLink(plink);
-    let bucket = cashBucketFromCheckoutKey(checkoutKey ?? fromLink);
-    if (bucket === "other" && bookingId) bucket = "one_to_one";
-    if (bucket === "other" && mode === "subscription") bucket = "community";
+      readString(metadata.one_to_one_booking_id);
+    let classified = classifyCheckoutKey(checkoutKey);
+    if (classified.package === "other" && bookingId) {
+      classified = { package: "one_to_one", audience: classified.audience === "kids" ? "kids" : "adults" };
+    }
+    if (classified.package === "other" && mode === "subscription") {
+      classified = { package: "community", audience: classified.audience === "kids" ? "kids" : "adults" };
+    }
 
     const email =
       readString(summary.email) ||
@@ -236,7 +338,8 @@ function classifyStripeEvents(events: StripeEventRow[]): ClassifiedStripePayment
       name: readString((raw.customer_details as Record<string, unknown> | undefined)?.name),
       amountPence: amount,
       date: event.received_at,
-      bucket,
+      package: classified.package,
+      audience: classified.package === "other" ? "unknown" : classified.audience,
     });
   }
 
@@ -254,7 +357,8 @@ function classifyStripeEvents(events: StripeEventRow[]): ClassifiedStripePayment
       name: readString(raw.customer_name),
       amountPence: amount,
       date: event.received_at,
-      bucket: "community",
+      package: "community",
+      audience: "adults",
     });
   }
 
@@ -504,9 +608,10 @@ async function loadStripeData(
         range.previousEnd.toISOString()
       ),
     ]);
+    const lookup = await enrichCheckoutKeyLookup(checkoutKeyLookupFromEnv());
     return {
-      payments: classifyStripeEvents(currentEvents),
-      previousPayments: classifyStripeEvents(previousEvents),
+      payments: classifyStripeEvents(currentEvents, lookup),
+      previousPayments: classifyStripeEvents(previousEvents, lookup),
       source: {
         id: "stripe",
         label: "Stripe — payments",
@@ -741,10 +846,22 @@ export async function loadAcquisitionSnapshot(
   const previousCalls = callsIn(range.previousStart, range.previousEnd);
   const bookedCurrent = currentCalls.length;
   const bookedPrevious = previousCalls.length;
-  const showedCurrent = currentCalls.filter((row) => row.show_up).length;
-  const showedPrevious = previousCalls.filter((row) => row.show_up).length;
+  const eligibleCurrent = currentCalls.filter((row) =>
+    isShowRateEligible(row.outcome, row.show_up)
+  ).length;
+  const eligiblePrevious = previousCalls.filter((row) =>
+    isShowRateEligible(row.outcome, row.show_up)
+  ).length;
+  const showedCurrent = currentCalls.filter((row) => isShowedCall(row.outcome, row.show_up)).length;
+  const showedPrevious = previousCalls.filter((row) =>
+    isShowedCall(row.outcome, row.show_up)
+  ).length;
   const closedCurrent = currentCalls.filter((row) => row.closed).length;
   const closedPrevious = previousCalls.filter((row) => row.closed).length;
+  const enrolmentCurrent = currentCalls.filter((row) => isEnrolmentCallBooked(row.outcome)).length;
+  const enrolmentPrevious = previousCalls.filter((row) => isEnrolmentCallBooked(row.outcome)).length;
+  const checkInCurrent = currentCalls.filter((row) => isCheckInCallBooked(row.outcome)).length;
+  const checkInPrevious = previousCalls.filter((row) => isCheckInCallBooked(row.outcome)).length;
 
   const notionCashFor = (start: Date, end: Date) => {
     let cashOnCall = 0;
@@ -792,15 +909,15 @@ export async function loadAcquisitionSnapshot(
     stripeCount === 0
       ? null
       : stripePayments.reduce<CashBreakdown>(
-          (acc, payment) => {
-            if (payment.bucket === "group") acc.groupPence += payment.amountPence;
-            else if (payment.bucket === "one_to_one") acc.oneToOnePence += payment.amountPence;
-            else if (payment.bucket === "community") acc.communityPence += payment.amountPence;
-            else acc.otherPence += payment.amountPence;
-            return acc;
-          },
-          { groupPence: 0, oneToOnePence: 0, communityPence: 0, otherPence: 0 }
+          (acc, payment) =>
+            addCashToBreakdown(acc, payment.amountPence, {
+              package: payment.package,
+              audience: payment.audience,
+            }),
+          emptyCashBreakdown()
         );
+  const unclassifiedShare =
+    stripeTotalPence > 0 && breakdown ? breakdown.otherPence / stripeTotalPence : null;
 
   const stripeSourceFailed = Boolean(stripeLoad.source.error);
   const notionLeadsFailed = notionLeads.current == null;
@@ -821,10 +938,10 @@ export async function loadAcquisitionSnapshot(
   );
   const showRate = rateMetric(
     salesCallsFailed ? null : showedCurrent,
-    salesCallsFailed ? null : bookedCurrent,
+    salesCallsFailed ? null : eligibleCurrent,
     showedPrevious,
-    bookedPrevious,
-    "No calls booked in this period"
+    eligiblePrevious,
+    "No eligible booked calls in this period"
   );
   const closeRate = rateMetric(
     salesCallsFailed ? null : closedCurrent,
@@ -950,7 +1067,23 @@ export async function loadAcquisitionSnapshot(
           : undefined,
     },
     upcomingCohorts: upcoming,
+    timeToFillAverageDays:
+      timeToFill.length === 0
+        ? null
+        : timeToFill.reduce((sum, point) => sum + (point.days ?? 0), 0) / timeToFill.length,
     timeToFill,
+    extraCounts: {
+      enrolmentCallsBooked: countMetric(
+        salesCallsFailed ? null : enrolmentCurrent,
+        salesCallsFailed ? null : enrolmentPrevious,
+        salesCallsFailed ? { unavailableReason: "Could not read sales calls" } : undefined
+      ),
+      checkInCallsBooked: countMetric(
+        salesCallsFailed ? null : checkInCurrent,
+        salesCallsFailed ? null : checkInPrevious,
+        salesCallsFailed ? { unavailableReason: "Could not read sales calls" } : undefined
+      ),
+    },
     cash: {
       stripe: moneyMetric(
         stripeSourceFailed ? null : penceToPounds(stripeTotalPence),
@@ -966,6 +1099,7 @@ export async function loadAcquisitionSnapshot(
       ),
       avgPayment: avgPackageValue,
       breakdown,
+      unclassifiedShare,
       notion: {
         availability:
           notionCashCurrent.cashOnCall + notionCashCurrent.paidAfterwards === 0

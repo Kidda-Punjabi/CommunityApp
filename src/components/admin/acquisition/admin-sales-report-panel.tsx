@@ -7,6 +7,7 @@ import type {
   SalesReportPreset,
   SalespersonRow,
 } from "@/lib/admin/sales-report/types";
+import { DEFAULT_PIPELINE_AGING_DAYS } from "@/lib/admin/sales-report/types";
 import {
   comparisonHint,
   formatCount,
@@ -49,7 +50,7 @@ export function AdminSalesReportPanel() {
   const [preset, setPreset] = useState<SalesReportPreset>("last_week");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [agingDays, setAgingDays] = useState(7);
+  const [agingDays, setAgingDays] = useState(DEFAULT_PIPELINE_AGING_DAYS);
   const [reportId, setReportId] = useState<string | null>(null);
   const [report, setReport] = useState<SalesReport | null>(null);
   const [past, setPast] = useState<SalesReportListItem[]>([]);
@@ -231,7 +232,9 @@ export function AdminSalesReportPanel() {
             min={1}
             max={30}
             value={agingDays}
-            onChange={(event) => setAgingDays(Number(event.target.value) || 7)}
+            onChange={(event) =>
+              setAgingDays(Number(event.target.value) || DEFAULT_PIPELINE_AGING_DAYS)
+            }
             className="mt-1 block w-20 rounded-md border border-[#E9E2F0] px-2 py-1.5 text-sm"
           />
         </label>
@@ -310,13 +313,6 @@ export function AdminSalesReportPanel() {
               tone={report.headline.revenueCollected.vsPreviousDirection}
             />
             <HeadlineCard
-              label="Revenue booked"
-              value={formatPounds(report.headline.revenueBooked.current)}
-              previous={comparisonHint(report.headline.revenueBooked, "money")}
-              mtd={mtdHint(report.headline.revenueBooked, "money")}
-              tone={report.headline.revenueBooked.vsPreviousDirection}
-            />
-            <HeadlineCard
               label="Close rate"
               value={formatPercent(report.headline.closeRate.current)}
               previous={`${formatCount(report.headline.callsClosed.current)} closed / ${formatCount(report.headline.callsTaken.current)} taken · ${comparisonHint(report.headline.closeRate, "rate")}`}
@@ -326,7 +322,7 @@ export function AdminSalesReportPanel() {
             <HeadlineCard
               label="Show rate"
               value={formatPercent(report.headline.showRate.current)}
-              previous={`${formatCount(report.headline.callsTaken.current)} showed / ${formatCount(report.headline.callsBooked.current)} booked · ${comparisonHint(report.headline.showRate, "rate")}`}
+              previous={`${formatCount(report.headline.callsTaken.current)} showed / ${formatCount(report.headline.callsShowEligible?.current ?? report.headline.callsBooked.current)} booked · ${comparisonHint(report.headline.showRate, "rate")}`}
               mtd={mtdHint(report.headline.showRate, "rate")}
               tone={report.headline.showRate.vsPreviousDirection}
             />
@@ -385,8 +381,27 @@ export function AdminSalesReportPanel() {
             <h3 className="font-heading text-[15px] font-semibold">Funnel / lead quality</h3>
             <p className="mb-3 mt-1 text-[13px] text-[#71667E]">
               Period activity, not a single-lead cohort. Booked can include leads created before
-              this range. {report.leadSourceNote}
+              this range. Show rate excludes cancelled, rescheduled, and unfilled outcome rows.
+              {` ${report.leadSourceNote}`}
             </p>
+            {report.headline.enrolmentCallsBooked && report.headline.checkInCallsBooked ? (
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <HeadlineCard
+                label="Enrolment calls booked"
+                value={formatCount(report.headline.enrolmentCallsBooked.current)}
+                previous={comparisonHint(report.headline.enrolmentCallsBooked, "count")}
+                mtd={mtdHint(report.headline.enrolmentCallsBooked, "count")}
+                tone={report.headline.enrolmentCallsBooked.vsPreviousDirection}
+              />
+              <HeadlineCard
+                label="Follow-up check-ins booked"
+                value={formatCount(report.headline.checkInCallsBooked.current)}
+                previous={comparisonHint(report.headline.checkInCallsBooked, "count")}
+                mtd={mtdHint(report.headline.checkInCallsBooked, "count")}
+                tone={report.headline.checkInCallsBooked.vsPreviousDirection}
+              />
+            </div>
+            ) : null}
             <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
               <div className="space-y-2">
                 {report.funnel.map((stage) => (

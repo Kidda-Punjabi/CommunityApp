@@ -331,8 +331,39 @@ export function AdminAcquisitionDashboard() {
               <h2 className="font-heading text-[17px] font-semibold">Lead to close funnel</h2>
               <p className="mb-5 mt-1 text-[13px] leading-relaxed text-[#71667E]">
                 {snapshot.rangeLabel}. Percentage shown is conversion from the stage above it.
+                Show rate excludes cancelled, rescheduled, and unfilled outcome rows.
               </p>
               <Funnel stages={snapshot.funnel} leadCount={leadsCount} />
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-[#F8F5FB] px-3 py-3">
+                  <p className="text-[12px] font-medium text-[#71667E]">Enrolment calls booked</p>
+                  <p className="mt-1 font-heading text-[22px] font-semibold">
+                    {kpiDisplay(
+                      snapshot.extraCounts?.enrolmentCallsBooked ?? {
+                        availability: "unavailable",
+                        value: null,
+                        previous: null,
+                        reason: "Not in this snapshot",
+                      },
+                      "count"
+                    ).value}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-[#F8F5FB] px-3 py-3">
+                  <p className="text-[12px] font-medium text-[#71667E]">Follow-up check-ins booked</p>
+                  <p className="mt-1 font-heading text-[22px] font-semibold">
+                    {kpiDisplay(
+                      snapshot.extraCounts?.checkInCallsBooked ?? {
+                        availability: "unavailable",
+                        value: null,
+                        previous: null,
+                        reason: "Not in this snapshot",
+                      },
+                      "count"
+                    ).value}
+                  </p>
+                </div>
+              </div>
             </section>
 
             <section className="rounded-xl border border-[#E9E2F0] bg-white p-6">
@@ -418,15 +449,22 @@ export function AdminAcquisitionDashboard() {
             <section className="rounded-xl border border-[#E9E2F0] bg-white p-6">
               <h2 className="font-heading text-[17px] font-semibold">Time to fill a cohort</h2>
               <p className="mb-4 mt-1 text-[13px] leading-relaxed text-[#71667E]">
-                Average days from the first seat sold to a full cohort, last 6 filled cohorts.
+                Average days from the first seat sold to a full cohort, last {snapshot.timeToFill.length || 6} filled
+                cohorts.
               </p>
               {snapshot.timeToFill.length === 0 ? (
                 <p className="text-sm text-[#71667E]">
-                  No filled cohorts yet — time-to-fill appears once a cohort reaches capacity.
+                  No filled cohorts yet. Time to fill appears once a cohort reaches capacity.
                 </p>
               ) : (
                 <>
-                  <div className="mb-1.5 flex h-[90px] items-end gap-2.5">
+                  <p className="font-heading text-[38px] font-bold leading-none text-[#4A2E6B]">
+                    {snapshot.timeToFillAverageDays == null
+                      ? "-"
+                      : `${Math.round(snapshot.timeToFillAverageDays)}`}
+                  </p>
+                  <p className="mt-1 text-[13px] text-[#71667E]">average days to fill</p>
+                  <div className="mt-5 mb-1.5 flex h-[90px] items-end gap-2.5">
                     {snapshot.timeToFill.map((point) => {
                       const height = point.days == null ? 0 : (point.days / maxFillDays) * 100;
                       const best =
@@ -483,26 +521,53 @@ export function AdminAcquisitionDashboard() {
                 </p>
               )}
               {snapshot.cash.breakdown ? (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-[9px] bg-[#F1E7F8] p-3.5">
-                  <FormulaPart
-                    value={formatPence(snapshot.cash.breakdown.groupPence)}
-                    label="group packages"
-                  />
-                  <FormulaPart
-                    value={formatPence(snapshot.cash.breakdown.oneToOnePence)}
-                    label="1‑1 packages"
-                  />
-                  <FormulaPart
-                    value={formatPence(snapshot.cash.breakdown.communityPence)}
-                    label="community"
-                  />
-                  {snapshot.cash.breakdown.otherPence > 0 ? (
+                <>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-[9px] bg-[#F1E7F8] p-3.5">
+                    <FormulaPart
+                      value={formatPence(snapshot.cash.breakdown.adultsPence)}
+                      label="adults"
+                    />
+                    <FormulaPart
+                      value={formatPence(snapshot.cash.breakdown.kidsPence)}
+                      label="kids"
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-[9px] bg-[#F8F5FB] p-3.5">
+                    <FormulaPart
+                      value={formatPence(snapshot.cash.breakdown.groupPence)}
+                      label="group packages"
+                    />
+                    <FormulaPart
+                      value={formatPence(snapshot.cash.breakdown.oneToOnePence)}
+                      label="1-1 packages"
+                    />
+                    <FormulaPart
+                      value={formatPence(snapshot.cash.breakdown.communityPence)}
+                      label="community"
+                    />
                     <FormulaPart
                       value={formatPence(snapshot.cash.breakdown.otherPence)}
                       label="unclassified"
                     />
+                  </div>
+                  {snapshot.cash.breakdown.otherPence > 0 ? (
+                    <p
+                      className={cn(
+                        "mt-3 text-sm",
+                        (snapshot.cash.unclassifiedShare ?? 0) >= 0.1
+                          ? "text-[#AE4335]"
+                          : "text-[#B8842A]"
+                      )}
+                    >
+                      Unclassified cash is {formatPence(snapshot.cash.breakdown.otherPence)}
+                      {snapshot.cash.unclassifiedShare != null
+                        ? ` (${Math.round(snapshot.cash.unclassifiedShare * 100)}% of Stripe cash).`
+                        : "."}{" "}
+                      That is a mapping data issue: those payments have no matching checkout key,
+                      payment link, or price.
+                    </p>
                   ) : null}
-                </div>
+                </>
               ) : null}
 
               <h3 className="mt-5 text-sm font-semibold">Sales call log split</h3>

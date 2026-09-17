@@ -8,7 +8,7 @@ import type {
   SalesReportListItem,
   SalesReportPreset,
 } from "@/lib/admin/sales-report/types";
-import { SALES_REPORT_PRESETS } from "@/lib/admin/sales-report/types";
+import { DEFAULT_PIPELINE_AGING_DAYS, SALES_REPORT_PRESETS } from "@/lib/admin/sales-report/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export function parseSalesReportPreset(value: string | null | undefined): SalesReportPreset {
@@ -28,7 +28,7 @@ export async function generateAcquisitionSalesReport(
     generatedBy?: string | null;
   }
 ): Promise<{ id: string; report: SalesReport }> {
-  const agingDays = Math.min(30, Math.max(1, input.agingDays ?? 7));
+  const agingDays = Math.min(30, Math.max(1, input.agingDays ?? DEFAULT_PIPELINE_AGING_DAYS));
   const range = resolveSalesReportRange(input.preset, new Date(), {
     from: input.from ?? "",
     to: input.to ?? "",

@@ -8,6 +8,7 @@ import {
 } from "@/app/admin/sales-calls/actions";
 import { AdminFilterPill } from "@/components/admin/admin-filter-pills";
 import {
+  CHECK_IN_CALL_BOOKED_HELP,
   SALES_CALL_COURSES,
   SALES_CALL_DELIVERIES,
   SALES_CALL_MECHANISMS,
@@ -851,12 +852,17 @@ function SalesCallFormModal({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <SelectField
-              label="Outcome"
-              value={form.outcome}
-              options={SALES_CALL_OUTCOMES}
-              onChange={(outcome) => patch({ outcome })}
-            />
+            <div>
+              <SelectField
+                label="Outcome"
+                value={form.outcome}
+                options={SALES_CALL_OUTCOMES}
+                onChange={(outcome) => patch({ outcome })}
+              />
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                {CHECK_IN_CALL_BOOKED_HELP}
+              </p>
+            </div>
             <SelectField
               label="Sales mechanism"
               value={form.salesMechanism}

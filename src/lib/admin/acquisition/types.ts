@@ -64,6 +64,9 @@ export type CashBreakdown = {
   oneToOnePence: number;
   communityPence: number;
   otherPence: number;
+  adultsPence: number;
+  kidsPence: number;
+  unclassifiedAudiencePence: number;
 };
 
 export type NotionCashSplit = {
@@ -107,16 +110,22 @@ export type AcquisitionSnapshot = {
     reason?: string;
   };
   upcomingCohorts: UpcomingCohortRow[];
+  timeToFillAverageDays?: number | null;
   timeToFill: TimeToFillPoint[];
   cash: {
     stripe: MoneyMetric;
     paymentCount: CountMetric;
     avgPayment: MoneyMetric;
     breakdown: CashBreakdown | null;
+    unclassifiedShare?: number | null;
     notion: NotionCashSplit;
     stripePence: number | null;
     notionPence: number | null;
     discrepancy: CashDiscrepancyRow[];
+  };
+  extraCounts?: {
+    enrolmentCallsBooked: CountMetric;
+    checkInCallsBooked: CountMetric;
   };
   sources: AcquisitionSourceSync[];
 };
