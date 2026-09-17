@@ -30,7 +30,12 @@ type GoogleApiEvent = {
 const EVENT_FIELDS =
   "items(id,summary,status,updated,start,end,attendees(email),recurringEventId,location,hangoutLink,conferenceData(entryPoints)),nextPageToken,nextSyncToken";
 
-function extractMeetLink(event: GoogleApiEvent): string | null {
+function extractMeetLink(event: {
+  hangoutLink?: string;
+  conferenceData?: {
+    entryPoints?: { entryPointType?: string; uri?: string }[];
+  };
+}): string | null {
   if (event.hangoutLink) return event.hangoutLink;
 
   const videoEntry = event.conferenceData?.entryPoints?.find(
@@ -159,15 +164,27 @@ type GoogleApiAttendee = { email?: string; responseStatus?: string };
 
 type GoogleApiEventDetail = {
   id?: string;
+  description?: string;
+  hangoutLink?: string;
   attendees?: GoogleApiAttendee[];
+  conferenceData?: {
+    entryPoints?: { entryPointType?: string; uri?: string }[];
+  };
+};
+
+export type GoogleCalendarEventDetail = {
+  id?: string;
+  description: string | null;
+  hangoutLink: string | null;
+  attendees: GoogleApiAttendee[];
 };
 
 export async function getGoogleCalendarEvent(
   accessToken: string,
   calendarId: string,
   eventId: string
-): Promise<GoogleApiEventDetail> {
-  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?fields=id,attendees(email,responseStatus)`;
+): Promise<GoogleCalendarEventDetail> {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?fields=id,description,hangoutLink,conferenceData(entryPoints),attendees(email,responseStatus)`;
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -178,7 +195,13 @@ export async function getGoogleCalendarEvent(
     throw new Error(`Google Calendar get event failed: ${text}`);
   }
 
-  return (await res.json()) as GoogleApiEventDetail;
+  const data = (await res.json()) as GoogleApiEventDetail;
+  return {
+    id: data.id,
+    description: data.description ?? null,
+    hangoutLink: extractMeetLink(data),
+    attendees: data.attendees ?? [],
+  };
 }
 
 /**
@@ -192,8 +215,11 @@ export async function addAttendeeToGoogleCalendarEvent(
   accessToken: string,
   calendarId: string,
   eventId: string,
-  attendeeEmail: string
-): Promise<void> {
+  attendeeEmail: string,
+  options?: {
+    description?: string | ((event: GoogleCalendarEventDetail) => string | null | undefined);
+  }
+): Promise<{ hangoutLink: string | null }> {
   const normalized = attendeeEmail.trim().toLowerCase();
   if (!normalized) {
     throw new Error("Student email is required for a calendar invite.");
@@ -201,8 +227,23 @@ export async function addAttendeeToGoogleCalendarEvent(
 
   const event = await getGoogleCalendarEvent(accessToken, calendarId, eventId);
   const existing = event.attendees ?? [];
-  if (existing.some((a) => a.email?.trim().toLowerCase() === normalized)) {
-    return;
+  const alreadyInvited = existing.some((a) => a.email?.trim().toLowerCase() === normalized);
+  const nextDescription =
+    typeof options?.description === "function"
+      ? options.description(event)
+      : options?.description;
+  const descriptionUnchanged =
+    nextDescription == null || (event.description ?? "") === nextDescription;
+
+  if (alreadyInvited && descriptionUnchanged) {
+    return { hangoutLink: event.hangoutLink };
+  }
+
+  const body: { attendees: GoogleApiAttendee[]; description?: string } = {
+    attendees: alreadyInvited ? existing : [...existing, { email: normalized }],
+  };
+  if (nextDescription != null) {
+    body.description = nextDescription;
   }
 
   const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
@@ -213,15 +254,15 @@ export async function addAttendeeToGoogleCalendarEvent(
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      attendees: [...existing, { email: normalized }],
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Google Calendar patch event failed: ${text}`);
   }
+
+  return { hangoutLink: event.hangoutLink };
 }
 
 export type CreateGoogleCalendarEventParams = {

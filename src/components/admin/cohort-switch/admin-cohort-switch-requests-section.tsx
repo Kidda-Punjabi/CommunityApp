@@ -281,7 +281,8 @@ function AdminCohortSwitchCard({
             />
           </label>
           <p className="text-xs text-zinc-500">
-            Approving invites the student to the alternate session calendar when possible.
+            Approving invites the student to the alternate session calendar and emails the
+            destination tutor when possible.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
