@@ -4,6 +4,7 @@ import {
   averageCycleDays,
   cashBucketFromCheckoutKey,
   classifyCheckoutKey,
+  classifyFromProductName,
   cohortFillStatus,
   conversionFromPrevious,
   countMetric,
@@ -147,6 +148,22 @@ describe("other helpers", () => {
       audience: "kids",
     });
     assert.deepEqual(classifyCheckoutKey("beginners-group"), {
+      package: "group",
+      audience: "adults",
+    });
+    assert.deepEqual(classifyFromProductName("12-Week Beginner Course Kids - Level 1"), {
+      package: "group",
+      audience: "kids",
+    });
+    assert.deepEqual(classifyFromProductName("12-Week Learn Punjabi (1-1)"), {
+      package: "one_to_one",
+      audience: "adults",
+    });
+    assert.deepEqual(classifyFromProductName("Kidda Community"), {
+      package: "community",
+      audience: "adults",
+    });
+    assert.deepEqual(classifyFromProductName("4-Week Foundational Course (Group)"), {
       package: "group",
       audience: "adults",
     });

@@ -9,6 +9,7 @@ import {
   addCashToBreakdown,
   averageCycleDays,
   classifyCheckoutKey,
+  classifyFromProductName,
   cohortFillStatus,
   conversionFromPrevious,
   countMetric,
@@ -244,38 +245,78 @@ function checkoutKeyLookupFromEnv(): CheckoutKeyLookup {
   return lookup;
 }
 
-async function enrichCheckoutKeyLookup(lookup: CheckoutKeyLookup): Promise<CheckoutKeyLookup> {
-  if (lookup.byUrl.size === 0) return lookup;
-  try {
-    const stripe = getStripe();
-    let startingAfter: string | undefined;
-    for (let page = 0; page < 5; page += 1) {
-      const list = await stripe.paymentLinks.list({
-        limit: 100,
-        active: true,
-        ...(startingAfter ? { starting_after: startingAfter } : {}),
-      });
-      for (const link of list.data) {
-        if (!link.url) continue;
-        const normalized = link.url.trim().replace(/\/$/, "").split("?")[0] ?? link.url;
-        const key = lookup.byUrl.get(normalized);
-        if (key) lookup.byPlinkId.set(link.id, key);
-      }
-      if (!list.has_more || list.data.length === 0) break;
-      startingAfter = list.data[list.data.length - 1]?.id;
+type PaymentLinkProduct = {
+  priceId: string | null;
+  productId: string | null;
+  productName: string | null;
+};
+
+const paymentLinkProductCache = new Map<string, PaymentLinkProduct>();
+
+async function resolvePaymentLinkProducts(plinkIds: string[]): Promise<Map<string, PaymentLinkProduct>> {
+  const unique = [...new Set(plinkIds.filter((id) => id.startsWith("plink_")))];
+  const missing = unique.filter((id) => !paymentLinkProductCache.has(id));
+  if (missing.length > 0) {
+    try {
+      const stripe = getStripe();
+      await Promise.all(
+        missing.map(async (id) => {
+          try {
+            const link = await stripe.paymentLinks.retrieve(id, {
+              expand: ["line_items.data.price.product"],
+            });
+            const item = link.line_items?.data?.[0];
+            const price = item?.price;
+            const priceId = typeof price === "string" ? price : price?.id ?? null;
+            let productId: string | null = null;
+            let productName: string | null = null;
+            if (price && typeof price === "object") {
+              const product = price.product;
+              if (typeof product === "string") productId = product;
+              else if (product && typeof product === "object") {
+                productId = product.id ?? null;
+                productName = typeof product.name === "string" ? product.name : null;
+              }
+            }
+            paymentLinkProductCache.set(id, { priceId, productId, productName });
+          } catch {
+            paymentLinkProductCache.set(id, { priceId: null, productId: null, productName: null });
+          }
+        })
+      );
+    } catch (error) {
+      console.warn(
+        "[acquisition] Could not resolve Stripe payment link products:",
+        error instanceof Error ? error.message : error
+      );
     }
-  } catch (error) {
-    console.warn(
-      "[acquisition] Could not resolve Stripe payment link ids:",
-      error instanceof Error ? error.message : error
+  }
+  const resolved = new Map<string, PaymentLinkProduct>();
+  for (const id of unique) {
+    resolved.set(
+      id,
+      paymentLinkProductCache.get(id) ?? { priceId: null, productId: null, productName: null }
     );
   }
-  return lookup;
+  return resolved;
+}
+
+function collectPaymentLinkIds(events: StripeEventRow[]): string[] {
+  const ids: string[] = [];
+  for (const event of events) {
+    const summary = event.payload_summary ?? {};
+    const raw = event.raw_payload ?? {};
+    const id =
+      paymentLinkIdFromUnknown(summary.payment_link) ?? paymentLinkIdFromUnknown(raw.payment_link);
+    if (id) ids.push(id);
+  }
+  return ids;
 }
 
 function classifyStripeEvents(
   events: StripeEventRow[],
-  lookup: CheckoutKeyLookup
+  lookup: CheckoutKeyLookup,
+  linkProducts: Map<string, PaymentLinkProduct>
 ): ClassifiedStripePayment[] {
   const checkout = events.filter((event) => event.event_type === "checkout.session.completed");
   const invoices = events.filter((event) => event.event_type === "invoice.paid");
@@ -302,17 +343,18 @@ function classifyStripeEvents(
 
     const mode = readString(raw.mode);
     const metadata = (raw.metadata as Record<string, unknown> | undefined) ?? {};
+    const plink =
+      paymentLinkIdFromUnknown(summary.payment_link) ?? paymentLinkIdFromUnknown(raw.payment_link);
+    const linkProduct = plink ? linkProducts.get(plink) : undefined;
     const checkoutKey = resolveCheckoutKeyFromRefs(
       {
         checkoutKey:
           readString(summary.checkout_key) || readString(metadata.checkout_key),
-        paymentLink:
-          paymentLinkIdFromUnknown(summary.payment_link) ??
-          paymentLinkIdFromUnknown(raw.payment_link),
+        paymentLink: plink,
         paymentLinkUrl:
           paymentLinkUrlFromUnknown(summary.payment_link) ??
           paymentLinkUrlFromUnknown(raw.payment_link),
-        priceId: priceIdFromSession(summary, raw),
+        priceId: priceIdFromSession(summary, raw) ?? linkProduct?.priceId ?? null,
       },
       lookup
     );
@@ -320,6 +362,9 @@ function classifyStripeEvents(
       readString(summary.one_to_one_booking_id) ||
       readString(metadata.one_to_one_booking_id);
     let classified = classifyCheckoutKey(checkoutKey);
+    if (classified.package === "other") {
+      classified = classifyFromProductName(linkProduct?.productName);
+    }
     if (classified.package === "other" && bookingId) {
       classified = { package: "one_to_one", audience: classified.audience === "kids" ? "kids" : "adults" };
     }
@@ -608,10 +653,14 @@ async function loadStripeData(
         range.previousEnd.toISOString()
       ),
     ]);
-    const lookup = await enrichCheckoutKeyLookup(checkoutKeyLookupFromEnv());
+    const lookup = checkoutKeyLookupFromEnv();
+    const linkProducts = await resolvePaymentLinkProducts([
+      ...collectPaymentLinkIds(currentEvents),
+      ...collectPaymentLinkIds(previousEvents),
+    ]);
     return {
-      payments: classifyStripeEvents(currentEvents, lookup),
-      previousPayments: classifyStripeEvents(previousEvents, lookup),
+      payments: classifyStripeEvents(currentEvents, lookup, linkProducts),
+      previousPayments: classifyStripeEvents(previousEvents, lookup, linkProducts),
       source: {
         id: "stripe",
         label: "Stripe — payments",

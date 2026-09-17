@@ -300,6 +300,32 @@ export function cashBucketFromCheckoutKey(
   return classifyCheckoutKey(checkoutKey).package;
 }
 
+export function classifyFromProductName(
+  productName: string | null | undefined
+): CashClassification {
+  const name = (productName ?? "").trim().toLowerCase();
+  if (!name) return { package: "other", audience: "unknown" };
+  const kids = /\bkids?\b/.test(name);
+  const audience: CashAudience = kids ? "kids" : "adults";
+  if (name.includes("community")) return { package: "community", audience };
+  if (
+    name.includes("one-to-one") ||
+    name.includes("one to one") ||
+    name.includes("1-1") ||
+    name.includes("1 to 1")
+  ) {
+    return { package: "one_to_one", audience };
+  }
+  if (name.includes("group") || name.includes("cohort")) {
+    return { package: "group", audience };
+  }
+  if (name.includes("foundational") || name.includes("refresher")) {
+    return { package: "one_to_one", audience };
+  }
+  if (name.includes("beginner")) return { package: "group", audience };
+  return { package: "other", audience: kids ? "kids" : "unknown" };
+}
+
 export type CheckoutKeyLookup = {
   byPlinkId: Map<string, string>;
   byUrl: Map<string, string>;
