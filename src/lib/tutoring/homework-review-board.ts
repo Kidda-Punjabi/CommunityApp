@@ -355,28 +355,28 @@ export async function loadHomeworkReviewBoard(
     };
   });
 
-  const cohortPackages: HomeworkReviewPackage[] = (
-    await Promise.all(
-      allCohortIds.map(async (cohortId) => {
-        const meta = cohortMeta.get(cohortId);
-        if (!meta?.courseId) return null;
-        const students = await loadCohortMembershipRoster(supabase, cohortId);
-        if (students.length === 0) return null;
-        return {
-          id: encodeHomeworkPackageId({ kind: "cohort", id: cohortId }),
-          kind: "cohort" as const,
-          name: meta.name,
-          courseId: meta.courseId,
-          courseName: meta.courseName,
-          students: students.map((student) => ({
-            studentId: student.studentId,
-            studentName: student.studentName,
-          })),
-          lessons: [] as HomeworkPackageLesson[],
-        };
-      })
-    )
-  ).filter((pack): pack is HomeworkReviewPackage => Boolean(pack));
+  const cohortRows = await Promise.all(
+    allCohortIds.map(async (cohortId) => {
+      const meta = cohortMeta.get(cohortId);
+      if (!meta?.courseId) return null;
+      const students = await loadCohortMembershipRoster(supabase, cohortId);
+      if (students.length === 0) return null;
+      const pack: HomeworkReviewPackage = {
+        id: encodeHomeworkPackageId({ kind: "cohort", id: cohortId }),
+        kind: "cohort",
+        name: meta.name,
+        courseId: meta.courseId,
+        courseName: meta.courseName,
+        students: students.map((student) => ({
+          studentId: student.studentId,
+          studentName: student.studentName,
+        })),
+        lessons: [],
+      };
+      return pack;
+    })
+  );
+  const cohortPackages = cohortRows.flatMap((pack) => (pack ? [pack] : []));
 
   const occupied = occupiedActorCourseKeysFromCohorts(cohortPackages);
   const oneToOnePackages = buildOneToOneHomeworkPackages(enrollments, occupied);
