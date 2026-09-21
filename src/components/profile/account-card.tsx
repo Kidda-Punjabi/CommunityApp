@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BookCallSheet } from "@/components/profile/book-call-sheet";
+import { useKidSession } from "@/components/kids/kid-session-provider";
 import {
   AccountListRow,
   HubCard,
@@ -14,6 +15,8 @@ type AccountCardProps = {
 
 export function AccountCard({ isFreeOnly }: AccountCardProps) {
   const [bookCallOpen, setBookCallOpen] = useState(false);
+  const { activeKidProfile } = useKidSession();
+  const showChangePassword = activeKidProfile === null;
 
   return (
     <>
@@ -34,6 +37,9 @@ export function AccountCard({ isFreeOnly }: AccountCardProps) {
             onClick={() => setBookCallOpen(true)}
           />
           <AccountListRow href="/dashboard/profile/notifications" label="Notification settings" />
+          {showChangePassword ? (
+            <AccountListRow href="/dashboard/profile/password" label="Change password" />
+          ) : null}
         </div>
       </HubCard>
       <BookCallSheet open={bookCallOpen} onClose={() => setBookCallOpen(false)} />

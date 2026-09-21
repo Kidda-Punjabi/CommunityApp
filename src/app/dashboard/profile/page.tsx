@@ -26,7 +26,12 @@ import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ passwordUpdated?: string }>;
+}) {
+  const { passwordUpdated } = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -122,6 +127,11 @@ export default async function ProfilePage() {
       )}
 
       <div className={`mt-8 ${ui.stackLoose}`}>
+        {passwordUpdated ? (
+          <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+            Password updated
+          </p>
+        ) : null}
         {showPlacementReminder && <PlacementReminderBanner />}
         <ProgressSummaryRow progression={progression} />
         <FriendsSummaryRow friends={friendsData.friends} />
