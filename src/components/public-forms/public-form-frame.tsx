@@ -10,10 +10,12 @@ import type { GuestIdentity } from "@/lib/public-forms/guest";
 export function PublicFormFrame({
   heading,
   courseOptions,
+  requireContact = true,
   children,
 }: {
   heading: { kicker: string; title: string; intro: string };
   courseOptions?: PublicGuestCourseOptions;
+  requireContact?: boolean;
   children: (identity: GuestIdentity) => ReactNode;
 }) {
   const [identity, setIdentity] = useState<GuestIdentity | null>(null);
@@ -27,7 +29,11 @@ export function PublicFormFrame({
       <p className="mt-2 text-sm text-zinc-600">{heading.intro}</p>
       <div className="mt-6">
         {!identity ? (
-          <PublicGuestGate onContinue={setIdentity} courseOptions={courseOptions} />
+          <PublicGuestGate
+            onContinue={setIdentity}
+            courseOptions={courseOptions}
+            requireContact={requireContact}
+          />
         ) : (
           children(identity)
         )}

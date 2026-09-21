@@ -8,11 +8,15 @@ export type GuestIdentity = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function validateGuestIdentity(input: {
-  fullName?: unknown;
-  email?: unknown;
-  phone?: unknown;
-}): { ok: true; identity: GuestIdentity } | { ok: false; error: string } {
+export function validateGuestIdentity(
+  input: {
+    fullName?: unknown;
+    email?: unknown;
+    phone?: unknown;
+  },
+  options?: { requireContact?: boolean }
+): { ok: true; identity: GuestIdentity } | { ok: false; error: string } {
+  const requireContact = options?.requireContact !== false;
   const fullName = typeof input.fullName === "string" ? input.fullName.trim() : "";
   const email = typeof input.email === "string" ? input.email.trim() : "";
   const phoneRaw = typeof input.phone === "string" ? input.phone.trim() : "";
@@ -20,8 +24,14 @@ export function validateGuestIdentity(input: {
   if (!fullName) {
     return { ok: false, error: "Please enter your name." };
   }
-  if (!EMAIL_RE.test(email)) {
-    return { ok: false, error: "Please enter a valid email address." };
+  if (requireContact || email) {
+    if (!EMAIL_RE.test(email)) {
+      return { ok: false, error: "Please enter a valid email address." };
+    }
+  }
+
+  if (!requireContact && !phoneRaw) {
+    return { ok: true, identity: { fullName, email, phone: "" } };
   }
 
   const phone = normalizeGuestPhone(phoneRaw);

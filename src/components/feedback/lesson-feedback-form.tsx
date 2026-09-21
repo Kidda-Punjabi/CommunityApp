@@ -170,10 +170,12 @@ export function LessonFeedbackForm({
     <form onSubmit={handleSubmit} className={compact ? "space-y-5" : `mt-6 ${ui.stack}`}>
       <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
         <p className="font-medium text-zinc-900">{guestSubmit?.fullName ?? context.fullName}</p>
-        <p className="mt-1 text-zinc-500">{guestSubmit?.email ?? context.email}</p>
-        {(guestSubmit?.phone ?? context.phone) && (
+        {(guestSubmit?.email ?? context.email) ? (
+          <p className="mt-1 text-zinc-500">{guestSubmit?.email ?? context.email}</p>
+        ) : null}
+        {(guestSubmit?.phone ?? context.phone) ? (
           <p className="mt-0.5 text-zinc-500">{guestSubmit?.phone ?? context.phone}</p>
-        )}
+        ) : null}
         <dl className="mt-3 grid gap-1 sm:grid-cols-2">
           <div>
             <dt className="text-xs uppercase tracking-wide text-zinc-400">Course</dt>

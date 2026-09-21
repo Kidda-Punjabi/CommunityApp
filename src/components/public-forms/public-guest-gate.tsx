@@ -14,9 +14,15 @@ export type PublicGuestCourseOptions = {
 type PublicGuestGateProps = {
   onContinue: (identity: GuestIdentity) => void;
   courseOptions?: PublicGuestCourseOptions;
+  /** Kids forms: name is enough. Adult/foundational keep email + phone required. */
+  requireContact?: boolean;
 };
 
-export function PublicGuestGate({ onContinue, courseOptions }: PublicGuestGateProps) {
+export function PublicGuestGate({
+  onContinue,
+  courseOptions,
+  requireContact = true,
+}: PublicGuestGateProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -26,7 +32,7 @@ export function PublicGuestGate({ onContinue, courseOptions }: PublicGuestGatePr
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const result = validateGuestIdentity({ fullName, email, phone });
+    const result = validateGuestIdentity({ fullName, email, phone }, { requireContact });
     if (!result.ok) {
       setError(result.error);
       return;
@@ -60,7 +66,9 @@ export function PublicGuestGate({ onContinue, courseOptions }: PublicGuestGatePr
       <div>
         <h2 className="text-lg font-semibold text-zinc-900">Before you start</h2>
         <p className="mt-1 text-sm text-zinc-600">
-          Enter your details so we can match this to your course.
+          {requireContact
+            ? "Enter your details so we can match this to your course."
+            : "Enter the learner's name so we can match this to their class. Email and phone are optional."}
         </p>
       </div>
 
@@ -77,26 +85,26 @@ export function PublicGuestGate({ onContinue, courseOptions }: PublicGuestGatePr
       </label>
 
       <label className="block text-sm font-medium text-zinc-700">
-        Email
+        {requireContact ? "Email" : "Email (optional)"}
         <input
           type="email"
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-          required
+          required={requireContact}
         />
       </label>
 
       <label className="block text-sm font-medium text-zinc-700">
-        Phone
+        {requireContact ? "Phone" : "Phone (optional)"}
         <input
           type="tel"
           autoComplete="tel"
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
           className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-          required
+          required={requireContact}
         />
       </label>
 
