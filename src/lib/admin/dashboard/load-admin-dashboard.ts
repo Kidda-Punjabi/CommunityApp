@@ -10,6 +10,7 @@ import { loadEnrollmentGaps } from "@/lib/admin/load-enrollment-gaps";
 import { loadIncompletePackageChecklists } from "@/lib/admin/load-incomplete-package-checklists";
 import { countPendingCohortChangeRequests } from "@/lib/admin/load-admin-cohort-change-requests";
 import { loadPendingCohortSwitchRequestCreatedAts } from "@/lib/admin/load-admin-cohort-switch-requests";
+import { loadOpenIssueReportCreatedAts } from "@/lib/admin/load-admin-issue-reports";
 import { loadAdminOnboardingQueue } from "@/lib/admin/load-admin-onboarding";
 import { loadPendingRescheduleRequestCreatedAts } from "@/lib/admin/load-admin-reschedule-requests";
 import { loadUnseenAppOnboarding } from "@/lib/admin/load-unseen-app-onboarding";
@@ -421,6 +422,7 @@ export async function loadAdminDashboard(
     switchAges,
     rescheduleAges,
     cohortChangePending,
+    issueAges,
     enrollmentGaps,
     unresolved,
     onboarding,
@@ -434,6 +436,7 @@ export async function loadAdminDashboard(
     loadPendingCohortSwitchRequestCreatedAts(supabase),
     loadPendingRescheduleRequestCreatedAts(supabase),
     countPendingCohortChangeRequests(supabase),
+    loadOpenIssueReportCreatedAts(supabase),
     loadEnrollmentGapsCard(supabase),
     loadUnresolvedEnrollmentsCard(supabase, nowMs),
     loadAdminOnboardingQueue(supabase),
@@ -488,6 +491,15 @@ export async function loadAdminDashboard(
       href: "/admin/cohort-change-requests",
       count: cohortChangePending.count,
       tone: cohortChangePending.count > 0 ? "urgent" : "ok",
+      group: "requests",
+    },
+    {
+      id: "issue_reports",
+      label: "Issues",
+      hint: "Open issue reports from Profile",
+      href: "/admin/issue-reports",
+      count: issueAges.createdAts.length,
+      tone: pendingTone(issueAges.createdAts),
       group: "requests",
     },
     enrollmentGaps.card,
@@ -550,6 +562,7 @@ export async function loadAdminDashboard(
     switchAges.error,
     rescheduleAges.error,
     cohortChangePending.error,
+    issueAges.error,
     enrollmentGaps.error,
     unresolved.error,
     onboarding.error,
