@@ -1,15 +1,19 @@
 import {
   WEEK1_STARTING_POINT_LESSON_LABEL,
   type FeedbackFormVariant,
-  type NotionCourseOption,
 } from "@/lib/feedback/constants";
+import type { FeedbackCourseName } from "@/lib/feedback/types";
+import { KIDS_BEGINNERS_COURSE_NAME } from "@/lib/learning/kids-beginners";
+
+export const KIDS_L1_WEEK_2_FEEDBACK_TARGET_ID = "kids-l1-week-2";
+export const KIDS_L1_WEEK_2_LESSON_LABEL = "Family - Week 2";
 
 export type PublicFeedbackTarget = {
   targetId: string;
   formVariant: Extract<FeedbackFormVariant, "standard" | "week1" | "week12">;
   lessonNumber: number;
   lessonLabel: string;
-  course: NotionCourseOption;
+  course: FeedbackCourseName;
 };
 
 function beginnersTarget(
@@ -52,6 +56,13 @@ export function publicFeedbackCopy(target: PublicFeedbackTarget): {
       intro: "How was this Foundational Course lesson for you?",
     };
   }
+  if (target.course === KIDS_BEGINNERS_COURSE_NAME) {
+    return {
+      kicker: "Session feedback",
+      title: `${target.lessonLabel} feedback`,
+      intro: "How was this Kids Beginners Course lesson for you?",
+    };
+  }
   return {
     kicker: "Session feedback",
     title: `Lesson ${target.lessonNumber} feedback`,
@@ -83,6 +94,16 @@ export function parsePublicFeedbackTarget(targetId: string): PublicFeedbackTarge
       lessonNumber,
       lessonLabel: `Lesson ${lessonNumber}`,
       course: "Foundational Course",
+    };
+  }
+
+  if (targetId === KIDS_L1_WEEK_2_FEEDBACK_TARGET_ID) {
+    return {
+      targetId,
+      formVariant: "standard",
+      lessonNumber: 2,
+      lessonLabel: KIDS_L1_WEEK_2_LESSON_LABEL,
+      course: KIDS_BEGINNERS_COURSE_NAME,
     };
   }
 

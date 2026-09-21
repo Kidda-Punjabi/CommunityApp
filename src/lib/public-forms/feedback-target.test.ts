@@ -47,11 +47,39 @@ describe("parsePublicFeedbackTarget", () => {
     }
   });
 
+  it("parses Kids Beginners L1 week 2 as standard session feedback", () => {
+    assert.deepEqual(parsePublicFeedbackTarget("kids-l1-week-2"), {
+      targetId: "kids-l1-week-2",
+      formVariant: "standard",
+      lessonNumber: 2,
+      lessonLabel: "Family - Week 2",
+      course: "Kids Beginners Course (Level 1)",
+    });
+  });
+
+  it("does not reuse adult week-2 or foundational-week-2 for kids L1 week 2", () => {
+    const kids = parsePublicFeedbackTarget("kids-l1-week-2");
+    const adult = parsePublicFeedbackTarget("week-2");
+    const foundational = parsePublicFeedbackTarget("foundational-week-2");
+    assert.ok(kids && adult && foundational);
+    assert.notEqual(kids.course, adult.course);
+    assert.notEqual(kids.lessonLabel, adult.lessonLabel);
+    assert.notEqual(kids.course, foundational.course);
+    assert.deepEqual(adult, {
+      targetId: "week-2",
+      formVariant: "standard",
+      lessonNumber: 2,
+      lessonLabel: "Lesson 2",
+      course: "Beginners Course",
+    });
+  });
+
   it("rejects Foundational weeks outside 1–4 and unknown ids", () => {
     assert.equal(parsePublicFeedbackTarget("foundational-week-5"), null);
     assert.equal(parsePublicFeedbackTarget("foundational-week-0"), null);
     assert.equal(parsePublicFeedbackTarget("week-13"), null);
     assert.equal(parsePublicFeedbackTarget("week-1"), null);
+    assert.equal(parsePublicFeedbackTarget("kids-l1-week-1"), null);
   });
 });
 
@@ -71,5 +99,14 @@ describe("publicFeedbackCopy", () => {
       publicFeedbackCopy(parsePublicFeedbackTarget("week-12")!).title,
       "Week 12 course feedback"
     );
+  });
+
+  it("does not reuse adult Lesson 2 copy for Kids Beginners L1 week 2", () => {
+    const kids = parsePublicFeedbackTarget("kids-l1-week-2");
+    const adult = parsePublicFeedbackTarget("week-2");
+    assert.ok(kids && adult);
+    assert.equal(publicFeedbackCopy(kids).title, "Family - Week 2 feedback");
+    assert.match(publicFeedbackCopy(kids).intro, /Kids Beginners Course/);
+    assert.equal(publicFeedbackCopy(adult).title, "Lesson 2 feedback");
   });
 });

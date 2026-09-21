@@ -47,6 +47,10 @@ function feedbackSortKey(targetId: string, course: string): [number, number] {
     const found = /^foundational-week-(\d+)$/.exec(targetId);
     return [1, found ? Number.parseInt(found[1], 10) : 99];
   }
+  if (course === "Kids Beginners Course (Level 1)") {
+    const found = /^kids-l1-week-(\d+)$/.exec(targetId);
+    return [2, found ? Number.parseInt(found[1], 10) : 99];
+  }
   if (targetId === "week-1-starting-point") return [0, 0];
   if (targetId === "week-1-session") return [0, 1];
   const match = /^week-(\d+)$/.exec(targetId);
@@ -70,6 +74,9 @@ function feedbackMappingNote(
   }
   if (course === "Foundational Course") {
     return `Standard session feedback. Notion Course = ${course}, Lesson = ${lessonLabel}. Three ratings: learning relevance, tutor effectiveness, confidence. Guest must choose 1-1 or their cohort number.`;
+  }
+  if (course === "Kids Beginners Course (Level 1)") {
+    return `Standard session feedback. Notion Course = ${course}, Lesson = ${lessonLabel}. Three ratings: learning relevance, tutor effectiveness, confidence. Guest must choose 1-1 or their Kids Circle.`;
   }
   return `Standard session feedback. Notion Course = ${course}, Lesson = ${lessonLabel}. Three ratings: learning relevance, tutor effectiveness, confidence.`;
 }
