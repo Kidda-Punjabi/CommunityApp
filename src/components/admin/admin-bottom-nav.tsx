@@ -60,7 +60,10 @@ const navItems: NavItem[] = [
   {
     href: "/admin",
     label: "Home",
-    match: (pathname) => pathname === "/admin" || pathname === "/admin/content",
+    match: (pathname) =>
+      pathname === "/admin" ||
+      pathname === "/admin/content" ||
+      pathname.startsWith("/admin/issue-reports"),
   },
   {
     href: "/admin/cohorts-hub",

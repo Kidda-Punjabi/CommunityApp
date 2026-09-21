@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { BookCallSheet } from "@/components/profile/book-call-sheet";
 import { useKidSession } from "@/components/kids/kid-session-provider";
 import {
@@ -17,6 +16,7 @@ export function AccountCard({ isFreeOnly }: AccountCardProps) {
   const [bookCallOpen, setBookCallOpen] = useState(false);
   const { activeKidProfile } = useKidSession();
   const showChangePassword = activeKidProfile === null;
+  const showReportIssue = activeKidProfile === null;
 
   return (
     <>
@@ -32,6 +32,9 @@ export function AccountCard({ isFreeOnly }: AccountCardProps) {
           <AccountListRow href="/dashboard/profile/kids/manage" label="Manage kid profiles & PIN" />
           <AccountListRow href="/dashboard/profile/feedback" label="Share lesson feedback" />
           <AccountListRow href="/dashboard/profile/help" label="Help Centre" />
+          {showReportIssue ? (
+            <AccountListRow href="/dashboard/profile/report-issue" label="Report an issue" />
+          ) : null}
           <AccountListRow
             label="Book a call with the team"
             onClick={() => setBookCallOpen(true)}
