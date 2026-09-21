@@ -21,20 +21,6 @@ export async function POST(request: Request) {
 
   const raw = body as Record<string, unknown>;
   const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
-  const identity = validateGuestIdentity({
-    fullName: raw.fullName,
-    email: raw.email,
-    phone: raw.phone,
-  });
-  if (!identity.ok) {
-    return NextResponse.json({ error: identity.error }, { status: 400 });
-  }
-
-  const scoreRaw = Number(raw.score);
-  if (!Number.isFinite(scoreRaw) || scoreRaw < 0 || scoreRaw > 100) {
-    return NextResponse.json({ error: "Score must be between 0 and 100." }, { status: 400 });
-  }
-  const score = Math.round(scoreRaw);
 
   const link = await lookupPublicFormLinkBySlug(slug);
   if (!link || link.formType !== "quiz") {
@@ -46,14 +32,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
+  const audience = publicCohortAudienceFromCourse({
+    courseName: quiz.courseName,
+    contentTrack: quiz.contentTrack,
+  });
+  const identity = validateGuestIdentity(
+    {
+      fullName: raw.fullName,
+      email: raw.email,
+      phone: raw.phone,
+    },
+    { requireContact: audience !== "kids" }
+  );
+  if (!identity.ok) {
+    return NextResponse.json({ error: identity.error }, { status: 400 });
+  }
+
+  const scoreRaw = Number(raw.score);
+  if (!Number.isFinite(scoreRaw) || scoreRaw < 0 || scoreRaw > 100) {
+    return NextResponse.json({ error: "Score must be between 0 and 100." }, { status: 400 });
+  }
+  const score = Math.round(scoreRaw);
+
   const cohort = typeof raw.cohort === "string" ? raw.cohort.trim() : "";
   const tutor = typeof raw.tutor === "string" ? raw.tutor.trim() : "";
-  const { cohorts, tutors } = await loadPublicFormSelectOptions(
-    publicCohortAudienceFromCourse({
-      courseName: quiz.courseName,
-      contentTrack: quiz.contentTrack,
-    })
-  );
+  const { cohorts, tutors } = await loadPublicFormSelectOptions(audience);
   if (!cohort || !cohorts.includes(cohort)) {
     return NextResponse.json({ error: "Please choose a valid cohort." }, { status: 400 });
   }

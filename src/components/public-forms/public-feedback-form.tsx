@@ -30,8 +30,9 @@ export function PublicFeedbackForm({
   tutors: string[];
   testimonialCalendarUrl?: string | null;
 }) {
+  const audience = publicCohortAudienceFromCourse({ courseName: context.course });
   return (
-    <PublicFormFrame heading={heading}>
+    <PublicFormFrame heading={heading} requireContact={audience !== "kids"}>
       {(identity) => (
         <PublicFeedbackRun
           slug={slug}
@@ -81,7 +82,7 @@ function PublicFeedbackRun({
     ...context,
     fullName: identity.fullName,
     email: identity.email,
-    phone: identity.phone,
+    phone: identity.phone || null,
   };
 
   if (target.formVariant === "week1") {

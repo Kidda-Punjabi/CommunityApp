@@ -29,6 +29,7 @@ export function PublicQuizForm({
   return (
     <PublicFormFrame
       heading={heading}
+      requireContact={audience !== "kids"}
       courseOptions={{
         cohorts: cohortsForPublicForm(cohorts, audience),
         tutors,

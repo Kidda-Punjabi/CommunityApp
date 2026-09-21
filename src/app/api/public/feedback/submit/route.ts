@@ -24,20 +24,6 @@ export async function POST(request: Request) {
 
   const raw = body as Record<string, unknown>;
   const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
-  const identity = validateGuestIdentity({
-    fullName: raw.fullName,
-    email: raw.email,
-    phone: raw.phone,
-  });
-  if (!identity.ok) {
-    return NextResponse.json({ error: identity.error }, { status: 400 });
-  }
-
-  const cohort = typeof raw.cohort === "string" ? raw.cohort.trim() : "";
-  const tutor = typeof raw.tutor === "string" ? raw.tutor.trim() : "";
-  if (!cohort) {
-    return NextResponse.json({ error: "Please choose your cohort." }, { status: 400 });
-  }
 
   const link = await lookupPublicFormLinkBySlug(slug);
   if (!link || link.formType !== "feedback") {
@@ -49,9 +35,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
-  const { cohorts, tutors } = await loadPublicFormSelectOptions(
-    publicCohortAudienceFromCourse({ courseName: target.course })
+  const audience = publicCohortAudienceFromCourse({ courseName: target.course });
+  const identity = validateGuestIdentity(
+    {
+      fullName: raw.fullName,
+      email: raw.email,
+      phone: raw.phone,
+    },
+    { requireContact: audience !== "kids" }
   );
+  if (!identity.ok) {
+    return NextResponse.json({ error: identity.error }, { status: 400 });
+  }
+
+  const cohort = typeof raw.cohort === "string" ? raw.cohort.trim() : "";
+  const tutor = typeof raw.tutor === "string" ? raw.tutor.trim() : "";
+  if (!cohort) {
+    return NextResponse.json({ error: "Please choose your cohort." }, { status: 400 });
+  }
+
+  const { cohorts, tutors } = await loadPublicFormSelectOptions(audience);
   if (!cohorts.includes(cohort)) {
     return NextResponse.json({ error: "Please choose a valid cohort." }, { status: 400 });
   }
@@ -81,7 +84,7 @@ export async function POST(request: Request) {
   const context: FeedbackContext = {
     fullName: identity.identity.fullName,
     email: identity.identity.email,
-    phone: identity.identity.phone,
+    phone: identity.identity.phone || null,
     cohort,
     course: target.course,
     lessonLabel: target.lessonLabel,
