@@ -4,12 +4,16 @@ import type {
   NotionCourseOption,
 } from "./constants";
 
+export type FeedbackCourseName =
+  | NotionCourseOption
+  | "Kids Beginners Course (Level 1)";
+
 export type FeedbackContext = {
   fullName: string;
   email: string;
   phone: string | null;
   cohort: string;
-  course: NotionCourseOption;
+  course: FeedbackCourseName;
   lessonLabel: string;
   lessonNumber: number | null;
   /** Preferred or display name shown on the form. */
