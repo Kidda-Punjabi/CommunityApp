@@ -3,12 +3,16 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  confirmHomeworkRecordingSubmission,
+  createHomeworkRecordingUploadUrl,
   getHomeworkNearLessonWarning,
   getHomeworkPlaybackUrl,
   submitHomeworkRecording,
   type HomeworkActionResult,
 } from "@/app/dashboard/learn/homework-actions";
 import { HomeworkAudioPlayer } from "@/components/homework/homework-audio-player";
+import { HOMEWORK_RECORDING_UPLOAD_ERROR } from "@/lib/tutoring/homework-recording-upload";
+import { uploadHomeworkRecordingToSignedUrl } from "@/lib/tutoring/upload-homework-recording";
 import {
   formatRecordingDuration,
   recordingExtensionForBlob,
@@ -31,6 +35,8 @@ type HomeworkSubmissionSectionProps = {
   catchupReturn?: string | null;
   description?: string | null;
   submitRecording?: HomeworkSubmitRecording;
+  /** Student homework uploads bytes straight to storage. Admin test keeps the server upload. */
+  directUpload?: boolean;
   loadPlaybackUrl?: (storagePath: string) => Promise<HomeworkActionResult>;
   loadNearLessonWarning?: (lessonId: string) => Promise<HomeworkActionResult>;
 };
@@ -72,6 +78,7 @@ function HomeworkRecorderBody({
   variant,
   description,
   submitRecording,
+  directUpload,
   loadPlaybackUrl,
   loadNearLessonWarning,
 }: {
@@ -80,6 +87,7 @@ function HomeworkRecorderBody({
   variant: "standalone" | "integrated" | "embedded";
   description?: string | null;
   submitRecording: HomeworkSubmitRecording;
+  directUpload: boolean;
   loadPlaybackUrl: (storagePath: string) => Promise<HomeworkActionResult>;
   loadNearLessonWarning: (lessonId: string) => Promise<HomeworkActionResult>;
 }) {
@@ -89,6 +97,7 @@ function HomeworkRecorderBody({
   const submitLockRef = useRef(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [nearLessonWarning, setNearLessonWarning] = useState<string | null>(null);
   const [timingTone, setTimingTone] = useState<"late" | "post_lesson">("late");
 
@@ -122,18 +131,54 @@ function HomeworkRecorderBody({
     setActionError(null);
     setActionSuccess(null);
 
-    const extension = recordingExtensionForBlob(recorder.blob);
-    const formData = new FormData();
-    formData.append(
-      "audio",
-      new File([recorder.blob], `homework.${extension}`, {
-        type: recorder.blob.type || "audio/webm",
-      })
-    );
-    formData.append("duration_seconds", String(recorder.durationSeconds));
+    const blob = recorder.blob;
+    const extension = recordingExtensionForBlob(blob);
+    const mimeType = blob.type || "audio/webm";
+    const file = new File([blob], `homework.${extension}`, { type: mimeType });
+    const durationSeconds = recorder.durationSeconds;
 
     startTransition(async () => {
       try {
+        if (directUpload) {
+          setUploadPercent(0);
+          const prepared = await createHomeworkRecordingUploadUrl(lessonId, mimeType);
+          if (prepared.error || !prepared.path || !prepared.token) {
+            setActionError(prepared.error ?? HOMEWORK_RECORDING_UPLOAD_ERROR);
+            return;
+          }
+
+          const uploadError = await uploadHomeworkRecordingToSignedUrl({
+            path: prepared.path,
+            token: prepared.token,
+            file,
+            onProgress: setUploadPercent,
+          });
+          if (uploadError) {
+            setActionError(HOMEWORK_RECORDING_UPLOAD_ERROR);
+            return;
+          }
+
+          setUploadPercent(100);
+          const result = await confirmHomeworkRecordingSubmission({
+            lessonId,
+            storagePath: prepared.path,
+            mimeType,
+            durationSeconds,
+          });
+          if (result.error) {
+            setActionError(result.error);
+            return;
+          }
+
+          setActionSuccess(result.success ?? "Homework submitted!");
+          recorder.discardRecording();
+          router.refresh();
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("audio", file);
+        formData.append("duration_seconds", String(durationSeconds));
         const result = await submitRecording(lessonId, formData);
         if (result.error) {
           setActionError(result.error);
@@ -144,7 +189,10 @@ function HomeworkRecorderBody({
         setActionSuccess(result.success ?? "Homework submitted!");
         recorder.discardRecording();
         router.refresh();
+      } catch {
+        setActionError(HOMEWORK_RECORDING_UPLOAD_ERROR);
       } finally {
+        setUploadPercent(null);
         submitLockRef.current = false;
       }
     });
@@ -284,9 +332,28 @@ function HomeworkRecorderBody({
               disabled={pending}
               className={ui.btnPrimary}
             >
-              {pending ? "Submitting…" : "Submit homework"}
+              {pending
+                ? uploadPercent != null && uploadPercent < 100
+                  ? `Uploading ${uploadPercent}%`
+                  : "Submitting…"
+                : "Submit homework"}
             </button>
           </div>
+          {pending && uploadPercent != null ? (
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-zinc-200"
+              role="progressbar"
+              aria-valuenow={uploadPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Upload progress"
+            >
+              <div
+                className="h-full rounded-full bg-violet-600 transition-[width]"
+                style={{ width: `${uploadPercent}%` }}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -311,6 +378,7 @@ export function HomeworkSubmissionSection({
   catchupReturn = null,
   description = null,
   submitRecording = submitHomeworkRecording,
+  directUpload = true,
   loadPlaybackUrl = getHomeworkPlaybackUrl,
   loadNearLessonWarning = getHomeworkNearLessonWarning,
 }: HomeworkSubmissionSectionProps) {
@@ -326,6 +394,7 @@ export function HomeworkSubmissionSection({
     localSubmission,
     description,
     submitRecording,
+    directUpload,
     loadPlaybackUrl,
     loadNearLessonWarning,
   };

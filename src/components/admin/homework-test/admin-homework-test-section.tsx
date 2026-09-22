@@ -406,6 +406,7 @@ export function AdminHomeworkTestSection() {
                       lessonId={viewLesson.id}
                       submission={null}
                       variant="embedded"
+                      directUpload={false}
                       submitRecording={async (id, formData) => {
                         if (!canSubmitLive || !actorInput) {
                           return { error: PICK_STUDENT_FIRST };
