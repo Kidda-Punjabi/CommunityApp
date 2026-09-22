@@ -1,5 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { HOMEWORK_RECORDINGS_BUCKET } from "@/lib/tutoring/homework-submissions";
+
+const HOMEWORK_RECORDINGS_BUCKET = "homework-recordings";
 
 /**
  * Browser fetch that reports upload progress for the storage PUT.
