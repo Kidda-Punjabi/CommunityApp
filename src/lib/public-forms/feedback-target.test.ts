@@ -74,12 +74,53 @@ describe("parsePublicFeedbackTarget", () => {
     });
   });
 
+  it("parses the other Kids Beginners L1 weeks as standard session feedback", () => {
+    const weeks: Array<{ week: number; lessonLabel: string }> = [
+      { week: 1, lessonLabel: "Greetings & Introductions - Week 1" },
+      { week: 3, lessonLabel: "Basic Needs - Week 3" },
+      { week: 4, lessonLabel: "Numbers - Week 4" },
+      { week: 5, lessonLabel: "Colours - Week 5" },
+      { week: 6, lessonLabel: "Food - Week 6" },
+      { week: 7, lessonLabel: "Ability - Week 7" },
+      { week: 8, lessonLabel: "Hobbies - Week 8" },
+      { week: 9, lessonLabel: "Routine - Week 9" },
+      { week: 10, lessonLabel: "Imperatives and Position - Week 10" },
+      { week: 11, lessonLabel: "Recap - Week 11" },
+      { week: 12, lessonLabel: "Conversation - Week 12" },
+    ];
+    for (const { week, lessonLabel } of weeks) {
+      assert.deepEqual(parsePublicFeedbackTarget(`kids-l1-week-${week}`), {
+        targetId: `kids-l1-week-${week}`,
+        formVariant: "standard",
+        lessonNumber: week,
+        lessonLabel,
+        course: "Kids Beginners Course (Level 1)",
+      });
+    }
+  });
+
+  it("keeps Kids L1 weeks 1 and 12 on the standard form, not adult week1 or week12", () => {
+    const week1 = parsePublicFeedbackTarget("kids-l1-week-1");
+    const week12 = parsePublicFeedbackTarget("kids-l1-week-12");
+    const adultWeek1 = parsePublicFeedbackTarget("week-1-starting-point");
+    const adultWeek12 = parsePublicFeedbackTarget("week-12");
+    assert.ok(week1 && week12 && adultWeek1 && adultWeek12);
+    assert.equal(week1.formVariant, "standard");
+    assert.equal(week12.formVariant, "standard");
+    assert.equal(adultWeek1.formVariant, "week1");
+    assert.equal(adultWeek12.formVariant, "week12");
+    assert.equal(publicFeedbackCopy(week1).title, "Greetings & Introductions - Week 1 feedback");
+    assert.equal(publicFeedbackCopy(week12).title, "Conversation - Week 12 feedback");
+    assert.equal(publicFeedbackCopy(adultWeek12).title, "Week 12 course feedback");
+  });
+
   it("rejects Foundational weeks outside 1–4 and unknown ids", () => {
     assert.equal(parsePublicFeedbackTarget("foundational-week-5"), null);
     assert.equal(parsePublicFeedbackTarget("foundational-week-0"), null);
     assert.equal(parsePublicFeedbackTarget("week-13"), null);
     assert.equal(parsePublicFeedbackTarget("week-1"), null);
-    assert.equal(parsePublicFeedbackTarget("kids-l1-week-1"), null);
+    assert.equal(parsePublicFeedbackTarget("kids-l1-week-13"), null);
+    assert.equal(parsePublicFeedbackTarget("kids-l1-week-0"), null);
   });
 });
 

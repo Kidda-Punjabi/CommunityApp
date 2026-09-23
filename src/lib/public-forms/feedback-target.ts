@@ -8,6 +8,21 @@ import { KIDS_BEGINNERS_COURSE_NAME } from "@/lib/learning/kids-beginners";
 export const KIDS_L1_WEEK_2_FEEDBACK_TARGET_ID = "kids-l1-week-2";
 export const KIDS_L1_WEEK_2_LESSON_LABEL = "Family - Week 2";
 
+/** Weeks other than Week 2. Week 2 stays on its own constants above. */
+const KIDS_L1_FEEDBACK_WEEKS: ReadonlyArray<{ week: number; lessonLabel: string }> = [
+  { week: 1, lessonLabel: "Greetings & Introductions - Week 1" },
+  { week: 3, lessonLabel: "Basic Needs - Week 3" },
+  { week: 4, lessonLabel: "Numbers - Week 4" },
+  { week: 5, lessonLabel: "Colours - Week 5" },
+  { week: 6, lessonLabel: "Food - Week 6" },
+  { week: 7, lessonLabel: "Ability - Week 7" },
+  { week: 8, lessonLabel: "Hobbies - Week 8" },
+  { week: 9, lessonLabel: "Routine - Week 9" },
+  { week: 10, lessonLabel: "Imperatives and Position - Week 10" },
+  { week: 11, lessonLabel: "Recap - Week 11" },
+  { week: 12, lessonLabel: "Conversation - Week 12" },
+];
+
 export type PublicFeedbackTarget = {
   targetId: string;
   formVariant: Extract<FeedbackFormVariant, "standard" | "week1" | "week12">;
@@ -27,6 +42,16 @@ function beginnersTarget(
     lessonNumber,
     lessonLabel: `Lesson ${lessonNumber}`,
     course: "Beginners Course",
+  };
+}
+
+function kidsL1FeedbackTarget(week: number, lessonLabel: string): PublicFeedbackTarget {
+  return {
+    targetId: `kids-l1-week-${week}`,
+    formVariant: "standard",
+    lessonNumber: week,
+    lessonLabel,
+    course: KIDS_BEGINNERS_COURSE_NAME,
   };
 }
 
@@ -105,6 +130,14 @@ export function parsePublicFeedbackTarget(targetId: string): PublicFeedbackTarge
       lessonLabel: KIDS_L1_WEEK_2_LESSON_LABEL,
       course: KIDS_BEGINNERS_COURSE_NAME,
     };
+  }
+
+  const kidsWeek = /^kids-l1-week-(\d+)$/.exec(targetId);
+  if (kidsWeek) {
+    const week = Number.parseInt(kidsWeek[1], 10);
+    const entry = KIDS_L1_FEEDBACK_WEEKS.find((row) => row.week === week);
+    if (!entry) return null;
+    return kidsL1FeedbackTarget(entry.week, entry.lessonLabel);
   }
 
   const match = /^week-(\d+)$/.exec(targetId);
