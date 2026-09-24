@@ -60,6 +60,7 @@ export function AdminDashboardGrid({
                   value={card.count}
                   href={card.href}
                   tone={card.tone}
+                  detail={card.detail}
                 />
               );
             })}

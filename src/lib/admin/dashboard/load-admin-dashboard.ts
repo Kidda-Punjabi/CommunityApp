@@ -1,6 +1,17 @@
 import "server-only";
 
-import { isUkBankHoliday } from "@/lib/admin/dashboard/uk-bank-holidays";
+import {
+  COHORT_SESSION_INTEGRITY_HREF,
+  COHORTS_SETUP_HREF,
+  cohortIssueBreakdown,
+  distinctCohortCount,
+  integrityIssues,
+  INTEGRITY_ISSUE_BREAKDOWN,
+  setupIssues,
+  SETUP_ISSUE_BREAKDOWN,
+  type CohortOpsIssue,
+} from "@/lib/admin/dashboard/cohort-ops-issues";
+import { loadCohortOpsIssues } from "@/lib/admin/dashboard/load-cohort-ops-issues";
 import type {
   AdminDashboardCard,
   AdminDashboardSnapshot,
@@ -16,7 +27,6 @@ import { loadPendingRescheduleRequestCreatedAts } from "@/lib/admin/load-admin-r
 import { loadUnseenAppOnboarding } from "@/lib/admin/load-unseen-app-onboarding";
 import { loadMonthlyRewardsAttention } from "@/lib/admin/monthly-rewards/load-monthly-rewards";
 import { loadAuthEmailSet } from "@/lib/admin/load-admin-profiles-with-email";
-import { loadGroupPurchaseAttention } from "@/lib/group-purchase/load-group-purchase-attention";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const PENDING_STALE_MS = 48 * 60 * 60 * 1000;
@@ -52,11 +62,6 @@ function countTone(count: number, yellowMax: number): DashboardTone {
   return "urgent";
 }
 
-function isTestCohortName(name: string | null | undefined): boolean {
-  const value = (name ?? "").trim().toLowerCase();
-  return value.startsWith("test") || value.startsWith("qa ") || value.includes("qa test");
-}
-
 function daysUntil(iso: string | null, nowMs: number): number | null {
   if (!iso) return null;
   const start = new Date(iso).getTime();
@@ -79,53 +84,57 @@ async function listAuthEmails(supabase: SupabaseClient): Promise<Set<string>> {
   return loadAuthEmailSet(supabase);
 }
 
-function ownCohortClassTitle(title: string, cohortName: string): boolean {
-  const lower = title.trim().toLowerCase();
-  if (!lower.includes(cohortName.trim().toLowerCase())) return false;
-  if (lower.includes("meeting")) return false;
-  return lower.includes("class") || lower.includes("cohort");
-}
-
-async function loadCohortsSetupCard(
-  supabase: SupabaseClient,
+function cohortOpsCards(
+  issues: CohortOpsIssue[],
+  error: string | undefined,
   nowMs: number
-): Promise<{ card: AdminDashboardCard; error?: string }> {
-  const attention = await loadGroupPurchaseAttention();
-  const setupItems = attention.items.filter((item) => item.kind === "group_cohort_setup");
-  const cohortIds = setupItems
-    .map((item) => {
-      const match = item.href.match(/cohort=([0-9a-f-]+)/i);
-      return match?.[1] ?? null;
-    })
-    .filter((id): id is string => Boolean(id));
-
-  const { data: cohorts, error } =
-    cohortIds.length > 0
-      ? await supabase.from("cohorts").select("id, start_date").in("id", cohortIds)
-      : { data: [] as Array<{ id: string; start_date: string | null }>, error: null };
-
-  const startById = new Map(
-    (cohorts ?? []).map((row) => [row.id as string, (row.start_date as string | null) ?? null])
-  );
+): {
+  setup: { card: AdminDashboardCard; error?: string };
+  integrity: { card: AdminDashboardCard; error?: string };
+} {
+  const setup = setupIssues(issues);
+  const integrity = integrityIssues(issues);
+  const setupCount = distinctCohortCount(setup);
+  const integrityCount = distinctCohortCount(integrity);
+  const setupBreakdown = cohortIssueBreakdown(setup, SETUP_ISSUE_BREAKDOWN);
+  const integrityBreakdown = cohortIssueBreakdown(integrity, INTEGRITY_ISSUE_BREAKDOWN);
 
   let urgent = false;
-  for (const id of cohortIds) {
-    const days = daysUntil(startById.get(id) ?? null, nowMs);
+  const seen = new Set<string>();
+  for (const issue of setup) {
+    if (seen.has(issue.cohortId)) continue;
+    seen.add(issue.cohortId);
+    const days = daysUntil(issue.startDate, nowMs);
     if (days == null || days <= SETUP_RED_DAYS) urgent = true;
   }
 
-  const count = setupItems.length;
   return {
-    card: {
-      id: "cohorts_setup",
-      label: "Cohorts needing setup",
-      hint: count === 0 ? "Calendar sync complete" : "No calendar sync / tutor connection",
-      href: "/admin/packages",
-      count,
-      tone: count === 0 ? "ok" : urgent ? "urgent" : "warning",
-      group: "cohorts",
+    setup: {
+      card: {
+        id: "cohorts_setup",
+        label: "Cohorts needing setup",
+        hint: setupCount === 0 ? "All cohorts are set up correctly." : setupBreakdown,
+        href: COHORTS_SETUP_HREF,
+        count: setupCount,
+        tone: setupCount === 0 ? "ok" : urgent ? "urgent" : "warning",
+        group: "cohorts",
+        detail: setupCount === 0 ? undefined : setupBreakdown,
+      },
+      error,
     },
-    error: attention.error ?? error?.message,
+    integrity: {
+      card: {
+        id: "session_integrity",
+        label: "Cohort session integrity",
+        hint: integrityCount === 0 ? "All cohorts are set up correctly." : integrityBreakdown,
+        href: COHORT_SESSION_INTEGRITY_HREF,
+        count: integrityCount,
+        tone: integrityCount === 0 ? "ok" : "urgent",
+        group: "cohorts",
+        detail: integrityCount === 0 ? undefined : integrityBreakdown,
+      },
+      error,
+    },
   };
 }
 
@@ -268,106 +277,6 @@ async function loadUnresolvedEnrollmentsCard(
   };
 }
 
-async function loadSessionIntegrityCard(
-  supabase: SupabaseClient
-): Promise<{ card: AdminDashboardCard; error?: string }> {
-  const { data: cohorts, error: cohortError } = await supabase
-    .from("cohorts")
-    .select("id, name, status")
-    .in("status", ["recruiting", "pre_scheduling", "scheduled", "in_progress", "paused"]);
-
-  if (cohortError) {
-    return {
-      card: {
-        id: "session_integrity",
-        label: "Session integrity",
-        hint: "Could not load",
-        href: "/admin/packages",
-        count: 0,
-        tone: "ok",
-        group: "cohorts",
-      },
-      error: cohortError.message,
-    };
-  }
-
-  const liveCohorts = (cohorts ?? []).filter((cohort) => !isTestCohortName(cohort.name as string));
-  const cohortIds = liveCohorts.map((cohort) => cohort.id as string);
-  const { data: sessions, error: sessionError } =
-    cohortIds.length > 0
-      ? await supabase
-          .from("tutor_scheduled_sessions")
-          .select("id, cohort_id, title, starts_at, status, week_number")
-          .in("cohort_id", cohortIds)
-          .in("status", ["scheduled", "cancelled"])
-      : { data: [], error: null };
-
-  if (sessionError) {
-    return {
-      card: {
-        id: "session_integrity",
-        label: "Session integrity",
-        hint: "Could not load sessions",
-        href: "/admin/packages",
-        count: 0,
-        tone: "ok",
-        group: "cohorts",
-      },
-      error: sessionError.message,
-    };
-  }
-
-  const sessionsByCohort = new Map<string, typeof sessions>();
-  for (const session of sessions ?? []) {
-    const cohortId = session.cohort_id as string;
-    const list = sessionsByCohort.get(cohortId) ?? [];
-    list.push(session);
-    sessionsByCohort.set(cohortId, list);
-  }
-
-  let count = 0;
-  for (const cohort of liveCohorts) {
-    const name = cohort.name as string;
-    const own = (sessionsByCohort.get(cohort.id as string) ?? []).filter((session) =>
-      ownCohortClassTitle(session.title as string, name)
-    );
-    const scheduled = own.filter((session) => session.status === "scheduled");
-    if (scheduled.some((session) => isUkBankHoliday(session.starts_at as string))) {
-      count += 1;
-      continue;
-    }
-
-    const weeks = scheduled
-      .map((session) => session.week_number as number | null)
-      .filter((week): week is number => week != null)
-      .sort((a, b) => a - b);
-    const seen = new Set<number>();
-    let duplicate = false;
-    for (const week of weeks) {
-      if (seen.has(week)) duplicate = true;
-      seen.add(week);
-    }
-    const unique = [...seen].sort((a, b) => a - b);
-    let gap = unique.length > 0 && unique[0] !== 1;
-    for (let index = 1; index < unique.length; index += 1) {
-      if (unique[index] !== unique[index - 1] + 1) gap = true;
-    }
-    if (duplicate || gap) count += 1;
-  }
-
-  return {
-    card: {
-      id: "session_integrity",
-      label: "Cohort session integrity",
-      hint: "Bank-holiday classes still scheduled, or week-number gaps/duplicates",
-      href: "/admin/packages",
-      count,
-      tone: count === 0 ? "ok" : "urgent",
-      group: "cohorts",
-    },
-  };
-}
-
 async function loadMissingRecordingsCard(
   supabase: SupabaseClient
 ): Promise<{ card: AdminDashboardCard; error?: string }> {
@@ -418,7 +327,7 @@ export async function loadAdminDashboard(
   const nowMs = now.getTime();
 
   const [
-    setup,
+    cohortOps,
     switchAges,
     rescheduleAges,
     cohortChangePending,
@@ -430,9 +339,8 @@ export async function loadAdminDashboard(
     incompleteChecklists,
     monthlyRewards,
     recordings,
-    integrity,
   ] = await Promise.all([
-    loadCohortsSetupCard(supabase, nowMs),
+    loadCohortOpsIssues(supabase),
     loadPendingCohortSwitchRequestCreatedAts(supabase),
     loadPendingRescheduleRequestCreatedAts(supabase),
     countPendingCohortChangeRequests(supabase),
@@ -444,8 +352,9 @@ export async function loadAdminDashboard(
     loadIncompletePackageChecklists(supabase),
     loadMonthlyRewardsAttention(supabase),
     loadMissingRecordingsCard(supabase),
-    loadSessionIntegrityCard(supabase),
   ]);
+
+  const { setup, integrity } = cohortOpsCards(cohortOps.issues, cohortOps.error, nowMs);
 
   const paymentSetupCount = onboarding.rows.filter((row) => {
     if (!row.isOverdue) return false;
@@ -570,7 +479,6 @@ export async function loadAdminDashboard(
     incompleteChecklists.error,
     monthlyRewards.error,
     recordings.error,
-    integrity.error,
   ].filter(Boolean);
 
   return {

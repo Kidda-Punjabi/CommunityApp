@@ -23,6 +23,8 @@ export type AdminMetricCardProps = {
   href?: string;
   /** Health cards colour the count. Omit for plain summary metrics. */
   tone?: DashboardTone;
+  /** Optional one-line breakdown under the count. */
+  detail?: string;
   loading?: boolean;
 };
 
@@ -30,6 +32,7 @@ function MetricCardBody({
   label,
   value,
   tone,
+  detail,
   loading,
 }: Omit<AdminMetricCardProps, "href">) {
   if (loading) {
@@ -53,6 +56,7 @@ function MetricCardBody({
         {value}
         {tone ? <span className="sr-only"> {toneLabel[tone]}</span> : null}
       </p>
+      {detail ? <p className="mt-1 text-[11px] leading-snug text-zinc-500">{detail}</p> : null}
     </>
   );
 }
@@ -89,11 +93,12 @@ export function AdminMetricCard({
   value,
   href,
   tone,
+  detail,
   loading = false,
 }: AdminMetricCardProps) {
   return (
     <CardFrame href={href} loading={loading}>
-      <MetricCardBody label={label} value={value} tone={tone} loading={loading} />
+      <MetricCardBody label={label} value={value} tone={tone} detail={detail} loading={loading} />
     </CardFrame>
   );
 }

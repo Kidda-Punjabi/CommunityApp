@@ -76,6 +76,8 @@ const navItems: NavItem[] = [
       pathname.startsWith("/admin/cover-requests") ||
       pathname.startsWith("/admin/cohort-switch-requests") ||
       pathname.startsWith("/admin/cohort-change-requests") ||
+      pathname.startsWith("/admin/cohorts-setup") ||
+      pathname.startsWith("/admin/cohort-session-integrity") ||
       pathname.startsWith("/admin/test-cohort-switch") ||
       pathname.startsWith("/admin/test-session-reschedule"),
   },

@@ -23,6 +23,8 @@ export type AdminDashboardCard = {
   count: number;
   tone: DashboardTone;
   group: "enrollment" | "requests" | "cohorts" | "ops";
+  /** One-line issue breakdown. Only set on the cohort setup and integrity cards. */
+  detail?: string;
 };
 
 export type AdminDashboardSnapshot = {
