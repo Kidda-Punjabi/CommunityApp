@@ -46,10 +46,6 @@ export function needsLessonAssignmentWrite(): LessonAssignmentWrite {
   };
 }
 
-export function cohortClassSessionTitle(cohortName: string): string {
-  return `Kidda Class - ${cohortName}`;
-}
-
 export type LessonSyncSession = {
   id: string;
   lessonId: string | null;
@@ -90,10 +86,13 @@ export function lessonSyncStateFromSessions(
   return "none";
 }
 
-/** Log-based week refresh must not overwrite an explicit lesson assignment or a calendar_link row. */
+/** Log-based week refresh must not overwrite an explicit lesson, a calendar_link row, or a manual week. */
 export function sessionWeekNumberIsFrozen(session: {
   lesson_id?: string | null;
   match_method?: string | null;
+  week_number?: number | null;
 }): boolean {
-  return session.lesson_id != null || session.match_method === "calendar_link";
+  if (session.lesson_id != null) return true;
+  if (session.match_method === "calendar_link") return true;
+  return session.match_method === "manual" && session.week_number != null;
 }

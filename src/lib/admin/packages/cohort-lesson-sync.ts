@@ -2,14 +2,28 @@ import "server-only";
 
 import {
   assignmentForLessonNumber,
-  cohortClassSessionTitle,
   initialLessonSyncMappings,
   needsLessonAssignmentWrite,
   type LessonRef,
   type LessonSyncLesson,
 } from "@/lib/calendar/lesson-assignment";
+import {
+  cohortAnchorTitlesByCohort,
+  isCohortClassSession,
+  type CohortClassSessionMatchInput,
+} from "@/lib/calendar/cohort-session-week-number";
 import { formatSessionWhenUk } from "@/lib/calendar/uk-display-time";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+function qualifyingSessionIds(
+  cohortId: string,
+  rows: Array<CohortClassSessionMatchInput & { id: string }>
+): Set<string> {
+  const anchorTitles = cohortAnchorTitlesByCohort(rows).get(cohortId);
+  return new Set(
+    rows.filter((row) => isCohortClassSession(row, anchorTitles)).map((row) => row.id)
+  );
+}
 
 export type CohortLessonSyncRow = {
   sessionId: string;
@@ -29,14 +43,13 @@ export async function loadCohortIndividualLessonSync(
 ): Promise<{ ok: true; preview: CohortLessonSyncPreview } | { ok: false; error: string }> {
   const { data: cohort, error: cohortError } = await supabase
     .from("cohorts")
-    .select("id, name, course_id")
+    .select("id, course_id")
     .eq("id", cohortId)
     .maybeSingle();
 
   if (cohortError) return { ok: false, error: cohortError.message };
   if (!cohort) return { ok: false, error: "Cohort not found." };
 
-  const title = cohortClassSessionTitle(cohort.name as string);
   const [{ data: lessonRows, error: lessonError }, { data: sessionRows, error: sessionError }] =
     await Promise.all([
       supabase
@@ -46,9 +59,8 @@ export async function loadCohortIndividualLessonSync(
         .order("lesson_number", { ascending: true }),
       supabase
         .from("tutor_scheduled_sessions")
-        .select("id, starts_at, lesson_id, lesson_assignment_status")
+        .select("id, cohort_id, title, status, match_method, starts_at, lesson_id, lesson_assignment_status")
         .eq("cohort_id", cohortId)
-        .eq("title", title)
         .neq("status", "cancelled")
         .order("starts_at", { ascending: true }),
     ]);
@@ -61,7 +73,17 @@ export async function loadCohortIndividualLessonSync(
     lessonNumber: lesson.lesson_number as number,
     title: lesson.title as string,
   }));
-  const sessions = (sessionRows ?? []).map((session) => ({
+  const qualifyingIds = qualifyingSessionIds(
+    cohortId,
+    (sessionRows ?? []).map((session) => ({
+      id: session.id as string,
+      cohort_id: cohortId,
+      title: session.title as string,
+      status: session.status as string | null,
+      match_method: session.match_method as string | null,
+    }))
+  );
+  const sessions = (sessionRows ?? []).filter((session) => qualifyingIds.has(session.id as string)).map((session) => ({
     id: session.id as string,
     startsAt: session.starts_at as string,
     lessonId: (session.lesson_id as string | null) ?? null,
@@ -93,14 +115,13 @@ export async function confirmCohortIndividualLessonSync(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: cohort, error: cohortError } = await supabase
     .from("cohorts")
-    .select("id, name, course_id")
+    .select("id, course_id")
     .eq("id", input.cohortId)
     .maybeSingle();
 
   if (cohortError) return { ok: false, error: cohortError.message };
   if (!cohort) return { ok: false, error: "Cohort not found." };
 
-  const title = cohortClassSessionTitle(cohort.name as string);
   const [{ data: lessonRows, error: lessonError }, { data: sessionRows, error: sessionError }] =
     await Promise.all([
       supabase
@@ -109,9 +130,8 @@ export async function confirmCohortIndividualLessonSync(
         .eq("course_id", cohort.course_id),
       supabase
         .from("tutor_scheduled_sessions")
-        .select("id")
+        .select("id, cohort_id, title, status, match_method")
         .eq("cohort_id", input.cohortId)
-        .eq("title", title)
         .neq("status", "cancelled"),
     ]);
 
@@ -123,7 +143,16 @@ export async function confirmCohortIndividualLessonSync(
     lessonNumber: lesson.lesson_number as number,
   }));
   const lessonById = new Map(lessons.map((lesson) => [lesson.id, lesson]));
-  const sessionIds = new Set((sessionRows ?? []).map((session) => session.id as string));
+  const sessionIds = qualifyingSessionIds(
+    input.cohortId,
+    (sessionRows ?? []).map((session) => ({
+      id: session.id as string,
+      cohort_id: input.cohortId,
+      title: session.title as string,
+      status: session.status as string | null,
+      match_method: session.match_method as string | null,
+    }))
+  );
   const mappedSessionIds = input.mappings.map((mapping) => mapping.sessionId);
 
   if (mappedSessionIds.length !== sessionIds.size || mappedSessionIds.some((id) => !sessionIds.has(id))) {

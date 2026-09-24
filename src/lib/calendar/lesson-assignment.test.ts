@@ -60,9 +60,20 @@ describe("initialLessonSyncMappings", () => {
 });
 
 describe("sessionWeekNumberIsFrozen", () => {
-  it("skips any row with lesson_id, and calendar_link rows that do not have one yet", () => {
+  it("skips lesson assignments, calendar_link rows, and manual rows that already have a week", () => {
     assert.equal(sessionWeekNumberIsFrozen({ lesson_id: "abc", match_method: "attendee_email" }), true);
     assert.equal(sessionWeekNumberIsFrozen({ lesson_id: null, match_method: "calendar_link" }), true);
-    assert.equal(sessionWeekNumberIsFrozen({ lesson_id: null, match_method: "attendee_email" }), false);
+    assert.equal(
+      sessionWeekNumberIsFrozen({ lesson_id: null, match_method: "manual", week_number: 4 }),
+      true
+    );
+    assert.equal(
+      sessionWeekNumberIsFrozen({ lesson_id: null, match_method: "manual", week_number: null }),
+      false
+    );
+    assert.equal(
+      sessionWeekNumberIsFrozen({ lesson_id: null, match_method: "attendee_email", week_number: 3 }),
+      false
+    );
   });
 });

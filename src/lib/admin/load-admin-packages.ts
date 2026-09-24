@@ -17,10 +17,11 @@ import { loadCohortLessonProgressMap } from "@/lib/lessons/load-lesson-log-progr
 import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isAppAccessExpected } from "@/lib/admin/app-access-expected";
+import { lessonSyncStateFromSessions } from "@/lib/calendar/lesson-assignment";
 import {
-  cohortClassSessionTitle,
-  lessonSyncStateFromSessions,
-} from "@/lib/calendar/lesson-assignment";
+  cohortAnchorTitlesByCohort,
+  isCohortClassSession,
+} from "@/lib/calendar/cohort-session-week-number";
 import type { TutorIdSource } from "@/lib/notion/tutor-id-source";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -321,13 +322,14 @@ export async function loadAdminPackagesList(
     cohortIds.length > 0
       ? supabase
           .from("tutor_scheduled_sessions")
-          .select("cohort_id, title, status, lesson_id, lesson_assignment_status")
+          .select("cohort_id, title, status, match_method, lesson_id, lesson_assignment_status")
           .in("cohort_id", cohortIds)
           .neq("status", "cancelled")
       : Promise.resolve({ data: [] as Array<{
           cohort_id: string | null;
           title: string;
           status: string;
+          match_method: string | null;
           lesson_id: string | null;
           lesson_assignment_status: string | null;
         }> }),
@@ -377,12 +379,34 @@ export async function loadAdminPackagesList(
       existing.recurringEventId = row.google_recurring_event_id;
     }
   }
+  const lessonAssignmentList = lessonAssignmentRows ?? [];
+  const anchorTitlesByCohort = cohortAnchorTitlesByCohort(
+    lessonAssignmentList.map((row) => ({
+      cohort_id: row.cohort_id,
+      title: row.title as string,
+      status: row.status as string | null,
+      match_method: row.match_method as string | null,
+    }))
+  );
   const lessonSessionsByCohort = new Map<
     string,
     Array<{ title: string; lessonId: string | null; needsAssignment: boolean }>
   >();
-  for (const row of lessonAssignmentRows ?? []) {
+  for (const row of lessonAssignmentList) {
     if (!row.cohort_id) continue;
+    if (
+      !isCohortClassSession(
+        {
+          cohort_id: row.cohort_id,
+          title: row.title as string,
+          status: row.status as string | null,
+          match_method: row.match_method as string | null,
+        },
+        anchorTitlesByCohort.get(row.cohort_id)
+      )
+    ) {
+      continue;
+    }
     const list = lessonSessionsByCohort.get(row.cohort_id) ?? [];
     list.push({
       title: row.title as string,
@@ -839,11 +863,7 @@ export async function loadAdminPackagesList(
       tutorCalendarLastSyncedAt: cohort.tutor_id
         ? (connectionByTutorId.get(cohort.tutor_id) ?? null)
         : null,
-      lessonSyncState: lessonSyncStateFromSessions(
-        (lessonSessionsByCohort.get(cohort.id) ?? []).filter(
-          (session) => session.title === cohortClassSessionTitle(cohort.name)
-        )
-      ),
+      lessonSyncState: lessonSyncStateFromSessions(lessonSessionsByCohort.get(cohort.id) ?? []),
     });
   }
 
