@@ -38,14 +38,26 @@ export function AdminHomeContent() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchAdminDashboard().then((result) => {
-      if (cancelled) return;
-      setCards(result.cards);
-      setDashboardError(result.error ?? null);
-      setLoadingDashboard(false);
-    });
+
+    function load() {
+      void fetchAdminDashboard().then((result) => {
+        if (cancelled) return;
+        setCards(result.cards);
+        setDashboardError(result.error ?? null);
+        setLoadingDashboard(false);
+      });
+    }
+
+    load();
+
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted) load();
+    }
+
+    window.addEventListener("pageshow", onPageShow);
     return () => {
       cancelled = true;
+      window.removeEventListener("pageshow", onPageShow);
     };
   }, []);
 
