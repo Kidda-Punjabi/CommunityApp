@@ -11,7 +11,12 @@ function localDayBounds(iso: string): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-/** When Google replaces a recurring instance (new id, same series + day), drop the old row. */
+/**
+ * Legacy same-series same-day delete. Calendar sync does not call this.
+ * Replacement is planned in planTutorCalendarWrites, which copies lesson_id,
+ * match_method, and cohort_id onto the new row, or retargets a protected row
+ * in place instead of inserting a duplicate.
+ */
 export async function removeReplacedRecurringInstance(
   adminClient: SupabaseClient,
   tutorId: string,

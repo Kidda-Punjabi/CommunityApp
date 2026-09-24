@@ -18,6 +18,7 @@ import {
   packageCalendarNeedsAttention,
   resolvePackageCalendarLinkState,
 } from "@/lib/admin/packages/calendar-link-state";
+import { CohortLessonSyncControl } from "@/components/admin/packages/cohort-lesson-sync-control";
 
 type Candidate = {
   googleEventId: string;
@@ -268,6 +269,13 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
               {linkedSessionCount} linked session{linkedSessionCount === 1 ? "" : "s"}
             </p>
           ) : null}
+          {isCohort ? (
+            <CohortLessonSyncControl
+              cohortId={row.id}
+              state={row.lessonSyncState}
+              onSynced={onLinked}
+            />
+          ) : null}
         </div>
 
         {confirmUnlink ? (
@@ -386,6 +394,13 @@ export function PackageCalendarCell({ row, onLinked }: PackageCalendarCellProps)
         <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-900">
           Calendar synced
         </span>
+        {isCohort ? (
+          <CohortLessonSyncControl
+            cohortId={row.id}
+            state={row.lessonSyncState}
+            onSynced={onLinked}
+          />
+        ) : null}
         {row.tutorCalendarLastSyncedAt ? (
           <p className="text-[10px] text-zinc-400">
             Last sync{" "}

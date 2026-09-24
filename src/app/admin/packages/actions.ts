@@ -740,6 +740,42 @@ export async function linkCohortCalendarMatch(input: {
   }
 }
 
+export async function loadCohortIndividualLessonSyncAction(
+  cohortId: string
+): Promise<{ preview?: import("@/lib/admin/packages/cohort-lesson-sync").CohortLessonSyncPreview; error?: string }> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { loadCohortIndividualLessonSync } = await import(
+      "@/lib/admin/packages/cohort-lesson-sync"
+    );
+    const result = await loadCohortIndividualLessonSync(supabase, cohortId);
+    if (!result.ok) return { error: result.error };
+    return { preview: result.preview };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not load lessons." };
+  }
+}
+
+export async function confirmCohortIndividualLessonSyncAction(input: {
+  cohortId: string;
+  mappings: Array<{ sessionId: string; lessonId: string | null }>;
+}): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const supabase = createServiceRoleClient();
+    const { confirmCohortIndividualLessonSync } = await import(
+      "@/lib/admin/packages/cohort-lesson-sync"
+    );
+    const result = await confirmCohortIndividualLessonSync(supabase, input);
+    if (!result.ok) return { error: result.error };
+    revalidatePackages(input.cohortId);
+    return { success: "Individual lessons synced." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not sync lessons." };
+  }
+}
+
 export async function unlinkCohortCalendarMatch(
   cohortId: string
 ): Promise<ActionResult & { unlinkedCount?: number }> {

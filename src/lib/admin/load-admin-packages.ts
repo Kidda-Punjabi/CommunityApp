@@ -17,6 +17,10 @@ import { loadCohortLessonProgressMap } from "@/lib/lessons/load-lesson-log-progr
 import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isAppAccessExpected } from "@/lib/admin/app-access-expected";
+import {
+  cohortClassSessionTitle,
+  lessonSyncStateFromSessions,
+} from "@/lib/calendar/lesson-assignment";
 import type { TutorIdSource } from "@/lib/notion/tutor-id-source";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -304,7 +308,8 @@ export async function loadAdminPackagesList(
     .filter((row) => row.notion_page_id)
     .map((row) => row.id);
 
-  const [{ data: recurringSessions }, { data: calendarConnections }] = await Promise.all([
+  const [{ data: recurringSessions }, { data: lessonAssignmentRows }, { data: calendarConnections }] =
+    await Promise.all([
     cohortIds.length > 0
       ? supabase
           .from("tutor_scheduled_sessions")
@@ -313,6 +318,19 @@ export async function loadAdminPackagesList(
           .not("google_recurring_event_id", "is", null)
           .order("starts_at", { ascending: true })
       : Promise.resolve({ data: [] }),
+    cohortIds.length > 0
+      ? supabase
+          .from("tutor_scheduled_sessions")
+          .select("cohort_id, title, status, lesson_id, lesson_assignment_status")
+          .in("cohort_id", cohortIds)
+          .neq("status", "cancelled")
+      : Promise.resolve({ data: [] as Array<{
+          cohort_id: string | null;
+          title: string;
+          status: string;
+          lesson_id: string | null;
+          lesson_assignment_status: string | null;
+        }> }),
     cohortTutorIds.length > 0
       ? supabase
           .from("tutor_google_calendar_connections")
@@ -358,6 +376,20 @@ export async function loadAdminPackagesList(
       existing.endsAt = row.ends_at;
       existing.recurringEventId = row.google_recurring_event_id;
     }
+  }
+  const lessonSessionsByCohort = new Map<
+    string,
+    Array<{ title: string; lessonId: string | null; needsAssignment: boolean }>
+  >();
+  for (const row of lessonAssignmentRows ?? []) {
+    if (!row.cohort_id) continue;
+    const list = lessonSessionsByCohort.get(row.cohort_id) ?? [];
+    list.push({
+      title: row.title as string,
+      lessonId: (row.lesson_id as string | null) ?? null,
+      needsAssignment: row.lesson_assignment_status === "needs_assignment",
+    });
+    lessonSessionsByCohort.set(row.cohort_id, list);
   }
   const connectionByTutorId = new Map(
     (calendarConnections ?? []).map((row) => [
@@ -807,6 +839,11 @@ export async function loadAdminPackagesList(
       tutorCalendarLastSyncedAt: cohort.tutor_id
         ? (connectionByTutorId.get(cohort.tutor_id) ?? null)
         : null,
+      lessonSyncState: lessonSyncStateFromSessions(
+        (lessonSessionsByCohort.get(cohort.id) ?? []).filter(
+          (session) => session.title === cohortClassSessionTitle(cohort.name)
+        )
+      ),
     });
   }
 
@@ -972,6 +1009,7 @@ export async function loadAdminPackagesList(
       tutorCalendarLastSyncedAt: instance.tutor_id
         ? (connectionByTutorId.get(instance.tutor_id) ?? null)
         : null,
+      lessonSyncState: "none",
     });
   }
 
@@ -1041,6 +1079,7 @@ async function loadCommunityPackageRow(
     calendarNeedsAttention: false,
     calendarLinkedEvent: null,
     tutorCalendarLastSyncedAt: null,
+    lessonSyncState: "none",
   };
 }
 

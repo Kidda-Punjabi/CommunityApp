@@ -9,8 +9,10 @@ import type { CalendarExclusionRow } from "@/lib/calendar/exclusions";
 import type { GoogleCalendarEvent } from "@/lib/calendar/types";
 import { calendarSyncRangeStart } from "@/lib/calendar/constants";
 import {
-  removeReplacedRecurringInstance,
-} from "@/lib/calendar/session-dedup";
+  planTutorCalendarWrites,
+  type CalendarSessionSnapshot,
+  type CarriedSessionFields,
+} from "@/lib/calendar/plan-calendar-event-write";
 
 const DB_CHUNK_SIZE = 100;
 
@@ -27,8 +29,14 @@ type ConnectionRow = {
 type ExistingSessionRow = {
   id: string;
   google_event_id: string;
+  google_recurring_event_id: string | null;
+  cohort_id: string | null;
+  student_id: string | null;
   rescheduling_allowed: boolean;
-  match_method: string;
+  match_method: string | null;
+  starts_at: string;
+  lesson_id: string | null;
+  lesson_assignment_status: string | null;
 };
 
 type SessionUpsertRow = {
@@ -49,6 +57,8 @@ type SessionUpsertRow = {
   updated_at: string;
   status: "scheduled";
   rescheduling_allowed: boolean;
+  lesson_id?: string | null;
+  lesson_assignment_status?: "needs_assignment" | null;
 };
 
 async function getValidAccessToken(
@@ -73,12 +83,45 @@ async function runInChunks<T>(
   }
 }
 
+function toSessionSnapshot(row: ExistingSessionRow): CalendarSessionSnapshot {
+  return {
+    id: row.id,
+    googleEventId: row.google_event_id,
+    googleRecurringEventId: row.google_recurring_event_id,
+    cohortId: row.cohort_id,
+    studentId: row.student_id,
+    matchMethod: row.match_method,
+    startsAt: row.starts_at,
+    lessonId: row.lesson_id,
+    lessonAssignmentStatus:
+      row.lesson_assignment_status === "needs_assignment" ? "needs_assignment" : null,
+    reschedulingAllowed: row.rescheduling_allowed,
+  };
+}
+
+function applyCarriedSessionFields(
+  row: SessionUpsertRow,
+  carry: CarriedSessionFields | null
+): SessionUpsertRow {
+  if (!carry) return row;
+  const cohortId = carry.cohortId;
+  return {
+    ...row,
+    lesson_id: carry.lessonId,
+    lesson_assignment_status: carry.lessonAssignmentStatus,
+    match_method: carry.matchMethod,
+    cohort_id: cohortId,
+    student_id: cohortId ? null : carry.studentId,
+    rescheduling_allowed: cohortId ? false : carry.reschedulingAllowed,
+  };
+}
+
 function buildSessionRow(
   tutorId: string,
   event: GoogleCalendarEvent,
   match: ReturnType<typeof matchEventToStudents>,
   updatedAt: string,
-  existing?: ExistingSessionRow | null
+  existing?: { rescheduling_allowed: boolean } | null
 ): SessionUpsertRow {
   const cohortId = match.studentId ? null : match.cohortId;
   // Always set explicitly — PostgREST upserts omit defaults and null out missing
@@ -146,18 +189,15 @@ export async function syncTutorGoogleCalendar(
       loadTutorMatchCandidates(adminClient, tutorId),
       adminClient
         .from("tutor_scheduled_sessions")
-        .select("id, google_event_id, rescheduling_allowed, match_method")
+        .select(
+          "id, google_event_id, google_recurring_event_id, cohort_id, student_id, rescheduling_allowed, match_method, starts_at, lesson_id, lesson_assignment_status"
+        )
         .eq("tutor_id", tutorId),
     ]);
 
   if (existingError) throw existingError;
 
-  const existingByGoogleEventId = new Map(
-    (existingSessions ?? []).map((session) => [
-      session.google_event_id,
-      session as ExistingSessionRow,
-    ])
-  );
+  const storedSessions = ((existingSessions ?? []) as ExistingSessionRow[]).map(toSessionSnapshot);
 
   const syncToken = options?.forceFullSync ? null : connection.sync_token;
   const isFullSync = !syncToken;
@@ -172,73 +212,80 @@ export async function syncTutorGoogleCalendar(
 
   const updatedAt = new Date().toISOString();
   const toUpsert: SessionUpsertRow[] = [];
-  const manualUpdates: Array<{ id: string; payload: Record<string, unknown> }> = [];
+  const carriedUpserts: SessionUpsertRow[] = [];
+  const inPlaceUpdates: Array<{ id: string; payload: Record<string, unknown> }> = [];
+  const replacedSessionIds: string[] = [];
   const cohortIdsToRefresh = new Set<string>();
   const seenGoogleEventIds = new Set<string>();
   let synced = 0;
   const skipped = 0;
 
-  if (cancelledEventIds.length > 0) {
-    await runInChunks(cancelledEventIds, DB_CHUNK_SIZE, async (chunk) => {
-      const { error: deleteError } = await adminClient
-        .from("tutor_scheduled_sessions")
-        .delete()
-        .eq("tutor_id", tutorId)
-        .in("google_event_id", chunk);
-      if (deleteError) throw deleteError;
-    });
-  }
+  const matchByEventId = new Map<string, ReturnType<typeof matchEventToStudents>>();
+  const { plans, cancelledEventIdsToDelete } = planTutorCalendarWrites({
+    events: events.map((event) => {
+      const match = matchEventToStudents(event, students, cohorts);
+      matchByEventId.set(event.id, match);
+      return {
+        id: event.id,
+        start: event.start,
+        recurringEventId: event.recurringEventId ?? null,
+        matchCohortId: match.studentId ? null : match.cohortId,
+        matchStudentId: match.studentId,
+      };
+    }),
+    sessions: storedSessions,
+    cancelledEventIds,
+  });
 
-  for (const event of events) {
-    const match = matchEventToStudents(event, students, cohorts);
-    const existing = existingByGoogleEventId.get(event.id);
-    const row = buildSessionRow(tutorId, event, match, updatedAt, existing);
+  for (const plan of plans) {
+    const event = events.find((item) => item.id === plan.eventId);
+    const match = matchByEventId.get(plan.eventId);
+    if (!event || !match) continue;
 
-    if (row.cohort_id) cohortIdsToRefresh.add(row.cohort_id);
-
-    await removeReplacedRecurringInstance(adminClient, tutorId, event, match);
-
-    if (existing && isProtectedCalendarMatchMethod(existing.match_method)) {
-      manualUpdates.push({
-        id: existing.id,
-        payload: {
-          title: row.title,
-          starts_at: row.starts_at,
-          ends_at: row.ends_at,
-          meet_link: row.meet_link,
-          location: row.location,
-          attendee_emails: row.attendee_emails,
-          google_recurring_event_id: row.google_recurring_event_id,
-          google_updated_at: row.google_updated_at,
-          updated_at: row.updated_at,
-        },
-      });
-    } else {
-      toUpsert.push(row);
-    }
-
+    if (plan.cohortId) cohortIdsToRefresh.add(plan.cohortId);
     seenGoogleEventIds.add(event.id);
     synced += 1;
+
+    if (plan.action === "update-in-place") {
+      inPlaceUpdates.push({
+        id: plan.sessionId,
+        payload: {
+          google_event_id: event.id,
+          title: event.summary,
+          starts_at: event.start,
+          ends_at: event.end,
+          meet_link: event.hangoutLink ?? null,
+          location: event.location ?? null,
+          attendee_emails: event.attendeeEmails,
+          google_recurring_event_id: event.recurringEventId ?? null,
+          google_updated_at: event.updated ?? null,
+          updated_at: updatedAt,
+        },
+      });
+      continue;
+    }
+
+    const stored = storedSessions.find((session) => session.googleEventId === event.id);
+    const row = applyCarriedSessionFields(
+      buildSessionRow(
+        tutorId,
+        event,
+        match,
+        updatedAt,
+        stored ? { rescheduling_allowed: stored.reschedulingAllowed } : null
+      ),
+      plan.carry
+    );
+    if (plan.carry) carriedUpserts.push(row);
+    else toUpsert.push(row);
+    replacedSessionIds.push(...plan.deleteSessionIds);
   }
 
   console.info(
-    `[calendar sync] tutor=${tutorId} events=${events.length} upsert=${toUpsert.length} manual=${manualUpdates.length} cancelled=${cancelledEventIds.length} full=${isFullSync}`
+    `[calendar sync] tutor=${tutorId} events=${events.length} upsert=${toUpsert.length} carried=${carriedUpserts.length} inplace=${inPlaceUpdates.length} cancelled=${cancelledEventIdsToDelete.length} full=${isFullSync}`
   );
 
-  await runInChunks(toUpsert, DB_CHUNK_SIZE, async (chunk) => {
-    const { error: upsertError } = await adminClient
-      .from("tutor_scheduled_sessions")
-      .upsert(chunk, { onConflict: "tutor_id,google_event_id" });
-    if (upsertError) {
-      console.error(
-        `[calendar sync] upsert failed tutor=${tutorId}:`,
-        upsertError.message
-      );
-      throw upsertError;
-    }
-  });
-
-  await runInChunks(manualUpdates, DB_CHUNK_SIZE, async (chunk) => {
+  await runInChunks(inPlaceUpdates, DB_CHUNK_SIZE, async (chunk) => {
     await Promise.all(
       chunk.map(async ({ id, payload }) => {
         const { error: updateError } = await adminClient
@@ -249,6 +296,42 @@ export async function syncTutorGoogleCalendar(
       })
     );
   });
+
+  if (replacedSessionIds.length > 0) {
+    await runInChunks(replacedSessionIds, DB_CHUNK_SIZE, async (chunk) => {
+      const { error: deleteError } = await adminClient
+        .from("tutor_scheduled_sessions")
+        .delete()
+        .in("id", chunk);
+      if (deleteError) throw deleteError;
+    });
+  }
+
+  for (const rows of [toUpsert, carriedUpserts]) {
+    await runInChunks(rows, DB_CHUNK_SIZE, async (chunk) => {
+      const { error: upsertError } = await adminClient
+        .from("tutor_scheduled_sessions")
+        .upsert(chunk, { onConflict: "tutor_id,google_event_id" });
+      if (upsertError) {
+        console.error(
+          `[calendar sync] upsert failed tutor=${tutorId}:`,
+          upsertError.message
+        );
+        throw upsertError;
+      }
+    });
+  }
+
+  if (cancelledEventIdsToDelete.length > 0) {
+    await runInChunks(cancelledEventIdsToDelete, DB_CHUNK_SIZE, async (chunk) => {
+      const { error: deleteError } = await adminClient
+        .from("tutor_scheduled_sessions")
+        .delete()
+        .eq("tutor_id", tutorId)
+        .in("google_event_id", chunk);
+      if (deleteError) throw deleteError;
+    });
+  }
 
   if (cohortIdsToRefresh.size > 0) {
     try {
@@ -298,6 +381,8 @@ export async function syncTutorGoogleCalendar(
   return { synced, skipped };
 }
 
+// Deletes only. Inserts and protected-row retargets happen earlier in this function,
+// so a retargeted row already carries the new google_event_id and is in seenGoogleEventIds.
 async function reconcileRemovedCalendarEvents(
   adminClient: SupabaseClient,
   tutorId: string,

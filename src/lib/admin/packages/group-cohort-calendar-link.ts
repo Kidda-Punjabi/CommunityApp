@@ -25,6 +25,7 @@ import {
   UK_DISPLAY_TIMEZONE,
   weekdayNameInTimezone,
 } from "@/lib/calendar/uk-display-time";
+import { assignmentForLessonNumber, type LessonRef } from "@/lib/calendar/lesson-assignment";
 import {
   isoFromDateInput,
   weekdayFromDateInput,
@@ -407,6 +408,18 @@ export async function insertGroupCohortCalendarLinkedSessions(
     }
   }
 
+  const { data: lessonRows, error: lessonError } = await supabase
+    .from("lessons")
+    .select("id, lesson_number")
+    .eq("course_id", params.courseId);
+
+  if (lessonError) return { ok: false, error: lessonError.message };
+
+  const lessons: LessonRef[] = (lessonRows ?? []).map((lesson) => ({
+    id: lesson.id as string,
+    lessonNumber: lesson.lesson_number as number,
+  }));
+
   const now = new Date().toISOString();
   const rows = params.included.map((occurrence) => ({
     tutor_id: params.tutorId,
@@ -424,7 +437,7 @@ export async function insertGroupCohortCalendarLinkedSessions(
     match_method: "calendar_link" as const,
     status: "scheduled" as const,
     rescheduling_allowed: false,
-    week_number: occurrence.weekNumber,
+    ...assignmentForLessonNumber(occurrence.weekNumber, lessons),
     updated_at: now,
   }));
 

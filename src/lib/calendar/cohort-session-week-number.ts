@@ -1,3 +1,4 @@
+import { sessionWeekNumberIsFrozen } from "./lesson-assignment";
 import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
 import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -126,7 +127,7 @@ export async function refreshCohortSessionWeekNumbers(
 
   const { data: sessions, error: sessionsError } = await adminClient
     .from("tutor_scheduled_sessions")
-    .select("id, cohort_id, starts_at, title, status, match_method")
+    .select("id, cohort_id, starts_at, title, status, match_method, lesson_id")
     .in("cohort_id", uniqueCohortIds)
     .neq("status", "cancelled");
 
@@ -151,15 +152,19 @@ export async function refreshCohortSessionWeekNumbers(
   const ambiguousSessionIds: string[] = [];
   let updated = 0;
 
-  const calendarLinkedIds = new Set(
-    ((sessions ?? []) as Array<CohortSessionWeekInput & { match_method?: string | null }>)
-      .filter((session) => session.match_method === "calendar_link")
+  const frozenSessionIds = new Set(
+    (
+      (sessions ?? []) as Array<
+        CohortSessionWeekInput & { lesson_id?: string | null; match_method?: string | null }
+      >
+    )
+      .filter((session) => sessionWeekNumberIsFrozen(session))
       .map((session) => session.id)
   );
 
   await Promise.all(
     [...classSessionIds].map(async (sessionId) => {
-      if (calendarLinkedIds.has(sessionId)) return;
+      if (frozenSessionIds.has(sessionId)) return;
       const weekNumber = weekNumberBySessionId.get(sessionId) ?? null;
       if (weekNumber == null) ambiguousSessionIds.push(sessionId);
       const { error } = await adminClient

@@ -81,6 +81,8 @@ export type AdminPackageListRow = {
   calendarLinkedEvent: CohortCalendarLinkedEvent | null;
   /** Tutor Google Calendar last_synced_at, if connected. */
   tutorCalendarLastSyncedAt: string | null;
+  /** Group cohort individual-lesson sync. `none` for 1-1 runs and cohorts not yet processed. */
+  lessonSyncState: "synced" | "needs_assignment" | "none";
 };
 
 export type PackagesFilterField = "status" | "tutor" | "course" | "delivery_mode";
