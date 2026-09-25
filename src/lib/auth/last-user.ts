@@ -17,7 +17,10 @@ export function lastUserCookieOptions() {
 }
 
 export function serializeLastUser(payload: LastUserPayload): string {
-  return JSON.stringify(payload);
+  return JSON.stringify({
+    email: payload.email,
+    displayName: payload.displayName,
+  });
 }
 
 export function parseLastUser(value: string | undefined | null): LastUserPayload | null {
@@ -32,7 +35,7 @@ export function parseLastUser(value: string | undefined | null): LastUserPayload
     return {
       email: parsed.email,
       displayName: parsed.displayName,
-      avatarUrl: typeof parsed.avatarUrl === "string" ? parsed.avatarUrl : null,
+      avatarUrl: null,
     };
   } catch {
     return null;
@@ -55,8 +58,6 @@ export function lastUserFromAuthMetadata(user: {
       : "";
   const firstName = fullName ? fullName.split(/\s+/)[0] : "";
   const displayName = preferred || firstName || user.email.split("@")[0];
-  const avatarUrl =
-    typeof user.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null;
 
-  return { email: user.email, displayName, avatarUrl };
+  return { email: user.email, displayName, avatarUrl: null };
 }

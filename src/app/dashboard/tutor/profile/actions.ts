@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { avatarObjectPathForUser } from "@/lib/storage/signed-media";
 import { revalidatePath } from "next/cache";
 
 export type TutorProfileActionState = {
@@ -90,12 +91,17 @@ export async function updateTutorAvatarUrl(avatarUrl: string): Promise<TutorProf
     return { error: "You must be signed in." };
   }
 
+  const avatarPath = avatarObjectPathForUser(user.id, avatarUrl);
+  if (!avatarPath) {
+    return { error: "That photo could not be saved." };
+  }
+
   const { error } = await supabase
     .from("profiles")
     .upsert(
       {
         id: user.id,
-        avatar_url: avatarUrl,
+        avatar_url: avatarPath,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" }
