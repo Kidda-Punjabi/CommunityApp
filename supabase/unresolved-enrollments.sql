@@ -131,6 +131,7 @@ SET search_path = public
 AS $$
 #variable_conflict use_column
 BEGIN
+  PERFORM set_config('statement_timeout', '25s', true);
   PERFORM public.assert_unresolved_enrollment_reader();
 
   RETURN QUERY
@@ -634,12 +635,16 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.admin_unresolved_enrollment_count()
 RETURNS integer
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT count(*)::integer FROM public.admin_unresolved_enrollment_rows();
+BEGIN
+  PERFORM set_config('statement_timeout', '25s', true);
+  PERFORM public.assert_unresolved_enrollment_reader();
+  RETURN (SELECT count(*)::integer FROM public.admin_unresolved_enrollment_rows());
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.admin_resolve_unresolved_enrollment(
