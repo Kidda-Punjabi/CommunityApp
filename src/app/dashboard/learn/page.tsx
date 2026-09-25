@@ -1,3 +1,5 @@
+import { AdultClassCard } from "@/components/learn/adult-class-card";
+import { ContinueAsKidCards } from "@/components/learn/continue-as-kid-cards";
 import { HomeGreetingHeader } from "@/components/home-greeting-header";
 import {
   HomeStreakBanner,
@@ -5,7 +7,6 @@ import {
 } from "@/components/home-streak-stats";
 import { LearnCertificatesRow } from "@/components/learn/learn-certificates-row";
 import { LearnCourseRow } from "@/components/learn/learn-course-row";
-import { LearnCourseTiles, type LearnHubTile } from "@/components/learn/learn-course-tiles";
 import { LearnKidsProgressLink } from "@/components/learn/learn-kids-progress-link";
 import { LearnSecondaryTiles } from "@/components/learn/learn-secondary-tiles";
 import {
@@ -25,7 +26,7 @@ import {
   fetchAccessibleKidsCourses,
   kidsCourseLearnPath,
 } from "@/lib/learning/kids-courses";
-import { kidsCourseHubStatus } from "@/lib/learning/kids-cohort-display";
+import { loadAdultClassCards } from "@/lib/learning/load-adult-class-cards";
 import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
 import { courseDetailPath } from "@/lib/learn/course-levels";
 import { loadRegisteredComingSoonLevels } from "@/lib/learn/course-interest";
@@ -182,18 +183,11 @@ export default async function LearnPage() {
     ? community.unlockUrl ?? "/courses/community"
     : learnTrackPath("community");
 
-  const kidsTiles: LearnHubTile[] = kidsCourses.map((course) => ({
-    id: `kids-${course.id}`,
-    kind: "kids-course" as const,
-    href: kidsCourseLearnPath(course.id),
-    title: course.name,
-    status: kidsCourseHubStatus({
-      cohortName: course.cohortName,
-      startDate: course.startDate,
-      gated: course.gated,
-    }),
-    tone: "accent" as const,
-  }));
+  const classCards =
+    actor.kind === "kid" || kidProfileCount === 0
+      ? []
+      : await loadAdultClassCards(supabase, user.id);
+  const classTiers = new Set(classCards.map((card) => card.tier));
 
   if (actor.kind === "kid") {
     const beginnerCourse = kidsCourses[0] ?? null;
@@ -255,36 +249,49 @@ export default async function LearnPage() {
           rescueStreak: dashboard.stats.rescueStreak,
         }}
       >
-        {greeting}
-
-        {kidsTiles.length > 0 ? (
+        {kidProfileCount > 0 ? (
           <div className="mb-5">
-            <LearnCourseTiles tiles={kidsTiles} />
+            <ContinueAsKidCards
+              kids={kidProgressSummaries.map((kid) => ({
+                id: kid.kidProfileId,
+                name: kid.kidName,
+                courseName: kid.courseName,
+              }))}
+            />
           </div>
         ) : null}
 
+        {greeting}
+
         <div className="space-y-3">
-          <LearnCourseRow
-            level="foundational"
-            tourId="learn-tile-foundational"
-            href={
-              foundationalLocked
-                ? foundational.unlockUrl ?? "/courses/foundational"
-                : learnTrackPath("foundational")
-            }
-            status={foundationalStatus}
-            percent={foundationalLocked ? null : foundationalPercent}
-          />
-          <LearnCourseRow
-            level="beginners"
-            tourId="learn-tile-beginners"
-            href={
-              beginnersLocked
-                ? beginners.unlockUrl ?? "/courses/beginners"
-                : learnTrackPath("beginners")
-            }
-            status={beginnersStatus}
-          />
+          {classCards.map((card) => (
+            <AdultClassCard key={card.courseId} card={card} />
+          ))}
+          {classTiers.has("foundational") || (kidProfileCount > 0 && foundationalLocked) ? null : (
+            <LearnCourseRow
+              level="foundational"
+              tourId="learn-tile-foundational"
+              href={
+                foundationalLocked
+                  ? foundational.unlockUrl ?? "/courses/foundational"
+                  : learnTrackPath("foundational")
+              }
+              status={foundationalStatus}
+              percent={foundationalLocked ? null : foundationalPercent}
+            />
+          )}
+          {classTiers.has("beginners") || (kidProfileCount > 0 && beginnersLocked) ? null : (
+            <LearnCourseRow
+              level="beginners"
+              tourId="learn-tile-beginners"
+              href={
+                beginnersLocked
+                  ? beginners.unlockUrl ?? "/courses/beginners"
+                  : learnTrackPath("beginners")
+              }
+              status={beginnersStatus}
+            />
+          )}
           <LearnCourseRow
             level="intermediate"
             href={courseDetailPath("intermediate")}

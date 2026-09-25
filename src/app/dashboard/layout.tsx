@@ -20,8 +20,10 @@ import {
 import { loadPendingCourseResourceTours } from "@/app/dashboard/tours/actions";
 import { AudioManagerProvider } from "@/lib/audio/audio-manager";
 import { loadSoundSettings } from "@/lib/audio/load-sound-settings";
+import { loadParentEntryFacts } from "@/lib/kids/load-parent-entry";
+import { decideParentEntry } from "@/lib/kids/parent-entry";
 import { loadKidSession } from "@/lib/kids/session";
-import { isKidProfilePickerPath, usesKidsShell } from "@/lib/kids/constants";
+import { isKidProfilePickerPath, KID_PROFILE_PICKER_PATH, usesKidsShell } from "@/lib/kids/constants";
 import { ui } from "@/lib/ui/styles";
 
 export default async function DashboardLayout({
@@ -52,6 +54,26 @@ export default async function DashboardLayout({
   const isPickerScreen = isKidProfilePickerPath(pathname);
   const isWhoIsLearningFlow =
     isPickerScreen || pathname.startsWith("/dashboard/profile/kids/");
+  if (
+    !kid &&
+    onboarding.hasSeenOnboarding &&
+    kidSession.hasKidProfiles &&
+    !kidSession.pickedWhoThisSession &&
+    !access.viewAs?.active &&
+    !isWhoIsLearningFlow
+  ) {
+    const facts = await loadParentEntryFacts(supabase, user.id);
+    const entry = decideParentEntry({
+      kidCount: facts.kidCount,
+      hasOwnAdultCourse: facts.hasOwnAdultCourse,
+      pickedWhoThisSession: false,
+      activeKidProfileId: null,
+      viewAsActive: false,
+    });
+    if (entry === "enter-kid") redirect("/api/kids/enter-default");
+    if (entry === "picker") redirect(KID_PROFILE_PICKER_PATH);
+  }
+
   const shouldPickWhoIsLearning =
     onboarding.hasSeenOnboarding &&
     kidSession.hasKidProfiles &&
@@ -61,7 +83,7 @@ export default async function DashboardLayout({
     !access.viewAs?.active;
 
   if (shouldPickWhoIsLearning) {
-    redirect("/dashboard/profile/kids");
+    redirect(KID_PROFILE_PICKER_PATH);
   }
 
   const isFirstRunPicker = isPickerScreen && !kidSession.pickedWhoThisSession;

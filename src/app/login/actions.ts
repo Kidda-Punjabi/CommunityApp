@@ -2,7 +2,9 @@
 
 import { persistLastUser } from "@/lib/auth/remember-last-user";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { WHO_IS_LEARNING_COOKIE } from "@/lib/kids/constants";
 import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { resolveSignInError, type SignInErrorKind } from "@/lib/auth/sign-in-errors";
@@ -62,6 +64,9 @@ export async function login(
   }
 
   await persistLastUser(supabase);
+
+  const cookieStore = await cookies();
+  cookieStore.delete(WHO_IS_LEARNING_COOKIE);
 
   const next = safeNextPath(formData.get("next") as string | null);
   redirect(next);

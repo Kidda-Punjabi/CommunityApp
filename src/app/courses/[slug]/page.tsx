@@ -6,6 +6,7 @@ import {
   PRODUCT_SLUGS,
   type ProductSlug,
 } from "@/lib/products/content";
+import { nextCohortStartNote } from "@/lib/products/next-cohort-start";
 import { loadUserStudentDiscountRequests } from "@/lib/student-discounts/load-requests";
 import type { StudentDiscountRequestView } from "@/lib/student-discounts/types";
 import { createClient } from "@/lib/supabase/server";
@@ -41,6 +42,8 @@ export default async function CoursePage({ params }: CoursePageProps) {
   if (!isProductSlug(slug)) notFound();
 
   const content = getProductContent(slug);
+  const scheduleNote =
+    slug === "beginners" ? await nextCohortStartNote("beginners") : content.scheduleNote;
 
   const supabase = await createClient();
   const {
@@ -64,7 +67,7 @@ export default async function CoursePage({ params }: CoursePageProps) {
 
   return (
     <ProductLanding
-      content={content}
+      content={{ ...content, scheduleNote }}
       isLoggedIn={Boolean(user)}
       owned={owned}
       studentDiscountRequests={studentDiscountRequests}

@@ -1,4 +1,5 @@
 import { AUTH_RECOVERY_COOKIE } from "@/lib/auth/recovery-flow";
+import { WHO_IS_LEARNING_COOKIE } from "@/lib/kids/constants";
 import { buildLastUserPayload, setLastUserOnResponse } from "@/lib/auth/remember-last-user";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -70,6 +71,7 @@ export async function GET(request: Request) {
 
       const response = NextResponse.redirect(`${origin}${next}`);
       response.cookies.delete(AUTH_RECOVERY_COOKIE);
+      response.cookies.delete(WHO_IS_LEARNING_COOKIE);
 
       const lastUser = await buildLastUserPayload(supabase);
       if (lastUser) setLastUserOnResponse(response, lastUser);

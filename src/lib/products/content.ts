@@ -202,7 +202,6 @@ const BEGINNERS_CONTENT: ProductPageContent = {
   heroSubtitle:
     "A 12-week live course to help you speak, understand, and connect with Punjabi culture — choose group lessons or private 1-to-1 tutoring with real instructors.",
   heroCta: "I WANT TO LEARN PUNJABI!",
-  scheduleNote: "Next cohort starts: June 20th 2026",
   featuresSectionTitle: "How you'll learn",
   features: [
     {
