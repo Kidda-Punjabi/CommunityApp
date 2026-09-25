@@ -11,7 +11,6 @@ export type DashboardCardId =
   | "payment_setup"
   | "app_onboarding"
   | "package_onboarding"
-  | "monthly_rewards"
   | "missing_recordings"
   | "session_integrity";
 

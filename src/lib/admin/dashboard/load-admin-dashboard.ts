@@ -25,14 +25,12 @@ import { loadOpenIssueReportCreatedAts } from "@/lib/admin/load-admin-issue-repo
 import { loadAdminOnboardingQueue } from "@/lib/admin/load-admin-onboarding";
 import { loadPendingRescheduleRequestCreatedAts } from "@/lib/admin/load-admin-reschedule-requests";
 import { loadUnseenAppOnboarding } from "@/lib/admin/load-unseen-app-onboarding";
-import { loadMonthlyRewardsAttention } from "@/lib/admin/monthly-rewards/load-monthly-rewards";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const PENDING_STALE_MS = 48 * 60 * 60 * 1000;
 const ONBOARDING_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const RECORDING_LOOKBACK_DAYS = 14;
 const SETUP_RED_DAYS = 7;
-const MONTH_END_RED_DAYS = 5;
 
 function pendingTone(createdAts: string[]): DashboardTone {
   if (createdAts.length === 0) return "ok";
@@ -58,13 +56,6 @@ function daysUntil(iso: string | null, nowMs: number): number | null {
   const start = new Date(iso).getTime();
   if (Number.isNaN(start)) return null;
   return (start - nowMs) / (24 * 60 * 60 * 1000);
-}
-
-function isLastFiveDaysOfMonth(now: Date): boolean {
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  return now.getDate() > lastDay - MONTH_END_RED_DAYS;
 }
 
 function cohortOpsCards(
@@ -225,8 +216,7 @@ async function loadMissingRecordingsCard(
 export async function loadAdminDashboard(
   supabase: SupabaseClient
 ): Promise<AdminDashboardSnapshot> {
-  const now = new Date();
-  const nowMs = now.getTime();
+  const nowMs = Date.now();
 
   const [
     cohortOps,
@@ -239,7 +229,6 @@ export async function loadAdminDashboard(
     onboarding,
     unseenAppOnboarding,
     incompleteChecklists,
-    monthlyRewards,
     recordings,
   ] = await Promise.all([
     loadCohortOpsIssues(supabase),
@@ -252,7 +241,6 @@ export async function loadAdminDashboard(
     loadAdminOnboardingQueue(supabase),
     loadUnseenAppOnboarding(supabase),
     loadIncompletePackageChecklists(supabase),
-    loadMonthlyRewardsAttention(supabase),
     loadMissingRecordingsCard(supabase),
   ]);
 
@@ -262,18 +250,6 @@ export async function loadAdminDashboard(
     if (!row.isOverdue) return false;
     return !row.packageRunId || row.progressDone < row.progressTotal;
   }).length;
-
-  const rewardsPending = monthlyRewards.attention.pendingMonths.reduce(
-    (sum, month) => sum + month.pendingCount,
-    0
-  );
-  const rewardsUncalculated = monthlyRewards.attention.uncalculatedMonth ? 1 : 0;
-  const rewardsCount = rewardsPending + rewardsUncalculated;
-  const rewardsTone: DashboardTone =
-    rewardsCount === 0 ? "ok" : isLastFiveDaysOfMonth(now) ? "urgent" : "warning";
-  const rewardsHref = monthlyRewards.attention.uncalculatedMonth
-    ? `/admin/monthly-rewards?month=${monthlyRewards.attention.uncalculatedMonth.monthStart.slice(0, 7)}`
-    : "/admin/monthly-rewards";
 
   const cards: AdminDashboardCard[] = [
     setup.card,
@@ -350,20 +326,6 @@ export async function loadAdminDashboard(
       tone: countTone(paymentSetupCount, 10),
       group: "enrollment",
     },
-    {
-      id: "monthly_rewards",
-      label: "Monthly rewards",
-      hint:
-        monthlyRewards.attention.uncalculatedMonth
-          ? `Winners not calculated for ${monthlyRewards.attention.uncalculatedMonth.monthLabel}`
-          : rewardsPending > 0
-            ? "Gift cards still pending"
-            : "Up to date",
-      href: rewardsHref,
-      count: rewardsCount,
-      tone: rewardsTone,
-      group: "ops",
-    },
     recordings.card,
     integrity.card,
   ];
@@ -379,7 +341,6 @@ export async function loadAdminDashboard(
     onboarding.error,
     unseenAppOnboarding.error,
     incompleteChecklists.error,
-    monthlyRewards.error,
     recordings.error,
   ].filter(Boolean);
 
