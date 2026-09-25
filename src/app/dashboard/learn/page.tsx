@@ -1,5 +1,4 @@
 import { AdultClassCard } from "@/components/learn/adult-class-card";
-import { ContinueAsKidCards } from "@/components/learn/continue-as-kid-cards";
 import { HomeGreetingHeader } from "@/components/home-greeting-header";
 import {
   HomeStreakBanner,
@@ -249,18 +248,6 @@ export default async function LearnPage() {
           rescueStreak: dashboard.stats.rescueStreak,
         }}
       >
-        {kidProfileCount > 0 ? (
-          <div className="mb-5">
-            <ContinueAsKidCards
-              kids={kidProgressSummaries.map((kid) => ({
-                id: kid.kidProfileId,
-                name: kid.kidName,
-                courseName: kid.courseName,
-              }))}
-            />
-          </div>
-        ) : null}
-
         {greeting}
 
         <div className="space-y-3">
