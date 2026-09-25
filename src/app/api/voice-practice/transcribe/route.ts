@@ -54,9 +54,8 @@ export async function POST(request: Request) {
   const keyterms = [targetRomanised, targetPunjabi].filter(Boolean) as string[];
 
   const { data: limitData, error: limitError } = await supabase.rpc(
-    "check_and_increment_voice_practice_attempt",
+    "check_my_voice_practice_attempt",
     {
-      p_user_id: user.id,
       p_sentence_id: sentenceId,
     }
   );
