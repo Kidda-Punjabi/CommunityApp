@@ -5,6 +5,7 @@ import {
   upsertNotionLeadsCache,
 } from "@/lib/notion/lead-sync";
 import { pullLessonLogFromNotion } from "@/lib/notion/lesson-log-sync";
+import { syncPackageLessonRecordings } from "@/lib/notion/package-lesson-recordings";
 import { pullPackageInstancesFromNotion } from "@/lib/notion/package-sync";
 import { finishNotionSyncRun, insertNotionSyncRun, stepFromResult } from "@/lib/notion/sync-run";
 import { syncAllGroupCohortsFromNotion } from "@/lib/notion/sync-group-cohorts-for-checkout";
@@ -71,6 +72,22 @@ export async function GET(request: Request) {
       })),
     ]);
 
+    let recordingLinksThrew = false;
+    const recordingLinks = await syncPackageLessonRecordings(client).catch((error) => {
+      const message =
+        error instanceof Error ? error.message : "Package lesson recording sync failed.";
+      console.error("[notion-sync] package lesson recordings threw:", message);
+      recordingLinksThrew = true;
+      return {
+        packagesScanned: 0,
+        rowsRead: 0,
+        linksFilled: 0,
+        unmatchedRows: 0,
+        skipped: [],
+        errors: [message],
+      };
+    });
+
     const profileLeads = await linkUnlinkedProfilesFromApp(client);
 
     let writebackThrew = false;
@@ -112,6 +129,14 @@ export async function GET(request: Request) {
         pulled: lessonLog.pulled,
         skipped: lessonLog.skipped,
       }),
+      packageLessonRecordings: stepFromResult(recordingLinks, {
+        packagesScanned: recordingLinks.packagesScanned,
+        rowsRead: recordingLinks.rowsRead,
+        linksFilled: recordingLinks.linksFilled,
+        unmatchedRows: recordingLinks.unmatchedRows,
+        skipped: recordingLinks.skipped,
+        threw: recordingLinksThrew,
+      }),
       profileLeads: stepFromResult(profileLeads, {
         processed: profileLeads.processed,
         linked: profileLeads.linked,
@@ -129,6 +154,7 @@ export async function GET(request: Request) {
     };
 
     const failed =
+      recordingLinksThrew ||
       writebackThrew ||
       Object.values(steps).some(
         (step) => step && typeof step === "object" && "ok" in step && step.ok === false
@@ -148,6 +174,7 @@ export async function GET(request: Request) {
       leadsCache,
       salesCalls,
       lessonLog,
+      packageLessonRecordings: recordingLinks,
       attendanceHomeworkWriteback,
       leadsSetupError,
     });

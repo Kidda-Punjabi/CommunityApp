@@ -29,7 +29,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const PENDING_STALE_MS = 48 * 60 * 60 * 1000;
 const ONBOARDING_STALE_MS = 7 * 24 * 60 * 60 * 1000;
-const RECORDING_LOOKBACK_DAYS = 14;
 const SETUP_RED_DAYS = 7;
 
 function pendingTone(createdAts: string[]): DashboardTone {
@@ -173,42 +172,34 @@ async function loadUnresolvedEnrollmentsCard(
 async function loadMissingRecordingsCard(
   supabase: SupabaseClient
 ): Promise<{ card: AdminDashboardCard; error?: string }> {
-  const cutoff = new Date();
-  cutoff.setUTCDate(cutoff.getUTCDate() - RECORDING_LOOKBACK_DAYS);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const empty: AdminDashboardCard = {
+    id: "missing_recordings",
+    label: "Missing recordings",
+    hint: "Could not load",
+    href: "/admin/recordings/missing",
+    count: 0,
+    tone: "ok",
+    group: "ops",
+  };
+  const { data, error } = await supabase.rpc("admin_missing_recordings_count");
+  if (error) return { card: empty, error: error.message };
 
-  const { data, error } = await supabase
-    .from("cohort_lesson_log_entries")
-    .select("id, lesson_date, status, recording_url, package_instance_id")
-    .not("package_instance_id", "is", null)
-    .eq("status", "Completed")
-    .gte("lesson_date", cutoffStr);
+  const counts =
+    data && typeof data === "object"
+      ? (data as { total?: number; one_to_one?: number; group?: number })
+      : {};
+  const total = Number(counts.total ?? 0);
+  const oneToOne = Number(counts.one_to_one ?? 0);
+  const group = Number(counts.group ?? 0);
+  const detail = `1-1 (${oneToOne}), group (${group})`;
 
-  if (error) {
-    return {
-      card: {
-        id: "missing_recordings",
-        label: "Missing 1-1 recordings",
-        hint: "Could not load",
-        href: "/admin/lesson-log",
-        count: 0,
-        tone: "ok",
-        group: "ops",
-      },
-      error: error.message,
-    };
-  }
-
-  const count = (data ?? []).filter((row) => !String(row.recording_url ?? "").trim()).length;
   return {
     card: {
-      id: "missing_recordings",
-      label: "Missing 1-1 recordings",
-      hint: "Completed 1-1 logs in the last 14 days with no recording link",
-      href: "/admin/lesson-log",
-      count,
-      tone: countTone(count, 5),
-      group: "ops",
+      ...empty,
+      hint: detail,
+      detail,
+      count: total,
+      tone: countTone(total, 5),
     },
   };
 }
