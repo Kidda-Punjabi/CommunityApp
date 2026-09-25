@@ -1,5 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import { getAvatarInitial } from "@/lib/profile/display-name";
 import type { ProfileNameFields } from "@/lib/profile/display-name";
+import { mediaSrc } from "@/lib/storage/signed-media";
 
 type UserAvatarProps = {
   profile: ProfileNameFields & { avatar_url?: string | null };
@@ -64,9 +68,19 @@ export function UserAvatar({
   const initial = getAvatarInitial(profile);
   const showLevel = level != null && level > 0;
 
-  const content = profile.avatar_url ? (
+  const avatarSrc = mediaSrc(profile.avatar_url);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const showImage = Boolean(avatarSrc) && failedSrc !== avatarSrc;
+  const content = showImage ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+    <img
+      src={avatarSrc ?? undefined}
+      alt=""
+      className="h-full w-full object-cover"
+      onError={() => {
+        if (avatarSrc) setFailedSrc(avatarSrc);
+      }}
+    />
   ) : (
     <div
       className="flex h-full w-full items-center justify-center bg-zinc-200 font-semibold text-zinc-600"

@@ -10,11 +10,9 @@ type ContinueAsUserCardProps = {
 
 function UserAvatarBubble({
   displayName,
-  avatarUrl,
   size,
 }: {
   displayName: string;
-  avatarUrl: string | null;
   size: "md" | "lg";
 }) {
   const sizeClass = size === "lg" ? "h-14 w-14 text-xl" : "h-12 w-12 text-lg";
@@ -25,12 +23,7 @@ function UserAvatarBubble({
       className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-violet-100 font-semibold text-violet-700 ${sizeClass}`}
       aria-hidden="true"
     >
-      {avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <span>{initial}</span>
-      )}
+      <span>{initial}</span>
     </div>
   );
 }
@@ -49,11 +42,7 @@ export function ContinueAsUserCard({
           href={continueHref}
           className="flex w-full items-center gap-4 rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-left shadow-sm transition-colors hover:border-violet-200 hover:bg-violet-50/50"
         >
-          <UserAvatarBubble
-            displayName={user.displayName}
-            avatarUrl={user.avatarUrl}
-            size="lg"
-          />
+          <UserAvatarBubble displayName={user.displayName} size="lg" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-zinc-900">
               Continue as {user.displayName}
@@ -85,11 +74,7 @@ export function ContinueAsUserCard({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4 rounded-xl border border-violet-100 bg-violet-50/60 px-4 py-4">
-        <UserAvatarBubble
-          displayName={user.displayName}
-          avatarUrl={user.avatarUrl}
-          size="md"
-        />
+        <UserAvatarBubble displayName={user.displayName} size="md" />
         <div className="min-w-0">
           <p className="text-sm font-semibold text-zinc-900">
             {user.sessionActive ? `Continue as ${user.displayName}` : `Welcome back, ${user.displayName}`}

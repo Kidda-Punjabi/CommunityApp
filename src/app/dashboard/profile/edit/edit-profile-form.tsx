@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { uploadAvatar } from "@/lib/profile/upload-avatar";
+import { retainAvatarCacheBust, withAvatarCacheBust } from "@/lib/storage/signed-media";
 import type { ProfileNameFields } from "@/lib/profile/display-name";
 import { updateAvatarUrl, updateProfile, type ProfileActionState } from "../actions";
 import { ui } from "@/lib/ui/styles";
@@ -31,7 +32,7 @@ export function EditProfileForm({ userId, profile, learnerLevel }: EditProfileFo
   useEffect(() => {
     setFullName(profile.full_name ?? "");
     setPreferredName(profile.preferred_name ?? "");
-    setAvatarUrl(profile.avatar_url ?? null);
+    setAvatarUrl((current) => retainAvatarCacheBust(current, profile.avatar_url ?? null));
   }, [profile.full_name, profile.preferred_name, profile.avatar_url]);
 
   useEffect(() => {
@@ -52,13 +53,13 @@ export function EditProfileForm({ userId, profile, learnerLevel }: EditProfileFo
     setUploading(true);
 
     try {
-      const url = await uploadAvatar(userId, file);
-      const result = await updateAvatarUrl(url);
+      const path = await uploadAvatar(userId, file);
+      const result = await updateAvatarUrl(path);
       if (result.error) {
         setUploadError(result.error);
         return;
       }
-      setAvatarUrl(url);
+      setAvatarUrl(withAvatarCacheBust(path));
       router.refresh();
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Upload failed.");

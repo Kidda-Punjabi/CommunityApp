@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { uploadAvatar } from "@/lib/profile/upload-avatar";
+import { retainAvatarCacheBust, withAvatarCacheBust } from "@/lib/storage/signed-media";
 import type { ProfileNameFields } from "@/lib/profile/display-name";
 import {
   updateTutorAvatarUrl,
@@ -33,7 +34,7 @@ export function TutorProfileEditForm({ userId, profile }: TutorProfileEditFormPr
 
   useEffect(() => {
     setBio(profile.tutor_bio ?? "");
-    setAvatarUrl(profile.avatar_url ?? null);
+    setAvatarUrl((current) => retainAvatarCacheBust(current, profile.avatar_url ?? null));
   }, [profile.tutor_bio, profile.avatar_url]);
 
   useEffect(() => {
@@ -53,13 +54,13 @@ export function TutorProfileEditForm({ userId, profile }: TutorProfileEditFormPr
     setUploading(true);
 
     try {
-      const url = await uploadAvatar(userId, file);
-      const result = await updateTutorAvatarUrl(url);
+      const path = await uploadAvatar(userId, file);
+      const result = await updateTutorAvatarUrl(path);
       if (result.error) {
         setUploadError(result.error);
         return;
       }
-      setAvatarUrl(url);
+      setAvatarUrl(withAvatarCacheBust(path));
       router.refresh();
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Upload failed.");
