@@ -1298,6 +1298,13 @@ export async function addPackageRunMember(
 
       if (spError) return { error: spError.message };
 
+      const { error: linkError } = await supabase
+        .from("course_enrollments")
+        .update({ student_package_id: studentPackage.id })
+        .eq("id", enrollment.id)
+        .is("student_package_id", null);
+      if (linkError) return { error: linkError.message };
+
       await ensureOnboardingChecklistForStudentPackage(
         supabase,
         studentPackage.id,

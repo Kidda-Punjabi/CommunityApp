@@ -26,22 +26,13 @@ import { loadAdminOnboardingQueue } from "@/lib/admin/load-admin-onboarding";
 import { loadPendingRescheduleRequestCreatedAts } from "@/lib/admin/load-admin-reschedule-requests";
 import { loadUnseenAppOnboarding } from "@/lib/admin/load-unseen-app-onboarding";
 import { loadMonthlyRewardsAttention } from "@/lib/admin/monthly-rewards/load-monthly-rewards";
-import { loadAuthEmailSet } from "@/lib/admin/load-admin-profiles-with-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const PENDING_STALE_MS = 48 * 60 * 60 * 1000;
 const ONBOARDING_STALE_MS = 7 * 24 * 60 * 60 * 1000;
-const UNRESOLVED_GRACE_MS = 48 * 60 * 60 * 1000;
 const RECORDING_LOOKBACK_DAYS = 14;
 const SETUP_RED_DAYS = 7;
 const MONTH_END_RED_DAYS = 5;
-const ACTIVE_PACKAGE_STATUSES = new Set([
-  "pre_scheduling",
-  "recruiting",
-  "scheduled",
-  "in_progress",
-  "paused",
-]);
 
 function pendingTone(createdAts: string[]): DashboardTone {
   if (createdAts.length === 0) return "ok";
@@ -74,14 +65,6 @@ function isLastFiveDaysOfMonth(now: Date): boolean {
   const month = now.getMonth();
   const lastDay = new Date(year, month + 1, 0).getDate();
   return now.getDate() > lastDay - MONTH_END_RED_DAYS;
-}
-
-function normalizeNotionId(id: string): string {
-  return id.replace(/-/g, "").toLowerCase();
-}
-
-async function listAuthEmails(supabase: SupabaseClient): Promise<Set<string>> {
-  return loadAuthEmailSet(supabase);
 }
 
 function cohortOpsCards(
@@ -172,107 +155,26 @@ async function loadEnrollmentGapsCard(
 }
 
 async function loadUnresolvedEnrollmentsCard(
-  supabase: SupabaseClient,
-  nowMs: number
+  supabase: SupabaseClient
 ): Promise<{ card: AdminDashboardCard; error?: string }> {
-  const [{ data: inbox, error: inboxError }, emails] = await Promise.all([
-    supabase
-      .from("notion_sync_inbox")
-      .select("package_name, status, start_date, raw_properties"),
-    listAuthEmails(supabase),
-  ]);
-
-  if (inboxError) {
-    return {
-      card: {
-        id: "unresolved_enrollments",
-        label: "Unresolved enrollments",
-        hint: "Could not load",
-        href: "/admin/packages",
-        count: 0,
-        tone: "ok",
-        group: "enrollment",
-      },
-      error: inboxError.message,
-    };
-  }
-
-  type InboxRow = {
-    package_name: string | null;
-    status: string | null;
-    start_date: string | null;
-    raw_properties: {
-      Confirmed?: { relation?: Array<{ id?: string }> };
-    } | null;
+  const empty: AdminDashboardCard = {
+    id: "unresolved_enrollments",
+    label: "Unresolved enrollments",
+    hint: "Could not load",
+    href: "/admin/unresolved-enrollments",
+    count: 0,
+    tone: "ok",
+    group: "enrollment",
   };
-
-  const leadIds: string[] = [];
-  const candidates: Array<{ packageName: string; leadId: string; startAt: string | null }> = [];
-
-  for (const row of (inbox ?? []) as InboxRow[]) {
-    if (!ACTIVE_PACKAGE_STATUSES.has(row.status ?? "")) continue;
-    if (/^community$/i.test(row.package_name ?? "")) continue;
-    const startAt = row.start_date;
-    if (startAt && nowMs - new Date(startAt).getTime() < UNRESOLVED_GRACE_MS) continue;
-    for (const rel of row.raw_properties?.Confirmed?.relation ?? []) {
-      if (!rel.id) continue;
-      leadIds.push(rel.id);
-      candidates.push({
-        packageName: row.package_name ?? "Package",
-        leadId: rel.id,
-        startAt,
-      });
-    }
-  }
-
-  const uniqueLeadIds = [...new Set(leadIds)];
-  const leads: Array<{ notion_page_id: string; name: string | null; email: string | null }> = [];
-  for (let index = 0; index < uniqueLeadIds.length; index += 80) {
-    const chunk = uniqueLeadIds.slice(index, index + 80);
-    const { data, error } = await supabase
-      .from("notion_leads_cache")
-      .select("notion_page_id, name, email")
-      .in("notion_page_id", chunk);
-    if (error) {
-      return {
-        card: {
-          id: "unresolved_enrollments",
-          label: "Unresolved enrollments",
-          hint: "Could not load leads",
-          href: "/admin/packages",
-          count: 0,
-          tone: "ok",
-          group: "enrollment",
-        },
-        error: error.message,
-      };
-    }
-    leads.push(...(data ?? []));
-  }
-
-  const leadById = new Map(
-    leads.map((lead) => [normalizeNotionId(lead.notion_page_id), lead] as const)
-  );
-
-  const flagged = new Set<string>();
-  for (const candidate of candidates) {
-    const lead = leadById.get(normalizeNotionId(candidate.leadId));
-    const email = lead?.email?.trim().toLowerCase() ?? null;
-    if (!email) continue;
-    if (emails.has(email)) continue;
-    flagged.add(`${email}|${candidate.packageName}`);
-  }
-
-  const count = flagged.size;
+  const { data, error } = await supabase.rpc("admin_unresolved_enrollment_count");
+  if (error) return { card: empty, error: error.message };
+  const count = typeof data === "number" ? data : 0;
   return {
     card: {
-      id: "unresolved_enrollments",
-      label: "Unresolved enrollments",
-      hint: "Confirmed Notion leads with no matching app account",
-      href: "/admin/packages",
+      ...empty,
+      hint: "Confirmed leads and app enrollments that do not match",
       count,
       tone: countTone(count, 3),
-      group: "enrollment",
     },
   };
 }
@@ -346,7 +248,7 @@ export async function loadAdminDashboard(
     countPendingCohortChangeRequests(supabase),
     loadOpenIssueReportCreatedAts(supabase),
     loadEnrollmentGapsCard(supabase),
-    loadUnresolvedEnrollmentsCard(supabase, nowMs),
+    loadUnresolvedEnrollmentsCard(supabase),
     loadAdminOnboardingQueue(supabase),
     loadUnseenAppOnboarding(supabase),
     loadIncompletePackageChecklists(supabase),

@@ -333,6 +333,16 @@ async function writeAppUserIdToLead(pageId: string, profileId: string): Promise<
   });
 }
 
+/** Write the profile id onto the Notion lead, then the caller enrolls in Supabase. */
+export async function setNotionLeadAppUserId(pageId: string, profileId: string): Promise<void> {
+  const trimmed = pageId.trim();
+  const userId = profileId.trim();
+  if (!trimmed || !userId) {
+    throw new Error("A Notion lead and an app account are required to link App User ID.");
+  }
+  await writeAppUserIdToLead(trimmed, userId);
+}
+
 async function queryLeadPagesWithFilter(
   filter: Record<string, unknown>
 ): Promise<string[]> {

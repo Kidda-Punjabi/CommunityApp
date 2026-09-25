@@ -229,6 +229,13 @@ export async function assignOnboardingStudentToRun(
         .eq("id", studentPackageId);
 
       if (updateError) return { error: updateError.message };
+
+      const { error: linkError } = await supabase
+        .from("course_enrollments")
+        .update({ student_package_id: studentPackageId })
+        .eq("id", enrollment.id)
+        .is("student_package_id", null);
+      if (linkError) return { error: linkError.message };
     } else {
       const { data: instance, error: instanceError } = await supabase
         .from("package_instances")
