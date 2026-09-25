@@ -35,8 +35,46 @@ import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
 import type { ChallengePlayContext } from "@/lib/challenges/types";
 const FEEDBACK_MS = 1800;
 
+const ACTIVE_BANK_TILE_CLASS =
+  "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300 disabled:opacity-70";
+const USED_BANK_TILE_CLASS =
+  "cursor-default rounded-lg border border-dashed border-zinc-300 bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-900 disabled:cursor-default disabled:opacity-100";
+
 type Phase = "ready" | "playing" | "finished";
 type Feedback = "correct" | "wrong";
+
+function WordBankTile({
+  tile,
+  used,
+  locked,
+  onSelect,
+}: {
+  tile: SentenceTile;
+  used: boolean;
+  locked: boolean;
+  onSelect: (tile: SentenceTile) => void;
+}) {
+  const romanised = latinRomanised(tile.romanised);
+
+  return (
+    <button
+      type="button"
+      className={used ? USED_BANK_TILE_CLASS : ACTIVE_BANK_TILE_CLASS}
+      {...(used
+        ? { "aria-hidden": true as const, tabIndex: -1, disabled: true }
+        : { disabled: locked, onClick: () => onSelect(tile) })}
+    >
+      <span className={used ? "invisible" : undefined}>{tile.word}</span>
+      {romanised ? (
+        <span
+          className={`mt-0.5 block text-xs font-normal ${used ? "invisible" : "text-violet-600"}`}
+        >
+          {romanised}
+        </span>
+      ) : null}
+    </button>
+  );
+}
 
 type SentenceBuilderModeProps = {
   sentences: GrammarSentence[];
@@ -192,16 +230,14 @@ export function SentenceBuilderMode({
 
   function moveToBuilt(tile: SentenceTile) {
     if (feedback) return;
-    setBank((prev) => prev.filter((item) => item.id !== tile.id));
-    setBuilt((prev) => [...prev, tile]);
+    setBuilt((prev) =>
+      prev.some((item) => item.id === tile.id) ? prev : [...prev, tile]
+    );
   }
 
   function moveToBank(tile: SentenceTile) {
     if (feedback) return;
     setBuilt((prev) => prev.filter((item) => item.id !== tile.id));
-    setBank((prev) =>
-      [...prev, tile].sort((a, b) => a.bankIndex - b.bankIndex)
-    );
   }
 
   function handleCheck() {
@@ -373,20 +409,13 @@ export function SentenceBuilderMode({
 
       <div className="flex flex-wrap gap-2">
         {bank.map((tile) => (
-          <button
+          <WordBankTile
             key={tile.id}
-            type="button"
-            onClick={() => moveToBuilt(tile)}
-            disabled={Boolean(feedback)}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300 disabled:opacity-70"
-          >
-            <span>{tile.word}</span>
-            {latinRomanised(tile.romanised) ? (
-              <span className="mt-0.5 block text-xs font-normal text-violet-600">
-                {latinRomanised(tile.romanised)}
-              </span>
-            ) : null}
-          </button>
+            tile={tile}
+            used={built.some((item) => item.id === tile.id)}
+            locked={Boolean(feedback)}
+            onSelect={moveToBuilt}
+          />
         ))}
       </div>
 
