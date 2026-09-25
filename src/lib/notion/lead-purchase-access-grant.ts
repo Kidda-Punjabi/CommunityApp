@@ -13,6 +13,12 @@ import {
   relationIds,
 } from "@/lib/notion/client";
 import type { LinkLeadsForProfileResult } from "@/lib/notion/lead-sync";
+import {
+  decideLeadPurchaseGrant,
+  isHistoricalPackageTarget,
+  isLeadGrantQueueUniqueViolation,
+  sortedPackagePageIdsKey,
+} from "@/lib/notion/lead-purchase-access-grant-logic";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type LeadPurchaseGrantResult = {
@@ -42,6 +48,19 @@ type ResolvedPackageTarget =
       notionPageId: string;
     };
 
+type HistoricalPackage = {
+  notionPageId: string;
+  kind: "cohort" | "package_instance";
+  label: string;
+  status: string | null;
+  appAccessExpected: boolean | null;
+};
+
+type PackagePageResolution =
+  | { outcome: "live"; target: ResolvedPackageTarget }
+  | { outcome: "historical"; historical: HistoricalPackage }
+  | { outcome: "unresolved"; notionPageId: string; error: string };
+
 function leadNameFromPage(properties: Record<string, unknown>): string | null {
   const props = properties as Record<string, { title?: Array<{ plain_text?: string }> }>;
   return plainTextFromTitle(props.Name) || null;
@@ -64,40 +83,61 @@ function leadEmailFromPage(properties: Record<string, unknown>): string | null {
   return null;
 }
 
+function unresolvedPage(notionPageId: string, error: string): PackagePageResolution {
+  return { outcome: "unresolved", notionPageId, error };
+}
+
 async function resolveNotionPackagePage(
   supabase: SupabaseClient,
   notionPageId: string
-): Promise<ResolvedPackageTarget | { error: string; notionPageId: string }> {
+): Promise<PackagePageResolution> {
   const { data: cohort, error: cohortError } = await supabase
     .from("cohorts")
-    .select("id, name, course_id")
+    .select("id, name, course_id, status")
     .eq("notion_page_id", notionPageId)
     .maybeSingle();
 
   if (cohortError) {
-    return { error: cohortError.message, notionPageId };
+    return unresolvedPage(notionPageId, cohortError.message);
   }
 
   const { data: instance, error: instanceError } = await supabase
     .from("package_instances")
-    .select("id, name, course_id, package_id")
+    .select("id, name, course_id, package_id, status, app_access_expected")
     .eq("notion_page_id", notionPageId)
     .maybeSingle();
 
   if (instanceError) {
-    return { error: instanceError.message, notionPageId };
+    return unresolvedPage(notionPageId, instanceError.message);
   }
 
   if (cohort && instance) {
-    return {
-      error: "Notion package page matches both a cohort and a package_instance.",
+    return unresolvedPage(
       notionPageId,
-    };
+      "Notion package page matches both a cohort and a package_instance."
+    );
   }
 
   if (cohort) {
+    if (
+      isHistoricalPackageTarget({
+        kind: "cohort",
+        status: cohort.status,
+      })
+    ) {
+      return {
+        outcome: "historical",
+        historical: {
+          notionPageId,
+          kind: "cohort",
+          label: cohort.name,
+          status: cohort.status ?? null,
+          appAccessExpected: null,
+        },
+      };
+    }
     if (!cohort.course_id) {
-      return { error: "Matched cohort has no course_id.", notionPageId };
+      return unresolvedPage(notionPageId, "Matched cohort has no course_id.");
     }
     const { data: groupPkg, error: pkgError } = await supabase
       .from("packages")
@@ -105,35 +145,59 @@ async function resolveNotionPackagePage(
       .eq("course_id", cohort.course_id)
       .eq("delivery_mode", "group")
       .maybeSingle();
-    if (pkgError) return { error: pkgError.message, notionPageId };
+    if (pkgError) return unresolvedPage(notionPageId, pkgError.message);
     if (!groupPkg) {
-      return { error: "No group package product for matched cohort course.", notionPageId };
+      return unresolvedPage(notionPageId, "No group package product for matched cohort course.");
     }
     return {
-      kind: "cohort",
-      runId: cohort.id,
-      courseId: cohort.course_id,
-      packageId: groupPkg.id,
-      label: cohort.name,
-      notionPageId,
+      outcome: "live",
+      target: {
+        kind: "cohort",
+        runId: cohort.id,
+        courseId: cohort.course_id,
+        packageId: groupPkg.id,
+        label: cohort.name,
+        notionPageId,
+      },
     };
   }
 
   if (instance) {
+    if (
+      isHistoricalPackageTarget({
+        kind: "package_instance",
+        status: instance.status,
+        appAccessExpected: instance.app_access_expected,
+      })
+    ) {
+      return {
+        outcome: "historical",
+        historical: {
+          notionPageId,
+          kind: "package_instance",
+          label: instance.name ?? "Package instance",
+          status: instance.status ?? null,
+          appAccessExpected: instance.app_access_expected ?? null,
+        },
+      };
+    }
     if (!instance.course_id || !instance.package_id) {
-      return { error: "Matched package_instance missing course_id/package_id.", notionPageId };
+      return unresolvedPage(notionPageId, "Matched package_instance missing course_id/package_id.");
     }
     return {
-      kind: "package_instance",
-      runId: instance.id,
-      courseId: instance.course_id,
-      packageId: instance.package_id,
-      label: instance.name ?? "Package instance",
-      notionPageId,
+      outcome: "live",
+      target: {
+        kind: "package_instance",
+        runId: instance.id,
+        courseId: instance.course_id,
+        packageId: instance.package_id,
+        label: instance.name ?? "Package instance",
+        notionPageId,
+      },
     };
   }
 
-  return { error: "No cohort or package_instance with this notion_page_id.", notionPageId };
+  return unresolvedPage(notionPageId, "No cohort or package_instance with this notion_page_id.");
 }
 
 async function ensureCohortMembership(
@@ -155,6 +219,18 @@ async function ensureCohortMembership(
   return {};
 }
 
+function queueInsertError(error: { code?: string; message: string }): { queued: boolean; error?: string } {
+  if (isLeadGrantQueueUniqueViolation(error)) {
+    return { queued: true };
+  }
+  if (error.message.includes("notion_lead_purchase_grant_queue")) {
+    console.error(
+      "[lead purchase grant] queue table missing — apply supabase/notion-lead-purchase-grant-queue.sql"
+    );
+  }
+  return { queued: false, error: error.message };
+}
+
 async function enqueueLeadPurchaseGrant(
   supabase: SupabaseClient,
   input: {
@@ -166,14 +242,24 @@ async function enqueueLeadPurchaseGrant(
     rawPackageData: Record<string, unknown>;
   }
 ): Promise<{ queued: boolean; error?: string }> {
-  const { data: existing } = await supabase
+  const packageKey = sortedPackagePageIdsKey(input.rawPackageData);
+  const { data: openRows, error: openError } = await supabase
     .from("notion_lead_purchase_grant_queue")
-    .select("id")
+    .select("id, raw_package_data")
     .eq("profile_id", input.profileId)
-    .eq("notion_lead_page_id", input.notionLeadPageId)
     .eq("reason", input.reason)
-    .eq("resolved", false)
-    .maybeSingle();
+    .eq("resolved", false);
+
+  if (openError) {
+    console.error(
+      "[lead purchase grant] open-queue lookup failed; insert will rely on the unique index:",
+      openError.message
+    );
+  }
+
+  const existing = (openRows ?? []).find(
+    (row) => sortedPackagePageIdsKey(row.raw_package_data) === packageKey
+  );
 
   if (existing?.id) {
     const { error } = await supabase
@@ -183,7 +269,8 @@ async function enqueueLeadPurchaseGrant(
         lead_name: input.leadName,
         raw_package_data: input.rawPackageData,
       })
-      .eq("id", existing.id);
+      .eq("id", existing.id)
+      .eq("resolved", false);
     if (error) return { queued: false, error: error.message };
     return { queued: true };
   }
@@ -198,15 +285,7 @@ async function enqueueLeadPurchaseGrant(
     resolved: false,
   });
 
-  if (error) {
-    if (error.message.includes("notion_lead_purchase_grant_queue")) {
-      console.error(
-        "[lead purchase grant] queue table missing — apply supabase/notion-lead-purchase-grant-queue.sql"
-      );
-      return { queued: false, error: error.message };
-    }
-    return { queued: false, error: error.message };
-  }
+  if (error) return queueInsertError(error);
 
   return { queued: true };
 }
@@ -260,6 +339,15 @@ async function grantResolvedTarget(
   });
   if (result.error) return { error: result.error };
 
+  if (target.kind === "cohort" && result.studentPackageId) {
+    const { error } = await supabase
+      .from("course_enrollments")
+      .update({ student_package_id: result.studentPackageId })
+      .eq("user_id", profileId)
+      .eq("cohort_id", target.runId);
+    if (error) return { error: error.message };
+  }
+
   return {};
 }
 
@@ -268,8 +356,11 @@ async function grantResolvedTarget(
  * Packages relation. Never throws to callers — failures are logged / queued.
  *
  * - 0 Packages → logged skip (normal unpaid signup); no queue noise
- * - Exactly one cleanly resolved package → auto-grant
- * - Multiple / unresolvable → queue for admin
+ * - Completed cohorts/instances and package instances with app_access_expected = false are ignored
+ * - Exactly one live package → auto-grant
+ * - Two or more live packages → queue as ambiguous
+ * - No live package, and at least one page that is not in the app yet → queue as unresolvable
+ * - No live package and nothing unresolved → skip, no queue
  */
 export async function grantAccessFromLinkedLeadPackages(
   supabase: SupabaseClient,
@@ -358,14 +449,20 @@ export async function grantAccessFromLinkedLeadPackages(
   }
 
   const resolved: ResolvedPackageTarget[] = [];
+  const historical: HistoricalPackage[] = [];
   const unresolved: Array<{ notionPageId: string; error: string }> = [];
 
   for (const packagePageId of packagePageIds) {
     const match = await resolveNotionPackagePage(supabase, packagePageId);
-    if ("kind" in match) {
-      resolved.push(match);
+    if (match.outcome === "live") {
+      resolved.push(match.target);
       console.info(
-        `[lead purchase grant] resolved requestId=${requestId} package=${packagePageId} kind=${match.kind} run=${match.runId}`
+        `[lead purchase grant] resolved requestId=${requestId} package=${packagePageId} kind=${match.target.kind} run=${match.target.runId}`
+      );
+    } else if (match.outcome === "historical") {
+      historical.push(match.historical);
+      console.info(
+        `[lead purchase grant] historical requestId=${requestId} package=${packagePageId} kind=${match.historical.kind} status=${match.historical.status ?? "null"}`
       );
     } else {
       unresolved.push({ notionPageId: match.notionPageId, error: match.error });
@@ -384,24 +481,31 @@ export async function grantAccessFromLinkedLeadPackages(
       label: r.label,
       notionPageId: r.notionPageId,
     })),
+    historical,
     unresolved,
     requestId,
     timestamp: new Date().toISOString(),
   };
 
-  const isCleanSingle =
-    resolved.length === 1 && unresolved.length === 0 && packagePageIds.length === 1;
+  const decision = decideLeadPurchaseGrant({
+    liveCount: resolved.length,
+    unresolvedCount: unresolved.length,
+  });
 
-  if (!isCleanSingle) {
-    const reason =
-      packagePageIds.length > 1
-        ? "ambiguous_multiple_packages"
-        : unresolved.length > 0
-          ? "unresolvable_package"
-          : "ambiguous_package_match";
+  if (decision.type === "skip") {
+    result.skipped = 1;
+    result.details.push(decision.detail);
+    console.info(
+      `[lead purchase grant] skip-historical requestId=${requestId} profile=${profileId} lead=${leadPageId} historical=${historical.length} elapsed=${Date.now() - startTime}ms`
+    );
+    return result;
+  }
+
+  if (decision.type === "queue") {
+    const reason = decision.reason;
 
     console.warn(
-      `[lead purchase grant] ${reason} requestId=${requestId} profile=${profileId} resolved=${resolved.length} unresolved=${unresolved.length} elapsed=${Date.now() - startTime}ms`
+      `[lead purchase grant] ${reason} requestId=${requestId} profile=${profileId} resolved=${resolved.length} historical=${historical.length} unresolved=${unresolved.length} elapsed=${Date.now() - startTime}ms`
     );
 
     const queued = await enqueueLeadPurchaseGrant(supabase, {
@@ -498,6 +602,11 @@ export async function grantAccessFromLinkedLeadPackages(
 
   result.granted = 1;
   result.details.push(`Granted ${target.kind} ${target.label} (${target.runId}).`);
+  if (historical.length > 0) {
+    result.details.push(
+      `Ignored ${historical.length} completed or non-app package${historical.length === 1 ? "" : "s"}.`
+    );
+  }
   console.info(
     `[lead purchase grant] SUCCESS requestId=${requestId} profile=${profileId} lead=${leadPageId} ${target.kind}=${target.runId} label=${target.label} elapsed=${Date.now() - startTime}ms`
   );
