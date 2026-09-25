@@ -30,6 +30,7 @@ export async function uploadAvatar(userId: string, file: File): Promise<string> 
   const { error } = await supabase.storage.from("avatars").upload(path, file, {
     contentType: file.type,
     upsert: true,
+    cacheControl: "0",
   });
 
   if (error) {
@@ -41,9 +42,14 @@ export async function uploadAvatar(userId: string, file: File): Promise<string> 
     throw new Error(error.message);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("avatars").getPublicUrl(path);
+  const { data: existing } = await supabase.storage.from("avatars").list(userId);
+  const stale = (existing ?? [])
+    .map((entry) => entry.name)
+    .filter((name) => name.startsWith("profile.") && name !== `profile.${ext}`)
+    .map((name) => `${userId}/${name}`);
+  if (stale.length > 0) {
+    await supabase.storage.from("avatars").remove(stale);
+  }
 
-  return publicUrl;
+  return path;
 }

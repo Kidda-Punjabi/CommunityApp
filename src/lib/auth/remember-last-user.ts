@@ -21,14 +21,14 @@ export async function buildLastUserPayload(
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, preferred_name, avatar_url")
+    .select("full_name, preferred_name")
     .eq("id", user.id)
     .maybeSingle();
 
   return {
     email: user.email,
     displayName: getDisplayName(profile) ?? user.email.split("@")[0],
-    avatarUrl: profile?.avatar_url ?? null,
+    avatarUrl: null,
   };
 }
 
