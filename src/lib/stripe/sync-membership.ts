@@ -15,6 +15,7 @@ import {
 } from "@/lib/kids/grant-kids-course-purchase";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { type PaidCourseTier } from "@/lib/membership/access";
+import { tierFromCheckoutKey } from "./checkout-tier";
 import { tierFromStripeIds } from "./products";
 import { getStripe } from "./server";
 import type Stripe from "stripe";
@@ -40,21 +41,6 @@ async function resolveUserIdFromSession(
     session.customer_details?.email ?? session.customer_email ?? null;
   if (!email) return null;
   return findUserIdByEmail(email);
-}
-
-/** When STRIPE_TIER_* env is missing on a deploy, line items still map via metadata.checkout_key. */
-function tierFromCheckoutKey(checkoutKey: string): PaidCourseTier | null {
-  if (checkoutKey.startsWith("foundational")) return "foundational";
-  if (checkoutKey === "community") return "community";
-  if (
-    checkoutKey === "beginners" ||
-    checkoutKey === "beginners-group" ||
-    checkoutKey === "beginners-one-to-one" ||
-    checkoutKey.includes("beginners")
-  ) {
-    return "beginners";
-  }
-  return null;
 }
 
 function purchasesForSession(

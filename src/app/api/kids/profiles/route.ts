@@ -90,5 +90,19 @@ export async function POST(request: Request) {
     );
   }
 
+  if (user.email) {
+    try {
+      const { drainKidsCoursePurchaseGrantQueue } = await import(
+        "@/lib/kids/grant-kids-course-purchase"
+      );
+      await drainKidsCoursePurchaseGrantQueue(user.id, user.email);
+    } catch (drainError) {
+      console.error(
+        "[kids profiles] lead heal drain failed:",
+        drainError instanceof Error ? drainError.message : drainError
+      );
+    }
+  }
+
   return NextResponse.json({ profile: data });
 }

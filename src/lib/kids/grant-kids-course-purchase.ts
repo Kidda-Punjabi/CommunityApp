@@ -67,6 +67,16 @@ export async function resolveIsKidsCoursePurchase(
   if (isKidsCourseCheckoutSession(session)) return true;
 
   const supabase = createServiceRoleClient();
+  const cohortId = session.metadata?.cohort_id?.trim() || "";
+  if (cohortId) {
+    const { data: cohortById } = await supabase
+      .from("cohorts")
+      .select("id, courses(content_track)")
+      .eq("id", cohortId)
+      .maybeSingle();
+    if (courseTrackFromJoin(cohortById?.courses) === "kids") return true;
+  }
+
   const notionPageId =
     session.client_reference_id?.trim() ||
     session.metadata?.notion_page_id?.trim() ||
@@ -547,7 +557,9 @@ export async function drainKidsCoursePurchaseGrantQueue(parentUserId: string, em
   const normalized = email.trim().toLowerCase();
   const { data: rows, error } = await supabase
     .from("kids_course_purchase_grant_queue")
-    .select("stripe_checkout_session_id")
+    .select(
+      "id, stripe_checkout_session_id, reason, parent_user_id, kid_name, kid_profile_id, cohort_id, raw_metadata"
+    )
     .eq("resolved", false)
     .ilike("parent_email", normalized);
 
@@ -556,10 +568,38 @@ export async function drainKidsCoursePurchaseGrantQueue(parentUserId: string, em
     return;
   }
 
-  const { getStripe } = await import("@/lib/stripe/server");
-  const stripe = getStripe();
+  const { LEAD_HEAL_KIDS_COURSE_REASON } = await import(
+    "@/lib/kids/lead-heal-kids-grant-logic"
+  );
+  const { resolveLeadHealKidsQueueRow } = await import("@/lib/kids/lead-heal-kids-grant");
+
+  let stripe: Stripe | null = null;
   for (const row of rows ?? []) {
+    if (row.reason === LEAD_HEAL_KIDS_COURSE_REASON) {
+      try {
+        await resolveLeadHealKidsQueueRow(supabase, parentUserId, {
+          id: row.id as string,
+          parent_user_id: (row.parent_user_id as string | null) ?? null,
+          kid_name: (row.kid_name as string | null) ?? null,
+          kid_profile_id: (row.kid_profile_id as string | null) ?? null,
+          cohort_id: (row.cohort_id as string | null) ?? null,
+          raw_metadata: row.raw_metadata,
+        });
+      } catch (e) {
+        console.error(
+          "[kids purchase grant] lead heal drain failed for",
+          row.id,
+          e instanceof Error ? e.message : e
+        );
+      }
+      continue;
+    }
+
     try {
+      if (!stripe) {
+        const { getStripe } = await import("@/lib/stripe/server");
+        stripe = getStripe();
+      }
       const session = await stripe.checkout.sessions.retrieve(
         row.stripe_checkout_session_id as string
       );

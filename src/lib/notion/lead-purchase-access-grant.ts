@@ -2,6 +2,11 @@ import "server-only";
 
 import { setPackageRunRosterStatus } from "@/lib/admin/packages/roster-membership";
 import {
+  enqueueLeadHealKidsCourse,
+  LEAD_HEAL_KIDS_COURSE_REASON,
+} from "@/lib/kids/lead-heal-kids-grant";
+import { leadHealKidsQueueSessionId } from "@/lib/kids/lead-heal-kids-grant-logic";
+import {
   notionJson,
   plainTextFromRichText,
   plainTextFromTitle,
@@ -210,7 +215,33 @@ async function grantResolvedTarget(
   supabase: SupabaseClient,
   profileId: string,
   target: ResolvedPackageTarget
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; queued?: boolean; grantedToKid?: boolean; skipped?: boolean }> {
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("content_track")
+    .eq("id", target.courseId)
+    .maybeSingle();
+  if (courseError) return { error: courseError.message };
+
+  if (course?.content_track === "kids") {
+    const queued = await enqueueLeadHealKidsCourse(supabase, profileId, target);
+    if (queued.error) return { error: queued.error };
+    if (queued.alreadySettled) return { skipped: true };
+    if (queued.email) {
+      const { drainKidsCoursePurchaseGrantQueue } = await import(
+        "@/lib/kids/grant-kids-course-purchase"
+      );
+      await drainKidsCoursePurchaseGrantQueue(profileId, queued.email);
+    }
+    const { data: settled } = await supabase
+      .from("kids_course_purchase_grant_queue")
+      .select("resolved")
+      .eq("stripe_checkout_session_id", leadHealKidsQueueSessionId(profileId, target.kind, target.runId))
+      .maybeSingle();
+    if (settled?.resolved) return { grantedToKid: true };
+    return { queued: true };
+  }
+
   // course_enrollments has a DB guard requiring an active cohort_members row first
   // (same order as complete_group_purchase_core). Membership before enrollment.
   if (target.kind === "cohort") {
@@ -439,6 +470,32 @@ export async function grantAccessFromLinkedLeadPackages(
     return result;
   }
 
+  if (grant.grantedToKid) {
+    result.granted = 1;
+    result.details.push(`Granted ${target.kind} ${target.label} to the kid profile.`);
+    console.info(
+      `[lead purchase grant] KID SUCCESS requestId=${requestId} profile=${profileId} lead=${leadPageId} ${target.kind}=${target.runId} label=${target.label} elapsed=${Date.now() - startTime}ms`
+    );
+    return result;
+  }
+
+  if (grant.queued) {
+    result.queued = 1;
+    result.details.push(
+      `Queued kids course ${target.label} (${LEAD_HEAL_KIDS_COURSE_REASON}) until a kid profile exists.`
+    );
+    console.info(
+      `[lead purchase grant] KID QUEUED requestId=${requestId} profile=${profileId} lead=${leadPageId} ${target.kind}=${target.runId} label=${target.label} elapsed=${Date.now() - startTime}ms`
+    );
+    return result;
+  }
+
+  if (grant.skipped) {
+    result.skipped = 1;
+    result.details.push(`Kids course ${target.label} was already granted to a kid profile.`);
+    return result;
+  }
+
   result.granted = 1;
   result.details.push(`Granted ${target.kind} ${target.label} (${target.runId}).`);
   console.info(
@@ -612,6 +669,30 @@ export async function maybeGrantAccessForLinkedProfile(
       };
     }
 
+    const { count: kidsHealCount, error: kidsHealError } = await supabase
+      .from("kids_course_purchase_grant_queue")
+      .select("id", { count: "exact", head: true })
+      .eq("parent_user_id", profileId)
+      .eq("reason", LEAD_HEAL_KIDS_COURSE_REASON);
+    if (!kidsHealError && (kidsHealCount ?? 0) > 0) {
+      const { data: authUser } = await supabase.auth.admin.getUserById(profileId);
+      const email = authUser.user?.email?.trim();
+      if (email) {
+        const { drainKidsCoursePurchaseGrantQueue } = await import(
+          "@/lib/kids/grant-kids-course-purchase"
+        );
+        await drainKidsCoursePurchaseGrantQueue(profileId, email);
+      }
+      return {
+        attempted: true,
+        granted: 0,
+        queued: 0,
+        skipped: 1,
+        errors: [],
+        details: ["Kids course lead is already on the kid grant queue."],
+      };
+    }
+
     console.info(
       `[lead purchase grant] linked-profile heal running profile=${profileId} lead=${leadPageId}`
     );
@@ -709,6 +790,14 @@ export async function resolveLeadPurchaseGrantQueueItem(
   const grant = await grantResolvedTarget(supabase, row.profile_id, target);
   if (grant.error) return { error: grant.error };
 
+  const kidNote = grant.grantedToKid
+    ? `Granted ${target.label} to the kid profile.`
+    : grant.queued
+      ? `Queued ${target.label} for the kid profile.`
+      : grant.skipped
+        ? `Kids course ${target.label} was already on the kid profile.`
+        : null;
+
   const { error } = await supabase
     .from("notion_lead_purchase_grant_queue")
     .update({
@@ -716,13 +805,12 @@ export async function resolveLeadPurchaseGrantQueueItem(
       resolved_at: new Date().toISOString(),
       resolved_by: input.resolvedBy,
       resolution_note:
-        input.note ??
-        `Granted ${target.kind} ${target.label} (${target.runId}).`,
+        input.note ?? kidNote ?? `Granted ${target.kind} ${target.label} (${target.runId}).`,
     })
     .eq("id", input.queueId);
 
   if (error) return { error: error.message };
-  return { success: `Granted ${target.label}.` };
+  return { success: kidNote ?? `Granted ${target.label}.` };
 }
 
 export async function loadLeadPurchaseGrantQueue(
