@@ -54,7 +54,7 @@ export function AdminUnseenAppOnboardingSection() {
           App onboarding incomplete
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Students whose profile still has has_seen_onboarding = false. Staff accounts are excluded.
+          Students whose profile still has has_seen_onboarding = false. Staff, disabled accounts, and offline-provisioned accounts that have never signed in are excluded.
         </p>
       </div>
 

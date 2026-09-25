@@ -9,6 +9,32 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type { UnseenAppOnboardingRow };
 
 const APP_ONBOARDING_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+const EXCLUSION_ID_CHUNK = 500;
+
+async function loadExcludedUserIds(
+  supabase: SupabaseClient,
+  userIds: string[]
+): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+
+  const excluded = new Set<string>();
+  for (let index = 0; index < userIds.length; index += EXCLUSION_ID_CHUNK) {
+    const chunk = userIds.slice(index, index + EXCLUSION_ID_CHUNK);
+    const { data, error } = await supabase.rpc("admin_unseen_onboarding_excluded_user_ids", {
+      p_user_ids: chunk,
+    });
+    if (error) {
+      throw new Error(error.message);
+    }
+    if (!Array.isArray(data)) {
+      throw new Error("Onboarding exclusion query returned no result.");
+    }
+    for (const row of data as Array<{ id?: string }>) {
+      if (row?.id) excluded.add(row.id);
+    }
+  }
+  return excluded;
+}
 
 async function loadEmailsById(
   supabase: SupabaseClient,
@@ -45,12 +71,18 @@ export async function loadUnseenAppOnboarding(supabase: SupabaseClient): Promise
     return true;
   });
 
-  const emailById = await loadEmailsById(
+  const excludedIds = await loadExcludedUserIds(
     supabase,
     studentProfiles.map((row) => row.id as string)
   );
+  const visibleProfiles = studentProfiles.filter((row) => !excludedIds.has(row.id as string));
 
-  const rows: UnseenAppOnboardingRow[] = studentProfiles
+  const emailById = await loadEmailsById(
+    supabase,
+    visibleProfiles.map((row) => row.id as string)
+  );
+
+  const rows: UnseenAppOnboardingRow[] = visibleProfiles
     .map((row) => {
       const signedUpAt = (row.created_at as string) ?? new Date(0).toISOString();
       return {
