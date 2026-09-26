@@ -19,14 +19,16 @@ export async function POST() {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
+  const { data: memberships } = await supabase
+    .from("memberships")
     .select("stripe_customer_id")
-    .eq("id", user.id)
-    .single();
+    .eq("user_id", user.id)
+    .in("status", ["active", "trialing", "past_due"])
+    .order("created_at", { ascending: false });
 
   const stripe = getStripe();
-  let customerId = profile?.stripe_customer_id ?? null;
+  let customerId =
+    memberships?.find((row) => row.stripe_customer_id)?.stripe_customer_id ?? null;
 
   if (!customerId) {
     const existing = await stripe.customers.list({ email: user.email, limit: 1 });

@@ -1,11 +1,15 @@
 import "server-only";
 
-import { TIER_LABELS } from "@/lib/membership/tiers";
-import { tierFromStripeIds } from "@/lib/stripe/products";
 import { tiersFromLineItems } from "@/lib/stripe/sync-purchases";
 import { getStripe } from "@/lib/stripe/server";
 import { createClient } from "@/lib/supabase/server";
 import type Stripe from "stripe";
+import {
+  billingMembershipsForCard,
+  billingSubscriptionName,
+  customerIdsFromMemberships,
+  type BillingMembershipRow,
+} from "./billing-memberships";
 
 export type UserPurchaseRow = {
   id: string;
@@ -27,6 +31,13 @@ export type UserSubscriptionRow = {
   cancelAtPeriodEnd: boolean;
 };
 
+type BillingResult = {
+  purchases: UserPurchaseRow[];
+  subscriptions: UserSubscriptionRow[];
+  hasStripeCustomer: boolean;
+  error: string | null;
+};
+
 function formatAmount(amount: number | null, currency: string | null): string | null {
   if (amount == null || !currency) return null;
   return new Intl.NumberFormat("en-GB", {
@@ -35,76 +46,100 @@ function formatAmount(amount: number | null, currency: string | null): string | 
   }).format(amount / 100);
 }
 
-async function resolveCustomerIds(
-  stripe: Stripe,
-  email: string,
-  storedCustomerId: string | null
-): Promise<string[]> {
-  const ids = new Set<string>();
-  if (storedCustomerId) ids.add(storedCustomerId);
-
-  const customers = await stripe.customers.list({ email, limit: 10 });
-  for (const customer of customers.data) {
-    ids.add(customer.id);
-  }
-
-  return [...ids];
+function emptyBilling(error: string | null): BillingResult {
+  return {
+    purchases: [],
+    subscriptions: [],
+    hasStripeCustomer: false,
+    error,
+  };
 }
 
-export async function loadUserBilling(): Promise<{
-  purchases: UserPurchaseRow[];
-  subscriptions: UserSubscriptionRow[];
-  hasStripeCustomer: boolean;
-  error: string | null;
-}> {
-  if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_")) {
-    return {
-      purchases: [],
-      subscriptions: [],
-      hasStripeCustomer: false,
-      error: "Billing is not configured.",
-    };
-  }
+function subscriptionPeriodEnd(sub: Stripe.Subscription): string | null {
+  const item = sub.items.data[0] as (Stripe.SubscriptionItem & { current_period_end?: number }) | undefined;
+  const legacyEnd = (sub as Stripe.Subscription & { current_period_end?: number }).current_period_end;
+  const end = item?.current_period_end ?? legacyEnd;
+  return end ? new Date(end * 1000).toISOString() : null;
+}
 
+function rowsFromMemberships(rows: BillingMembershipRow[]): UserSubscriptionRow[] {
+  return billingMembershipsForCard(rows).map((row) => ({
+    id: row.id,
+    status: row.status,
+    productName: billingSubscriptionName(row.tier_name),
+    amountLabel: null,
+    interval: null,
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+  }));
+}
+
+function applyStripePeriod(
+  subscriptions: UserSubscriptionRow[],
+  memberships: BillingMembershipRow[],
+  stripeSubs: Stripe.Subscription[]
+) {
+  const byStripeId = new Map(stripeSubs.map((sub) => [sub.id, sub]));
+  const membershipById = new Map(memberships.map((row) => [row.id, row]));
+
+  for (const subscription of subscriptions) {
+    const membership = membershipById.get(subscription.id);
+    const stripeSub = membership?.stripe_subscription_id
+      ? byStripeId.get(membership.stripe_subscription_id)
+      : undefined;
+    if (!stripeSub) continue;
+
+    const item = stripeSub.items.data[0];
+    const price = item?.price;
+    subscription.amountLabel = formatAmount(price?.unit_amount ?? null, price?.currency ?? null);
+    subscription.interval = price?.recurring?.interval ?? null;
+    subscription.currentPeriodEnd = subscriptionPeriodEnd(stripeSub);
+    subscription.cancelAtPeriodEnd = stripeSub.cancel_at_period_end ?? false;
+  }
+}
+
+export async function loadUserBilling(): Promise<BillingResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user?.email) {
+  if (!user) return emptyBilling("Not signed in.");
+
+  const { data: membershipRows, error: membershipError } = await supabase
+    .from("memberships")
+    .select("id, status, tier_name, stripe_customer_id, stripe_subscription_id, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (membershipError) {
+    return emptyBilling(membershipError.message);
+  }
+
+  const memberships = (membershipRows ?? []) as BillingMembershipRow[];
+  const subscriptions = rowsFromMemberships(memberships);
+  const storedCustomerIds = customerIdsFromMemberships(memberships);
+
+  if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_")) {
     return {
       purchases: [],
-      subscriptions: [],
-      hasStripeCustomer: false,
-      error: "Not signed in.",
+      subscriptions,
+      hasStripeCustomer: storedCustomerIds.length > 0,
+      error: "Billing is not configured.",
     };
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("stripe_customer_id")
-    .eq("id", user.id)
-    .single();
-
   try {
     const stripe = getStripe();
-    const customerIds = await resolveCustomerIds(
-      stripe,
-      user.email,
-      profile?.stripe_customer_id ?? null
-    );
+    const customerIds = new Set(storedCustomerIds);
 
-    if (customerIds.length === 0) {
-      return {
-        purchases: [],
-        subscriptions: [],
-        hasStripeCustomer: false,
-        error: null,
-      };
+    if (user.email) {
+      const customers = await stripe.customers.list({ email: user.email, limit: 10 });
+      for (const customer of customers.data) customerIds.add(customer.id);
     }
 
     const purchases: UserPurchaseRow[] = [];
-    const subscriptions: UserSubscriptionRow[] = [];
+    const stripeSubs: Stripe.Subscription[] = [];
 
     for (const customerId of customerIds) {
       const sessions = await stripe.checkout.sessions.list({
@@ -120,17 +155,12 @@ export async function loadUserBilling(): Promise<{
           expand: ["data.price.product"],
         });
 
-        const tiers = tiersFromLineItems(lineItems.data);
-        const products = lineItems.data.map(
-          (item) => item.description ?? "Purchase"
-        );
-
         purchases.push({
           id: session.id,
           date: new Date(session.created * 1000).toISOString(),
           amountLabel: formatAmount(session.amount_total, session.currency),
-          products,
-          tiers,
+          products: lineItems.data.map((item) => item.description ?? "Purchase"),
+          tiers: tiersFromLineItems(lineItems.data),
           type: session.mode === "subscription" ? "subscription" : "payment",
           status: session.payment_status ?? session.status ?? "unknown",
         });
@@ -142,48 +172,23 @@ export async function loadUserBilling(): Promise<{
         limit: 20,
         expand: ["data.items.data.price"],
       });
-
-      for (const sub of subs.data) {
-        const billingFields = sub as Stripe.Subscription & {
-          current_period_end?: number;
-          cancel_at_period_end?: boolean;
-        };
-        const item = sub.items.data[0];
-        const price = item?.price;
-        const productId =
-          typeof price?.product === "string" ? price.product : price?.product?.id ?? null;
-        const tier = tierFromStripeIds(productId, price?.id ?? null);
-        const productName =
-          tier && tier !== "free"
-            ? TIER_LABELS[tier]
-            : price?.nickname?.trim() || "Subscription";
-        subscriptions.push({
-          id: sub.id,
-          status: sub.status,
-          productName,
-          amountLabel: formatAmount(price?.unit_amount ?? null, price?.currency ?? null),
-          interval: price?.recurring?.interval ?? null,
-          currentPeriodEnd: billingFields.current_period_end
-            ? new Date(billingFields.current_period_end * 1000).toISOString()
-            : null,
-          cancelAtPeriodEnd: billingFields.cancel_at_period_end ?? false,
-        });
-      }
+      stripeSubs.push(...subs.data);
     }
 
+    applyStripePeriod(subscriptions, memberships, stripeSubs);
     purchases.sort((a, b) => b.date.localeCompare(a.date));
 
     return {
       purchases,
       subscriptions,
-      hasStripeCustomer: true,
+      hasStripeCustomer: customerIds.size > 0,
       error: null,
     };
   } catch (error) {
     return {
       purchases: [],
-      subscriptions: [],
-      hasStripeCustomer: Boolean(profile?.stripe_customer_id),
+      subscriptions,
+      hasStripeCustomer: storedCustomerIds.length > 0,
       error: error instanceof Error ? error.message : "Failed to load billing.",
     };
   }

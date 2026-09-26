@@ -54,10 +54,7 @@ export default async function ProfileBillingPage() {
 
   const access = await getCourseAccessContext(supabase, user!);
   const billing = await loadUserBilling();
-
-  const activeSubscriptions = billing.subscriptions.filter(
-    (sub) => sub.status === "active" || sub.status === "trialing"
-  );
+  const activeSubscriptions = billing.subscriptions;
 
   return (
     <div className={ui.page}>
