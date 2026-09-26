@@ -3,7 +3,13 @@ import "server-only";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import type Stripe from "stripe";
 
-export type WebhookProcessingStatus = "received" | "processed" | "ignored" | "failed";
+export type WebhookProcessingStatus =
+  | "received"
+  | "processed"
+  | "ignored"
+  | "failed"
+  | "unmatched"
+  | "duplicate_subscription";
 
 function checkoutSessionIdFromEvent(event: Stripe.Event): string | null {
   if (
@@ -34,6 +40,12 @@ function summarizeEvent(event: Stripe.Event): Record<string, unknown> {
     summary.one_to_one_booking_id = session.metadata?.one_to_one_booking_id ?? null;
     summary.client_reference_id = session.client_reference_id ?? null;
     summary.email = session.customer_details?.email ?? session.customer_email ?? null;
+    summary.subscription_id =
+      typeof session.subscription === "string"
+        ? session.subscription
+        : session.subscription?.id ?? null;
+    summary.stripe_customer_id =
+      typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
   }
 
   if (event.type.startsWith("customer.subscription.")) {
@@ -45,6 +57,10 @@ function summarizeEvent(event: Stripe.Event): Record<string, unknown> {
       subscription.metadata?.app_user_id ??
       subscription.metadata?.supabase_user_id ??
       null;
+    summary.stripe_customer_id =
+      typeof subscription.customer === "string"
+        ? subscription.customer
+        : subscription.customer?.id ?? null;
   }
 
   return summary;
@@ -86,6 +102,25 @@ export async function logStripeWebhookReceived(event: Stripe.Event): Promise<voi
     }
   } catch (error) {
     console.error("[stripe_webhook_events] failed to log received:", error);
+  }
+}
+
+/** Checkout later resolved this subscription, so earlier "awaiting checkout" rows are noise. */
+export async function markUnmatchedEventsProcessedForSubscription(
+  subscriptionId: string
+): Promise<void> {
+  const admin = createServiceRoleClient();
+  const { error } = await admin
+    .from("stripe_webhook_events")
+    .update({
+      processing_status: "processed",
+      error_message: null,
+      processed_at: new Date().toISOString(),
+    })
+    .eq("processing_status", "unmatched")
+    .filter("payload_summary->>subscription_id", "eq", subscriptionId);
+  if (error) {
+    console.error("[stripe_webhook_events] failed to clear unmatched:", error.message);
   }
 }
 

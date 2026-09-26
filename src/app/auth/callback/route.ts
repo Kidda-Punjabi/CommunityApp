@@ -67,6 +67,23 @@ export async function GET(request: Request) {
             healError instanceof Error ? healError.message : healError
           );
         }
+
+        if (user.email_confirmed_at) {
+          try {
+            const { claimUnmatchedPremiumCheckouts } = await import(
+              "@/lib/stripe/claim-unmatched-premium"
+            );
+            await claimUnmatchedPremiumCheckouts({
+              userId: user.id,
+              email: userEmail,
+            });
+          } catch (claimError) {
+            console.error(
+              "[auth/callback] premium claim failed:",
+              claimError instanceof Error ? claimError.message : claimError
+            );
+          }
+        }
       }
 
       const response = NextResponse.redirect(`${origin}${next}`);

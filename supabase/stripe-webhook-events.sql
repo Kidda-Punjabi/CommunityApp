@@ -5,7 +5,14 @@ CREATE TABLE IF NOT EXISTS public.stripe_webhook_events (
   livemode              BOOLEAN NOT NULL DEFAULT true,
   checkout_session_id   TEXT,
   processing_status     TEXT NOT NULL DEFAULT 'received'
-    CHECK (processing_status IN ('received', 'processed', 'ignored', 'failed')),
+    CHECK (processing_status IN (
+      'received',
+      'processed',
+      'ignored',
+      'failed',
+      'unmatched',
+      'duplicate_subscription'
+    )),
   error_message         TEXT,
   payload_summary       JSONB NOT NULL DEFAULT '{}'::jsonb,
   raw_payload           JSONB,

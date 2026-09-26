@@ -69,6 +69,23 @@ export async function signup(
         linkError instanceof Error ? linkError.message : linkError
       );
     }
+
+    if (data.user.email_confirmed_at && data.user.email) {
+      try {
+        const { claimUnmatchedPremiumCheckouts } = await import(
+          "@/lib/stripe/claim-unmatched-premium"
+        );
+        await claimUnmatchedPremiumCheckouts({
+          userId: data.user.id,
+          email: data.user.email,
+        });
+      } catch (claimError) {
+        console.error(
+          "[signup] premium claim failed:",
+          claimError instanceof Error ? claimError.message : claimError
+        );
+      }
+    }
   }
 
   if (data.user && data.session) {
