@@ -1,11 +1,12 @@
 import type { PaidCourseTier } from "@/lib/membership/access";
 import type { GameDeckSummary } from "./load-game-decks";
 
-export type GameCourseLevel = "foundational" | "beginners";
+export type GameCourseLevel = "foundational" | "beginners" | "community";
 
 export const GAME_COURSE_LEVELS: { id: GameCourseLevel; label: string; tier: PaidCourseTier }[] = [
   { id: "foundational", label: "Foundational", tier: "foundational" },
   { id: "beginners", label: "Beginner", tier: "beginners" },
+  { id: "community", label: "Community", tier: "community" },
 ];
 
 export function filterDecksByCourseLevel(

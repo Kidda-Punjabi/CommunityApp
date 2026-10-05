@@ -4,9 +4,16 @@ import type { PaidCourseTier } from "@/lib/membership/access";
 import { isPublicLearnCourse, type CourseRecord } from "@/lib/membership/courses";
 import { getCourseAccessContext } from "@/lib/membership/unlocked";
 import { resolveGamesContentScope } from "@/lib/games/content-scope";
-import { actorFilter, resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
+import {
+  actorFilter,
+  resolveCourseActor,
+  studentActorFilter,
+  type CourseActor,
+} from "@/lib/kids/course-actor";
+import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import {
   buildGameDeckSummaries,
+  isFinishedRunStatus,
   lessonIdsTaughtToStudent,
   type DeckListLesson,
   type DeckListLink,
@@ -18,6 +25,57 @@ import {
 } from "@/lib/games/game-deck-weeks";
 
 export type { GameDeckSummary };
+
+async function loadCohortStatuses(cohortIds: string[]): Promise<Map<string, string | null>> {
+  const statuses = new Map<string, string | null>();
+  if (cohortIds.length === 0) return statuses;
+
+  const service = tryCreateServiceRoleClient();
+  if (!service.client) return statuses;
+
+  const { data, error } = await service.client
+    .from("cohorts")
+    .select("id, status")
+    .in("id", cohortIds);
+  if (error || !data) return statuses;
+
+  for (const row of data) {
+    if (!row.id) continue;
+    statuses.set(row.id as string, (row.status as string | null) ?? null);
+  }
+  return statuses;
+}
+
+async function loadInactiveIndividualCourseIds(actor: CourseActor): Promise<Set<string>> {
+  const inactive = new Set<string>();
+  const service = tryCreateServiceRoleClient();
+  if (!service.client) return inactive;
+
+  const column = actor.kind === "kid" ? "kid_profile_id" : "user_id";
+  const value = actor.kind === "kid" ? actor.kidProfileId : actor.userId;
+  const { data, error } = await service.client
+    .from("student_packages")
+    .select("course_id, status, package_instances(status)")
+    .eq(column, value);
+  if (error || !data) return inactive;
+
+  const byCourse = new Map<string, boolean[]>();
+  for (const row of data) {
+    const courseId = row.course_id as string | null;
+    if (!courseId || row.status === "withdrawn" || row.status === "interested") continue;
+    const raw = row.package_instances as { status: string | null } | { status: string | null }[] | null;
+    const instance = Array.isArray(raw) ? raw[0] : raw;
+    const finished = instance?.status ? isFinishedRunStatus(instance.status) : false;
+    const list = byCourse.get(courseId) ?? [];
+    list.push(finished);
+    byCourse.set(courseId, list);
+  }
+
+  for (const [courseId, finishedFlags] of byCourse) {
+    if (finishedFlags.length > 0 && finishedFlags.every(Boolean)) inactive.add(courseId);
+  }
+  return inactive;
+}
 
 type LessonQueryRow = {
   id: string;
@@ -123,13 +181,30 @@ export async function loadAccessibleGameDecks(
     isPublic: course.is_public ?? null,
   }));
 
+  const enrollmentCohortIds = [
+    ...new Set(
+      enrollmentRows
+        .map((row) => row.cohort_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const [cohortStatuses, inactiveIndividualCourseIds] = await Promise.all([
+    loadCohortStatuses(enrollmentCohortIds),
+    loadInactiveIndividualCourseIds(actor),
+  ]);
+
   const enrollments: TaughtEnrollmentInput[] = enrollmentRows
     .filter((row) => row.course_id)
-    .map((row) => ({
-      courseId: row.course_id as string,
-      deliveryMode: (row.delivery_mode as string | null) ?? null,
-      cohortId: (row.cohort_id as string | null) ?? null,
-    }));
+    .map((row) => {
+      const cohortId = (row.cohort_id as string | null) ?? null;
+      return {
+        courseId: row.course_id as string,
+        deliveryMode: (row.delivery_mode as string | null) ?? null,
+        cohortId,
+        cohortStatus: cohortId ? (cohortStatuses.get(cohortId) ?? null) : null,
+        individualPackageInactive: inactiveIndividualCourseIds.has(row.course_id as string),
+      };
+    });
 
   const enrolledCourseIds = new Set(enrollments.map((enrollment) => enrollment.courseId));
   const adminPreviewCourseIds = new Set<string>();
@@ -196,6 +271,7 @@ export async function loadAccessibleGameDecks(
   const links: DeckListLink[] = linkRows.map((row) => ({
     deckId: row.deck_id as string,
     lessonId: (row.lesson_id as string | null) ?? null,
+    courseId: (row.course_id as string | null) ?? null,
   }));
 
   const sets: DeckListSet[] = setRows.map((row) => ({
@@ -205,6 +281,18 @@ export async function loadAccessibleGameDecks(
     cardCount: embeddedCardCount(row.flashcards),
   }));
 
+  const privateCourseIds =
+    actor.kind === "kid"
+      ? new Set(
+          lessons
+            .filter(
+              (lesson) =>
+                !lesson.isPublicCourse && access.unlockedCourseIds.has(lesson.courseId)
+            )
+            .map((lesson) => lesson.courseId)
+        )
+      : null;
+
   return buildGameDeckSummaries({
     lessons,
     links,
@@ -212,5 +300,6 @@ export async function loadAccessibleGameDecks(
     unlockedCourseIds: access.unlockedCourseIds,
     taughtLessonIds,
     englishCourseIds: scope.mode === "english" ? new Set(scope.courseIds) : null,
+    privateCourseIds,
   });
 }
