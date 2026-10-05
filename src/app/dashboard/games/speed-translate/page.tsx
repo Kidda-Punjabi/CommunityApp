@@ -17,8 +17,8 @@ export default async function TranslationSprintDeckSelectPage() {
       <BackLink fallbackHref="/dashboard/games">← Back</BackLink>
       <h1 className="mt-4 text-2xl font-bold text-zinc-900">Translation Sprint</h1>
       <p className="mt-1 text-sm text-zinc-500">
-        Choose a course level, then pick a deck. Pick the correct translation before you run out
-        of lives.
+        Choose a course level and week, then pick a deck. Pick the correct translation before you
+        run out of lives.
       </p>
       <div className="mt-6">
         <GameDeckCoursePicker

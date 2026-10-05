@@ -13,12 +13,16 @@ type GameDeckCoursePickerProps = {
   gameSlug: string;
   gameTitle: string;
   decks: GameDeckSummary[];
+  onSelectDeck?: (deck: GameDeckSummary) => void;
+  hideEmptyBackLink?: boolean;
 };
 
 export function GameDeckCoursePicker({
   gameSlug,
   gameTitle,
   decks,
+  onSelectDeck,
+  hideEmptyBackLink = false,
 }: GameDeckCoursePickerProps) {
   const availableLevels = useMemo(
     () =>
@@ -38,7 +42,14 @@ export function GameDeckCoursePicker({
   );
 
   if (decks.length === 0) {
-    return <DeckSelectList gameSlug={gameSlug} gameTitle={gameTitle} decks={[]} />;
+    return (
+      <DeckSelectList
+        gameSlug={gameSlug}
+        gameTitle={gameTitle}
+        decks={[]}
+        hideEmptyBackLink={hideEmptyBackLink}
+      />
+    );
   }
 
   return (
@@ -67,7 +78,13 @@ export function GameDeckCoursePicker({
         </div>
       )}
 
-      <DeckSelectList gameSlug={gameSlug} gameTitle={gameTitle} decks={filteredDecks} />
+      <DeckSelectList
+        gameSlug={gameSlug}
+        gameTitle={gameTitle}
+        decks={filteredDecks}
+        onSelectDeck={onSelectDeck}
+        hideEmptyBackLink={hideEmptyBackLink}
+      />
     </div>
   );
 }
