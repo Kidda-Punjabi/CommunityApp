@@ -47,10 +47,27 @@ export type HomeworkPendingAssignment = {
   studentId: string;
 };
 
-import type { PendingHomeworkReviewRow } from "@/lib/tutoring/homework-submissions";
+import type {
+  HomeworkSubmissionType,
+  PendingHomeworkReviewRow,
+} from "@/lib/tutoring/homework-submissions";
 
 export type HomeworkBoardPendingRow = PendingHomeworkReviewRow & {
   packageId: string;
+};
+
+/** A marked submission kept on the package roster so the tutor can play it again. */
+export type ReviewedHomeworkPlayback = {
+  id: string;
+  studentId: string;
+  lessonId: string;
+  submittedAt: string;
+  submissionType: HomeworkSubmissionType;
+  storagePath: string | null;
+  durationSeconds: number | null;
+  textAnswers: Array<{ question_number: number; answer_text: string }> | null;
+  approved: boolean | null;
+  tutorComment: string | null;
 };
 
 export function encodeHomeworkPackageId(ref: HomeworkPackageRef): string {

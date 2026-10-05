@@ -15,10 +15,24 @@ type PlaybackUrlLoader = (storagePath: string) => Promise<{
   error?: string;
 }>;
 
+export const HOMEWORK_PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2] as const;
+export type HomeworkPlaybackRate = (typeof HOMEWORK_PLAYBACK_RATES)[number];
+
+export function isHomeworkPlaybackRate(value: number): value is HomeworkPlaybackRate {
+  return (HOMEWORK_PLAYBACK_RATES as readonly number[]).includes(value);
+}
+
+function formatPlaybackRate(rate: number): string {
+  return `${rate}x`;
+}
+
 type HomeworkAudioPlayerProps = {
   storagePath: string;
   durationSeconds: number | null;
   loadPlaybackUrl?: PlaybackUrlLoader;
+  /** When set with onPlaybackRateChange, tutors get a speed control on this player. */
+  playbackRate?: HomeworkPlaybackRate;
+  onPlaybackRateChange?: (rate: HomeworkPlaybackRate) => void;
 };
 
 /**
@@ -33,10 +47,19 @@ export function HomeworkAudioPlayer({
   storagePath,
   durationSeconds,
   loadPlaybackUrl = getHomeworkPlaybackUrl,
+  playbackRate,
+  onPlaybackRateChange,
 }: HomeworkAudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const playbackRateRef = useRef(playbackRate);
   const repairingRef = useRef(false);
   const repairPromiseRef = useRef<Promise<number | null> | null>(null);
+
+  function applyPlaybackRate(audio: HTMLAudioElement | null) {
+    const rate = playbackRateRef.current;
+    if (!audio || rate == null) return;
+    audio.playbackRate = rate;
+  }
 
   const [src, setSrc] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -94,6 +117,7 @@ export function HomeworkAudioPlayer({
     const repaired = await repairPromiseRef.current;
     if (repaired != null) setLiveDuration(repaired);
     setCurrentTime(0);
+    applyPlaybackRate(audio);
     return repaired;
   }
 
@@ -139,6 +163,8 @@ export function HomeworkAudioPlayer({
       await ensureFiniteDuration(audio);
     }
 
+    applyPlaybackRate(audio);
+
     try {
       await audio.play();
       setPlayError(null);
@@ -146,6 +172,13 @@ export function HomeworkAudioPlayer({
       setPlayError("Playback was blocked by the browser. Tap play again.");
     }
   }
+
+  useEffect(() => {
+    playbackRateRef.current = playbackRate;
+    const audio = audioRef.current;
+    if (!audio || playbackRate == null) return;
+    audio.playbackRate = playbackRate;
+  }, [playbackRate, src]);
 
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
 
@@ -155,7 +188,10 @@ export function HomeworkAudioPlayer({
         ref={audioRef}
         src={src ?? undefined}
         preload="auto"
-        onLoadedMetadata={() => void handleLoadedMetadata()}
+        onLoadedMetadata={() => {
+          applyPlaybackRate(audioRef.current);
+          void handleLoadedMetadata();
+        }}
         onTimeUpdate={handleTimeUpdate}
         onEnded={() => {
           if (repairingRef.current) return;
@@ -207,6 +243,35 @@ export function HomeworkAudioPlayer({
           </p>
         </div>
       </div>
+
+      {onPlaybackRateChange ? (
+        <div
+          className="mt-3 flex flex-wrap items-center gap-1.5"
+          role="group"
+          aria-label="Playback speed"
+        >
+          <span className="mr-1 text-xs font-medium text-zinc-500">Speed</span>
+          {HOMEWORK_PLAYBACK_RATES.map((rate) => {
+            const selected = playbackRate === rate;
+            return (
+              <button
+                key={rate}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onPlaybackRateChange(rate)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-xs font-semibold",
+                  selected
+                    ? "bg-violet-600 text-white"
+                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                )}
+              >
+                {formatPlaybackRate(rate)}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       {playError ? <p className="mt-2 text-xs text-red-600">{playError}</p> : null}
       {!src && !loadError ? (

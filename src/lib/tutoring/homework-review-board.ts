@@ -12,6 +12,7 @@ import {
   type HomeworkPackageEnrollment,
   type HomeworkPackageLesson,
   type HomeworkReviewPackage,
+  type ReviewedHomeworkPlayback,
 } from "@/lib/tutoring/homework-review-packages";
 import {
   homeworkRosterActorKey,
@@ -24,7 +25,7 @@ export type { HomeworkBoardPendingRow } from "@/lib/tutoring/homework-review-pac
 export type HomeworkReviewBoard = {
   packages: HomeworkReviewPackage[];
   pendingSubmissions: HomeworkBoardPendingRow[];
-  reviewedKeys: string[];
+  reviewedSubmissions: ReviewedHomeworkPlayback[];
 };
 
 type CourseRel = { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null;
@@ -90,15 +91,31 @@ async function loadLessonsByCourseId(
   return lessonsByCourse;
 }
 
-async function loadReviewedKeysForActors(
+type ReviewedPlaybackQueryRow = {
+  id: string;
+  student_id: string | null;
+  kid_profile_id: string | null;
+  lesson_id: string | null;
+  storage_path: string | null;
+  duration_seconds: number | null;
+  submission_type: string | null;
+  text_answers: Array<{ question_number: number; answer_text: string }> | null;
+  submitted_at: string;
+  approved: boolean | null;
+  tutor_comment: string | null;
+};
+
+async function loadReviewedPlaybacksForActors(
   supabase: SupabaseClient,
   actorIds: string[]
-): Promise<string[]> {
+): Promise<ReviewedHomeworkPlayback[]> {
   if (actorIds.length === 0) return [];
 
   const { data, error } = await supabase
     .from("homework_submissions")
-    .select("student_id, kid_profile_id, lesson_id")
+    .select(
+      "id, student_id, kid_profile_id, lesson_id, storage_path, duration_seconds, submission_type, text_answers, submitted_at, approved, tutor_comment"
+    )
     .eq("status", "reviewed")
     .eq("is_practice", false)
     .or(`student_id.in.(${actorIds.join(",")}),kid_profile_id.in.(${actorIds.join(",")})`);
@@ -108,14 +125,29 @@ async function loadReviewedKeysForActors(
     throw error;
   }
 
-  const keys = new Set<string>();
-  for (const row of data ?? []) {
+  const actorIdSet = new Set(actorIds);
+  const byKey = new Map<string, ReviewedHomeworkPlayback>();
+  for (const row of (data ?? []) as ReviewedPlaybackQueryRow[]) {
     const actorId = homeworkRosterActorKey(row);
-    const lessonId = row.lesson_id as string | null;
-    if (!actorId || !lessonId) continue;
-    keys.add(homeworkReviewedKey(actorId, lessonId));
+    const lessonId = row.lesson_id;
+    if (!actorId || !lessonId || !actorIdSet.has(actorId)) continue;
+    const key = homeworkReviewedKey(actorId, lessonId);
+    const existing = byKey.get(key);
+    if (existing && existing.submittedAt >= row.submitted_at) continue;
+    byKey.set(key, {
+      id: row.id,
+      studentId: actorId,
+      lessonId,
+      submittedAt: row.submitted_at,
+      submissionType: row.submission_type === "text" ? "text" : "voice",
+      storagePath: row.storage_path,
+      durationSeconds: row.duration_seconds,
+      textAnswers: row.text_answers,
+      approved: row.approved,
+      tutorComment: row.tutor_comment,
+    });
   }
-  return [...keys];
+  return [...byKey.values()];
 }
 
 export async function loadHomeworkReviewBoard(
@@ -421,11 +453,11 @@ export async function loadHomeworkReviewBoard(
   const actorIds = [
     ...new Set(withLessons.flatMap((pack) => pack.students.map((student) => student.studentId))),
   ];
-  const reviewedKeys = await loadReviewedKeysForActors(supabase, actorIds);
+  const reviewedSubmissions = await loadReviewedPlaybacksForActors(supabase, actorIds);
 
   const packages = withLessons
     .filter((pack) => pack.students.length > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return { packages, pendingSubmissions, reviewedKeys };
+  return { packages, pendingSubmissions, reviewedSubmissions };
 }

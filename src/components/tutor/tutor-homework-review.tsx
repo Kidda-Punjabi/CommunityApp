@@ -1,14 +1,18 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { reviewHomeworkSubmission } from "@/app/dashboard/tutor/homework-actions";
-import { HomeworkAudioPlayer } from "@/components/homework/homework-audio-player";
+import {
+  HomeworkAudioPlayer,
+  type HomeworkPlaybackRate,
+} from "@/components/homework/homework-audio-player";
 import {
   homeworkReviewedKey,
   pendingBadgeLabel,
   type HomeworkBoardPendingRow,
   type HomeworkReviewPackage,
+  type ReviewedHomeworkPlayback,
 } from "@/lib/tutoring/homework-review-packages";
 import type { PendingHomeworkReviewRow } from "@/lib/tutoring/homework-submissions";
 import { cn, ui } from "@/lib/ui/styles";
@@ -16,12 +20,74 @@ import { cn, ui } from "@/lib/ui/styles";
 type HomeworkReviewTab = "pending" | "packages";
 type RosterPill = "awaiting" | "reviewed" | "not_submitted";
 
+type LockedReview = {
+  approved: boolean | null;
+  tutorComment: string | null;
+};
+
+type ReviewListRow = HomeworkBoardPendingRow & {
+  lockedReview?: LockedReview;
+};
+
+let sessionPlaybackRate: HomeworkPlaybackRate = 1;
+
 type TutorHomeworkReviewProps = {
   submissions: HomeworkBoardPendingRow[];
   packages?: HomeworkReviewPackage[];
-  reviewedKeys?: string[];
+  reviewedSubmissions?: ReviewedHomeworkPlayback[];
   fullPage?: boolean;
 };
+
+function indexReviewedSubmissions(
+  submissions: ReviewedHomeworkPlayback[]
+): Record<string, ReviewedHomeworkPlayback> {
+  const indexed: Record<string, ReviewedHomeworkPlayback> = {};
+  for (const submission of submissions) {
+    indexed[homeworkReviewedKey(submission.studentId, submission.lessonId)] = submission;
+  }
+  return indexed;
+}
+
+function reviewedPlaybackFromRow(
+  row: HomeworkBoardPendingRow,
+  outcome: LockedReview
+): ReviewedHomeworkPlayback {
+  return {
+    id: row.id,
+    studentId: row.studentId,
+    lessonId: row.lessonId,
+    submittedAt: row.submittedAt,
+    submissionType: row.submissionType,
+    storagePath: row.storagePath,
+    durationSeconds: row.durationSeconds,
+    textAnswers: row.textAnswers,
+    approved: outcome.approved,
+    tutorComment: outcome.tutorComment,
+  };
+}
+
+function submissionFromReviewedPlayback(
+  studentName: string,
+  lesson: { id: string; lessonNumber: number; title: string },
+  reviewed: ReviewedHomeworkPlayback
+): PendingHomeworkReviewRow {
+  return {
+    id: reviewed.id,
+    studentId: reviewed.studentId,
+    studentName,
+    lessonId: lesson.id,
+    lessonTitle: lesson.title,
+    lessonNumber: lesson.lessonNumber,
+    submittedAt: reviewed.submittedAt,
+    submissionType: reviewed.submissionType,
+    storagePath: reviewed.storagePath,
+    mimeType: null,
+    durationSeconds: reviewed.durationSeconds,
+    textAnswers: reviewed.textAnswers,
+    answerKeys: [],
+    timingState: "unknown",
+  };
+}
 
 function formatSubmittedAt(iso: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -53,30 +119,55 @@ function TimingBadge({
   );
 }
 
+function OutcomeBadge({ approved }: { approved: boolean | null }) {
+  const approvedOutcome = approved === true;
+  const label =
+    approved == null ? "Reviewed" : approvedOutcome ? "Approved" : "Needs improvement";
+  return (
+    <span
+      className={cn(
+        "rounded-full px-2.5 py-1 text-xs font-semibold",
+        approvedOutcome
+          ? "bg-green-100 text-green-800"
+          : approved == null
+            ? "bg-zinc-100 text-zinc-600"
+            : "bg-amber-100 text-amber-900"
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
 function HomeworkReviewCard({
   submission,
   onReviewed,
+  playbackRate,
+  onPlaybackRateChange,
+  reviewed = null,
 }: {
   submission: PendingHomeworkReviewRow;
-  onReviewed: (submissionId: string) => void;
+  onReviewed?: (submissionId: string, outcome: LockedReview) => void;
+  playbackRate: HomeworkPlaybackRate;
+  onPlaybackRateChange: (rate: HomeworkPlaybackRate) => void;
+  reviewed?: LockedReview | null;
 }) {
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const locked = reviewed != null;
 
   function submitReview(approved: boolean) {
+    if (!onReviewed || locked) return;
     setError(null);
+    const tutorComment = comment.trim() || null;
     startTransition(async () => {
-      const result = await reviewHomeworkSubmission(
-        submission.id,
-        approved,
-        comment.trim() || null
-      );
+      const result = await reviewHomeworkSubmission(submission.id, approved, tutorComment);
       if (result.error) {
         setError(result.error);
         return;
       }
-      onReviewed(submission.id);
+      onReviewed(submission.id, { approved, tutorComment });
     });
   }
 
@@ -92,7 +183,11 @@ function HomeworkReviewCard({
             Submitted {formatSubmittedAt(submission.submittedAt)}
           </p>
         </div>
-        <TimingBadge state={submission.timingState} />
+        {locked && reviewed ? (
+          <OutcomeBadge approved={reviewed.approved} />
+        ) : (
+          <TimingBadge state={submission.timingState} />
+        )}
       </div>
 
       <div className="mt-4">
@@ -124,12 +219,22 @@ function HomeworkReviewCard({
           <HomeworkAudioPlayer
             storagePath={submission.storagePath}
             durationSeconds={submission.durationSeconds}
+            playbackRate={playbackRate}
+            onPlaybackRateChange={onPlaybackRateChange}
           />
         ) : (
           <p className="text-sm text-zinc-500">No recording attached.</p>
         )}
       </div>
 
+      {locked && reviewed ? (
+        <div className="mt-4">
+          <p className="text-xs font-medium text-zinc-500">Comment</p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm text-zinc-800">
+            {reviewed.tutorComment?.trim() || "No comment"}
+          </p>
+        </div>
+      ) : (
       <div className="mt-4 space-y-3">
         <label className="block">
           <span className="text-xs font-medium text-zinc-500">Comment (optional on approve)</span>
@@ -163,6 +268,7 @@ function HomeworkReviewCard({
 
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
+      )}
     </li>
   );
 }
@@ -204,70 +310,125 @@ function rosterPill(status: RosterPill): { label: string; className: string } {
   return { label: "Not submitted", className: "bg-zinc-100 text-zinc-600" };
 }
 
-function studentRosterStatus(
+function studentRosterEntry(
   studentId: string,
-  lessonId: string,
+  studentName: string,
+  lesson: { id: string; lessonNumber: number; title: string },
   packageId: string,
-  pendingRows: HomeworkBoardPendingRow[],
-  reviewed: Set<string>
-): { status: RosterPill; submission: HomeworkBoardPendingRow | null } {
-  const submission =
+  pendingRows: ReviewListRow[],
+  reviewedByKey: Record<string, ReviewedHomeworkPlayback>
+): {
+  status: RosterPill;
+  submission: PendingHomeworkReviewRow | null;
+  lockedReview: LockedReview | null;
+} {
+  const awaiting =
     pendingRows.find(
       (row) =>
+        !row.lockedReview &&
         row.packageId === packageId &&
-        row.lessonId === lessonId &&
+        row.lessonId === lesson.id &&
         row.studentId === studentId
     ) ?? null;
-  if (submission) return { status: "awaiting", submission };
-  if (reviewed.has(homeworkReviewedKey(studentId, lessonId))) {
-    return { status: "reviewed", submission: null };
+  if (awaiting) {
+    return { status: "awaiting", submission: awaiting, lockedReview: null };
   }
-  return { status: "not_submitted", submission: null };
+
+  const locked = pendingRows.find(
+    (row) =>
+      row.lockedReview &&
+      row.packageId === packageId &&
+      row.lessonId === lesson.id &&
+      row.studentId === studentId
+  );
+  if (locked?.lockedReview) {
+    return { status: "reviewed", submission: locked, lockedReview: locked.lockedReview };
+  }
+
+  const reviewed = reviewedByKey[homeworkReviewedKey(studentId, lesson.id)];
+  if (reviewed) {
+    return {
+      status: "reviewed",
+      submission: submissionFromReviewedPlayback(studentName, lesson, reviewed),
+      lockedReview: {
+        approved: reviewed.approved,
+        tutorComment: reviewed.tutorComment,
+      },
+    };
+  }
+
+  return { status: "not_submitted", submission: null, lockedReview: null };
 }
 
 export function TutorHomeworkReview({
   submissions,
   packages = [],
-  reviewedKeys = [],
+  reviewedSubmissions = [],
   fullPage = false,
 }: TutorHomeworkReviewProps) {
   const [tab, setTab] = useState<HomeworkReviewTab>("packages");
-  const [rows, setRows] = useState(submissions);
-  const [reviewed, setReviewed] = useState(() => new Set(reviewedKeys));
+  const [lockedReviews, setLockedReviews] = useState<
+    Record<string, { row: HomeworkBoardPendingRow; outcome: LockedReview }>
+  >({});
+  const [sessionReviewed, setSessionReviewed] = useState<Record<string, ReviewedHomeworkPlayback>>(
+    {}
+  );
+  const [playbackRate, setPlaybackRate] = useState<HomeworkPlaybackRate>(sessionPlaybackRate);
   const [expandedPackageId, setExpandedPackageId] = useState<string | null>(null);
   const [openLessonKey, setOpenLessonKey] = useState<string | null>(null);
   const [expandedStudentKey, setExpandedStudentKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    setRows(submissions);
-  }, [submissions]);
+  const rows = useMemo(() => {
+    const next: ReviewListRow[] = submissions.map((row) => {
+      const locked = lockedReviews[row.id];
+      return locked ? { ...row, lockedReview: locked.outcome } : row;
+    });
+    const seen = new Set(next.map((row) => row.id));
+    for (const locked of Object.values(lockedReviews)) {
+      if (!seen.has(locked.row.id)) {
+        next.push({ ...locked.row, lockedReview: locked.outcome });
+      }
+    }
+    return next;
+  }, [lockedReviews, submissions]);
 
-  useEffect(() => {
-    setReviewed(new Set(reviewedKeys));
-  }, [reviewedKeys]);
+  const reviewedByKey = useMemo(
+    () => ({
+      ...indexReviewedSubmissions(reviewedSubmissions),
+      ...sessionReviewed,
+    }),
+    [reviewedSubmissions, sessionReviewed]
+  );
+
+  const queueRows = useMemo(() => rows.filter((row) => !row.lockedReview), [rows]);
 
   const counts = useMemo(() => {
     const byPackage: Record<string, number> = {};
     const byLesson: Record<string, number> = {};
-    for (const row of rows) {
+    for (const row of queueRows) {
       byPackage[row.packageId] = (byPackage[row.packageId] ?? 0) + 1;
       const lessonKey = `${row.packageId}:${row.lessonId}`;
       byLesson[lessonKey] = (byLesson[lessonKey] ?? 0) + 1;
     }
-    return { global: rows.length, byPackage, byLesson };
-  }, [rows]);
+    return { global: queueRows.length, byPackage, byLesson };
+  }, [queueRows]);
 
-  function handleReviewed(submissionId: string) {
-    const row = rows.find((item) => item.id === submissionId);
-    setRows((current) => current.filter((item) => item.id !== submissionId));
+  function changePlaybackRate(rate: HomeworkPlaybackRate) {
+    sessionPlaybackRate = rate;
+    setPlaybackRate(rate);
+  }
+
+  function handleReviewed(submissionId: string, outcome: LockedReview) {
+    const row = submissions.find((item) => item.id === submissionId) ?? lockedReviews[submissionId]?.row;
     if (!row) return;
-    const key = homeworkReviewedKey(row.studentId, row.lessonId);
-    setReviewed((current) => {
-      const next = new Set(current);
-      next.add(key);
-      return next;
-    });
-    setExpandedStudentKey(null);
+    setLockedReviews((current) => ({
+      ...current,
+      [submissionId]: { row, outcome },
+    }));
+    setSessionReviewed((current) => ({
+      ...current,
+      [homeworkReviewedKey(row.studentId, row.lessonId)]: reviewedPlaybackFromRow(row, outcome),
+    }));
   }
 
   const pendingList = (
@@ -295,6 +456,9 @@ export function TutorHomeworkReview({
               key={submission.id}
               submission={submission}
               onReviewed={handleReviewed}
+              playbackRate={playbackRate}
+              onPlaybackRateChange={changePlaybackRate}
+              reviewed={submission.lockedReview ?? null}
             />
           ))}
         </ul>
@@ -385,19 +549,19 @@ export function TutorHomeworkReview({
                           {lessonOpen ? (
                             <ul className="space-y-2 bg-zinc-50 px-3 pb-3 pt-1">
                               {pack.students.map((student) => {
-                                const { status, submission } = studentRosterStatus(
+                                const { status, submission, lockedReview } = studentRosterEntry(
                                   student.studentId,
-                                  lesson.id,
+                                  student.studentName,
+                                  lesson,
                                   pack.id,
                                   rows,
-                                  reviewed
+                                  reviewedByKey
                                 );
                                 const studentKey = `${lessonKey}:${student.studentId}`;
                                 const pill = rosterPill(status);
-                                const awaiting = status === "awaiting" && submission;
                                 const expanded = expandedStudentKey === studentKey;
 
-                                if (!awaiting) {
+                                if (!submission) {
                                   return (
                                     <li
                                       key={student.studentId}
@@ -447,6 +611,9 @@ export function TutorHomeworkReview({
                                         <HomeworkReviewCard
                                           submission={submission}
                                           onReviewed={handleReviewed}
+                                          playbackRate={playbackRate}
+                                          onPlaybackRateChange={changePlaybackRate}
+                                          reviewed={lockedReview}
                                         />
                                       </ul>
                                     ) : null}

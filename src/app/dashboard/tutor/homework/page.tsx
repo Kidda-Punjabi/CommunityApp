@@ -20,7 +20,7 @@ export default async function TutorHomeworkPage() {
       <TutorHomeworkReview
         submissions={board.pendingSubmissions}
         packages={board.packages}
-        reviewedKeys={board.reviewedKeys}
+        reviewedSubmissions={board.reviewedSubmissions}
         fullPage
       />
     </div>
