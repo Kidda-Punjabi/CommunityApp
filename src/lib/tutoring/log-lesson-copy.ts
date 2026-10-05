@@ -17,6 +17,12 @@ export function isTestClassName(name: string | null | undefined): boolean {
   return (name ?? "").toUpperCase().includes("TEST");
 }
 
+/** Finished classes stay behind the Classes tab link. Test names stay hidden. */
+export function isFinishedTeachingClass(row: TeachingClassRow): boolean {
+  if (isTestClassName(row.name)) return false;
+  return Boolean(row.status && FINISHED_STATUSES.has(row.status));
+}
+
 /** Active classes only: not finished, not inactive, not archived (active = false), not test. */
 export function isActiveTeachingClass(
   row: TeachingClassRow,

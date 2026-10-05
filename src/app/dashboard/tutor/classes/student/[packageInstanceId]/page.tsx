@@ -1,15 +1,15 @@
 import { ClassDetailView } from "@/components/tutor/class-detail-view";
-import { loadCohortClassDetail } from "@/lib/tutoring/load-tutor-classes";
+import { loadPackageClassDetail } from "@/lib/tutoring/load-tutor-classes";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 
-type CohortPageProps = {
-  params: Promise<{ cohortId: string }>;
+type StudentClassPageProps = {
+  params: Promise<{ packageInstanceId: string }>;
 };
 
-export default async function TutorCohortPage({ params }: CohortPageProps) {
-  const { cohortId } = await params;
+export default async function TutorStudentClassPage({ params }: StudentClassPageProps) {
+  const { packageInstanceId } = await params;
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,8 +17,8 @@ export default async function TutorCohortPage({ params }: CohortPageProps) {
   if (!user) redirect("/login");
 
   const { client: admin } = tryCreateServiceRoleClient();
-  const detail = await loadCohortClassDetail(admin ?? supabase, user.id, cohortId);
+  const detail = await loadPackageClassDetail(admin ?? supabase, user.id, packageInstanceId);
   if (!detail) notFound();
 
-  return <ClassDetailView detail={detail} cohortId={cohortId} />;
+  return <ClassDetailView detail={detail} packageInstanceId={packageInstanceId} />;
 }

@@ -11,11 +11,14 @@ import {
   LEADS_KID_PROFILE_ID_PROPERTY,
   WRITEBACK_BATCH_SIZE,
   WRITEBACK_MAX_ATTEMPTS,
+  APP_LOG_WRITEBACK_SKIP,
   classifyLookupCount,
+  logCoversQueueTarget,
   mergeRelationIds,
   relationPropertyForKind,
   shouldRetryFailed,
   uniqueNotionIds,
+  type AppLogCoverageRow,
   type WritebackKind,
 } from "@/lib/notion/attendance-homework-writeback-logic";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -395,6 +398,93 @@ async function markQueueRow(
   }
 }
 
+async function packageInstanceIdsForQueueRow(
+  supabase: SupabaseClient,
+  row: QueueRow
+): Promise<string[]> {
+  if (row.kind === "attendance") {
+    const { data } = await supabase
+      .from("cohort_lesson_attendance")
+      .select("package_instance_id")
+      .eq("id", row.source_row_id)
+      .maybeSingle();
+    const packageInstanceId = (data?.package_instance_id as string | null) ?? null;
+    if (packageInstanceId) return [packageInstanceId];
+  }
+
+  let userId = row.student_id;
+  if (!userId && row.kid_profile_id) {
+    const { data: kid } = await supabase
+      .from("kid_profiles")
+      .select("parent_user_id")
+      .eq("id", row.kid_profile_id)
+      .maybeSingle();
+    userId = (kid?.parent_user_id as string | null) ?? null;
+  }
+  if (!userId) return [];
+
+  const { data: lesson } = await supabase
+    .from("lessons")
+    .select("course_id")
+    .eq("id", row.lesson_id)
+    .maybeSingle();
+  const courseId = (lesson?.course_id as string | null) ?? null;
+  if (!courseId) return [];
+
+  const { data: links } = await supabase
+    .from("student_packages")
+    .select("package_instance_id")
+    .eq("user_id", userId)
+    .eq("course_id", courseId)
+    .neq("status", "withdrawn");
+
+  return [
+    ...new Set(
+      (links ?? [])
+        .map((link) => link.package_instance_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+}
+
+async function coveredBySyncedAppLog(
+  supabase: SupabaseClient,
+  row: QueueRow
+): Promise<boolean> {
+  const packageInstanceIds = row.cohort_id ? [] : await packageInstanceIdsForQueueRow(supabase, row);
+  let query = supabase
+    .from("cohort_lesson_log_entries")
+    .select("cohort_id, package_instance_id, lesson_id, source, notion_sync_status")
+    .eq("lesson_id", row.lesson_id)
+    .eq("source", "app")
+    .eq("notion_sync_status", "synced");
+
+  if (row.cohort_id) {
+    query = query.eq("cohort_id", row.cohort_id);
+  } else if (packageInstanceIds.length > 0) {
+    query = query.in("package_instance_id", packageInstanceIds);
+  } else {
+    return false;
+  }
+
+  const { data, error } = await query.limit(5);
+  if (error) throw error;
+
+  const logs: AppLogCoverageRow[] = (data ?? []).map((entry) => ({
+    cohortId: (entry.cohort_id as string | null) ?? null,
+    packageInstanceId: (entry.package_instance_id as string | null) ?? null,
+    lessonId: (entry.lesson_id as string | null) ?? null,
+    source: (entry.source as string | null) ?? null,
+    notionSyncStatus: (entry.notion_sync_status as string | null) ?? null,
+  }));
+
+  return logCoversQueueTarget(logs, {
+    cohortId: row.cohort_id,
+    packageInstanceIds,
+    lessonId: row.lesson_id,
+  });
+}
+
 async function processQueueRow(
   supabase: SupabaseClient,
   row: QueueRow
@@ -446,6 +536,14 @@ export async function processAttendanceHomeworkWriteback(
     if (row.status === "failed" && !shouldRetryFailed(row.attempts)) continue;
     result.processed += 1;
     try {
+      if (await coveredBySyncedAppLog(supabase, row)) {
+        await markQueueRow(supabase, row.id, {
+          status: "skipped",
+          last_error: APP_LOG_WRITEBACK_SKIP,
+        });
+        result.skipped += 1;
+        continue;
+      }
       const outcome = await processQueueRow(supabase, row);
       if (outcome.createdLessonLogPage) result.createdLessonLogPages += 1;
       await markQueueRow(supabase, row.id, { status: "sent", last_error: null });

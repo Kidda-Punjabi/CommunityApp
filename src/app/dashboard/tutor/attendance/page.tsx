@@ -1,5 +1,6 @@
 import { TutorAttendanceSection } from "@/components/tutor/tutor-attendance-section";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
+import { isTestClassName } from "@/lib/tutoring/log-lesson-copy";
 import { loadTutorDashboard } from "@/lib/tutoring/load-tutor-dashboard";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -11,6 +12,7 @@ export default async function TutorAttendancePage() {
   } = await supabase.auth.getUser();
 
   const data = await loadTutorDashboard(supabase, user!.id);
+  const groups = data.beginnersGroups.filter((cohort) => !isTestClassName(cohort.cohortName));
 
   return (
     <div className={ui.page}>
@@ -19,7 +21,7 @@ export default async function TutorAttendancePage() {
         subtitle="Mark present or absent for each student after a group live session."
       />
 
-      {data.beginnersGroups.length === 0 ? (
+      {groups.length === 0 ? (
         <div className={ui.emptyState}>
           <span className="text-5xl" role="img" aria-hidden="true">
             👥
@@ -31,7 +33,7 @@ export default async function TutorAttendancePage() {
           </p>
         </div>
       ) : (
-        <TutorAttendanceSection cohorts={data.beginnersGroups} fullPage />
+        <TutorAttendanceSection cohorts={groups} fullPage />
       )}
     </div>
   );

@@ -256,3 +256,14 @@ export async function readLessonLogPage(options: {
     notionUrl: page.url || notionPageUrl(options.pageId),
   };
 }
+
+export async function patchLessonLogRecording(pageId: string, url: string): Promise<void> {
+  await notionJson(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      properties: {
+        "Recording Link": { url },
+      },
+    }),
+  });
+}

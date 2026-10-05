@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   classifyLookupCount,
+  logCoversQueueTarget,
   mergeRelationIds,
   relationPropertyForKind,
   shouldRetryFailed,
@@ -40,6 +41,64 @@ describe("mergeRelationIds", () => {
     const result = mergeRelationIds(["lead-1", "lead-2"], "LEAD-1");
     assert.equal(result.changed, false);
     assert.deepEqual(result.next, ["lead-1", "lead-2"]);
+  });
+});
+
+describe("logCoversQueueTarget", () => {
+  const syncedApp = {
+    cohortId: "cohort-1",
+    packageInstanceId: null,
+    lessonId: "lesson-1",
+    source: "app",
+    notionSyncStatus: "synced",
+  };
+
+  it("skips a cohort lesson the app already synced", () => {
+    assert.equal(
+      logCoversQueueTarget([syncedApp], {
+        cohortId: "cohort-1",
+        packageInstanceIds: [],
+        lessonId: "lesson-1",
+      }),
+      true
+    );
+  });
+
+  it("keeps homework and attendance for lessons that were not logged in the app", () => {
+    assert.equal(
+      logCoversQueueTarget([{ ...syncedApp, source: "notion" }], {
+        cohortId: "cohort-1",
+        packageInstanceIds: [],
+        lessonId: "lesson-1",
+      }),
+      false
+    );
+    assert.equal(
+      logCoversQueueTarget([syncedApp], {
+        cohortId: "cohort-1",
+        packageInstanceIds: [],
+        lessonId: "lesson-2",
+      }),
+      false
+    );
+  });
+
+  it("matches a 1-1 package when the queue row has no cohort", () => {
+    assert.equal(
+      logCoversQueueTarget(
+        [
+          {
+            cohortId: null,
+            packageInstanceId: "pkg-1",
+            lessonId: "lesson-1",
+            source: "app",
+            notionSyncStatus: "synced",
+          },
+        ],
+        { cohortId: null, packageInstanceIds: ["pkg-1"], lessonId: "lesson-1" }
+      ),
+      true
+    );
   });
 });
 

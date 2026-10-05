@@ -47,6 +47,31 @@ export function shouldRetryFailed(attempts: number, maxAttempts = WRITEBACK_MAX_
   return attempts < maxAttempts;
 }
 
+export const APP_LOG_WRITEBACK_SKIP = "covered by app log";
+
+export type AppLogCoverageRow = {
+  cohortId: string | null;
+  packageInstanceId: string | null;
+  lessonId: string | null;
+  source: string | null;
+  notionSyncStatus: string | null;
+};
+
+/** True when a synced app lesson log already covers this queue item's cohort or package. */
+export function logCoversQueueTarget(
+  logs: AppLogCoverageRow[],
+  target: { cohortId: string | null; packageInstanceIds: string[]; lessonId: string }
+): boolean {
+  return logs.some((log) => {
+    if (log.lessonId !== target.lessonId) return false;
+    if (log.source !== "app" || log.notionSyncStatus !== "synced") return false;
+    if (target.cohortId && log.cohortId === target.cohortId) return true;
+    return Boolean(
+      log.packageInstanceId && target.packageInstanceIds.includes(log.packageInstanceId)
+    );
+  });
+}
+
 export function relationPropertyForKind(kind: WritebackKind): "Attendees" | "Homework" {
   return kind === "attendance" ? "Attendees" : "Homework";
 }
