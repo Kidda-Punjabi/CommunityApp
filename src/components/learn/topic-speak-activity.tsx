@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { MicrophoneAccessNotice } from "@/components/audio/microphone-access-notice";
 import type { FlashcardDeckCard } from "@/lib/flashcards/types";
+import {
+  safePracticeMessage,
+  type MicrophoneFailure,
+} from "@/lib/audio/microphone-access-message";
+import { startPracticeRecording } from "@/lib/audio/request-microphone";
 import { TopicListenButton } from "@/components/learn/topic-listen-button";
 import {
   flashcardToSpeakingCard,
@@ -25,11 +31,6 @@ type TopicSpeakActivityProps = {
   subtitle: string;
   onComplete: (result: { percent: number; correct: number; total: number }) => void;
 };
-
-function pickRecorderMimeType(): string | undefined {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
-  return candidates.find((type) => MediaRecorder.isTypeSupported(type));
-}
 
 export function TopicSpeakActivity({
   cards,
@@ -63,7 +64,7 @@ export function TopicSpeakActivity({
   );
   const [failAttempts, setFailAttempts] = useState(0);
   const [transcript, setTranscript] = useState<string | null>(null);
-  const [micError, setMicError] = useState<string | null>(null);
+  const [micFailure, setMicFailure] = useState<MicrophoneFailure | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -72,42 +73,49 @@ export function TopicSpeakActivity({
   function resetRoundState() {
     setFeedback(null);
     setTranscript(null);
-    setMicError(null);
+    setMicFailure(null);
   }
 
   async function startRecording() {
     if (feedback === "pass" || recording || uploading) return;
-    setMicError(null);
+    setMicFailure(null);
     if (feedback === "retry" || feedback === "failed") {
       setFeedback(null);
       setTranscript(null);
     }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = pickRecorderMimeType();
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
-      chunksRef.current = [];
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data);
-      };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((track) => track.stop());
-        void submitRecording(new Blob(chunksRef.current, { type: recorder.mimeType }));
-      };
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setRecording(true);
-      window.setTimeout(() => {
-        if (mediaRecorderRef.current?.state === "recording") {
-          mediaRecorderRef.current.stop();
-          setRecording(false);
-        }
-      }, 8000);
-    } catch {
-      setMicError("Microphone permission is needed to practise speaking.");
+    const opened = await startPracticeRecording();
+    if (!opened.ok) {
+      setMicFailure(opened.failure);
+      return;
     }
+    const { stream, recorder } = opened;
+    chunksRef.current = [];
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunksRef.current.push(event.data);
+    };
+    recorder.onstop = () => {
+      stream.getTracks().forEach((track) => track.stop());
+      void submitRecording(new Blob(chunksRef.current, { type: recorder.mimeType }));
+    };
+    mediaRecorderRef.current = recorder;
+    try {
+      recorder.start();
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      mediaRecorderRef.current = null;
+      setMicFailure({
+        kind: "message",
+        message: "We couldn't start the microphone. Tap again to retry.",
+      });
+      return;
+    }
+    setRecording(true);
+    window.setTimeout(() => {
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+        setRecording(false);
+      }
+    }, 8000);
   }
 
   function stopRecording() {
@@ -136,7 +144,13 @@ export function TopicSpeakActivity({
         message?: string;
       };
       if (!response.ok) {
-        setMicError(payload.error ?? payload.message ?? "Could not check your speech.");
+        setMicFailure({
+          kind: "message",
+          message: safePracticeMessage(
+            payload.error ?? payload.message,
+            "Could not check your speech. Tap again to retry."
+          ),
+        });
         return;
       }
       const rawTranscript = payload.transcript ?? "";
@@ -156,7 +170,10 @@ export function TopicSpeakActivity({
       setFailAttempts(nextFails);
       setFeedback(nextFails >= VOICE_PRACTICE_MAX_ATTEMPTS ? "failed" : "retry");
     } catch {
-      setMicError("Could not check your speech. Try again.");
+      setMicFailure({
+        kind: "message",
+        message: "Could not check your speech. Tap again to retry.",
+      });
     } finally {
       setUploading(false);
     }
@@ -229,7 +246,7 @@ export function TopicSpeakActivity({
         {transcript ? (
           <p className="mt-2 text-xs text-zinc-500">Heard: {transcript}</p>
         ) : null}
-        {micError ? <p className="mt-2 text-sm text-rose-600">{micError}</p> : null}
+        {micFailure ? <MicrophoneAccessNotice failure={micFailure} /> : null}
 
         <div className="mt-6 flex flex-col gap-2">
           {feedback === "pass" ? (

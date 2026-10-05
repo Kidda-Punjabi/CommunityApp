@@ -54,15 +54,18 @@ export async function POST(request: Request) {
   const keyterms = [targetRomanised, targetPunjabi].filter(Boolean) as string[];
 
   const { data: limitData, error: limitError } = await supabase.rpc(
-    "check_and_increment_speaking_attempt",
+    "check_my_speaking_attempt",
     {
-      p_user_id: user.id,
       p_flashcard_id: flashcardId,
     }
   );
 
   if (limitError) {
-    return NextResponse.json({ error: limitError.message }, { status: 500 });
+    console.error("[speaking-practice] attempt check failed:", limitError.message);
+    return NextResponse.json(
+      { error: "Could not check your speech. Please try again." },
+      { status: 500 }
+    );
   }
 
   const limit = limitData as LimitResult;

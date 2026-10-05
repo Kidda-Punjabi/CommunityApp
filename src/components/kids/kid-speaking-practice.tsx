@@ -1,8 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MicrophoneAccessNotice } from "@/components/audio/microphone-access-notice";
 import { emojiForIcon } from "@/components/games/PictureMatch/emojiMap";
 import { useAudioManager } from "@/lib/audio/audio-manager";
+import {
+  safePracticeMessage,
+  type MicrophoneFailure,
+} from "@/lib/audio/microphone-access-message";
+import { startPracticeRecording } from "@/lib/audio/request-microphone";
 import { useKidActivityComplete } from "@/components/kids/use-kid-activity-complete";
 import {
   matchSpeakingTranscript,
@@ -21,6 +27,7 @@ export function KidSpeakingPractice({ cards }: KidSpeakingPracticeProps) {
   const [index, setIndex] = useState(0);
   const [recording, setRecording] = useState(false);
   const [feedback, setFeedback] = useState<"great" | "try" | null>(null);
+  const [micFailure, setMicFailure] = useState<MicrophoneFailure | null>(null);
   const [finished, setFinished] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -39,11 +46,16 @@ export function KidSpeakingPractice({ cards }: KidSpeakingPracticeProps) {
   useEffect(() => () => cleanup(), [cleanup]);
 
   async function startRecording() {
-    if (!card) return;
+    if (!card || recording) return;
     setFeedback(null);
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    setMicFailure(null);
+    const opened = await startPracticeRecording();
+    if (!opened.ok) {
+      setMicFailure(opened.failure);
+      return;
+    }
+    const { stream, recorder } = opened;
     streamRef.current = stream;
-    const recorder = new MediaRecorder(stream);
     chunksRef.current = [];
     recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
     recorder.onstop = async () => {
@@ -51,37 +63,70 @@ export function KidSpeakingPractice({ cards }: KidSpeakingPracticeProps) {
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
       const form = new FormData();
       form.append("audio", blob, "recording.webm");
-      const response = await fetch("/api/speaking-practice/transcribe", {
-        method: "POST",
-        body: form,
-      });
-      const data = (await response.json()) as { transcript?: string; allowed?: boolean };
-      if (data.allowed === false) {
-        setFeedback("try");
-        return;
-      }
-      const similarity = matchSpeakingTranscript(data.transcript ?? "", {
-        romanised: card.romanised,
-        punjabi: card.punjabi,
-      });
-      const passed = passedSpeakingAttempt(similarity);
-      playSound(passed ? "correct" : "incorrect");
-      setFeedback(passed ? "great" : "try");
-      if (passed) {
-        setTimeout(() => {
-          if (index + 1 >= cards.length) {
-            playSound("game_complete");
-            setFinished(true);
-            void completeActivity("speaking_practice", { words: cards.length });
-          } else {
-            setIndex((i) => i + 1);
-            setFeedback(null);
-          }
-        }, 1200);
+      try {
+        const response = await fetch("/api/speaking-practice/transcribe", {
+          method: "POST",
+          body: form,
+        });
+        const data = (await response.json()) as {
+          transcript?: string;
+          allowed?: boolean;
+          error?: string;
+          message?: string;
+        };
+        if (!response.ok) {
+          setMicFailure({
+            kind: "message",
+            message: safePracticeMessage(
+              data.error ?? data.message,
+              "Could not check your speech. Tap again to retry."
+            ),
+          });
+          return;
+        }
+        if (data.allowed === false) {
+          setFeedback("try");
+          return;
+        }
+        const similarity = matchSpeakingTranscript(data.transcript ?? "", {
+          romanised: card.romanised,
+          punjabi: card.punjabi,
+        });
+        const passed = passedSpeakingAttempt(similarity);
+        playSound(passed ? "correct" : "incorrect");
+        setFeedback(passed ? "great" : "try");
+        if (passed) {
+          setTimeout(() => {
+            if (index + 1 >= cards.length) {
+              playSound("game_complete");
+              setFinished(true);
+              void completeActivity("speaking_practice", { words: cards.length });
+            } else {
+              setIndex((i) => i + 1);
+              setFeedback(null);
+            }
+          }, 1200);
+        }
+      } catch {
+        setMicFailure({
+          kind: "message",
+          message: "Could not check your speech. Tap again to retry.",
+        });
       }
     };
     recorderRef.current = recorder;
-    recorder.start();
+    try {
+      recorder.start();
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      recorderRef.current = null;
+      setMicFailure({
+        kind: "message",
+        message: "We couldn't start the microphone. Tap again to retry.",
+      });
+      return;
+    }
     setRecording(true);
     setTimeout(() => recorder.state === "recording" && recorder.stop(), 6000);
   }
@@ -116,6 +161,8 @@ export function KidSpeakingPractice({ cards }: KidSpeakingPracticeProps) {
       >
         {recording ? "Listening…" : "🎤 Tap to speak"}
       </button>
+
+      {micFailure ? <MicrophoneAccessNotice failure={micFailure} /> : null}
 
       {feedback === "great" && (
         <p className="mt-6 text-2xl font-bold text-green-600">Wonderful!</p>

@@ -3,7 +3,13 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
+import { MicrophoneAccessNotice } from "@/components/audio/microphone-access-notice";
 import { useAudioManager } from "@/lib/audio/audio-manager";
+import {
+  safePracticeMessage,
+  type MicrophoneFailure,
+} from "@/lib/audio/microphone-access-message";
+import { startPracticeRecording } from "@/lib/audio/request-microphone";
 import { EnglishWithGenderMarkers } from "@/components/english-with-gender-markers";
 import { GameSessionReview } from "@/components/games/game-session-review";
 import { GameSessionSettings } from "@/components/games/game-session-settings";
@@ -55,11 +61,6 @@ type VoicePracticeModeProps = {
   catchupReturn?: string | null;
 };
 
-function pickRecorderMimeType(): string | undefined {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
-  return candidates.find((type) => MediaRecorder.isTypeSupported(type));
-}
-
 export function VoicePracticeMode({
   sentences,
   initialAttempts,
@@ -81,7 +82,7 @@ export function VoicePracticeMode({
   const [feedback, setFeedback] = useState<QuestionFeedback>(null);
   const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [micError, setMicError] = useState<string | null>(null);
+  const [micFailure, setMicFailure] = useState<MicrophoneFailure | null>(null);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const [monthlyAttempts, setMonthlyAttempts] = useState(initialAttempts);
   const [pointsEarned, setPointsEarned] = useState(0);
@@ -217,7 +218,7 @@ export function VoicePracticeMode({
     setBestSimilarity(0);
     setLastTranscript(null);
     setFeedback(null);
-    setMicError(null);
+    setMicFailure(null);
   }
 
   function startRound(choice: GameSessionSettingsChoice) {
@@ -244,7 +245,7 @@ export function VoicePracticeMode({
     setBestSimilarity(0);
     setLastTranscript(null);
     setFeedback(null);
-    setMicError(null);
+    setMicFailure(null);
     setLimitMessage(null);
     setPhase("playing");
   }
@@ -304,7 +305,7 @@ export function VoicePracticeMode({
     if (!current) return;
 
     setUploading(true);
-    setMicError(null);
+    setMicFailure(null);
 
     try {
       const body = new FormData();
@@ -330,7 +331,13 @@ export function VoicePracticeMode({
       }
 
       if (!response.ok || payload.error) {
-        setMicError(payload.error ?? "Could not transcribe your recording. Please try again.");
+        setMicFailure({
+          kind: "message",
+          message: safePracticeMessage(
+            payload.error,
+            "Could not transcribe your recording. Please try again."
+          ),
+        });
         return;
       }
 
@@ -344,7 +351,10 @@ export function VoicePracticeMode({
 
       handleTranscript(payload.transcript ?? "");
     } catch {
-      setMicError("Something went wrong sending your recording. Please try again.");
+      setMicFailure({
+        kind: "message",
+        message: "Something went wrong sending your recording. Please try again.",
+      });
     } finally {
       setUploading(false);
     }
@@ -361,55 +371,65 @@ export function VoicePracticeMode({
       return;
     }
 
-    setMicError(null);
+    setMicFailure(null);
     if (feedback === "retry") {
       setFeedback(null);
       setLastTranscript(null);
     }
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      chunksRef.current = [];
-
-      const mimeType = pickRecorderMimeType();
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
-
-      recorderRef.current = recorder;
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data);
-      };
-
-      recorder.onstop = () => {
-        setRecording(false);
-        stopStream();
-        const blob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
-        });
-        chunksRef.current = [];
-        recorderRef.current = null;
-        void handleRecordingComplete(blob);
-      };
-
-      recorder.onerror = () => {
-        setMicError("Recording failed — check microphone permissions and try again.");
-        stopRecording();
-      };
-
-      recorder.start();
-      setRecording(true);
-
-      stopTimerRef.current = window.setTimeout(() => {
-        stopRecording();
-      }, MAX_RECORDING_MS);
-    } catch {
-      setMicError("Microphone access is required for Speak It.");
+    const opened = await startPracticeRecording();
+    if (!opened.ok) {
+      setMicFailure(opened.failure);
       stopStream();
       setRecording(false);
+      return;
     }
+
+    const { stream, recorder } = opened;
+    streamRef.current = stream;
+    chunksRef.current = [];
+    recorderRef.current = recorder;
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunksRef.current.push(event.data);
+    };
+
+    recorder.onstop = () => {
+      setRecording(false);
+      stopStream();
+      const blob = new Blob(chunksRef.current, {
+        type: recorder.mimeType || "audio/webm",
+      });
+      chunksRef.current = [];
+      recorderRef.current = null;
+      void handleRecordingComplete(blob);
+    };
+
+    recorder.onerror = () => {
+      setMicFailure({
+        kind: "message",
+        message: "Recording failed. Tap again to retry.",
+      });
+      stopRecording();
+    };
+
+    try {
+      recorder.start();
+    } catch {
+      stopStream();
+      recorderRef.current = null;
+      setMicFailure({
+        kind: "message",
+        message: "We couldn't start the microphone. Tap again to retry.",
+      });
+      setRecording(false);
+      return;
+    }
+    setRecording(true);
+
+    stopTimerRef.current = window.setTimeout(() => {
+      stopRecording();
+    }, MAX_RECORDING_MS);
   }
 
   if (phase === "ready") {
@@ -580,7 +600,7 @@ export function VoicePracticeMode({
           </div>
         )}
 
-        {micError ? <p className="mt-3 text-sm text-red-600">{micError}</p> : null}
+        {micFailure ? <MicrophoneAccessNotice failure={micFailure} /> : null}
 
         {feedback !== "pass" && feedback !== "failed" && !limitMessage ? (
           <button

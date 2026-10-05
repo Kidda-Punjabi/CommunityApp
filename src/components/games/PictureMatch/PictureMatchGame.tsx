@@ -33,6 +33,7 @@ type RoundOption = {
   cardId: string;
   punjabi: string;
   romanised: string | null;
+  audioUrl: string | null;
   isCorrect: boolean;
 };
 
@@ -89,12 +90,14 @@ function buildRoundOptions(
       cardId: correct.id,
       punjabi: correct.punjabi,
       romanised: correct.romanised,
+      audioUrl: correct.audioUrl?.trim() || null,
       isCorrect: true,
     },
     ...distractors.map((card) => ({
       cardId: card.id,
       punjabi: card.punjabi,
       romanised: card.romanised,
+      audioUrl: card.audioUrl?.trim() || null,
       isCorrect: false,
     })),
   ];
@@ -514,7 +517,7 @@ export function PictureMatchGame({
           const showWrong = feedback !== null && isSelected && !option.isCorrect;
 
           let buttonClass =
-            "relative flex min-h-[4.5rem] flex-col items-center justify-center rounded-2xl border px-4 py-3 text-center transition-colors ";
+            "relative flex min-h-[4.5rem] w-full items-stretch rounded-2xl border text-center transition-colors ";
 
           if (showCorrect) {
             buttonClass += "border-green-500 bg-green-50 text-green-900";
@@ -527,22 +530,39 @@ export function PictureMatchGame({
               "border-zinc-200 bg-white text-zinc-900 hover:border-violet-300 hover:bg-violet-50";
           }
 
+          const optionAudio = option.audioUrl?.trim() || null;
+
           return (
-            <button
-              key={option.cardId}
-              type="button"
-              onClick={() => handleAnswer(option)}
-              disabled={locked}
-              className={buttonClass + " w-full"}
-            >
-              <PunjabiOptionLabel
-                punjabi={option.punjabi}
-                romanised={option.romanised}
-                tone={
-                  showCorrect ? "correct" : showWrong ? "wrong" : locked ? "muted" : "neutral"
-                }
-              />
-            </button>
+            <div key={option.cardId} className={buttonClass + " w-full"}>
+              <button
+                type="button"
+                onClick={() => handleAnswer(option)}
+                disabled={locked}
+                className={`flex min-h-[4.5rem] w-full flex-col items-center justify-center border-0 bg-transparent py-3 text-center disabled:opacity-100 ${
+                  optionAudio ? "px-12" : "px-4"
+                }`}
+              >
+                <PunjabiOptionLabel
+                  punjabi={option.punjabi}
+                  romanised={option.romanised}
+                  tone={
+                    showCorrect ? "correct" : showWrong ? "wrong" : locked ? "muted" : "neutral"
+                  }
+                />
+              </button>
+              {optionAudio ? (
+                <div
+                  className="absolute right-2 top-1/2 z-10 -translate-y-1/2"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <FlashcardAudioPlayButton
+                    audioUrl={optionAudio}
+                    label={`Play ${option.punjabi}`}
+                  />
+                </div>
+              ) : null}
+            </div>
           );
         })}
       </div>

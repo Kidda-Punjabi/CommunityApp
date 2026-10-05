@@ -61,7 +61,11 @@ export async function POST(request: Request) {
   );
 
   if (limitError) {
-    return NextResponse.json({ error: limitError.message }, { status: 500 });
+    console.error("[voice-practice] attempt check failed:", limitError.message);
+    return NextResponse.json(
+      { error: "Could not check your speech. Please try again." },
+      { status: 500 }
+    );
   }
 
   const limit = limitData as LimitResult;
