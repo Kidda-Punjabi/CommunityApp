@@ -10,6 +10,7 @@ import { pullPackageInstancesFromNotion } from "@/lib/notion/package-sync";
 import { finishNotionSyncRun, insertNotionSyncRun, stepFromResult } from "@/lib/notion/sync-run";
 import { syncAllGroupCohortsFromNotion } from "@/lib/notion/sync-group-cohorts-for-checkout";
 import { pullSalesCallsFromNotion } from "@/lib/notion/sales-call-sync";
+import { retryPendingTutorLessonLogs } from "@/lib/tutoring/log-lesson-sweep";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
 
@@ -108,6 +109,14 @@ export async function GET(request: Request) {
       }
     );
 
+    let tutorLessonRetryThrew = false;
+    const tutorLessonRetry = await retryPendingTutorLessonLogs(client).catch((error) => {
+      const message = error instanceof Error ? error.message : "Tutor lesson log retry failed.";
+      console.error("[notion-sync] tutor lesson retry threw:", message);
+      tutorLessonRetryThrew = true;
+      return { retried: 0, synced: 0, errors: [message] };
+    });
+
     const steps = {
       leadsSetupError,
       leadsCache: stepFromResult(leadsCache, {
@@ -143,6 +152,15 @@ export async function GET(request: Request) {
         ambiguous: profileLeads.ambiguous,
         conflicts: profileLeads.conflicts,
       }),
+      tutorLessonRetry: stepFromResult(
+        { errors: tutorLessonRetryThrew ? tutorLessonRetry.errors : [] },
+        {
+          retried: tutorLessonRetry.retried,
+          synced: tutorLessonRetry.synced,
+          rowErrors: tutorLessonRetry.errors,
+          threw: tutorLessonRetryThrew,
+        }
+      ),
       attendanceHomeworkWriteback: stepFromResult(attendanceHomeworkWriteback, {
         processed: attendanceHomeworkWriteback.processed,
         sent: attendanceHomeworkWriteback.sent,
@@ -176,6 +194,7 @@ export async function GET(request: Request) {
       lessonLog,
       packageLessonRecordings: recordingLinks,
       attendanceHomeworkWriteback,
+      tutorLessonRetry,
       leadsSetupError,
     });
   } catch (error) {

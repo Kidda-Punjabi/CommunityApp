@@ -71,6 +71,12 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
         </div>
       ) : null}
 
+      <Link href="/dashboard/tutor/log" className={`${ui.heroCard} mb-8`}>
+        <p className={ui.heroBadge}>After class</p>
+        <p className={ui.heroTitle}>Log a lesson</p>
+        <p className={ui.heroSubtitle}>Attendance, unlock, and Notion in one save.</p>
+      </Link>
+
       <div className="mb-8 grid grid-cols-2 gap-3">
         <StatCard label="1-1 students" value={studentCount} />
         <StatCard label="Group cohorts" value={cohortCount} />
@@ -116,7 +122,7 @@ export default async function TutorHomePage({ searchParams }: TutorHomePageProps
             ) : null}
             {cohortCount > 0 ? (
               <QuickTaskLink
-                href="/dashboard/tutor/log-lesson"
+                href="/dashboard/tutor/log"
                 title="Log a lesson"
                 description="Create a Lessons Log entry after a group session"
               />

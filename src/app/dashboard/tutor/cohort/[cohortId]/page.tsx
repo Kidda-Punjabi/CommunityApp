@@ -43,7 +43,7 @@ export default async function TutorCohortPage({ params }: TutorCohortPageProps) 
           {data.members.length === 1 ? "" : "s"} in this cohort.
         </p>
         <Link
-          href={`/dashboard/tutor/log-lesson?cohortId=${cohortId}`}
+          href={`/dashboard/tutor/log?cohort=${cohortId}`}
           className="mt-3 inline-flex text-sm font-semibold text-violet-600 hover:text-violet-500"
         >
           Log this lesson →

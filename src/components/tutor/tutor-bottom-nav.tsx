@@ -23,6 +23,15 @@ function HomeIcon({ active }: { active: boolean }) {
   );
 }
 
+function LogIcon({ active }: { active: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9" />
+      <circle cx="12" cy="12" r="9" />
+    </svg>
+  );
+}
+
 function AttendanceIcon({ active }: { active: boolean }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className={iconClass(active)}>
@@ -70,6 +79,12 @@ const navItems: NavItem[] = [
     match: (pathname) => pathname === "/dashboard/tutor",
   },
   {
+    href: "/dashboard/tutor/log",
+    label: "Log",
+    match: (pathname) =>
+      pathname === "/dashboard/tutor/log" || pathname.startsWith("/dashboard/tutor/log/"),
+  },
+  {
     href: "/dashboard/tutor/attendance",
     label: "Attendance",
     match: (pathname) => pathname.startsWith("/dashboard/tutor/attendance"),
@@ -105,6 +120,8 @@ function NavIcon({ label, active }: { label: string; active: boolean }) {
   switch (label) {
     case "Home":
       return <HomeIcon active={active} />;
+    case "Log":
+      return <LogIcon active={active} />;
     case "Attendance":
       return <AttendanceIcon active={active} />;
     case "Homework":
