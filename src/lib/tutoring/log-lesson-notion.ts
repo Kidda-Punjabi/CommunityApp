@@ -85,7 +85,7 @@ export async function createLessonLogPage(options: {
   if (options.recordingUrl?.trim()) {
     properties["Recording Link"] = { url: options.recordingUrl.trim() };
   }
-  if (options.isCoverSession && options.notionTutorUserId?.trim()) {
+  if (options.notionTutorUserId?.trim()) {
     properties["Actual Tutor (New)"] = {
       people: [{ id: options.notionTutorUserId.trim() }],
     };

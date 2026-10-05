@@ -1,5 +1,6 @@
 import "server-only";
 
+import { assignMissingLessonIds } from "@/lib/lessons/lesson-log-lesson-assign";
 import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -139,16 +140,19 @@ export async function syncCohortLessonLogLessonIds(
   const countable = (logRows ?? []).filter((row) =>
     isCountableLessonLogStatus(row.status as string | null)
   );
+  const updates = assignMissingLessonIds(
+    countable.map((row) => ({ lessonId: (row.lesson_id as string | null) ?? null })),
+    lessonIdByNumber.size > 0
+      ? lessonIdByNumber
+      : new Map(lessonIdByIndex.map((lessonId, index) => [index + 1, lessonId]))
+  );
 
-  for (let index = 0; index < countable.length; index += 1) {
-    const row = countable[index]!;
-    const lessonNumber = index + 1;
-    const targetLessonId =
-      lessonIdByNumber.get(lessonNumber) ?? lessonIdByIndex[index] ?? null;
-    if (!targetLessonId || row.lesson_id === targetLessonId) continue;
+  for (const update of updates) {
+    const row = countable[update.index];
+    if (!row) continue;
     const { error } = await supabase
       .from("cohort_lesson_log_entries")
-      .update({ lesson_id: targetLessonId })
+      .update({ lesson_id: update.lessonId })
       .eq("id", row.id);
     if (error && !isMissingLessonIdColumn(error.message)) {
       console.error(`syncCohortLessonLogLessonIds update ${row.id}:`, error.message);

@@ -61,9 +61,26 @@ export async function loadCoverTutorChoices(reader: SupabaseClient): Promise<Cov
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+async function notionUserIdForTutor(
+  admin: SupabaseClient,
+  tutorId: string
+): Promise<string | null> {
+  const { data: map } = await admin
+    .from("notion_tutor_map")
+    .select("notion_user_id")
+    .eq("tutor_id", tutorId)
+    .maybeSingle();
+  const notionUserId = ((map?.notion_user_id as string | null) ?? "").trim();
+  return notionUserId || null;
+}
+
 export async function resolveCoverLessonWrite(
   admin: SupabaseClient,
-  input: { isCoverSession?: boolean; actualTutorId?: string | null }
+  input: {
+    isCoverSession?: boolean;
+    actualTutorId?: string | null;
+    assignedTutorId?: string | null;
+  }
 ): Promise<
   | {
       ok: true;
@@ -74,18 +91,20 @@ export async function resolveCoverLessonWrite(
   | { ok: false; error: string }
 > {
   if (!input.isCoverSession) {
+    const assignedId = input.assignedTutorId?.trim() ?? "";
+    const notionTutorUserId = assignedId ? await notionUserIdForTutor(admin, assignedId) : null;
     return {
       ok: true,
       isCoverSession: false,
       actualTutorId: null,
-      notionTutorUserId: null,
+      notionTutorUserId,
     };
   }
 
   const tutorId = input.actualTutorId?.trim() ?? "";
   if (!tutorId) return { ok: false, error: "Choose who taught this lesson." };
 
-  const [{ data: profile }, { data: roles }, { data: map }] = await Promise.all([
+  const [{ data: profile }, { data: roles }] = await Promise.all([
     admin
       .from("profiles")
       .select("id, full_name, preferred_name")
@@ -96,14 +115,13 @@ export async function resolveCoverLessonWrite(
       .select("role")
       .eq("user_id", tutorId)
       .in("role", ["tutor", "master_admin"]),
-    admin.from("notion_tutor_map").select("notion_user_id").eq("tutor_id", tutorId).maybeSingle(),
   ]);
 
   if (!profile || (roles ?? []).length === 0) {
     return { ok: false, error: "Choose an active tutor." };
   }
 
-  const notionUserId = ((map?.notion_user_id as string | null) ?? "").trim();
+  const notionUserId = await notionUserIdForTutor(admin, tutorId);
   if (!notionUserId) {
     const name = getDisplayName(profile) || "That tutor";
     return {

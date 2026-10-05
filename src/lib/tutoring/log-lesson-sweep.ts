@@ -10,6 +10,7 @@ import {
   isFoundationalCourse,
   isHttpUrl,
   lessonSlotLabel,
+  logTitleMatchesLessonNumber,
   londonTimeLabel,
   type LessonLogReadback,
   type ReadbackDifference,
@@ -68,6 +69,7 @@ type TargetContext = {
   lessonNumber: number;
   lessonTitle: string;
   recordingStudentId: string | null;
+  assignedTutorId: string | null;
 };
 
 function emptyResult(error: string): LogLessonSweepResult {
@@ -105,7 +107,7 @@ async function loadTarget(
 
     const { data: cohort } = await admin
       .from("cohorts")
-      .select("id, name, course_id, notion_page_id, status, active, courses(name)")
+      .select("id, name, course_id, tutor_id, notion_page_id, status, active, courses(name)")
       .eq("id", cohortId)
       .maybeSingle();
     if (!cohort) return { ok: false, error: "That cohort could not be found." };
@@ -142,6 +144,7 @@ async function loadTarget(
         lessonNumber: lesson.lesson_number,
         lessonTitle: lesson.title,
         recordingStudentId: null,
+        assignedTutorId: (cohort.tutor_id as string | null) ?? null,
       },
     };
   }
@@ -197,6 +200,7 @@ async function loadTarget(
       lessonNumber: lesson.lesson_number,
       lessonTitle: lesson.title,
       recordingStudentId: (link?.user_id as string | null) ?? null,
+      assignedTutorId: (instance.tutor_id as string | null) ?? null,
     },
   };
 }
@@ -332,11 +336,10 @@ async function pushNotionForEntry(
     const dropped = appended.before.filter(
       (id) => !appended.after.some((kept) => kept.replace(/-/g, "") === id.replace(/-/g, ""))
     );
+    const expectedTutorUserId = ((entry.notion_tutor_user_id as string | null) ?? "").trim() || null;
     const readback = await readLessonLogPage({
       pageId,
-      expectedTutorUserId: entry.is_cover_session
-        ? ((entry.notion_tutor_user_id as string | null) ?? null)
-        : null,
+      expectedTutorUserId,
       absentNames,
     });
     const submittedLesson = lessonTokenFromTitle(entry.lesson_title as string);
@@ -352,6 +355,7 @@ async function pushNotionForEntry(
       droppedExistingLeadIds: dropped,
       expectedLeadIds: leads.leadIds,
       expectedCoverSession: Boolean(entry.is_cover_session),
+      expectedNotionTutorUserId: expectedTutorUserId,
     });
     const notionError = differences.length ? "Notion read-back did not match what was saved." : null;
     await markNotion(
@@ -433,7 +437,10 @@ export async function logTutorLessonSweep(
   const loaded = await loadTarget(admin, userClient, userId, input);
   if (!loaded.ok) return emptyResult(loaded.error);
 
-  const cover = await resolveCoverLessonWrite(admin, input);
+  const cover = await resolveCoverLessonWrite(admin, {
+    ...input,
+    assignedTutorId: loaded.target.assignedTutorId,
+  });
   if (!cover.ok) return emptyResult(cover.error);
 
   const slot = lessonSlotLabel(loaded.target.courseName, loaded.target.lessonNumber);
@@ -443,6 +450,9 @@ export async function logTutorLessonSweep(
     lessonNumber: loaded.target.lessonNumber,
     lessonDate,
   });
+  if (!logTitleMatchesLessonNumber(title, loaded.target.lessonNumber)) {
+    return emptyResult("The lesson title does not match the selected lesson.");
+  }
   const pendingId = `pending-${crypto.randomUUID()}`;
   const marks = attendancePayload(input);
 

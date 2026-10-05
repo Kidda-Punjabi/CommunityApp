@@ -9,6 +9,7 @@ import {
   lessonListLabel,
   lessonSlotLabel,
   lessonTopicTitle,
+  logTitleMatchesLessonNumber,
   suggestNextLesson,
 } from "./log-lesson-copy";
 
@@ -137,4 +138,53 @@ test("read-back is green only when every field matches", () => {
   });
   assert.equal(mismatch.length, 1);
   assert.equal(mismatch[0]?.field, "Attendees");
+});
+
+test("a title week must be the selected lesson number", () => {
+  assert.equal(logTitleMatchesLessonNumber("Practice Cohort - Week 1 - 5 Oct (app)", 1), true);
+  assert.equal(logTitleMatchesLessonNumber("Practice Cohort - Week 1 - 5 Oct (app)", 2), false);
+  assert.equal(logTitleMatchesLessonNumber("Aman - Lesson 2 - 5 Oct (app)", 2), true);
+});
+
+test("read-back fails when the tutor is missing or attendees are a different set", () => {
+  const actual = {
+    title: "Practice Cohort - Week 3 - 5 Oct (app)",
+    date: "2026-10-05",
+    lesson: "Week 3",
+    recordingUrl: "",
+    attendeeNames: ["Gurupma"],
+    attendeeLeadIds: ["lead-a"],
+    absentNames: [],
+    tutorName: "",
+    tutorMatched: true,
+    notionUrl: "https://notion.so/abc",
+  };
+  const missingTutor = compareLessonLogReadback({
+    submittedTitle: actual.title,
+    submittedDate: actual.date,
+    submittedLesson: "Week 3",
+    submittedRecordingUrl: "",
+    submittedPresentNames: ["Gurupma"],
+    submittedAbsentNames: [],
+    actual,
+    unmatchedPresentNames: [],
+    expectedLeadIds: ["lead-a"],
+    expectedNotionTutorUserId: null,
+  });
+  assert.equal(missingTutor.some((diff) => diff.submitted === "Tutor missing in Notion"), true);
+
+  const extraAttendee = compareLessonLogReadback({
+    submittedTitle: actual.title,
+    submittedDate: actual.date,
+    submittedLesson: "Week 3",
+    submittedRecordingUrl: "",
+    submittedPresentNames: [],
+    submittedAbsentNames: ["Gurupma"],
+    actual,
+    unmatchedPresentNames: [],
+    expectedLeadIds: [],
+    expectedNotionTutorUserId: "notion-tutor",
+  });
+  assert.equal(extraAttendee.some((diff) => diff.field === "Attendees"), true);
+  assert.equal(extraAttendee.some((diff) => diff.field === "Tutor"), false);
 });

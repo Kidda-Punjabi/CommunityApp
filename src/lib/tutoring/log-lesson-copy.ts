@@ -80,6 +80,19 @@ export function formatLogNotionTitle(options: {
   return `${options.name.trim()} - ${slot} - ${formatTaughtDate(options.lessonDate)} (app)`;
 }
 
+/** Week or lesson number written in an app log title, such as "Week 2". */
+export function lessonNumberInLogTitle(title: string): number | null {
+  const match = /\b(?:Week|Lesson)\s+(\d+)\b/i.exec(title);
+  if (!match) return null;
+  const number = Number(match[1]);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+/** The title week and the selected lesson's lesson_number are the same value. */
+export function logTitleMatchesLessonNumber(title: string, lessonNumber: number): boolean {
+  return lessonNumberInLogTitle(title) === lessonNumber;
+}
+
 export function isHttpUrl(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
@@ -162,6 +175,14 @@ function sameNameSet(submitted: string[], actual: string[]): boolean {
   return true;
 }
 
+function sameLeadIdSet(expected: string[], actual: string[]): boolean {
+  const norm = (id: string) => id.replace(/-/g, "").toLowerCase();
+  const left = [...new Set(expected.map(norm).filter(Boolean))];
+  const right = [...new Set(actual.map(norm).filter(Boolean))];
+  if (left.length !== right.length) return false;
+  return left.every((id) => right.includes(id));
+}
+
 export function compareLessonLogReadback(options: {
   submittedTitle: string;
   submittedDate: string;
@@ -174,6 +195,8 @@ export function compareLessonLogReadback(options: {
   droppedExistingLeadIds?: string[];
   expectedLeadIds?: string[];
   expectedCoverSession?: boolean;
+  /** Null means the tutor has no Notion user, so Actual Tutor cannot be written. */
+  expectedNotionTutorUserId?: string | null;
 }): ReadbackDifference[] {
   const diffs: ReadbackDifference[] = [];
   const actual = options.actual;
@@ -213,12 +236,7 @@ export function compareLessonLogReadback(options: {
   const dropped = options.droppedExistingLeadIds ?? [];
   const expectedLeadIds = options.expectedLeadIds;
   const leadIdsMatch =
-    expectedLeadIds != null &&
-    expectedLeadIds.every((id) =>
-      actual.attendeeLeadIds.some(
-        (kept) => kept.replace(/-/g, "").toLowerCase() === id.replace(/-/g, "").toLowerCase()
-      )
-    );
+    expectedLeadIds != null && sameLeadIdSet(expectedLeadIds, actual.attendeeLeadIds);
   const namesMatch = sameNameSet(options.submittedPresentNames, presentActual);
   if (
     options.unmatchedPresentNames.length > 0 ||
@@ -247,7 +265,22 @@ export function compareLessonLogReadback(options: {
       actual: `Still on Attendees: ${absentOnPage.join(", ")}`,
     });
   }
-  if (!actual.tutorMatched) {
+  if (options.expectedNotionTutorUserId !== undefined) {
+    const expectedTutor = options.expectedNotionTutorUserId?.trim() ?? "";
+    if (!expectedTutor) {
+      diffs.push({
+        field: "Tutor",
+        submitted: "Tutor missing in Notion",
+        actual: actual.tutorName || "(not set on the page)",
+      });
+    } else if (!actual.tutorMatched) {
+      diffs.push({
+        field: "Tutor",
+        submitted: "Linked Notion tutor",
+        actual: actual.tutorName || "(not set on the page)",
+      });
+    }
+  } else if (!actual.tutorMatched) {
     diffs.push({
       field: "Tutor",
       submitted: options.expectedCoverSession ? "Linked Notion tutor" : "No Actual Tutor",

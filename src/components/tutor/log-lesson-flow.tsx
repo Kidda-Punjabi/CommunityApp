@@ -659,12 +659,18 @@ function DoneScreen({
         {result.notionError ? <p className="mt-2 text-sm">{result.notionError}</p> : null}
         {result.differences.length > 0 ? (
           <ul className="mt-2 space-y-1 text-sm">
-            {result.differences.map((diff) => (
-              <li key={diff.field}>
-                <span className="font-semibold">{diff.field}:</span> saved "{diff.submitted}", Notion has "
-                {diff.actual}"
-              </li>
-            ))}
+            {result.differences.map((diff) =>
+              diff.submitted === "Tutor missing in Notion" ? (
+                <li key={diff.field} className="font-semibold">
+                  Tutor missing in Notion
+                </li>
+              ) : (
+                <li key={diff.field}>
+                  <span className="font-semibold">{diff.field}:</span> saved "{diff.submitted}", Notion has "
+                  {diff.actual}"
+                </li>
+              )
+            )}
           </ul>
         ) : null}
         {readback ? (
