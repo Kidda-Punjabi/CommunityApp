@@ -254,3 +254,42 @@ REVOKE ALL ON FUNCTION public.apply_tutor_lesson_log(
 GRANT EXECUTE ON FUNCTION public.apply_tutor_lesson_log(
   uuid, uuid, uuid, text, date, text, text, uuid, text, text, jsonb, uuid
 ) TO service_role;
+
+-- Allow lesson_id on 1-1 package rows when the lesson belongs to that package course.
+CREATE OR REPLACE FUNCTION public.enforce_cohort_lesson_log_lesson_scope()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.lesson_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.cohort_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM public.lessons l
+      JOIN public.cohorts co ON co.id = NEW.cohort_id
+      WHERE l.id = NEW.lesson_id
+        AND l.course_id = co.course_id
+    ) THEN
+      RAISE EXCEPTION 'lesson_id must belong to the cohort''s course.';
+    END IF;
+  ELSIF NEW.package_instance_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM public.lessons l
+      JOIN public.package_instances pi ON pi.id = NEW.package_instance_id
+      WHERE l.id = NEW.lesson_id
+        AND l.course_id = pi.course_id
+    ) THEN
+      RAISE EXCEPTION 'lesson_id must belong to the package''s course.';
+    END IF;
+  ELSE
+    RAISE EXCEPTION 'lesson_id needs a cohort or a package.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
