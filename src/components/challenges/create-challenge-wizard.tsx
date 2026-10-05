@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { createFriendChallenge, type ActionResult } from "@/app/dashboard/challenges/actions";
 import { UserAvatar } from "@/components/profile/user-avatar";
-import { GAME_CATALOG } from "@/lib/games/catalog";
+import { GameDeckCoursePicker } from "@/components/games/game-deck-course-picker";
+import { GAME_CATALOG, gameSlugForType } from "@/lib/games/catalog";
 import type { ChallengeConfig, StreakSurvivalVariant } from "@/lib/challenges/types";
 import type { FriendListItem } from "@/lib/friends/load-friends";
 import type { GameDeckSummary } from "@/lib/games/load-game-decks";
@@ -236,26 +237,19 @@ export function CreateChallengeWizard({ friends, decks }: CreateChallengeWizardP
               {needsDeck && !deckSelection && (
                 <div className="mt-4 space-y-2">
                   <p className="text-sm font-medium text-zinc-700">Pick a deck</p>
-                  {decks.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No decks available for this game.</p>
-                  ) : (
-                    decks.map((deck) => (
-                      <button
-                        key={`${deck.lessonId}-${deck.deckId}`}
-                        type="button"
-                        onClick={() =>
-                          handleDeckPick(deck.lessonId, deck.deckId, deck.setName)
-                        }
-                        className="block w-full rounded-2xl border border-zinc-200 bg-white p-4 text-left hover:border-violet-300 hover:bg-violet-50/30"
-                      >
-                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-                          {deck.courseName}
-                        </p>
-                        <p className="mt-1 font-semibold text-zinc-900">{deck.setName}</p>
-                        <p className="text-sm text-zinc-500">{deck.lessonTitle}</p>
-                      </button>
-                    ))
-                  )}
+                  <GameDeckCoursePicker
+                    gameSlug={
+                      gameType === "streak_survival"
+                        ? "streak-survival/deck"
+                        : gameSlugForType(gameType ?? "match")
+                    }
+                    gameTitle={selectedGame?.title ?? "Game"}
+                    decks={decks}
+                    hideEmptyBackLink
+                    onSelectDeck={(deck) =>
+                      handleDeckPick(deck.lessonId, deck.deckId, deck.setName)
+                    }
+                  />
                 </div>
               )}
 
