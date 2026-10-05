@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { RecordingSaveField, UnlockEarlyButton } from "@/components/tutor/class-lesson-actions";
+import { UnlockEarlyButton } from "@/components/tutor/class-lesson-actions";
+import { LessonLogEdit } from "@/components/tutor/lesson-log-edit";
+import type { CoverTutorChoice } from "@/lib/tutoring/cover-lesson";
 import { lessonSlotLabel } from "@/lib/tutoring/log-lesson-copy";
 import type { ClassDetail } from "@/lib/tutoring/load-tutor-classes";
 
@@ -7,10 +9,12 @@ export function ClassDetailView({
   detail,
   cohortId,
   packageInstanceId,
+  tutors,
 }: {
   detail: ClassDetail;
   cohortId?: string;
   packageInstanceId?: string;
+  tutors: CoverTutorChoice[];
 }) {
   return (
     <div className="mx-auto flex w-full max-w-[390px] flex-col gap-4 px-4 py-5">
@@ -76,7 +80,16 @@ export function ClassDetailView({
                 {detail.kind === "one_to_one" && lesson.homeworkLabel ? (
                   <p className="mt-1 text-sm text-zinc-600">Homework: {lesson.homeworkLabel}</p>
                 ) : null}
-                {lesson.entryId ? <RecordingSaveField entryId={lesson.entryId} /> : null}
+                {lesson.entryId ? (
+                  <LessonLogEdit
+                    entryId={lesson.entryId}
+                    recordingUrl={lesson.recordingUrl}
+                    isCoverSession={lesson.isCoverSession}
+                    actualTutorId={lesson.actualTutorId}
+                    attendance={lesson.attendance}
+                    tutors={tutors}
+                  />
+                ) : null}
               </li>
             );
           }
@@ -98,6 +111,16 @@ export function ClassDetailView({
                 ) : null}
                 {detail.kind === "one_to_one" && lesson.homeworkLabel ? (
                   <p className="mt-1 text-sm text-zinc-600">Homework: {lesson.homeworkLabel}</p>
+                ) : null}
+                {lesson.entryId ? (
+                  <LessonLogEdit
+                    entryId={lesson.entryId}
+                    recordingUrl={lesson.recordingUrl}
+                    isCoverSession={lesson.isCoverSession}
+                    actualTutorId={lesson.actualTutorId}
+                    attendance={lesson.attendance}
+                    tutors={tutors}
+                  />
                 ) : null}
               </li>
             );

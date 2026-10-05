@@ -1,4 +1,5 @@
 import { ClassDetailView } from "@/components/tutor/class-detail-view";
+import { loadCoverTutorChoices } from "@/lib/tutoring/cover-lesson";
 import { loadPackageClassDetail } from "@/lib/tutoring/load-tutor-classes";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
@@ -17,8 +18,12 @@ export default async function TutorStudentClassPage({ params }: StudentClassPage
   if (!user) redirect("/login");
 
   const { client: admin } = tryCreateServiceRoleClient();
-  const detail = await loadPackageClassDetail(admin ?? supabase, user.id, packageInstanceId);
+  const reader = admin ?? supabase;
+  const [detail, tutors] = await Promise.all([
+    loadPackageClassDetail(reader, user.id, packageInstanceId),
+    loadCoverTutorChoices(reader),
+  ]);
   if (!detail) notFound();
 
-  return <ClassDetailView detail={detail} packageInstanceId={packageInstanceId} />;
+  return <ClassDetailView detail={detail} packageInstanceId={packageInstanceId} tutors={tutors} />;
 }

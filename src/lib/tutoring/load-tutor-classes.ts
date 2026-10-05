@@ -1,6 +1,7 @@
 import "server-only";
 
 import { coverTaughtByLabel } from "@/lib/tutoring/cover-lesson";
+import type { LessonLogEditAttendance } from "@/lib/tutoring/lesson-log-edit";
 import { getDisplayName } from "@/lib/profile/display-name";
 import {
   kidProfileIdsInCohort,
@@ -59,6 +60,10 @@ export type ClassLessonRow = {
   homeworkLabel: string | null;
   unlockEarly: boolean;
   coverLabel: string | null;
+  recordingUrl: string;
+  isCoverSession: boolean;
+  actualTutorId: string | null;
+  attendance: LessonLogEditAttendance[];
 };
 
 export type ClassDetail = {
@@ -530,20 +535,26 @@ async function buildDetail(options: {
   const attendanceQuery = options.kind === "group"
     ? options.reader
         .from("cohort_lesson_attendance")
-        .select("lesson_id, attended")
+        .select("lesson_id, attended, student_id, kid_profile_id")
         .eq("cohort_id", options.id)
     : options.reader
         .from("cohort_lesson_attendance")
-        .select("lesson_id, attended")
+        .select("lesson_id, attended, student_id, kid_profile_id")
         .eq("package_instance_id", options.id);
   const { data: attendanceRows } = await attendanceQuery;
   const marksByLesson = new Map<string, { present: number; total: number }>();
+  const attendedByLessonActor = new Map<string, Map<string, boolean>>();
   for (const row of attendanceRows ?? []) {
     const lessonId = row.lesson_id as string;
     const current = marksByLesson.get(lessonId) ?? { present: 0, total: 0 };
     current.total += 1;
     if (row.attended) current.present += 1;
     marksByLesson.set(lessonId, current);
+    const actorId = (row.kid_profile_id as string | null) ?? (row.student_id as string | null);
+    if (!actorId) continue;
+    const byActor = attendedByLessonActor.get(lessonId) ?? new Map<string, boolean>();
+    byActor.set(actorId, Boolean(row.attended));
+    attendedByLessonActor.set(lessonId, byActor);
   }
 
   const lessonIds = courseLessons.map((lesson) => lesson.id);
@@ -586,6 +597,7 @@ async function buildDetail(options: {
     const entry = logByLesson.get(lesson.id);
     if (entry) {
       const marks = marksByLesson.get(lesson.id);
+      const byActor = attendedByLessonActor.get(lesson.id);
       const person = options.people[0];
       const submission = person ? submissionByLessonActor.get(`${lesson.id}:${person.id}`) : undefined;
       return {
@@ -607,6 +619,15 @@ async function buildDetail(options: {
         coverLabel: entry.is_cover_session
           ? coverTaughtByLabel(entry.actual_tutor_id ? coverNameById.get(entry.actual_tutor_id) : null)
           : null,
+        recordingUrl: entry.recording_url?.trim() ?? "",
+        isCoverSession: Boolean(entry.is_cover_session),
+        actualTutorId: entry.actual_tutor_id ?? null,
+        attendance: options.people.map((student) => ({
+          id: student.id,
+          name: student.name,
+          kind: student.kind,
+          attended: byActor?.get(student.id) ?? (byActor && byActor.size > 0 ? false : true),
+        })),
       };
     }
     if (next?.lessonId === lesson.id) {
@@ -624,6 +645,10 @@ async function buildDetail(options: {
         homeworkLabel: null,
         unlockEarly: false,
         coverLabel: null,
+        recordingUrl: "",
+        isCoverSession: false,
+        actualTutorId: null,
+        attendance: [],
       };
     }
     const alreadyUnlocked = options.unlockedLessonIds.has(lesson.id);
@@ -643,6 +668,10 @@ async function buildDetail(options: {
       homeworkLabel: null,
       unlockEarly,
       coverLabel: null,
+      recordingUrl: "",
+      isCoverSession: false,
+      actualTutorId: null,
+      attendance: [],
     };
   });
 

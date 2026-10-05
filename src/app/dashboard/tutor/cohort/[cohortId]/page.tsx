@@ -1,4 +1,5 @@
 import { ClassDetailView } from "@/components/tutor/class-detail-view";
+import { loadCoverTutorChoices } from "@/lib/tutoring/cover-lesson";
 import { loadCohortClassDetail } from "@/lib/tutoring/load-tutor-classes";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
@@ -17,8 +18,12 @@ export default async function TutorCohortPage({ params }: CohortPageProps) {
   if (!user) redirect("/login");
 
   const { client: admin } = tryCreateServiceRoleClient();
-  const detail = await loadCohortClassDetail(admin ?? supabase, user.id, cohortId);
+  const reader = admin ?? supabase;
+  const [detail, tutors] = await Promise.all([
+    loadCohortClassDetail(reader, user.id, cohortId),
+    loadCoverTutorChoices(reader),
+  ]);
   if (!detail) notFound();
 
-  return <ClassDetailView detail={detail} cohortId={cohortId} />;
+  return <ClassDetailView detail={detail} cohortId={cohortId} tutors={tutors} />;
 }

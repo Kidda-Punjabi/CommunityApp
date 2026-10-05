@@ -14,6 +14,7 @@ import {
 } from "@/lib/notion/attendance-homework-writeback-logic";
 import { matchStudentsToNotionLeads } from "@/lib/notion/lesson-log-attendance-sync";
 import type { LessonLogReadback } from "@/lib/tutoring/log-lesson-copy";
+import { lessonLogEditNotionProperties } from "@/lib/tutoring/lesson-log-edit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type NotionProperty = {
@@ -269,6 +270,23 @@ export async function patchLessonLogRecording(pageId: string, url: string): Prom
       properties: {
         "Recording Link": { url },
       },
+    }),
+  });
+}
+
+/** Update recording, cover tutor, and attendees on the lesson log page that already exists. */
+export async function patchLoggedLessonOnNotion(options: {
+  pageId: string;
+  recordingUrl: string | null;
+  isCoverSession: boolean;
+  notionTutorUserId: string | null;
+  attendeeLeadIds: string[] | null;
+}): Promise<void> {
+  await notionJson(`/pages/${options.pageId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      archived: false,
+      properties: lessonLogEditNotionProperties(options),
     }),
   });
 }

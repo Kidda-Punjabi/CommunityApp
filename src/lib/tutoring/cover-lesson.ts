@@ -33,6 +33,34 @@ export function lessonCountsAsTaughtBy(input: {
   return input.classTutorId === input.tutorId;
 }
 
+export async function loadCoverTutorChoices(reader: SupabaseClient): Promise<CoverTutorChoice[]> {
+  const { data: roleRows } = await reader
+    .from("profile_roles")
+    .select("user_id")
+    .in("role", ["tutor", "master_admin"]);
+  const tutorIds = [...new Set((roleRows ?? []).map((row) => row.user_id as string).filter(Boolean))];
+  const [{ data: tutorProfiles }, { data: tutorMaps }] = await Promise.all([
+    tutorIds.length
+      ? reader.from("profiles").select("id, full_name, preferred_name").in("id", tutorIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null; preferred_name: string | null }> }),
+    tutorIds.length
+      ? reader.from("notion_tutor_map").select("tutor_id, notion_user_id").in("tutor_id", tutorIds)
+      : Promise.resolve({ data: [] as Array<{ tutor_id: string; notion_user_id: string | null }> }),
+  ]);
+  const linked = new Set(
+    (tutorMaps ?? [])
+      .filter((row) => (row.notion_user_id ?? "").trim())
+      .map((row) => row.tutor_id)
+  );
+  return (tutorProfiles ?? [])
+    .map((profile) => ({
+      id: profile.id,
+      name: getDisplayName(profile) || "Tutor",
+      notionLinked: linked.has(profile.id),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function resolveCoverLessonWrite(
   admin: SupabaseClient,
   input: { isCoverSession?: boolean; actualTutorId?: string | null }
