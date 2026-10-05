@@ -6,7 +6,9 @@ import {
   formatTaughtDate,
   isActiveTeachingClass,
   isFoundationalCourse,
+  lessonListLabel,
   lessonSlotLabel,
+  lessonTopicTitle,
   suggestNextLesson,
 } from "./log-lesson-copy";
 
@@ -34,6 +36,27 @@ test("lesson labels follow the course, not a hardcoded count", () => {
   assert.equal(isFoundationalCourse("English Foundations (Punjabi-medium)"), false);
   assert.equal(lessonSlotLabel("Foundational Course", 2), "Lesson 2");
   assert.equal(lessonSlotLabel("Beginners Course", 8), "Week 8");
+});
+
+test("week names are not written twice", () => {
+  assert.equal(lessonTopicTitle("Beginner Phrases - Week 1"), "Beginner Phrases");
+  assert.equal(
+    lessonTopicTitle("Verb Root Endings + Continuous Tense - Week 3"),
+    "Verb Root Endings + Continuous Tense"
+  );
+  assert.equal(lessonTopicTitle("The Alphabet (Part 2)"), "The Alphabet (Part 2)");
+  assert.equal(
+    lessonListLabel("Beginners Course", 1, "Beginner Phrases - Week 1"),
+    "Week 1: Beginner Phrases"
+  );
+  assert.equal(
+    lessonListLabel("Beginners Course", 2, "Sentence Structure - Week 2"),
+    "Week 2: Sentence Structure"
+  );
+  assert.equal(
+    lessonListLabel("Foundational Course", 2, "The Alphabet (Part 2)"),
+    "Lesson 2: The Alphabet (Part 2)"
+  );
 });
 
 test("notion title uses the app suffix and a short date", () => {

@@ -15,7 +15,7 @@ import type {
   LogRosterPerson,
   LogStudentOption,
 } from "@/lib/tutoring/load-log-lesson-catalog";
-import { isHttpUrl, lessonSlotLabel } from "@/lib/tutoring/log-lesson-copy";
+import { isHttpUrl, lessonListLabel } from "@/lib/tutoring/log-lesson-copy";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -81,7 +81,7 @@ export function LogLessonFlow({
   const [teacherId, setTeacherId] = useState("");
 
   const listed =
-    cover && classScope === "all" ? (allCatalog ?? { cohorts: [], students: [] }) : catalog;
+    classScope === "all" ? (allCatalog ?? { cohorts: [], students: [] }) : catalog;
   const cohort =
     listed.cohorts.find((row) => row.id === cohortId) ??
     allCatalog?.cohorts.find((row) => row.id === cohortId) ??
@@ -137,7 +137,6 @@ export function LogLessonFlow({
     setCover(next);
     setError(null);
     if (!next) {
-      setClassScope("mine");
       setTeacherId("");
       return;
     }
@@ -236,21 +235,6 @@ export function LogLessonFlow({
         </p>
       ) : null}
 
-      {step < 5 ? (
-        <CoverLessonControls
-          cover={cover}
-          onCover={chooseCover}
-          teacherId={teacherId}
-          onTeacher={setTeacherId}
-          tutors={tutors}
-          showClassScope={step <= 2}
-          classScope={classScope}
-          onMine={() => setClassScope("mine")}
-          onAll={() => void showAllClasses()}
-          loadingAll={loadingAll}
-        />
-      ) : null}
-
       {step === 1 ? (
         <section>
           <h1 className="mt-2 font-heading text-2xl font-bold text-zinc-900">What did you teach?</h1>
@@ -271,8 +255,14 @@ export function LogLessonFlow({
         <section>
           <BackButton onClick={() => setStep(1)} />
           <h1 className="mt-3 font-heading text-2xl font-bold text-zinc-900">Which cohort?</h1>
+          <ClassScopeLink
+            scope={classScope}
+            loading={loadingAll}
+            onMine={() => setClassScope("mine")}
+            onAll={() => void showAllClasses()}
+          />
           <div className="mt-5 space-y-3">
-            {cover && classScope === "all" && loadingAll ? (
+            {classScope === "all" && loadingAll ? (
               <p className="text-sm text-zinc-500">Loading all classes…</p>
             ) : listed.cohorts.length === 0 ? (
               <p className="text-sm text-zinc-500">No active group cohorts.</p>
@@ -285,7 +275,7 @@ export function LogLessonFlow({
                   className="min-h-11 w-full rounded-3xl border border-zinc-200 bg-white p-4 text-left shadow-sm"
                 >
                   <p className="text-base font-semibold text-zinc-900">{row.name}</p>
-                  {cover && classScope === "all" && row.assignedTutorName ? (
+                  {classScope === "all" && row.assignedTutorName ? (
                     <p className="mt-1 text-sm text-zinc-500">Assigned tutor: {row.assignedTutorName}</p>
                   ) : null}
                   <p className="mt-1 text-sm text-zinc-500">
@@ -293,7 +283,7 @@ export function LogLessonFlow({
                   </p>
                   <p className="mt-2 text-sm font-medium text-violet-700">
                     {row.nextLessonNumber
-                      ? `Next: ${lessonSlotLabel(row.courseName, row.nextLessonNumber)} · ${row.nextLessonTitle}`
+                      ? `Next: ${lessonListLabel(row.courseName, row.nextLessonNumber, row.nextLessonTitle ?? "")}`
                       : "All lessons logged"}
                   </p>
                   <Progress
@@ -312,8 +302,14 @@ export function LogLessonFlow({
         <section>
           <BackButton onClick={() => setStep(1)} />
           <h1 className="mt-3 font-heading text-2xl font-bold text-zinc-900">Which student?</h1>
+          <ClassScopeLink
+            scope={classScope}
+            loading={loadingAll}
+            onMine={() => setClassScope("mine")}
+            onAll={() => void showAllClasses()}
+          />
           <div className="mt-5 space-y-3">
-            {cover && classScope === "all" && loadingAll ? (
+            {classScope === "all" && loadingAll ? (
               <p className="text-sm text-zinc-500">Loading all classes…</p>
             ) : listed.students.length === 0 ? (
               <p className="text-sm text-zinc-500">No active 1-1 students.</p>
@@ -326,7 +322,7 @@ export function LogLessonFlow({
                   className="min-h-11 w-full rounded-3xl border border-zinc-200 bg-white p-4 text-left shadow-sm"
                 >
                   <p className="text-base font-semibold text-zinc-900">{row.studentName}</p>
-                  {cover && classScope === "all" && row.assignedTutorName ? (
+                  {classScope === "all" && row.assignedTutorName ? (
                     <p className="mt-1 text-sm text-zinc-500">Assigned tutor: {row.assignedTutorName}</p>
                   ) : null}
                   <p className="mt-1 text-sm text-zinc-500">
@@ -335,7 +331,7 @@ export function LogLessonFlow({
                   </p>
                   <p className="mt-2 text-sm font-medium text-violet-700">
                     {row.nextLessonNumber
-                      ? `Next: ${lessonSlotLabel(row.courseName, row.nextLessonNumber)}`
+                      ? `Next: ${lessonListLabel(row.courseName, row.nextLessonNumber, row.nextLessonTitle ?? "")}`
                       : "All lessons logged"}
                   </p>
                 </button>
@@ -361,7 +357,7 @@ export function LogLessonFlow({
                 Suggested
               </p>
               <p className="mt-1 text-lg font-bold">
-                {lessonSlotLabel(courseName, selected.lessonNumber)} · {selected.title}
+                {lessonListLabel(courseName, selected.lessonNumber, selected.title)}
               </p>
             </div>
           ) : (
@@ -418,6 +414,13 @@ export function LogLessonFlow({
               className="mt-1 w-full rounded-2xl border border-zinc-200 px-3 py-3 text-base"
             />
           </label>
+          <CoverLessonCheckbox
+            cover={cover}
+            onCover={chooseCover}
+            teacherId={teacherId}
+            onTeacher={setTeacherId}
+            tutors={tutors}
+          />
           {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
           {kind === "group" ? (
             <button
@@ -730,54 +733,54 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CoverLessonControls({
+function ClassScopeLink({
+  scope,
+  loading,
+  onMine,
+  onAll,
+}: {
+  scope: "mine" | "all";
+  loading: boolean;
+  onMine: () => void;
+  onAll: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={scope === "all" ? onMine : onAll}
+      className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-violet-700"
+    >
+      {scope === "all" ? "Show only my classes" : loading ? "Loading classes…" : "Show every active class"}
+    </button>
+  );
+}
+
+function CoverLessonCheckbox({
   cover,
   onCover,
   teacherId,
   onTeacher,
   tutors,
-  showClassScope,
-  classScope,
-  onMine,
-  onAll,
-  loadingAll,
 }: {
   cover: boolean;
   onCover: (next: boolean) => void;
   teacherId: string;
   onTeacher: (id: string) => void;
   tutors: CoverTutorChoice[];
-  showClassScope: boolean;
-  classScope: "mine" | "all";
-  onMine: () => void;
-  onAll: () => void;
-  loadingAll: boolean;
 }) {
   return (
-    <div className="mt-4 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <p className="text-sm font-semibold text-zinc-900">Was this a cover lesson?</p>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => onCover(false)}
-          className={`min-h-11 rounded-full border text-sm font-semibold ${
-            cover ? "border-zinc-200 text-zinc-700" : "border-violet-600 bg-violet-600 text-white"
-          }`}
-        >
-          No
-        </button>
-        <button
-          type="button"
-          onClick={() => onCover(true)}
-          className={`min-h-11 rounded-full border text-sm font-semibold ${
-            cover ? "border-violet-600 bg-violet-600 text-white" : "border-zinc-200 text-zinc-700"
-          }`}
-        >
-          Yes
-        </button>
-      </div>
+    <div className="mt-5">
+      <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-zinc-900">
+        <input
+          type="checkbox"
+          checked={cover}
+          onChange={(event) => onCover(event.target.checked)}
+          className="h-5 w-5 accent-violet-600"
+        />
+        This was a cover lesson
+      </label>
       {cover ? (
-        <div className="mt-4">
+        <div className="mt-3">
           <label htmlFor="cover-teacher" className="text-sm font-semibold text-zinc-900">
             Who taught this lesson?
           </label>
@@ -796,35 +799,6 @@ function CoverLessonControls({
             ))}
           </select>
           <p className="mt-2 text-sm text-zinc-500">Pay for this lesson goes to the tutor who taught it.</p>
-          {showClassScope ? (
-            <div className="mt-4">
-              <p className="text-sm font-semibold text-zinc-900">Which classes can you pick?</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={onMine}
-                  className={`min-h-11 rounded-full border text-sm font-semibold ${
-                    classScope === "mine"
-                      ? "border-violet-600 bg-violet-600 text-white"
-                      : "border-zinc-200 text-zinc-700"
-                  }`}
-                >
-                  My classes
-                </button>
-                <button
-                  type="button"
-                  onClick={onAll}
-                  className={`min-h-11 rounded-full border text-sm font-semibold ${
-                    classScope === "all"
-                      ? "border-violet-600 bg-violet-600 text-white"
-                      : "border-zinc-200 text-zinc-700"
-                  }`}
-                >
-                  {loadingAll && classScope === "all" ? "Loading…" : "All classes"}
-                </button>
-              </div>
-            </div>
-          ) : null}
         </div>
       ) : null}
     </div>

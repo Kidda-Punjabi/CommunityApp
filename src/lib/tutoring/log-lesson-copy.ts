@@ -43,6 +43,22 @@ export function lessonSlotLabel(courseName: string, lessonNumber: number): strin
   return `Week ${lessonNumber}`;
 }
 
+/** Drop a trailing "Week 3" or "Lesson 3" so the slot label is not repeated. */
+export function lessonTopicTitle(title: string): string {
+  return title
+    .replace(/\s*[-–—]\s*(?:week|lesson)\s*\d+\s*$/i, "")
+    .replace(/\s*\(\s*(?:week|lesson)\s*\d+\s*\)\s*$/i, "")
+    .trim();
+}
+
+/** "Week 1: Beginner Phrases" from a title that already ends in "Week 1". */
+export function lessonListLabel(courseName: string, lessonNumber: number, title: string): string {
+  const slot = lessonSlotLabel(courseName, lessonNumber);
+  const topic = lessonTopicTitle(title);
+  if (!topic || topic.toLowerCase() === slot.toLowerCase()) return slot;
+  return `${slot}: ${topic}`;
+}
+
 export function formatTaughtDate(lessonDate: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(lessonDate.trim());
   if (!match) return lessonDate;

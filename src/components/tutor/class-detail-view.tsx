@@ -2,7 +2,7 @@ import Link from "next/link";
 import { UnlockEarlyButton } from "@/components/tutor/class-lesson-actions";
 import { LessonLogEdit } from "@/components/tutor/lesson-log-edit";
 import type { CoverTutorChoice } from "@/lib/tutoring/cover-lesson";
-import { lessonSlotLabel } from "@/lib/tutoring/log-lesson-copy";
+import { lessonListLabel, lessonSlotLabel } from "@/lib/tutoring/log-lesson-copy";
 import type { ClassDetail } from "@/lib/tutoring/load-tutor-classes";
 
 export function ClassDetailView({
@@ -61,12 +61,12 @@ export function ClassDetailView({
 
       <ul className="flex flex-col gap-2">
         {detail.lessons.map((lesson) => {
-          const slot = lessonSlotLabel(detail.courseName, lesson.lessonNumber);
+          const label = lessonListLabel(detail.courseName, lesson.lessonNumber, lesson.title);
           if (lesson.state === "logged" && !lesson.hasRecording) {
             return (
               <li key={lesson.lessonId} className="rounded-2xl border border-red-200 bg-red-50 p-3">
                 <p className="font-semibold text-red-700">
-                  {slot} · {lesson.title}
+                  {label}
                 </p>
                 <p className="mt-1 text-sm text-red-700">
                   {lesson.dateLabel ?? "Logged"} · {lesson.present}/{lesson.total} · recording missing
@@ -98,7 +98,7 @@ export function ClassDetailView({
               <li key={lesson.lessonId} className="rounded-2xl bg-white p-3 shadow-sm">
                 <p className="font-semibold text-emerald-700">
                   <span aria-hidden="true">✓ </span>
-                  {slot} · {lesson.title}
+                  {label}
                 </p>
                 <p className="mt-1 text-sm text-zinc-600">
                   {lesson.dateLabel ?? "Logged"} · {lesson.present}/{lesson.total} · recorded
@@ -130,7 +130,7 @@ export function ClassDetailView({
               <li key={lesson.lessonId} className="rounded-2xl border border-violet-300 bg-violet-50 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">Next to teach</p>
                 <p className="mt-1 font-semibold text-zinc-900">
-                  {slot} · {lesson.title}
+                  {label}
                 </p>
                 <Link
                   href={detail.logHref}
@@ -148,7 +148,7 @@ export function ClassDetailView({
                   <rect x="5" y="11" width="14" height="9" rx="2" />
                   <path d="M8 11V8a4 4 0 0 1 8 0v3" strokeLinecap="round" />
                 </svg>
-                {slot} · {lesson.title}
+                {label}
               </p>
               {lesson.unlockEarly ? (
                 <UnlockEarlyButton

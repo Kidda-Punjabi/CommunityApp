@@ -14,6 +14,7 @@ import {
   type HomeworkReviewPackage,
   type ReviewedHomeworkPlayback,
 } from "@/lib/tutoring/homework-review-packages";
+import { lessonTopicTitle } from "@/lib/tutoring/log-lesson-copy";
 import type { PendingHomeworkReviewRow } from "@/lib/tutoring/homework-submissions";
 import { cn, ui } from "@/lib/ui/styles";
 
@@ -177,7 +178,7 @@ function HomeworkReviewCard({
         <div>
           <p className="font-semibold text-zinc-900">{submission.studentName}</p>
           <p className="mt-1 text-sm text-zinc-600">
-            Lesson {submission.lessonNumber}: {submission.lessonTitle}
+            Lesson {submission.lessonNumber}: {lessonTopicTitle(submission.lessonTitle)}
           </p>
           <p className="mt-1 text-xs text-zinc-500">
             Submitted {formatSubmittedAt(submission.submittedAt)}
@@ -539,7 +540,7 @@ export function TutorHomeworkReview({
                           >
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-zinc-900">
-                                {lesson.title}
+                                {lessonTopicTitle(lesson.title) || lesson.title}
                               </p>
                               <p className="mt-0.5 text-xs text-zinc-500">{lesson.weekLabel}</p>
                             </div>

@@ -12,7 +12,7 @@ import {
   isActiveTeachingClass,
   isFinishedTeachingClass,
   isTestClassName,
-  lessonSlotLabel,
+  lessonListLabel,
   suggestNextLesson,
 } from "@/lib/tutoring/log-lesson-copy";
 import {
@@ -413,7 +413,9 @@ export async function loadTutorClassBoard(
       schedule: options.schedule,
       loggedCount: loggedIds.size,
       totalLessons: courseLessons.length,
-      nextLabel: next ? `Next: ${lessonSlotLabel(options.courseName, next.lessonNumber)} · ${next.title}` : null,
+      nextLabel: next
+        ? `Next: ${lessonListLabel(options.courseName, next.lessonNumber, next.title)}`
+        : null,
       issue: classIssue({
         courseName: options.courseName,
         missingRecordingNumber,
