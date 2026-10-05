@@ -75,6 +75,27 @@ export function ClassDetailView({
       <ul className="flex flex-col gap-2">
         {detail.lessons.map((lesson) => {
           const label = lessonListLabel(detail.courseName, lesson.lessonNumber, lesson.title);
+          const edit = lesson.entryId ? (
+            <LessonLogEdit
+              entryId={lesson.entryId}
+              lessonId={lesson.lessonId}
+              lessonDate={lesson.lessonDate ?? ""}
+              notes={lesson.notes ?? ""}
+              courseName={detail.courseName}
+              lessons={detail.lessons.map((row) => ({
+                id: row.lessonId,
+                lessonNumber: row.lessonNumber,
+                title: row.title,
+                taken: row.state === "logged" && row.lessonId !== lesson.lessonId,
+              }))}
+              recordingUrl={lesson.recordingUrl}
+              isCoverSession={lesson.isCoverSession}
+              actualTutorId={lesson.actualTutorId}
+              attendance={lesson.attendance}
+              homework={lesson.homework}
+              tutors={tutors}
+            />
+          ) : null;
           if (lesson.state === "logged" && !lesson.hasRecording) {
             return (
               <li key={lesson.lessonId} className="rounded-2xl border border-red-200 bg-red-50 p-3">
@@ -94,17 +115,7 @@ export function ClassDetailView({
                 {detail.kind === "one_to_one" && lesson.homeworkLabel ? (
                   <p className="mt-1 text-sm text-zinc-600">Homework: {lesson.homeworkLabel}</p>
                 ) : null}
-                {lesson.entryId ? (
-                  <LessonLogEdit
-                    entryId={lesson.entryId}
-                    recordingUrl={lesson.recordingUrl}
-                    isCoverSession={lesson.isCoverSession}
-                    actualTutorId={lesson.actualTutorId}
-                    attendance={lesson.attendance}
-                    homework={lesson.homework}
-                    tutors={tutors}
-                  />
-                ) : null}
+                {edit}
               </li>
             );
           }
@@ -128,17 +139,7 @@ export function ClassDetailView({
                 {detail.kind === "one_to_one" && lesson.homeworkLabel ? (
                   <p className="mt-1 text-sm text-zinc-600">Homework: {lesson.homeworkLabel}</p>
                 ) : null}
-                {lesson.entryId ? (
-                  <LessonLogEdit
-                    entryId={lesson.entryId}
-                    recordingUrl={lesson.recordingUrl}
-                    isCoverSession={lesson.isCoverSession}
-                    actualTutorId={lesson.actualTutorId}
-                    attendance={lesson.attendance}
-                    homework={lesson.homework}
-                    tutors={tutors}
-                  />
-                ) : null}
+                {edit}
               </li>
             );
           }

@@ -7,13 +7,25 @@ import { getDisplayName } from "@/lib/profile/display-name";
 import { kidProfileIdsInCohort, loadCohortMembershipRoster } from "@/lib/tutoring/cohort-attendance";
 import { resolveCoverLessonWrite } from "@/lib/tutoring/cover-lesson";
 import type { LessonLogEditAttendance } from "@/lib/tutoring/lesson-log-edit";
-import { submittedHomeworkActorIds } from "@/lib/tutoring/lesson-log-edit";
-import { patchLessonLogRecording, patchLoggedLessonOnNotion, resolvePresentLeads } from "@/lib/tutoring/log-lesson-notion";
-import { isHttpUrl } from "@/lib/tutoring/log-lesson-copy";
+import { patchLessonLogRecording, patchLoggedLessonOnNotion, readLessonLogPage, resolvePresentLeads } from "@/lib/tutoring/log-lesson-notion";
+import {
+  compareLessonLogReadback,
+  formatLogNotionTitle,
+  isHttpUrl,
+  logTitleMatchesLessonNumber,
+  londonTimeLabel,
+  type ReadbackDifference,
+} from "@/lib/tutoring/log-lesson-copy";
 import { syncCohortLessonRecordingFromLog } from "@/lib/tutoring/sync-cohort-recording-from-log";
-import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
+import { canAccessTutorDashboard, canEditTeachingClass } from "@/lib/tutoring/tutor-access";
 
-export type ClassActionResult = { error?: string; success?: string };
+export type ClassActionResult = {
+  error?: string;
+  success?: string;
+  confirmed?: boolean;
+  readAt?: string;
+  differences?: ReadbackDifference[];
+};
 
 async function requireTutor() {
   const supabase = await createClient();
@@ -24,7 +36,7 @@ async function requireTutor() {
   const allowed = await canAccessTutorDashboard(supabase, user.id);
   if (!allowed) throw new Error("Tutor access required.");
   const { client: admin } = tryCreateServiceRoleClient();
-  return { reader: admin ?? supabase, userId: user.id };
+  return { reader: admin ?? supabase, auth: supabase, userId: user.id };
 }
 
 function refreshClassPaths(cohortId: string | null, packageInstanceId: string | null) {
@@ -39,7 +51,7 @@ export async function saveClassRecordingAction(entryId: string, recordingUrl: st
     const url = recordingUrl.trim();
     if (!isHttpUrl(url)) return { error: "Enter a recording link that starts with http or https." };
 
-    const { reader, userId } = await requireTutor();
+    const { reader, auth, userId } = await requireTutor();
     const { data: entry, error } = await reader
       .from("cohort_lesson_log_entries")
       .select("id, cohort_id, package_instance_id, lesson_id, notion_page_id")
@@ -55,14 +67,18 @@ export async function saveClassRecordingAction(entryId: string, recordingUrl: st
         .select("tutor_id")
         .eq("id", cohortId)
         .maybeSingle();
-      if (cohort?.tutor_id !== userId) return { error: "You are not the tutor for this class." };
+      if (!(await canEditTeachingClass(auth, userId, (cohort?.tutor_id as string | null) ?? null))) {
+        return { error: "You are not the tutor for this class." };
+      }
     } else if (packageInstanceId) {
       const { data: instance } = await reader
         .from("package_instances")
         .select("tutor_id")
         .eq("id", packageInstanceId)
         .maybeSingle();
-      if (instance?.tutor_id !== userId) return { error: "You are not the tutor for this class." };
+      if (!(await canEditTeachingClass(auth, userId, (instance?.tutor_id as string | null) ?? null))) {
+        return { error: "You are not the tutor for this class." };
+      }
     } else {
       return { error: "That lesson log is not attached to a class." };
     }
@@ -132,25 +148,73 @@ export async function saveClassRecordingAction(entryId: string, recordingUrl: st
 
 export async function updateLoggedLessonAction(input: {
   entryId: string;
+  lessonId: string;
+  lessonDate: string;
+  notes: string;
   recordingUrl: string;
   attendance: LessonLogEditAttendance[];
+  homeworkSubmittedIds: string[];
   isCoverSession: boolean;
   actualTutorId: string | null;
 }): Promise<ClassActionResult> {
   try {
+    const lessonDate = input.lessonDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(lessonDate)) return { error: "Choose the date you taught." };
     const recordingUrl = input.recordingUrl.trim();
     if (recordingUrl && !isHttpUrl(recordingUrl)) {
       return { error: "Enter a recording link that starts with http or https." };
     }
 
-    const { reader, userId } = await requireTutor();
-    const owned = await loadOwnedLessonLog(reader, userId, input.entryId);
+    const { reader, auth, userId } = await requireTutor();
+    const owned = await loadOwnedLessonLog(reader, auth, userId, input.entryId);
     if ("error" in owned) return { error: owned.error };
     const { entry, cohortId, packageInstanceId } = owned;
+
+    const { data: lesson } = await reader
+      .from("lessons")
+      .select("id, lesson_number, title, course_id")
+      .eq("id", input.lessonId)
+      .maybeSingle();
+    if (!lesson || lesson.course_id !== owned.courseId) {
+      return { error: "That lesson is not part of this course." };
+    }
+    const title = formatLogNotionTitle({
+      name: owned.className,
+      courseName: owned.courseName,
+      lessonNumber: lesson.lesson_number as number,
+      lessonDate,
+    });
+    if (!logTitleMatchesLessonNumber(title, lesson.lesson_number as number)) {
+      return { error: "The lesson title does not match the selected lesson." };
+    }
+
+    if (input.lessonId !== entry.lesson_id) {
+      const clash = cohortId
+        ? await reader
+            .from("cohort_lesson_log_entries")
+            .select("id")
+            .eq("cohort_id", cohortId)
+            .eq("lesson_id", input.lessonId)
+            .is("dismissed_at", null)
+            .neq("id", input.entryId)
+            .limit(1)
+        : await reader
+            .from("cohort_lesson_log_entries")
+            .select("id")
+            .eq("package_instance_id", packageInstanceId)
+            .eq("lesson_id", input.lessonId)
+            .is("dismissed_at", null)
+            .neq("id", input.entryId)
+            .limit(1);
+      if (clash.data && clash.data.length > 0) {
+        return { error: "That lesson is already logged." };
+      }
+    }
 
     const cover = await resolveCoverLessonWrite(reader, {
       isCoverSession: input.isCoverSession,
       actualTutorId: input.actualTutorId,
+      assignedTutorId: owned.assignedTutorId,
     });
     if (!cover.ok) return { error: cover.error };
 
@@ -158,10 +222,15 @@ export async function updateLoggedLessonAction(input: {
     const allowed = new Map(roster.map((person) => [person.id, person]));
     const marks = input.attendance.filter((person) => allowed.has(person.id));
     if (marks.length === 0) return { error: "Add who attended before saving." };
+    const homeworkIds = input.homeworkSubmittedIds.filter((id) => allowed.has(id));
 
     const { error: updateError } = await reader
       .from("cohort_lesson_log_entries")
       .update({
+        lesson_id: input.lessonId,
+        lesson_title: title,
+        lesson_date: lessonDate,
+        notes: input.notes.trim() || null,
         recording_url: recordingUrl || null,
         is_cover_session: cover.isCoverSession,
         actual_tutor_id: cover.actualTutorId,
@@ -171,29 +240,55 @@ export async function updateLoggedLessonAction(input: {
       .eq("id", input.entryId);
     if (updateError) return { error: updateError.message };
 
+    if (input.lessonId !== entry.lesson_id) {
+      const moved = await clearLessonRows(reader, cohortId, packageInstanceId, entry.lesson_id);
+      if (moved) return { error: moved };
+    }
+
     const attendanceError = await writeAttendance(reader, {
       userId,
       cohortId,
       packageInstanceId,
-      lessonId: entry.lesson_id as string,
+      lessonId: input.lessonId,
       marks,
     });
     if (attendanceError) return { error: attendanceError };
+
+    const homeworkError = await writeHomeworkMarks(reader, {
+      userId,
+      cohortId,
+      lessonId: input.lessonId,
+      marks: roster.map((person) => ({
+        ...person,
+        completed: homeworkIds.includes(person.id),
+      })),
+    });
+    if (homeworkError) return { error: homeworkError };
+
+    const unlockError = await writeUnlock(reader, {
+      userId,
+      cohortId,
+      packageInstanceId,
+      previousLessonId: entry.lesson_id,
+      lessonId: input.lessonId,
+      marks,
+    });
+    if (unlockError) return { error: unlockError };
 
     const recordingError = await syncRecording(reader, {
       userId,
       cohortId,
       packageInstanceId,
-      lessonId: entry.lesson_id as string,
+      lessonId: input.lessonId,
       entryId: input.entryId,
       recordingUrl,
     });
     if (recordingError) return { error: recordingError };
 
-    const pageId = (entry.notion_page_id as string | null)?.trim() ?? "";
+    const pageId = entry.notion_page_id?.trim() ?? "";
     if (!pageId || pageId.startsWith("pending-")) {
       refreshClassPaths(cohortId, packageInstanceId);
-      return { success: "Updated in the app. This lesson has no Notion page yet." };
+      return { success: "Updated in the app. This lesson has no Notion page yet.", confirmed: false, readAt: londonTimeLabel() };
     }
 
     const present = marks
@@ -204,24 +299,22 @@ export async function updateLoggedLessonAction(input: {
         name: allowed.get(person.id)?.name || person.name,
       }));
     const leads = await resolvePresentLeads(reader, present);
-    const replaceAttendees = present.length === 0 || leads.leadIds.length > 0;
-    const submittedIds = await submittedHomeworkIdsForLesson(
-      reader,
-      entry.lesson_id as string,
-      roster.map((person) => person.id)
-    );
     const submitted = roster
-      .filter((person) => submittedIds.includes(person.id))
+      .filter((person) => homeworkIds.includes(person.id))
       .map((person) => ({
         studentId: person.kind === "student" ? person.id : null,
         kidProfileId: person.kind === "kid" ? person.id : null,
         name: person.name,
       }));
     const homeworkLeads = await resolvePresentLeads(reader, submitted);
+    const replaceAttendees = present.length === 0 || leads.leadIds.length > 0;
     const replaceHomework = submitted.length === 0 || homeworkLeads.leadIds.length > 0;
     try {
       await patchLoggedLessonOnNotion({
         pageId,
+        title,
+        lessonDate,
+        notes: input.notes.trim(),
         recordingUrl: recordingUrl || null,
         isCoverSession: cover.isCoverSession,
         notionTutorUserId: cover.notionTutorUserId,
@@ -242,21 +335,41 @@ export async function updateLoggedLessonAction(input: {
       return { error: `Updated in the app. Notion lesson log was not updated: ${message}` };
     }
 
+    const absentNames = marks.filter((person) => !person.attended).map((person) => person.name);
+    const readback = await readLessonLogPage({
+      pageId,
+      expectedTutorUserId: cover.notionTutorUserId,
+      absentNames,
+    });
+    const differences = compareLessonLogReadback({
+      submittedTitle: title,
+      submittedDate: lessonDate,
+      submittedLesson: title.match(/\b(?:Week|Lesson) \d+\b/)?.[0] ?? title,
+      submittedRecordingUrl: recordingUrl,
+      submittedPresentNames: present.map((person) => person.name),
+      submittedAbsentNames: absentNames,
+      actual: readback,
+      unmatchedPresentNames: leads.unmatchedNames,
+      expectedLeadIds: replaceAttendees ? leads.leadIds : undefined,
+      expectedCoverSession: cover.isCoverSession,
+      expectedNotionTutorUserId: cover.notionTutorUserId,
+    });
+    const confirmed = differences.length === 0;
     await reader
       .from("cohort_lesson_log_entries")
       .update({
-        notion_sync_status: "synced",
-        notion_sync_error: null,
-        notion_synced_at: new Date().toISOString(),
+        notion_sync_status: confirmed ? "synced" : "error",
+        notion_sync_error: confirmed ? null : "Notion read-back did not match what was saved.",
+        notion_synced_at: confirmed ? new Date().toISOString() : null,
       })
       .eq("id", input.entryId);
     refreshClassPaths(cohortId, packageInstanceId);
-    const missingNames = [...new Set([...leads.unmatchedNames, ...homeworkLeads.unmatchedNames])];
-    const missing = missingNames.length ? ` No Notion lead for ${missingNames.join(", ")}.` : "";
-    const homeworkNote = submitted.length
-      ? ` Homework for this lesson: ${submitted.map((person) => person.name).join(", ")}.`
-      : "";
-    return { success: `Updated. The Notion lesson log was updated.${homeworkNote}${missing}` };
+    return {
+      success: confirmed ? "Updated. Notion matches this lesson." : "Updated. Notion needs a check.",
+      confirmed,
+      readAt: londonTimeLabel(),
+      differences,
+    };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not update the lesson." };
   }
@@ -264,6 +377,7 @@ export async function updateLoggedLessonAction(input: {
 
 async function loadOwnedLessonLog(
   reader: Awaited<ReturnType<typeof requireTutor>>["reader"],
+  auth: Awaited<ReturnType<typeof requireTutor>>["auth"],
   userId: string,
   entryId: string
 ): Promise<
@@ -274,6 +388,10 @@ async function loadOwnedLessonLog(
       };
       cohortId: string | null;
       packageInstanceId: string | null;
+      courseId: string;
+      courseName: string;
+      className: string;
+      assignedTutorId: string | null;
     }
   | { error: string }
 > {
@@ -286,16 +404,40 @@ async function loadOwnedLessonLog(
 
   const cohortId = (entry.cohort_id as string | null) ?? null;
   const packageInstanceId = (entry.package_instance_id as string | null) ?? null;
+  let assignedTutorId: string | null = null;
+  let courseId = "";
+  let courseName = "Course";
+  let className = "Class";
   if (cohortId) {
-    const { data: cohort } = await reader.from("cohorts").select("tutor_id").eq("id", cohortId).maybeSingle();
-    if (cohort?.tutor_id !== userId) return { error: "You are not the tutor for this class." };
+    const { data: cohort } = await reader
+      .from("cohorts")
+      .select("tutor_id, name, course_id, courses(name)")
+      .eq("id", cohortId)
+      .maybeSingle();
+    if (!cohort) return { error: "That class could not be found." };
+    assignedTutorId = (cohort.tutor_id as string | null) ?? null;
+    if (!(await canEditTeachingClass(auth, userId, assignedTutorId))) {
+      return { error: "You are not the tutor for this class." };
+    }
+    courseId = cohort.course_id as string;
+    className = (cohort.name as string) || "Cohort";
+    const course = Array.isArray(cohort.courses) ? cohort.courses[0] : cohort.courses;
+    courseName = (course as { name?: string } | null)?.name ?? "Course";
   } else if (packageInstanceId) {
     const { data: instance } = await reader
       .from("package_instances")
-      .select("tutor_id")
+      .select("tutor_id, name, course_id, courses(name)")
       .eq("id", packageInstanceId)
       .maybeSingle();
-    if (instance?.tutor_id !== userId) return { error: "You are not the tutor for this class." };
+    if (!instance) return { error: "That class could not be found." };
+    assignedTutorId = (instance.tutor_id as string | null) ?? null;
+    if (!(await canEditTeachingClass(auth, userId, assignedTutorId))) {
+      return { error: "You are not the tutor for this class." };
+    }
+    courseId = instance.course_id as string;
+    className = (instance.name as string) || "Student";
+    const course = Array.isArray(instance.courses) ? instance.courses[0] : instance.courses;
+    courseName = (course as { name?: string } | null)?.name ?? "Course";
   } else {
     return { error: "That lesson log is not attached to a class." };
   }
@@ -307,27 +449,136 @@ async function loadOwnedLessonLog(
     },
     cohortId,
     packageInstanceId,
+    courseId,
+    courseName,
+    className,
+    assignedTutorId,
   };
 }
 
-async function submittedHomeworkIdsForLesson(
+async function clearLessonRows(
   reader: Awaited<ReturnType<typeof requireTutor>>["reader"],
-  lessonId: string,
-  rosterIds: string[]
-): Promise<string[]> {
-  if (rosterIds.length === 0) return [];
-  const { data, error } = await reader
-    .from("homework_submissions")
-    .select("student_id, kid_profile_id")
-    .eq("lesson_id", lessonId)
-    .eq("is_practice", false);
-  if (error) return [];
-  return submittedHomeworkActorIds(
-    rosterIds,
-    (data ?? []).map((row) => ({
-      actorId: (row.kid_profile_id as string | null) ?? (row.student_id as string | null),
-    }))
-  );
+  cohortId: string | null,
+  packageInstanceId: string | null,
+  lessonId: string
+): Promise<string | null> {
+  const attendance = cohortId
+    ? await reader.from("cohort_lesson_attendance").delete().eq("cohort_id", cohortId).eq("lesson_id", lessonId)
+    : await reader
+        .from("cohort_lesson_attendance")
+        .delete()
+        .eq("package_instance_id", packageInstanceId)
+        .eq("lesson_id", lessonId);
+  if (attendance.error) return attendance.error.message;
+  if (cohortId) {
+    const homework = await reader
+      .from("cohort_lesson_homework")
+      .delete()
+      .eq("cohort_id", cohortId)
+      .eq("lesson_id", lessonId);
+    if (homework.error) return homework.error.message;
+  }
+  return null;
+}
+
+async function writeHomeworkMarks(
+  reader: Awaited<ReturnType<typeof requireTutor>>["reader"],
+  input: {
+    userId: string;
+    cohortId: string | null;
+    lessonId: string;
+    marks: Array<LessonLogEditAttendance & { completed: boolean }>;
+  }
+): Promise<string | null> {
+  if (!input.cohortId) return null;
+  for (const mark of input.marks) {
+    const payload = {
+      cohort_id: input.cohortId,
+      lesson_id: input.lessonId,
+      student_id: mark.kind === "student" ? mark.id : null,
+      kid_profile_id: mark.kind === "kid" ? mark.id : null,
+      completed: mark.completed,
+      marked_by: input.userId,
+      marked_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const existing = mark.kind === "kid"
+      ? await reader
+          .from("cohort_lesson_homework")
+          .select("id")
+          .eq("cohort_id", input.cohortId)
+          .eq("lesson_id", input.lessonId)
+          .eq("kid_profile_id", mark.id)
+          .maybeSingle()
+      : await reader
+          .from("cohort_lesson_homework")
+          .select("id")
+          .eq("cohort_id", input.cohortId)
+          .eq("lesson_id", input.lessonId)
+          .eq("student_id", mark.id)
+          .maybeSingle();
+    const write = existing.data?.id
+      ? await reader.from("cohort_lesson_homework").update(payload).eq("id", existing.data.id)
+      : await reader.from("cohort_lesson_homework").insert(payload);
+    if (write.error) return write.error.message;
+  }
+  return null;
+}
+
+async function writeUnlock(
+  reader: Awaited<ReturnType<typeof requireTutor>>["reader"],
+  input: {
+    userId: string;
+    cohortId: string | null;
+    packageInstanceId: string | null;
+    previousLessonId: string;
+    lessonId: string;
+    marks: LessonLogEditAttendance[];
+  }
+): Promise<string | null> {
+  if (input.cohortId) {
+    const { error } = await reader.from("cohort_lesson_unlocks").upsert(
+      {
+        cohort_id: input.cohortId,
+        lesson_id: input.lessonId,
+        unlocked_by: input.userId,
+        unlocked_at: new Date().toISOString(),
+      },
+      { onConflict: "cohort_id,lesson_id" }
+    );
+    if (error) return error.message;
+    if (input.previousLessonId !== input.lessonId) {
+      const { data: stillUsed } = await reader
+        .from("cohort_lesson_log_entries")
+        .select("id")
+        .eq("cohort_id", input.cohortId)
+        .eq("lesson_id", input.previousLessonId)
+        .is("dismissed_at", null)
+        .limit(1);
+      if (!stillUsed?.length) {
+        await reader
+          .from("cohort_lesson_unlocks")
+          .delete()
+          .eq("cohort_id", input.cohortId)
+          .eq("lesson_id", input.previousLessonId);
+      }
+    }
+    return null;
+  }
+  for (const mark of input.marks) {
+    const { error } = await reader.from("student_lesson_unlocks").upsert(
+      {
+        student_id: mark.kind === "student" ? mark.id : null,
+        kid_profile_id: mark.kind === "kid" ? mark.id : null,
+        lesson_id: input.lessonId,
+        unlocked_by: input.userId,
+        unlocked_at: new Date().toISOString(),
+      },
+      { onConflict: mark.kind === "kid" ? "kid_profile_id,lesson_id" : "student_id,lesson_id" }
+    );
+    if (error) return error.message;
+  }
+  return null;
 }
 
 async function classRoster(

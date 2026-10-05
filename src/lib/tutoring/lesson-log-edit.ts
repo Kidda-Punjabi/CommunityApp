@@ -22,6 +22,9 @@ export function submittedHomeworkActorIds(
 
 /** Properties written onto an existing Notion lesson log when a tutor edits it. */
 export function lessonLogEditNotionProperties(input: {
+  title?: string | null;
+  lessonDate?: string | null;
+  notes?: string | null;
   recordingUrl: string | null;
   isCoverSession: boolean;
   notionTutorUserId: string | null;
@@ -32,12 +35,23 @@ export function lessonLogEditNotionProperties(input: {
     "Recording Link": { url: input.recordingUrl },
     "Cover Session?": { checkbox: input.isCoverSession },
     "Actual Tutor (New)": {
-      people:
-        input.isCoverSession && input.notionTutorUserId?.trim()
-          ? [{ id: input.notionTutorUserId.trim() }]
-          : [],
+      people: input.notionTutorUserId?.trim() ? [{ id: input.notionTutorUserId.trim() }] : [],
     },
   };
+  if (input.title?.trim()) {
+    properties.Lesson = {
+      title: [{ type: "text", text: { content: input.title.trim().slice(0, 2000) } }],
+    };
+  }
+  if (input.lessonDate?.trim()) {
+    properties["Lesson Date"] = { date: { start: input.lessonDate.trim() } };
+  }
+  if (input.notes !== undefined) {
+    const note = input.notes?.trim() ?? "";
+    properties.notes = {
+      rich_text: note ? [{ type: "text", text: { content: note.slice(0, 2000) } }] : [],
+    };
+  }
   if (input.attendeeLeadIds) {
     properties.Attendees = {
       relation: input.attendeeLeadIds.map((id) => ({ id })),

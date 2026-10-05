@@ -66,8 +66,10 @@ export default async function DashboardLayout({
   const isPickerScreen = isKidProfilePickerPath(pathname);
   const isWhoIsLearningFlow =
     isPickerScreen || pathname.startsWith("/dashboard/profile/kids/");
+  const tutorShell = pathname.startsWith("/dashboard/tutor");
   const redirects = { count: 0 };
   if (
+    !tutorShell &&
     !kid &&
     onboarding.hasSeenOnboarding &&
     kidSession.hasKidProfiles &&
@@ -88,6 +90,7 @@ export default async function DashboardLayout({
   }
 
   const shouldPickWhoIsLearning =
+    !tutorShell &&
     onboarding.hasSeenOnboarding &&
     kidSession.hasKidProfiles &&
     kidSession.hasPin &&
@@ -105,7 +108,6 @@ export default async function DashboardLayout({
   }
 
   const parentInitial = (user.email?.trim().charAt(0) ?? "P").toUpperCase();
-  const tutorShell = pathname.startsWith("/dashboard/tutor");
 
   return (
     <FirstRunProvider

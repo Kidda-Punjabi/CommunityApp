@@ -277,6 +277,9 @@ export async function patchLessonLogRecording(pageId: string, url: string): Prom
 /** Update recording, cover tutor, and attendees on the lesson log page that already exists. */
 export async function patchLoggedLessonOnNotion(options: {
   pageId: string;
+  title?: string | null;
+  lessonDate?: string | null;
+  notes?: string | null;
   recordingUrl: string | null;
   isCoverSession: boolean;
   notionTutorUserId: string | null;

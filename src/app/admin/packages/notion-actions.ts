@@ -123,7 +123,7 @@ export async function fetchNotionTutorMapData(): Promise<{
 
     const [{ data: roleRows }, { data: profiles }, { data: mappings, error: mapError }] =
       await Promise.all([
-        supabase.from("profile_roles").select("user_id").eq("role", "tutor"),
+        supabase.from("profile_roles").select("user_id").in("role", ["tutor", "master_admin"]),
         supabase.from("profiles").select("id, full_name, preferred_name"),
         supabase
           .from("notion_tutor_map")

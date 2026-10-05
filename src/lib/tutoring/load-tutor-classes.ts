@@ -1,6 +1,7 @@
 import "server-only";
 
 import { coverTaughtByLabel } from "@/lib/tutoring/cover-lesson";
+import { canEditTeachingClass } from "@/lib/tutoring/tutor-access";
 import type { LessonLogEditAttendance } from "@/lib/tutoring/lesson-log-edit";
 import { getDisplayName } from "@/lib/profile/display-name";
 import {
@@ -61,6 +62,7 @@ export type ClassLessonRow = {
   unlockEarly: boolean;
   coverLabel: string | null;
   recordingUrl: string;
+  lessonDate: string | null;
   isCoverSession: boolean;
   actualTutorId: string | null;
   attendance: LessonLogEditAttendance[];
@@ -568,6 +570,20 @@ async function buildDetail(options: {
         .in("lesson_id", lessonIds)
         .eq("is_practice", false)
     : { data: [] as Array<Record<string, unknown>> };
+  const { data: homeworkMarkRows } =
+    options.kind === "group"
+      ? await options.reader
+          .from("cohort_lesson_homework")
+          .select("lesson_id, student_id, kid_profile_id, completed")
+          .eq("cohort_id", options.id)
+      : { data: [] as Array<Record<string, unknown>> };
+  const homeworkCompleted = new Map<string, boolean>();
+  for (const row of homeworkMarkRows ?? []) {
+    const actor = (row.kid_profile_id as string | null) ?? (row.student_id as string | null);
+    if (!actor) continue;
+    homeworkCompleted.set(`${row.lesson_id}:${actor}`, Boolean(row.completed));
+  }
+
   const submissionByLessonActor = new Map<string, { status: string | null; approved: boolean | null }>();
   for (const row of submissionRows ?? []) {
     const actor = (row.kid_profile_id as string | null) ?? (row.student_id as string | null);
@@ -623,6 +639,7 @@ async function buildDetail(options: {
           ? coverTaughtByLabel(entry.actual_tutor_id ? coverNameById.get(entry.actual_tutor_id) : null)
           : null,
         recordingUrl: entry.recording_url?.trim() ?? "",
+        lessonDate: entry.lesson_date ? String(entry.lesson_date).slice(0, 10) : null,
         isCoverSession: Boolean(entry.is_cover_session),
         actualTutorId: entry.actual_tutor_id ?? null,
         attendance: options.people.map((student) => ({
@@ -634,7 +651,9 @@ async function buildDetail(options: {
         homework: options.people.map((student) => ({
           id: student.id,
           name: student.name,
-          submitted: submissionByLessonActor.has(`${lesson.id}:${student.id}`),
+          submitted: homeworkCompleted.has(`${lesson.id}:${student.id}`)
+            ? Boolean(homeworkCompleted.get(`${lesson.id}:${student.id}`))
+            : submissionByLessonActor.has(`${lesson.id}:${student.id}`),
         })),
       };
     }
@@ -654,6 +673,7 @@ async function buildDetail(options: {
         unlockEarly: false,
         coverLabel: null,
         recordingUrl: "",
+        lessonDate: null,
         isCoverSession: false,
         actualTutorId: null,
         attendance: [],
@@ -678,6 +698,7 @@ async function buildDetail(options: {
       unlockEarly,
       coverLabel: null,
       recordingUrl: "",
+      lessonDate: null,
       isCoverSession: false,
       actualTutorId: null,
       attendance: [],
@@ -734,7 +755,10 @@ export async function loadCohortClassDetail(
     .select("id, name, status, active, course_id, tutor_id, start_day_of_week, weekly_session_start, courses(name)")
     .eq("id", cohortId)
     .maybeSingle();
-  if (!cohort || cohort.tutor_id !== tutorId) return null;
+  if (!cohort) return null;
+  if (!(await canEditTeachingClass(reader, tutorId, (cohort.tutor_id as string | null) ?? null))) {
+    return null;
+  }
   const teaching = {
     name: cohort.name as string,
     active: cohort.active as boolean | null,
@@ -795,7 +819,10 @@ export async function loadPackageClassDetail(
     .select("id, name, status, active, course_id, tutor_id, start_day_of_week, package_id, courses(name)")
     .eq("id", packageInstanceId)
     .maybeSingle();
-  if (!instance || instance.tutor_id !== tutorId) return null;
+  if (!instance) return null;
+  if (!(await canEditTeachingClass(reader, tutorId, (instance.tutor_id as string | null) ?? null))) {
+    return null;
+  }
   const teaching = {
     name: instance.name as string,
     active: instance.active as boolean | null,

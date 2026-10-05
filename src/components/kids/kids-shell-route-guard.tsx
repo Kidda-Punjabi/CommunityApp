@@ -18,6 +18,7 @@ export function KidsShellRouteGuard() {
   useEffect(() => {
     if (!activeKidProfile || !usesKidsShell(activeKidProfile.age_tier)) return;
     if (pathname.startsWith("/dashboard/kids")) return;
+    if (pathname.startsWith("/dashboard/tutor")) return;
     // Profile tab / picker must stay reachable while a kid is active, otherwise
     // this guard races profile switching and snaps back to the kid home.
     if (isKidProfilePickerPath(pathname)) return;

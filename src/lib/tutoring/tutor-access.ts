@@ -25,6 +25,19 @@ export async function canAccessTutorDashboard(
   return hasAnyRole(roles, TUTOR_DASHBOARD_ROLES);
 }
 
+/** Assigned tutor, or a master admin opening someone else's class. */
+export async function canEditTeachingClass(
+  supabase: SupabaseClient,
+  userId: string,
+  assignedTutorId: string | null
+): Promise<boolean> {
+  if (assignedTutorId && assignedTutorId === userId) return true;
+  const roles = await loadCurrentUserAppRoles(supabase, userId);
+  if (roles.includes("master_admin")) return true;
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id === userId && data.user.app_metadata?.role === "admin";
+}
+
 export async function canManageCohort(
   supabase: SupabaseClient,
   userId: string,
