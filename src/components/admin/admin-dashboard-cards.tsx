@@ -28,7 +28,7 @@ const slotsByGroup: Record<AdminDashboardCard["group"], DashboardCardId[]> = {
   ],
   requests: ["cohort_switch", "reschedule", "cohort_change", "issue_reports"],
   cohorts: ["cohorts_setup", "session_integrity"],
-  ops: ["missing_recordings"],
+  ops: ["missing_recordings", "hidden_homework"],
 };
 
 export function AdminDashboardGrid({

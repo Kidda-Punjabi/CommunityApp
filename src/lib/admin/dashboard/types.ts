@@ -12,6 +12,7 @@ export type DashboardCardId =
   | "app_onboarding"
   | "package_onboarding"
   | "missing_recordings"
+  | "hidden_homework"
   | "session_integrity";
 
 export type AdminDashboardCard = {

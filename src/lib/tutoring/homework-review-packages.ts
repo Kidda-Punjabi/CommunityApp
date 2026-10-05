@@ -1,3 +1,5 @@
+import { isTestClassName } from "@/lib/tutoring/log-lesson-copy";
+
 export type HomeworkPackageKind = "cohort" | "one_to_one";
 
 export type HomeworkPackageRef =
@@ -191,6 +193,13 @@ export function buildOneToOneHomeworkPackages(
   }
 
   return packages;
+}
+
+/** Test classes stay off the tutor list. Filter them out before assigning homework. */
+export function homeworkReviewPackagesForTutor<
+  T extends { name: string; students: readonly unknown[] },
+>(packages: T[]): T[] {
+  return packages.filter((pack) => pack.students.length > 0 && !isTestClassName(pack.name));
 }
 
 export function assignPendingToPackages(

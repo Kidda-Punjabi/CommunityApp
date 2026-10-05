@@ -1,5 +1,4 @@
 import { getStaffFacingName } from "@/lib/profile/display-name";
-import { isTestClassName } from "@/lib/tutoring/log-lesson-copy";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { loadCohortMembershipRoster } from "@/lib/tutoring/cohort-attendance";
 import {
@@ -7,6 +6,7 @@ import {
   buildOneToOneHomeworkPackages,
   encodeHomeworkPackageId,
   homeworkLessonWeekLabel,
+  homeworkReviewPackagesForTutor,
   homeworkReviewedKey,
   occupiedActorCourseKeysFromCohorts,
   type HomeworkBoardPendingRow,
@@ -46,7 +46,32 @@ function courseFromRel(rel: CourseRel): { id: string; name: string } | null {
   return { id: row.id, name: row.name?.trim() || "Course" };
 }
 
-async function loadCoverCohortIds(supabase: SupabaseClient): Promise<string[]> {
+async function loadCoverCohortIds(supabase: SupabaseClient, tutorId: string): Promise<string[]> {
+  const { client } = tryCreateServiceRoleClient();
+  const reader = client ?? supabase;
+  const { data: covers } = await reader
+    .from("tutor_cover_requests")
+    .select("session_id")
+    .eq("assigned_tutor_id", tutorId)
+    .in("status", ["assigned", "confirmed"]);
+  const sessionIds = (covers ?? [])
+    .map((row) => row.session_id as string | null)
+    .filter((id): id is string => Boolean(id));
+  if (sessionIds.length > 0) {
+    const { data: sessions } = await reader
+      .from("tutor_scheduled_sessions")
+      .select("cohort_id")
+      .in("id", sessionIds);
+    const ids = [
+      ...new Set(
+        (sessions ?? [])
+          .map((row) => row.cohort_id as string | null)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    if (ids.length > 0) return ids;
+  }
+
   const { data, error } = await supabase.rpc("tutor_cover_cohort_ids");
   if (error && !error.message.includes("tutor_cover_cohort_ids")) {
     console.error("[homework-review-board] tutor_cover_cohort_ids failed", error.message);
@@ -151,10 +176,10 @@ async function loadReviewedPlaybacksForActors(
   return [...byKey.values()];
 }
 
-export async function loadHomeworkReviewBoard(
+export async function loadTutorHomeworkPackages(
   supabase: SupabaseClient,
   tutorId: string
-): Promise<HomeworkReviewBoard> {
+): Promise<HomeworkReviewPackage[]> {
   let { data: enrollmentRows, error: enrollmentError } = await supabase
     .from("course_enrollments")
     .select(
@@ -183,7 +208,7 @@ export async function loadHomeworkReviewBoard(
     coverCohortIds,
   ] = await Promise.all([
     supabase.from("cohorts").select("id, name, course_id, courses(id, name)").eq("tutor_id", tutorId),
-    loadCoverCohortIds(supabase),
+    loadCoverCohortIds(supabase, tutorId),
   ]);
 
   const enrollmentCohortIds = [
@@ -434,8 +459,19 @@ export async function loadHomeworkReviewBoard(
     lessons: pack.lessons.length > 0 ? pack.lessons : lessonsByCourse.get(pack.courseId) ?? [],
   }));
 
+  return withLessons;
+}
+
+export async function loadHomeworkReviewBoard(
+  supabase: SupabaseClient,
+  tutorId: string
+): Promise<HomeworkReviewBoard> {
+  const packages = homeworkReviewPackagesForTutor(
+    await loadTutorHomeworkPackages(supabase, tutorId)
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
   const pending = await loadPendingHomeworkReviews(supabase);
-  const assignments = assignPendingToPackages(withLessons, pending);
+  const assignments = assignPendingToPackages(packages, pending);
   const packageIdBySubmission = new Map(
     assignments.map((row) => [row.submissionId, row.packageId] as const)
   );
@@ -452,18 +488,74 @@ export async function loadHomeworkReviewBoard(
     );
 
   const actorIds = [
-    ...new Set(withLessons.flatMap((pack) => pack.students.map((student) => student.studentId))),
+    ...new Set(packages.flatMap((pack) => pack.students.map((student) => student.studentId))),
   ];
   const reviewedSubmissions = await loadReviewedPlaybacksForActors(supabase, actorIds);
 
-  const packages = withLessons
-    .filter((pack) => pack.students.length > 0 && !isTestClassName(pack.name))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const packageIds = new Set(packages.map((pack) => pack.id));
-
   return {
     packages,
-    pendingSubmissions: pendingSubmissions.filter((row) => packageIds.has(row.packageId)),
+    pendingSubmissions,
     reviewedSubmissions,
   };
+}
+
+/** Pending submissions that the same review board would not show for any tutor. */
+export async function countPendingHomeworkHiddenFromTutors(
+  supabase: SupabaseClient
+): Promise<number> {
+  const db = tryCreateServiceRoleClient().client ?? supabase;
+  const { data, error } = await db
+    .from("homework_submissions")
+    .select("id, student_id, kid_profile_id, lesson_id")
+    .eq("status", "pending_review")
+    .eq("is_practice", false);
+  if (error) throw error;
+
+  const pending = (data ?? []).flatMap((row) => {
+    const studentId = (row.kid_profile_id as string | null) ?? (row.student_id as string | null);
+    const lessonId = (row.lesson_id as string | null) ?? null;
+    if (!studentId || !lessonId) return [];
+    return [{ id: row.id as string, studentId, lessonId }];
+  });
+  if (pending.length === 0) return 0;
+
+  const actorIds = [...new Set(pending.map((row) => row.studentId))];
+  const listed = actorIds.join(",");
+  const [{ data: memberRows }, { data: enrollmentRows }] = await Promise.all([
+    db
+      .from("cohort_members")
+      .select("cohort_id")
+      .or(`user_id.in.(${listed}),kid_profile_id.in.(${listed})`)
+      .is("left_at", null),
+    db
+      .from("course_enrollments")
+      .select("tutor_id")
+      .or(`user_id.in.(${listed}),kid_profile_id.in.(${listed})`),
+  ]);
+  const cohortIds = [
+    ...new Set((memberRows ?? []).map((row) => row.cohort_id as string).filter(Boolean)),
+  ];
+  const { data: cohortRows } =
+    cohortIds.length > 0
+      ? await db.from("cohorts").select("tutor_id").in("id", cohortIds)
+      : { data: [] as Array<{ tutor_id: string | null }> };
+  const tutorIds = [
+    ...new Set(
+      [...(cohortRows ?? []), ...(enrollmentRows ?? [])]
+        .map((row) => row.tutor_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  const shown = new Set<string>();
+  for (const tutorId of tutorIds) {
+    const packages = homeworkReviewPackagesForTutor(
+      await loadTutorHomeworkPackages(db, tutorId)
+    );
+    for (const row of assignPendingToPackages(packages, pending)) {
+      shown.add(row.submissionId);
+    }
+  }
+
+  return pending.filter((row) => !shown.has(row.id)).length;
 }

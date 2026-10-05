@@ -17,6 +17,7 @@ import type {
   AdminDashboardSnapshot,
   DashboardTone,
 } from "@/lib/admin/dashboard/types";
+import { countPendingHomeworkHiddenFromTutors } from "@/lib/tutoring/homework-review-board";
 import { loadEnrollmentGaps } from "@/lib/admin/load-enrollment-gaps";
 import { loadIncompletePackageChecklists } from "@/lib/admin/load-incomplete-package-checklists";
 import { countPendingCohortChangeRequests } from "@/lib/admin/load-admin-cohort-change-requests";
@@ -221,6 +222,7 @@ export async function loadAdminDashboard(
     unseenAppOnboarding,
     incompleteChecklists,
     recordings,
+    hiddenHomework,
   ] = await Promise.all([
     loadCohortOpsIssues(supabase),
     loadPendingCohortSwitchRequestCreatedAts(supabase),
@@ -233,6 +235,12 @@ export async function loadAdminDashboard(
     loadUnseenAppOnboarding(supabase),
     loadIncompletePackageChecklists(supabase),
     loadMissingRecordingsCard(supabase),
+    countPendingHomeworkHiddenFromTutors(supabase)
+      .then((count) => ({ count, error: undefined as string | undefined }))
+      .catch((error: unknown) => ({
+        count: 0,
+        error: error instanceof Error ? error.message : "Could not count hidden homework.",
+      })),
   ]);
 
   const { setup, integrity } = cohortOpsCards(cohortOps.issues, cohortOps.error, nowMs);
@@ -318,6 +326,15 @@ export async function loadAdminDashboard(
       group: "enrollment",
     },
     recordings.card,
+    {
+      id: "hidden_homework",
+      label: "Homework missing from tutor review",
+      hint: "Pending submissions no tutor screen would show",
+      href: "/admin",
+      count: hiddenHomework.count,
+      tone: hiddenHomework.count > 0 ? "urgent" : "ok",
+      group: "ops",
+    },
     integrity.card,
   ];
 
@@ -333,6 +350,7 @@ export async function loadAdminDashboard(
     unseenAppOnboarding.error,
     incompleteChecklists.error,
     recordings.error,
+    hiddenHomework.error,
   ].filter(Boolean);
 
   return {

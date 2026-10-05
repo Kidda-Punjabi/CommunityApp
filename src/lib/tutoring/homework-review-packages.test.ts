@@ -8,6 +8,7 @@ import {
   encodeHomeworkPackageId,
   homeworkEnrollmentActorId,
   homeworkLessonWeekLabel,
+  homeworkReviewPackagesForTutor,
   isGroupCohortEnrollment,
   occupiedActorCourseKeysFromCohorts,
   parseHomeworkPackageId,
@@ -216,6 +217,31 @@ describe("assignPendingToPackages counts", () => {
     assert.equal(counts.byPackage[privateId], 2);
     assert.equal(counts.byLesson[`${cohortId}:l1`], 2);
     assert.equal(assignments.some((row) => row.submissionId === "orphan"), false);
+  });
+
+  it("keeps a submission on the real cohort when a test class would have matched first", () => {
+    const testId = encodeHomeworkPackageId({ kind: "cohort", id: "test-50" });
+    const practiceId = encodeHomeworkPackageId({ kind: "cohort", id: "practice" });
+    const visible = homeworkReviewPackagesForTutor([
+      {
+        id: testId,
+        name: "TEST - Cohort 50 writeback (archived)",
+        students: [{ studentId: "gurupma" }],
+        lessons: [{ id: "week-3" }],
+      },
+      {
+        id: practiceId,
+        name: "Practice Cohort",
+        students: [{ studentId: "gurupma" }],
+        lessons: [{ id: "week-3" }],
+      },
+    ]);
+    const assignments = assignPendingToPackages(visible, [
+      { id: "week-3-voice", studentId: "gurupma", lessonId: "week-3" },
+    ]);
+    assert.equal(visible.some((pack) => pack.id === testId), false);
+    assert.equal(assignments.length, 1);
+    assert.equal(assignments[0]?.packageId, practiceId);
   });
 });
 
