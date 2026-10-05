@@ -10,6 +10,7 @@ import {
   isFoundationalCourse,
   suggestNextLesson,
 } from "@/lib/tutoring/log-lesson-copy";
+import { packageNameMatchesStudent } from "@/lib/tutoring/tutor-class-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type LogRosterPerson = {
@@ -297,31 +298,33 @@ export async function loadLogLessonCatalog(
         .neq("status", "withdrawn")
     : { data: [] as Array<{ user_id: string; package_instance_id: string; status: string }> };
 
+  const { data: enrollmentRows } = await reader
+    .from("course_enrollments")
+    .select("user_id, course_id, tutor_id, kid_profile_id, delivery_mode")
+    .eq("tutor_id", tutorId)
+    .or("delivery_mode.is.null,delivery_mode.eq.one_to_one");
+  const enrollments = (enrollmentRows ?? []) as Array<{
+    user_id: string;
+    course_id: string;
+    tutor_id: string;
+    kid_profile_id: string | null;
+    delivery_mode: string | null;
+  }>;
   const parentIds = [
-    ...new Set((studentPackageRows ?? []).map((row) => row.user_id).filter(Boolean)),
+    ...new Set(
+      [...(studentPackageRows ?? []).map((row) => row.user_id), ...enrollments.map((row) => row.user_id)].filter(
+        (id): id is string => Boolean(id)
+      )
+    ),
   ];
-  const [{ data: profiles }, { data: enrollments }] = await Promise.all([
-    parentIds.length
-      ? reader.from("profiles").select("id, full_name, preferred_name").in("id", parentIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null; preferred_name: string | null }> }),
-    parentIds.length
-      ? reader
-          .from("course_enrollments")
-          .select("user_id, course_id, tutor_id, kid_profile_id, delivery_mode")
-          .in("user_id", parentIds)
-          .eq("tutor_id", tutorId)
-      : Promise.resolve({
-          data: [] as Array<{
-            user_id: string;
-            course_id: string;
-            tutor_id: string;
-            kid_profile_id: string | null;
-            delivery_mode: string | null;
-          }>,
-        }),
-  ]);
+  const { data: profiles } = parentIds.length
+    ? await reader.from("profiles").select("id, full_name, preferred_name").in("id", parentIds)
+    : { data: [] as Array<{ id: string; full_name: string | null; preferred_name: string | null }> };
   const profileName = new Map(
     (profiles ?? []).map((profile) => [profile.id, getDisplayName(profile) ?? ""] as const)
+  );
+  const profileFullName = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile.full_name?.trim() || getDisplayName(profile) || ""] as const)
   );
   const kidIds = [
     ...new Set(
@@ -336,12 +339,25 @@ export async function loadLogLessonCatalog(
   const kidName = new Map((kids ?? []).map((kid) => [kid.id, kid.name?.trim() ?? ""] as const));
 
   const students: LogStudentOption[] = [];
+  const assignedUserIds = new Set<string>();
   for (const instance of oneToOneInstances) {
     const links = (studentPackageRows ?? []).filter((row) => row.package_instance_id === instance.id);
-    if (links.length !== 1) continue;
-    const parentId = links[0]!.user_id;
     const courseId = instance.course_id as string;
-    const enrollment = (enrollments ?? []).find(
+    let parentId = links.length === 1 ? links[0]!.user_id : null;
+    if (!parentId && links.length === 0) {
+      const matches = enrollments.filter((row) => {
+        if (row.course_id !== courseId || row.delivery_mode === "group") return false;
+        if (assignedUserIds.has(row.user_id)) return false;
+        const studentName = row.kid_profile_id
+          ? kidName.get(row.kid_profile_id) || ""
+          : profileFullName.get(row.user_id) || "";
+        return packageNameMatchesStudent(instance.name as string, studentName);
+      });
+      if (matches.length === 1) parentId = matches[0]!.user_id;
+    }
+    if (!parentId) continue;
+    assignedUserIds.add(parentId);
+    const enrollment = enrollments.find(
       (row) =>
         row.user_id === parentId &&
         row.course_id === courseId &&
