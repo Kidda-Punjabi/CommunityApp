@@ -3,6 +3,8 @@ import { ContinueAsUserCard } from "@/components/auth/continue-as-user-card";
 import { UseAnotherAccountButton } from "@/components/auth/use-another-account-button";
 import { getContinueAsUser } from "@/lib/auth/continue-as-user";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { planRedirect } from "@/lib/navigation/redirect-guard";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { LoginForm } from "./login-form";
 
@@ -15,7 +17,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const continueAs = await getContinueAsUser();
 
   if (continueAs?.sessionActive) {
-    redirect(safeNextPath(next));
+    const pathname = (await headers()).get("x-pathname") || "/login";
+    const destination = planRedirect({
+      currentPath: pathname,
+      destination: safeNextPath(next),
+      redirectsAlreadyIssued: 0,
+    });
+    if (destination) redirect(destination);
   }
 
   const rememberedEmail = continueAs?.email ?? emailParam?.trim() ?? "";

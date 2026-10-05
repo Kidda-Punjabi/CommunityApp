@@ -18,10 +18,25 @@ import {
 } from "@/lib/referrals/constants";
 import { isKidBlockedCommunityPath } from "@/lib/kids/community-block";
 import { KID_PROFILE_COOKIE } from "@/lib/kids/constants";
+import { planRedirect } from "@/lib/navigation/redirect-guard";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const POST_AUTH_PATH = "/dashboard/learn";
+
+function redirectTo(request: NextRequest, pathname: string, issued: { count: number }) {
+  const next = planRedirect({
+    currentPath: request.nextUrl.pathname,
+    destination: pathname,
+    redirectsAlreadyIssued: issued.count,
+  });
+  if (!next) return null;
+  issued.count += 1;
+  const url = request.nextUrl.clone();
+  url.pathname = next;
+  url.search = "";
+  return NextResponse.redirect(url);
+}
 
 export async function updateSession(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
@@ -142,16 +157,17 @@ export async function updateSession(request: NextRequest) {
       request.nextUrl.pathname === "/login" ||
       request.nextUrl.pathname === "/signup")
   ) {
-    const url = request.nextUrl.clone();
-    url.pathname = safeNextPath(request.nextUrl.searchParams.get("next"));
-    url.search = "";
-    return NextResponse.redirect(url);
+    const response = redirectTo(
+      request,
+      safeNextPath(request.nextUrl.searchParams.get("next")),
+      { count: 0 }
+    );
+    if (response) return response;
   }
 
   if (request.nextUrl.pathname === "/dashboard") {
-    const url = request.nextUrl.clone();
-    url.pathname = POST_AUTH_PATH;
-    return NextResponse.redirect(url);
+    const response = redirectTo(request, POST_AUTH_PATH, { count: 0 });
+    if (response) return response;
   }
 
   if (request.nextUrl.pathname.startsWith("/admin")) {
@@ -162,13 +178,13 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  const redirects = { count: 0 };
+
   if (user && isKidBlockedCommunityPath(request.nextUrl.pathname)) {
     const kidCookie = request.cookies.get(KID_PROFILE_COOKIE)?.value?.trim();
     if (kidCookie) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard/learn";
-      url.search = "";
-      return NextResponse.redirect(url);
+      const response = redirectTo(request, POST_AUTH_PATH, redirects);
+      if (response) return response;
     }
   }
 
@@ -181,10 +197,8 @@ export async function updateSession(request: NextRequest) {
   ) {
     const kidCookie = request.cookies.get(KID_PROFILE_COOKIE)?.value?.trim();
     if (kidCookie) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard/learn";
-      url.search = "";
-      return NextResponse.redirect(url);
+      const response = redirectTo(request, POST_AUTH_PATH, redirects);
+      if (response) return response;
     }
   }
 

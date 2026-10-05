@@ -24,7 +24,19 @@ import { loadParentEntryFacts } from "@/lib/kids/load-parent-entry";
 import { decideParentEntry } from "@/lib/kids/parent-entry";
 import { loadKidSession } from "@/lib/kids/session";
 import { isKidProfilePickerPath, KID_PROFILE_PICKER_PATH, usesKidsShell } from "@/lib/kids/constants";
+import { planRedirect } from "@/lib/navigation/redirect-guard";
 import { ui } from "@/lib/ui/styles";
+
+function redirectIfMoved(currentPath: string, destination: string, issued: { count: number }) {
+  const next = planRedirect({
+    currentPath,
+    destination,
+    redirectsAlreadyIssued: issued.count,
+  });
+  if (!next) return;
+  issued.count += 1;
+  redirect(next);
+}
 
 export default async function DashboardLayout({
   children,
@@ -54,6 +66,7 @@ export default async function DashboardLayout({
   const isPickerScreen = isKidProfilePickerPath(pathname);
   const isWhoIsLearningFlow =
     isPickerScreen || pathname.startsWith("/dashboard/profile/kids/");
+  const redirects = { count: 0 };
   if (
     !kid &&
     onboarding.hasSeenOnboarding &&
@@ -70,8 +83,8 @@ export default async function DashboardLayout({
       activeKidProfileId: null,
       viewAsActive: false,
     });
-    if (entry === "enter-kid") redirect("/api/kids/enter-default");
-    if (entry === "picker") redirect(KID_PROFILE_PICKER_PATH);
+    if (entry === "enter-kid") redirectIfMoved(pathname, "/api/kids/enter-default", redirects);
+    if (entry === "picker") redirectIfMoved(pathname, KID_PROFILE_PICKER_PATH, redirects);
   }
 
   const shouldPickWhoIsLearning =
@@ -83,7 +96,7 @@ export default async function DashboardLayout({
     !access.viewAs?.active;
 
   if (shouldPickWhoIsLearning) {
-    redirect(KID_PROFILE_PICKER_PATH);
+    redirectIfMoved(pathname, KID_PROFILE_PICKER_PATH, redirects);
   }
 
   const isFirstRunPicker = isPickerScreen && !kidSession.pickedWhoThisSession;
@@ -103,7 +116,7 @@ export default async function DashboardLayout({
         hasSeenOnboarding={onboarding.hasSeenOnboarding}
         hasSeenAppTour={onboarding.hasSeenAppTour}
         pendingCourseTours={pendingCourseTours}
-        kidsShellActive={kidsShellActive}
+        kidSessionActive={Boolean(kid)}
       >
         <KidSessionProvider
           activeKidProfile={kid}

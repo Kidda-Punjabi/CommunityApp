@@ -20,6 +20,7 @@ import {
   runAppTour,
   runCourseResourceTourQueue,
 } from "@/lib/tours/driver-tours";
+import { planRedirect } from "@/lib/navigation/redirect-guard";
 import {
   learnTileTourSelector,
   type CourseTourTarget,
@@ -48,11 +49,14 @@ export function useAppTours() {
   return ctx;
 }
 
+const LEARN_HUB_PATH = "/dashboard/learn";
+
 type TourProviderProps = {
   hasSeenOnboarding: boolean;
   hasSeenAppTour: boolean;
   pendingCourseTours: CourseTourTarget[];
-  kidsShellActive: boolean;
+  /** Little-kids shell or any active kid session: do not pull them to the adult Learn hub. */
+  kidSessionActive: boolean;
   children: React.ReactNode;
 };
 
@@ -125,19 +129,20 @@ export function TourProvider({
   hasSeenOnboarding,
   hasSeenAppTour,
   pendingCourseTours,
-  kidsShellActive,
+  kidSessionActive,
   children,
 }: TourProviderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const runningRef = useRef(false);
   const bootstrappedRef = useRef(false);
+  const forcedNavCount = useRef(0);
   const pendingCoursesRef = useRef(pendingCourseTours);
   pendingCoursesRef.current = pendingCourseTours;
   const [previewNotice, setPreviewNotice] = useState<string | null>(null);
 
   const ensureLearnHub = useCallback(async (): Promise<boolean> => {
-    if (window.location.pathname === "/dashboard/learn") {
+    if (window.location.pathname === LEARN_HUB_PATH) {
       const ready = await waitForSelector(
         '[data-tour="learn-tile-foundational"], [data-tour="learn-tile-beginners"], [data-tour="learn-tile-community"]',
         5000
@@ -145,11 +150,18 @@ export function TourProvider({
       return Boolean(ready);
     }
 
-    // Soft navigate first.
-    router.push("/dashboard/learn");
+    const next = planRedirect({
+      currentPath: window.location.pathname,
+      destination: LEARN_HUB_PATH,
+      redirectsAlreadyIssued: forcedNavCount.current,
+    });
+    if (!next) return false;
+
+    forcedNavCount.current += 1;
+    router.push(next);
     const start = Date.now();
     while (Date.now() - start < 2500) {
-      if (window.location.pathname === "/dashboard/learn") {
+      if (window.location.pathname === LEARN_HUB_PATH) {
         const ready = await waitForSelector(
           '[data-tour="learn-tile-foundational"], [data-tour="learn-tile-beginners"], [data-tour="learn-tile-community"]',
           5000
@@ -167,8 +179,18 @@ export function TourProvider({
 
       const onLearn = await ensureLearnHub();
       if (!onLearn) {
+        const next = planRedirect({
+          currentPath: window.location.pathname,
+          destination: LEARN_HUB_PATH,
+          redirectsAlreadyIssued: forcedNavCount.current,
+        });
+        if (!next) {
+          writeStoredCourseQueue(null);
+          return;
+        }
+        forcedNavCount.current += 1;
         writeStoredCourseQueue({ targets, persist });
-        window.location.assign("/dashboard/learn");
+        window.location.assign(next);
         return;
       }
 
@@ -237,7 +259,7 @@ export function TourProvider({
       courseTargets: CourseTourTarget[];
       persistCourseTours: boolean;
     }) => {
-      if (runningRef.current || kidsShellActive) return;
+      if (runningRef.current || kidSessionActive) return;
       if (
         pathname.startsWith("/dashboard/tutor") ||
         pathname.startsWith("/dashboard/kids") ||
@@ -281,12 +303,12 @@ export function TourProvider({
         runningRef.current = false;
       }
     },
-    [kidsShellActive, pathname, runCourseQueue]
+    [kidSessionActive, pathname, runCourseQueue]
   );
 
   // Resume hard-nav course queue on Learn.
   useEffect(() => {
-    if (kidsShellActive) return;
+    if (kidSessionActive) return;
     if (pathname !== "/dashboard/learn") return;
     const stored = readStoredCourseQueue();
     if (!stored?.targets.length) return;
@@ -304,11 +326,11 @@ export function TourProvider({
       });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [kidsShellActive, pathname, runSequencedTours]);
+  }, [kidSessionActive, pathname, runSequencedTours]);
 
   // Real triggers on load: Part 1 (if due) then Part 2.
   useEffect(() => {
-    if (bootstrappedRef.current || kidsShellActive) return;
+    if (bootstrappedRef.current || kidSessionActive) return;
     if (!hasSeenOnboarding) return;
     if (pathname.startsWith("/dashboard/placement")) return;
     // Let the resume effect own Learn when a stored queue exists.
@@ -339,7 +361,7 @@ export function TourProvider({
   }, [
     hasSeenOnboarding,
     hasSeenAppTour,
-    kidsShellActive,
+    kidSessionActive,
     pathname,
     runSequencedTours,
   ]);
@@ -392,7 +414,14 @@ export function TourProvider({
     const onLearn =
       window.location.pathname === "/dashboard/learn" ||
       (await (async () => {
-        router.push("/dashboard/learn");
+        const next = planRedirect({
+          currentPath: window.location.pathname,
+          destination: LEARN_HUB_PATH,
+          redirectsAlreadyIssued: forcedNavCount.current,
+        });
+        if (!next) return false;
+        forcedNavCount.current += 1;
+        router.push(next);
         const start = Date.now();
         while (Date.now() - start < 3000) {
           if (window.location.pathname === "/dashboard/learn") return true;
@@ -402,8 +431,15 @@ export function TourProvider({
       })());
 
     if (!onLearn) {
+      const next = planRedirect({
+        currentPath: window.location.pathname,
+        destination: LEARN_HUB_PATH,
+        redirectsAlreadyIssued: forcedNavCount.current,
+      });
+      if (!next) return null;
+      forcedNavCount.current += 1;
       writeStoredCourseQueue({ targets: result.targets, persist: false });
-      window.location.assign("/dashboard/learn");
+      window.location.assign(next);
       return null;
     }
 

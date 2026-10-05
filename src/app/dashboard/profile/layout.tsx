@@ -1,6 +1,7 @@
 import { isKidProfilePickerPath } from "@/lib/kids/constants";
 import { kidHomeHref } from "@/lib/kids/load-kid-content";
 import { loadKidSession } from "@/lib/kids/session";
+import { planRedirect } from "@/lib/navigation/redirect-guard";
 import { createClient } from "@/lib/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -24,7 +25,12 @@ export default async function ProfileSectionLayout({
 
   const session = await loadKidSession(user.id);
   if (session.activeKidProfile && !isProfileSwitcher) {
-    redirect(kidHomeHref(session.activeKidProfile.age_tier));
+    const next = planRedirect({
+      currentPath: pathname,
+      destination: kidHomeHref(session.activeKidProfile.age_tier),
+      redirectsAlreadyIssued: 0,
+    });
+    if (next) redirect(next);
   }
 
   return children;

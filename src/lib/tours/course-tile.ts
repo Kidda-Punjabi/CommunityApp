@@ -21,6 +21,21 @@ export function learnTileTourSelector(tileId: LearnTourTileId): string {
   return `[data-tour="learn-tile-${tileId}"]`;
 }
 
+/**
+ * Kids-track grants are not Learn-hub tiles. A private kids course otherwise
+ * resolves to the English tile, which the kid home does not render.
+ */
+export function shouldOfferCourseResourceTour(course: {
+  content_track?: string | null;
+  is_home_course?: boolean | null;
+}): boolean {
+  if (course.content_track === "kids") return false;
+  if (course.content_track === "learn_english" && course.is_home_course === false) {
+    return false;
+  }
+  return true;
+}
+
 export function resolveLearnTourTileId(course: CourseTierSource): LearnTourTileId | null {
   if (isPrivateCourseTier(course.required_tier) || course.is_public === false) {
     return "english";

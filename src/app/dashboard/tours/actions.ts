@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import {
   dedupeTargetsByTile,
   resolveLearnTourTileId,
+  shouldOfferCourseResourceTour,
   sortCourseTourTargets,
   type CourseTourTarget,
 } from "@/lib/tours/course-tile";
@@ -57,10 +58,11 @@ export async function loadPendingCourseResourceTours(
     if (seen.has(courseId)) continue;
     const course = courseById.get(courseId);
     if (!course) continue;
-    // Learn-tab English courses aren't Punjabi Learn hub tiles — don't queue tours for them.
     if (
-      course.content_track === "learn_english" &&
-      course.is_home_course === false
+      !shouldOfferCourseResourceTour({
+        content_track: course.content_track as string | null,
+        is_home_course: course.is_home_course as boolean | null,
+      })
     ) {
       continue;
     }
@@ -114,8 +116,10 @@ export async function loadPreviewCourseResourceTours(): Promise<{
     const course = courseById.get(courseId);
     if (!course) continue;
     if (
-      course.content_track === "learn_english" &&
-      course.is_home_course === false
+      !shouldOfferCourseResourceTour({
+        content_track: course.content_track as string | null,
+        is_home_course: course.is_home_course as boolean | null,
+      })
     ) {
       continue;
     }

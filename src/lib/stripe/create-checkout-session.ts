@@ -6,6 +6,7 @@ import {
   resolveCheckoutPriceId,
   resolvePaymentLinkForCheckout,
 } from "@/lib/products/checkout";
+import { customerIdsFromMemberships } from "@/lib/stripe/billing-memberships";
 import { getAppUrl, getStripe } from "@/lib/stripe/server";
 import { createClient } from "@/lib/supabase/server";
 import { isGroupPackageCheckoutKey } from "@/lib/group-purchase/checkout-keys";
@@ -29,13 +30,12 @@ async function resolveStripeCustomerId(userId: string, email: string): Promise<s
   const stripe = getStripe();
   const supabase = await createClient();
 
-  const { data: profile } = await supabase
-    .from("profiles")
+  const { data: memberships } = await supabase
+    .from("memberships")
     .select("stripe_customer_id")
-    .eq("id", userId)
-    .single();
+    .eq("user_id", userId);
 
-  let customerId = profile?.stripe_customer_id ?? null;
+  let customerId = customerIdsFromMemberships(memberships ?? [])[0] ?? null;
 
   if (!customerId) {
     const existing = await stripe.customers.list({ email, limit: 1 });
@@ -48,11 +48,6 @@ async function resolveStripeCustomerId(userId: string, email: string): Promise<s
       });
       customerId = customer.id;
     }
-
-    await supabase
-      .from("profiles")
-      .update({ stripe_customer_id: customerId })
-      .eq("id", userId);
   }
 
   return customerId;

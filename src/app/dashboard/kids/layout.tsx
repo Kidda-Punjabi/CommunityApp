@@ -1,7 +1,9 @@
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { loadKidSession } from "@/lib/kids/session";
-import { usesKidsShell } from "@/lib/kids/constants";
+import { KID_PROFILE_PICKER_PATH, usesKidsShell } from "@/lib/kids/constants";
+import { planRedirect } from "@/lib/navigation/redirect-guard";
 import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export default async function KidsLayout({ children }: { children: React.ReactNode }) {
@@ -16,7 +18,13 @@ export default async function KidsLayout({ children }: { children: React.ReactNo
   const kid = session.activeKidProfile;
 
   if (!kid || !usesKidsShell(kid.age_tier)) {
-    redirect("/dashboard/profile/kids");
+    const pathname = (await headers()).get("x-pathname") || "/dashboard/kids";
+    const next = planRedirect({
+      currentPath: pathname,
+      destination: KID_PROFILE_PICKER_PATH,
+      redirectsAlreadyIssued: 0,
+    });
+    if (next) redirect(next);
   }
 
   return (

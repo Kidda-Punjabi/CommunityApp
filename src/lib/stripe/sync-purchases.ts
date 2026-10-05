@@ -1,5 +1,6 @@
 import type { PaidCourseTier } from "@/lib/membership/access";
 import { courseIdsForTiers, fetchCourses } from "@/lib/membership/courses";
+import { customerIdsFromMemberships } from "@/lib/stripe/billing-memberships";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { tierFromStripeIds } from "./products";
 import { getStripe } from "./server";
@@ -195,7 +196,7 @@ export async function findUserIdByEmail(email: string): Promise<string | null> {
 export async function grantCoursesToUser(
   userId: string,
   purchasedTiers: PaidCourseTier[],
-  stripeCustomerId: string | null
+  _stripeCustomerId: string | null
 ) {
   const uniqueTiers = [...new Set(purchasedTiers)];
   if (!uniqueTiers.length) {
@@ -229,13 +230,6 @@ export async function grantCoursesToUser(
     { onConflict: "user_id,course_tier" }
   );
 
-  if (stripeCustomerId) {
-    await supabase
-      .from("profiles")
-      .update({ stripe_customer_id: stripeCustomerId })
-      .eq("id", userId);
-  }
-
   return { updated: true, unlockedTiers: uniqueTiers };
 }
 
@@ -251,17 +245,13 @@ export async function syncStripePurchasesForUser(userId: string, email: string) 
   const purchases: PurchaseForStudentPackage[] = [];
   let primaryCustomerId: string | null = null;
 
-  const { data: profile } = await supabase
-    .from("profiles")
+  const { data: memberships } = await supabase
+    .from("memberships")
     .select("stripe_customer_id")
-    .eq("id", userId)
-    .single();
+    .eq("user_id", userId);
 
-  const customerIds = new Set<string>();
-  if (profile?.stripe_customer_id) {
-    customerIds.add(profile.stripe_customer_id);
-    primaryCustomerId = profile.stripe_customer_id;
-  }
+  const customerIds = new Set(customerIdsFromMemberships(memberships ?? []));
+  primaryCustomerId = customerIds.values().next().value ?? null;
 
   const customers = await stripe.customers.list({ email, limit: 10 });
   for (const customer of customers.data) {
