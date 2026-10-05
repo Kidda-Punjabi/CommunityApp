@@ -92,6 +92,7 @@ export default async function DashboardLayout({
   }
 
   const parentInitial = (user.email?.trim().charAt(0) ?? "P").toUpperCase();
+  const tutorShell = pathname.startsWith("/dashboard/tutor");
 
   return (
     <FirstRunProvider
@@ -120,7 +121,9 @@ export default async function DashboardLayout({
                   className={`flex min-h-dvh flex-1 flex-col ${
                     kidsShellActive
                       ? "bg-gradient-to-b from-sky-100 via-violet-50 to-amber-50"
-                      : ui.pageBg
+                      : tutorShell
+                        ? "overflow-x-clip bg-violet-50/40"
+                        : ui.pageBg
                   }`}
                 >
                   <ActivityDateSync />
@@ -130,7 +133,9 @@ export default async function DashboardLayout({
                     className={
                       kidsShellActive
                         ? `relative isolate flex w-full flex-1 flex-col ${ui.navClearance}`
-                        : `relative isolate mx-auto flex w-full max-w-lg flex-1 flex-col ${ui.pageBg} ${ui.navClearance}`
+                        : `relative isolate mx-auto flex w-full max-w-lg flex-1 flex-col ${
+                          tutorShell ? "" : ui.pageBg
+                        } ${ui.navClearance}`
                     }
                   >
                     {children}

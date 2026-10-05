@@ -9,7 +9,7 @@ export function TutorAdminPanelBar() {
   if (pathname === "/dashboard/tutor") return null;
 
   return (
-    <div className="border-b border-violet-200/60 bg-white/90">
+    <div className="relative left-1/2 w-dvw -translate-x-1/2 border-b border-violet-200/60 bg-white">
       <div className="mx-auto flex max-w-lg justify-end px-5 py-2.5">
         <TutorAdminPanelBarLink />
       </div>

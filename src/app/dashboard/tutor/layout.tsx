@@ -29,7 +29,7 @@ export default async function TutorLayout({
   ]);
 
   return (
-    <div className={`flex min-h-0 flex-1 flex-col bg-violet-50/40 ${ui.navClearance}`}>
+    <div className={`flex min-h-0 flex-1 flex-col ${ui.navClearance}`}>
       {setupStatus.showPrompt ? <TutorSetupBanner /> : null}
       {showAdminPanel ? <TutorAdminPanelBar /> : null}
       {children}

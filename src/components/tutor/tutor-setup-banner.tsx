@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function TutorSetupBanner() {
   return (
-    <div className="border-b border-violet-200/70 bg-violet-600">
+    <div className="relative left-1/2 w-dvw -translate-x-1/2 border-b border-violet-200/70 bg-violet-600">
       <Link
         href="/dashboard/tutor/setup"
         className="mx-auto flex max-w-lg items-center justify-between gap-3 px-5 py-3 text-sm text-white transition-colors hover:bg-violet-500/90"
