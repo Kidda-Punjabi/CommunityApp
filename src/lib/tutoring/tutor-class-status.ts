@@ -40,6 +40,13 @@ export function classTypePill(options: {
   return `1-1 · ${course}`;
 }
 
+/** Package titles often start with a short form of the student name, such as "Arsh - Foundational". */
+export function packageNameMatchesStudent(packageName: string, studentName: string): boolean {
+  const token = packageName.trim().toLowerCase().split(/[\s-]+/)[0] ?? "";
+  const student = studentName.trim().toLowerCase();
+  return token.length >= 3 && student.startsWith(token);
+}
+
 export function lowestLessonNumber(
   lessons: Array<{ lessonNumber: number; flagged: boolean }>
 ): number | null {

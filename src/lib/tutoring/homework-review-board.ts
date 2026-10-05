@@ -1,4 +1,5 @@
 import { getStaffFacingName } from "@/lib/profile/display-name";
+import { isTestClassName } from "@/lib/tutoring/log-lesson-copy";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { loadCohortMembershipRoster } from "@/lib/tutoring/cohort-attendance";
 import {
@@ -456,8 +457,13 @@ export async function loadHomeworkReviewBoard(
   const reviewedSubmissions = await loadReviewedPlaybacksForActors(supabase, actorIds);
 
   const packages = withLessons
-    .filter((pack) => pack.students.length > 0)
+    .filter((pack) => pack.students.length > 0 && !isTestClassName(pack.name))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const packageIds = new Set(packages.map((pack) => pack.id));
 
-  return { packages, pendingSubmissions, reviewedSubmissions };
+  return {
+    packages,
+    pendingSubmissions: pendingSubmissions.filter((row) => packageIds.has(row.packageId)),
+    reviewedSubmissions,
+  };
 }

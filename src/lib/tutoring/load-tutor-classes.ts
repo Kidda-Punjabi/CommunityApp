@@ -13,7 +13,13 @@ import {
   lessonSlotLabel,
   suggestNextLesson,
 } from "@/lib/tutoring/log-lesson-copy";
-import { classIssue, classTypePill, lowestLessonNumber, type ClassIssue } from "@/lib/tutoring/tutor-class-status";
+import {
+  classIssue,
+  classTypePill,
+  lowestLessonNumber,
+  packageNameMatchesStudent,
+  type ClassIssue,
+} from "@/lib/tutoring/tutor-class-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type TutorClassCard = {
@@ -170,28 +176,32 @@ export async function loadTutorClassBoard(
         .neq("status", "withdrawn")
     : { data: [] as Array<{ user_id: string; package_instance_id: string }> };
 
-  const parentIds = [...new Set((studentPackageRows ?? []).map((row) => row.user_id).filter(Boolean))];
-  const [{ data: profiles }, { data: enrollments }] = await Promise.all([
-    parentIds.length
-      ? reader.from("profiles").select("id, full_name, preferred_name").in("id", parentIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null; preferred_name: string | null }> }),
-    parentIds.length
-      ? reader
-          .from("course_enrollments")
-          .select("user_id, course_id, kid_profile_id, delivery_mode")
-          .in("user_id", parentIds)
-          .eq("tutor_id", tutorId)
-      : Promise.resolve({
-          data: [] as Array<{
-            user_id: string;
-            course_id: string;
-            kid_profile_id: string | null;
-            delivery_mode: string | null;
-          }>,
-        }),
-  ]);
+  const { data: enrollmentRows } = await reader
+    .from("course_enrollments")
+    .select("user_id, course_id, kid_profile_id, delivery_mode")
+    .eq("tutor_id", tutorId)
+    .or("delivery_mode.is.null,delivery_mode.eq.one_to_one");
+  const enrollments = (enrollmentRows ?? []) as Array<{
+    user_id: string;
+    course_id: string;
+    kid_profile_id: string | null;
+    delivery_mode: string | null;
+  }>;
+  const parentIds = [
+    ...new Set(
+      [...(studentPackageRows ?? []).map((row) => row.user_id), ...enrollments.map((row) => row.user_id)].filter(
+        (id): id is string => Boolean(id)
+      )
+    ),
+  ];
+  const { data: profiles } = parentIds.length
+    ? await reader.from("profiles").select("id, full_name, preferred_name").in("id", parentIds)
+    : { data: [] as Array<{ id: string; full_name: string | null; preferred_name: string | null }> };
   const profileName = new Map(
     (profiles ?? []).map((profile) => [profile.id, getDisplayName(profile) ?? ""] as const)
+  );
+  const profileFullName = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile.full_name?.trim() || getDisplayName(profile) || ""] as const)
   );
   const kidIds = [
     ...new Set((enrollments ?? []).map((row) => row.kid_profile_id).filter((id): id is string => Boolean(id))),
@@ -269,6 +279,32 @@ export async function loadTutorClassBoard(
         name,
         kind: kidProfileId ? "kid" : "student",
       },
+    ]);
+  }
+
+  const assignedUserIds = new Set(
+    (studentPackageRows ?? [])
+      .filter((row) => peopleByPackage.has(row.package_instance_id))
+      .map((row) => row.user_id)
+  );
+  for (const instance of oneToOne) {
+    if (peopleByPackage.has(instance.id as string)) continue;
+    const matches = enrollments.filter((row) => {
+      if (row.course_id !== instance.course_id || row.delivery_mode === "group") return false;
+      if (assignedUserIds.has(row.user_id)) return false;
+      const studentName = row.kid_profile_id
+        ? kidName.get(row.kid_profile_id) || ""
+        : profileFullName.get(row.user_id) || "";
+      return packageNameMatchesStudent(instance.name as string, studentName);
+    });
+    if (matches.length !== 1) continue;
+    const match = matches[0]!;
+    const kidProfileId = match.kid_profile_id;
+    const name = kidProfileId ? kidName.get(kidProfileId) || "" : profileName.get(match.user_id) || "";
+    if (!name) continue;
+    assignedUserIds.add(match.user_id);
+    peopleByPackage.set(instance.id as string, [
+      { id: kidProfileId ?? match.user_id, name, kind: kidProfileId ? "kid" : "student" },
     ]);
   }
 
@@ -703,14 +739,29 @@ export async function loadPackageClassDetail(
   if (isTestClassName(teaching.name) || (!isActiveTeachingClass(teaching) && !isFinishedTeachingClass(teaching))) {
     return null;
   }
-  const { data: link } = await reader
+  const { data: links } = await reader
     .from("student_packages")
     .select("user_id")
     .eq("package_instance_id", packageInstanceId)
-    .neq("status", "withdrawn")
-    .limit(1)
-    .maybeSingle();
-  const parentId = (link?.user_id as string | null) ?? null;
+    .neq("status", "withdrawn");
+  let parentId = (links ?? []).length === 1 ? ((links?.[0]?.user_id as string | null) ?? null) : null;
+  if (!parentId) {
+    const { data: courseEnrollments } = await reader
+      .from("course_enrollments")
+      .select("user_id, kid_profile_id, delivery_mode, profiles(full_name, preferred_name)")
+      .eq("tutor_id", tutorId)
+      .eq("course_id", instance.course_id)
+      .or("delivery_mode.is.null,delivery_mode.eq.one_to_one");
+    const matches = (courseEnrollments ?? []).filter((row) => {
+      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      const studentName =
+        (profile as { full_name?: string | null } | null)?.full_name?.trim() ||
+        getDisplayName(profile as { full_name?: string | null; preferred_name?: string | null } | null) ||
+        "";
+      return packageNameMatchesStudent(instance.name as string, studentName);
+    });
+    if (matches.length === 1) parentId = (matches[0]?.user_id as string | null) ?? null;
+  }
   if (!parentId) return null;
   const [{ data: profile }, { data: enrollment }, { data: logRows }] = await Promise.all([
     reader.from("profiles").select("id, full_name, preferred_name").eq("id", parentId).maybeSingle(),

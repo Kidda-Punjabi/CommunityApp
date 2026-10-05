@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isFinishedTeachingClass } from "./log-lesson-copy";
-import { classIssue, classTypePill, lowestLessonNumber } from "./tutor-class-status";
+import { classIssue, classTypePill, lowestLessonNumber, packageNameMatchesStudent } from "./tutor-class-status";
 
 test("finished classes exclude test names", () => {
   assert.equal(
@@ -55,4 +55,10 @@ test("pills use the cohort number or the 1-1 course", () => {
     "1-1 · FOUNDATIONAL"
   );
   assert.equal(lowestLessonNumber([{ lessonNumber: 4, flagged: false }, { lessonNumber: 2, flagged: true }]), 2);
+});
+
+test("a package title can match the student when there is no student_packages row", () => {
+  assert.equal(packageNameMatchesStudent("Arsh - Foundational", "Arshdeep Kaur"), true);
+  assert.equal(packageNameMatchesStudent("Conor Joss - Foundational Course", "Conor Joss"), true);
+  assert.equal(packageNameMatchesStudent("Manisha Bhamra - Beginners Course", "Arshdeep Kaur"), false);
 });
