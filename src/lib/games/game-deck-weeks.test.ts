@@ -340,11 +340,13 @@ describe("extra practice and kid courses", () => {
       links: [
         { deckId: "week-deck", lessonId: weekLesson.id, courseId: COMMUNITY },
         { deckId: "master", lessonId: null, courseId: COMMUNITY },
+        { deckId: "animals", lessonId: null, courseId: COMMUNITY },
         { deckId: "week-deck", lessonId: null, courseId: COMMUNITY },
       ],
       sets: [
         set("week-deck", "Vocabulary - Week 1", 1, 20),
         set("master", "Vocabulary - Master List", null, 1292),
+        set("animals", "Vocabulary - Animals", null, 24),
       ],
       unlockedCourseIds: new Set([COMMUNITY]),
       taughtLessonIds: new Set([weekLesson.id]),
@@ -355,6 +357,7 @@ describe("extra practice and kid courses", () => {
       summaries.map((deck) => [deck.weekNumber, deck.setName, deck.lessonTitle]),
       [
         [1, "Vocabulary - Week 1", "Lesson 1"],
+        [null, "Vocabulary - Animals", "Extra practice"],
         [null, "Vocabulary - Master List", "Extra practice"],
       ]
     );
@@ -382,6 +385,28 @@ describe("extra practice and kid courses", () => {
     assert.equal(
       buildGameDeckSummaries({ ...shared, privateCourseIds: new Set([kidsCourse]) }).length,
       1
+    );
+  });
+
+  it("hides course-only decks when the student only has a free lesson on that course", () => {
+    const freeLesson = { ...lesson("community-1", 1, COMMUNITY), isFree: true };
+    const summaries = buildGameDeckSummaries({
+      lessons: [freeLesson],
+      links: [
+        { deckId: "week", lessonId: freeLesson.id, courseId: COMMUNITY },
+        { deckId: "master", lessonId: null, courseId: COMMUNITY },
+      ],
+      sets: [
+        set("week", "Week 1 - Welcome", 1, 14),
+        set("master", "Vocabulary - Master List", null, 1292),
+      ],
+      unlockedCourseIds: new Set(),
+      taughtLessonIds: new Set([freeLesson.id]),
+      englishCourseIds: null,
+    });
+    assert.deepEqual(
+      summaries.map((deck) => deck.deckId),
+      ["week"]
     );
   });
 });

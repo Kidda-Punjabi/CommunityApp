@@ -3,9 +3,8 @@
 import { useMemo, useState } from "react";
 import { DeckSelectList } from "@/components/games/deck-select-list";
 import {
-  GAME_COURSE_LEVELS,
-  type GameCourseLevel,
-  decksForCourseLevel,
+  decksForPickerLevel,
+  gameDeckPickerLevels,
 } from "@/lib/games/course-levels";
 import type { GameDeckSummary } from "@/lib/games/load-game-decks";
 
@@ -24,20 +23,12 @@ export function GameDeckCoursePicker({
   onSelectDeck,
   hideEmptyBackLink = false,
 }: GameDeckCoursePickerProps) {
-  const availableLevels = useMemo(
-    () =>
-      GAME_COURSE_LEVELS.filter((level) =>
-        decks.some((deck) => deck.courseTier === level.tier)
-      ),
-    [decks]
-  );
+  const availableLevels = useMemo(() => gameDeckPickerLevels(decks), [decks]);
 
-  const [level, setLevel] = useState<GameCourseLevel>(
-    availableLevels[0]?.id ?? "foundational"
-  );
+  const [level, setLevel] = useState(availableLevels[0]?.id ?? "foundational");
 
   const filteredDecks = useMemo(
-    () => decksForCourseLevel(decks, level),
+    () => decksForPickerLevel(decks, level),
     [decks, level]
   );
 

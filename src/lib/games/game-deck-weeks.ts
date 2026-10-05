@@ -87,8 +87,9 @@ function weekSortKey(weekNumber: number | null): number {
 }
 
 export function compareGameDecks(a: GameDeckSummary, b: GameDeckSummary): number {
-  const byWeek = weekSortKey(a.weekNumber) - weekSortKey(b.weekNumber);
-  if (byWeek !== 0) return byWeek;
+  const weekA = weekSortKey(a.weekNumber);
+  const weekB = weekSortKey(b.weekNumber);
+  if (weekA !== weekB) return weekA < weekB ? -1 : 1;
   return a.setName.localeCompare(b.setName, undefined, { sensitivity: "base" });
 }
 
@@ -301,6 +302,7 @@ export function buildGameDeckSummaries(input: {
   for (const link of input.links) {
     if (link.lessonId || !link.courseId) continue;
     if (lessonLinkedDeckIds.has(link.deckId)) continue;
+    if (!input.unlockedCourseIds.has(link.courseId)) continue;
     const set = setsById.get(link.deckId);
     if (!set || set.cardCount <= 0) continue;
 
