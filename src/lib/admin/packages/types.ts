@@ -143,6 +143,7 @@ export type PackageSessionLogEntry = {
   curriculumLessonLabel: string | null;
   recordingUrl: string | null;
   isUnlocked: boolean;
+  coverLabel: string | null;
 };
 
 export type OnboardingChecklistRow = {

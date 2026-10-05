@@ -45,6 +45,8 @@ export type LogCohortOption = {
   nextLessonNumber: number | null;
   nextLessonTitle: string | null;
   pinnedNote: LogPinnedNote | null;
+  assignedTutorId: string;
+  assignedTutorName: string;
 };
 
 export type LogStudentOption = {
@@ -62,6 +64,8 @@ export type LogStudentOption = {
   nextLessonNumber: number | null;
   nextLessonTitle: string | null;
   pinnedNote: LogPinnedNote | null;
+  assignedTutorId: string;
+  assignedTutorName: string;
 };
 
 export type LogLessonCatalog = {
@@ -145,21 +149,21 @@ function pinnedNote(
 export async function loadLogLessonCatalog(
   reader: SupabaseClient,
   tutorId: string,
-  options?: { includeTest?: boolean }
+  options?: { includeTest?: boolean; allClasses?: boolean }
 ): Promise<LogLessonCatalog> {
+  const cohortRequest = reader
+    .from("cohorts")
+    .select(
+      "id, name, status, active, course_id, tutor_id, start_day_of_week, weekly_session_start, notion_page_id"
+    );
+  const instanceRequest = reader
+    .from("package_instances")
+    .select(
+      "id, name, status, active, course_id, tutor_id, start_day_of_week, notion_page_id, package_id"
+    );
   const [{ data: cohortRows }, { data: instanceRows }] = await Promise.all([
-    reader
-      .from("cohorts")
-      .select(
-        "id, name, status, active, course_id, tutor_id, start_day_of_week, weekly_session_start, notion_page_id"
-      )
-      .eq("tutor_id", tutorId),
-    reader
-      .from("package_instances")
-      .select(
-        "id, name, status, active, course_id, tutor_id, start_day_of_week, notion_page_id, package_id"
-      )
-      .eq("tutor_id", tutorId),
+    options?.allClasses ? cohortRequest : cohortRequest.eq("tutor_id", tutorId),
+    options?.allClasses ? instanceRequest : instanceRequest.eq("tutor_id", tutorId),
   ]);
 
   const activeCohorts = (cohortRows ?? []).filter((row) =>
@@ -230,6 +234,23 @@ export async function loadLogLessonCatalog(
         : Promise.resolve({ data: [] as Array<{ id: string; delivery_mode: string | null }> }),
     ]);
 
+  const assignedTutorIds = [
+    ...new Set(
+      [...activeCohorts, ...activeInstances]
+        .map((row) => row.tutor_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const { data: tutorProfiles } = assignedTutorIds.length
+    ? await reader
+        .from("profiles")
+        .select("id, full_name, preferred_name")
+        .in("id", assignedTutorIds)
+    : { data: [] as Array<{ id: string; full_name: string | null; preferred_name: string | null }> };
+  const tutorNameById = new Map(
+    (tutorProfiles ?? []).map((profile) => [profile.id, getDisplayName(profile) ?? "Tutor"] as const)
+  );
+
   const courseName = new Map((courseRows ?? []).map((row) => [row.id, row.name] as const));
   const lessonsByCourse = new Map<string, LessonRow[]>();
   for (const lesson of (lessonRows ?? []) as LessonRow[]) {
@@ -279,6 +300,8 @@ export async function loadLogLessonCatalog(
       nextLessonNumber: built.next?.lesson_number ?? null,
       nextLessonTitle: built.next?.title ?? null,
       pinnedNote: pinnedNote(cohortLogs, lessonNumberById),
+      assignedTutorId: (cohort.tutor_id as string) || "",
+      assignedTutorName: tutorNameById.get(cohort.tutor_id as string) ?? "",
     });
   }
 
@@ -298,11 +321,13 @@ export async function loadLogLessonCatalog(
         .neq("status", "withdrawn")
     : { data: [] as Array<{ user_id: string; package_instance_id: string; status: string }> };
 
-  const { data: enrollmentRows } = await reader
+  const enrollmentRequest = reader
     .from("course_enrollments")
     .select("user_id, course_id, tutor_id, kid_profile_id, delivery_mode")
-    .eq("tutor_id", tutorId)
     .or("delivery_mode.is.null,delivery_mode.eq.one_to_one");
+  const { data: enrollmentRows } = options?.allClasses
+    ? await enrollmentRequest
+    : await enrollmentRequest.eq("tutor_id", tutorId);
   const enrollments = (enrollmentRows ?? []) as Array<{
     user_id: string;
     course_id: string;
@@ -346,6 +371,7 @@ export async function loadLogLessonCatalog(
     let parentId = links.length === 1 ? links[0]!.user_id : null;
     if (!parentId && links.length === 0) {
       const matches = enrollments.filter((row) => {
+        if (row.tutor_id !== instance.tutor_id) return false;
         if (row.course_id !== courseId || row.delivery_mode === "group") return false;
         if (assignedUserIds.has(row.user_id)) return false;
         const studentName = row.kid_profile_id
@@ -393,6 +419,8 @@ export async function loadLogLessonCatalog(
       nextLessonNumber: built.next?.lesson_number ?? null,
       nextLessonTitle: built.next?.title ?? null,
       pinnedNote: pinnedNote(instanceLogs, lessonNumberById),
+      assignedTutorId: (instance.tutor_id as string) || "",
+      assignedTutorName: tutorNameById.get(instance.tutor_id as string) ?? "",
     });
   }
 

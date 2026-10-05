@@ -15,6 +15,7 @@ import type { PackageInstanceStatus, PackageMembershipStatus } from "@/lib/admin
 import { fetchCommunityPackageProduct } from "@/lib/admin/community-package";
 import { loadCohortLessonProgressMap } from "@/lib/lessons/load-lesson-log-progress";
 import { loadEmailsByUserId } from "@/lib/admin/load-admin-profiles-with-email";
+import { coverTaughtByLabel } from "@/lib/tutoring/cover-lesson";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { isAppAccessExpected } from "@/lib/admin/app-access-expected";
 import { lessonSyncStateFromSessions } from "@/lib/calendar/lesson-assignment";
@@ -1199,6 +1200,27 @@ export async function loadAdminPackageDetail(
   };
 }
 
+async function coverTutorNames(
+  supabase: SupabaseClient,
+  rows: Array<{ is_cover_session?: boolean | null; actual_tutor_id?: string | null }>
+): Promise<Map<string, string>> {
+  const ids = [
+    ...new Set(
+      rows
+        .filter((row) => row.is_cover_session && row.actual_tutor_id)
+        .map((row) => row.actual_tutor_id as string)
+    ),
+  ];
+  if (ids.length === 0) return new Map();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, preferred_name")
+    .in("id", ids);
+  return new Map(
+    (data ?? []).map((profile) => [profile.id, getDisplayName(profile) || "Tutor"] as const)
+  );
+}
+
 async function loadPackageSessionLog(
   supabase: SupabaseClient,
   cohortId: string
@@ -1211,7 +1233,7 @@ async function loadPackageSessionLog(
   const { data: entries, error } = await supabase
     .from("cohort_lesson_log_entries")
     .select(
-      "id, lesson_date, lesson_title, status, recording_url, lesson_id, cohort_id"
+      "id, lesson_date, lesson_title, status, recording_url, lesson_id, cohort_id, is_cover_session, actual_tutor_id"
     )
     .eq("cohort_id", cohortId)
     .order("lesson_date", { ascending: false });
@@ -1220,7 +1242,7 @@ async function loadPackageSessionLog(
   if (error?.message?.toLowerCase().includes("lesson_id")) {
     const fallback = await supabase
       .from("cohort_lesson_log_entries")
-      .select("id, lesson_date, lesson_title, status, recording_url, cohort_id")
+      .select("id, lesson_date, lesson_title, status, recording_url, cohort_id, is_cover_session, actual_tutor_id")
       .eq("cohort_id", cohortId)
       .order("lesson_date", { ascending: false });
     if (fallback.error) {
@@ -1253,6 +1275,7 @@ async function loadPackageSessionLog(
   const { formatCurriculumLessonLabel } = await import(
     "@/lib/lessons/lesson-log-lesson-link"
   );
+  const coverNames = await coverTutorNames(supabase, rows ?? []);
 
   return (rows ?? []).map((row) => {
     const lesson = row.lesson_id ? lessonById.get(row.lesson_id) : null;
@@ -1266,6 +1289,9 @@ async function loadPackageSessionLog(
         : null,
       recordingUrl: row.recording_url,
       isUnlocked: row.lesson_id ? unlockedIds.has(row.lesson_id) : false,
+      coverLabel: row.is_cover_session
+        ? coverTaughtByLabel(row.actual_tutor_id ? coverNames.get(row.actual_tutor_id) : null)
+        : null,
     };
   });
 }
@@ -1276,7 +1302,7 @@ async function loadPackageInstanceSessionLog(
 ): Promise<PackageSessionLogEntry[]> {
   const { data: entries, error } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, lesson_date, lesson_title, status, recording_url")
+    .select("id, lesson_date, lesson_title, status, recording_url, is_cover_session, actual_tutor_id")
     .eq("package_instance_id", packageInstanceId)
     .order("lesson_date", { ascending: false });
 
@@ -1285,6 +1311,8 @@ async function loadPackageInstanceSessionLog(
     throw error;
   }
 
+  const coverNames = await coverTutorNames(supabase, entries ?? []);
+
   return (entries ?? []).map((row) => ({
     id: row.id,
     lessonDate: row.lesson_date,
@@ -1292,6 +1320,9 @@ async function loadPackageInstanceSessionLog(
     status: row.status,
     curriculumLessonLabel: null,
     recordingUrl: row.recording_url,
+    coverLabel: row.is_cover_session
+      ? coverTaughtByLabel(row.actual_tutor_id ? coverNames.get(row.actual_tutor_id) : null)
+      : null,
     isUnlocked: false,
   }));
 }

@@ -67,6 +67,9 @@ export function ClassDetailView({
                 <p className="mt-1 text-sm text-red-700">
                   {lesson.dateLabel ?? "Logged"} · {lesson.present}/{lesson.total} · recording missing
                 </p>
+                {lesson.coverLabel ? (
+                  <p className="mt-1 text-sm font-medium text-violet-700">{lesson.coverLabel}</p>
+                ) : null}
                 {detail.kind === "one_to_one" && lesson.notes ? (
                   <p className="mt-1 text-sm text-zinc-700">{lesson.notes}</p>
                 ) : null}
@@ -87,6 +90,9 @@ export function ClassDetailView({
                 <p className="mt-1 text-sm text-zinc-600">
                   {lesson.dateLabel ?? "Logged"} · {lesson.present}/{lesson.total} · recorded
                 </p>
+                {lesson.coverLabel ? (
+                  <p className="mt-1 text-sm font-medium text-violet-700">{lesson.coverLabel}</p>
+                ) : null}
                 {detail.kind === "one_to_one" && lesson.notes ? (
                   <p className="mt-1 text-sm text-zinc-700">{lesson.notes}</p>
                 ) : null}

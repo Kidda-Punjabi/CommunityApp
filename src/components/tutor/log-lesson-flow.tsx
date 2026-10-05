@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  loadAllClassesCatalogAction,
   retryTutorLessonSyncAction,
   saveTutorLessonAction,
 } from "@/app/dashboard/tutor/log/actions";
+import { defaultCoverTeacherId, type CoverTutorChoice } from "@/lib/tutoring/cover-lesson";
 import type { LogLessonSweepResult } from "@/lib/tutoring/log-lesson-sweep";
 import type {
   LogCohortOption,
@@ -25,6 +27,9 @@ type LogLessonFlowProps = {
   today: string;
   initialCohortId: string | null;
   initialPackageId: string | null;
+  userId: string;
+  tutors: CoverTutorChoice[];
+  includeTest: boolean;
 };
 
 function suggestedLesson(lessons: LogLessonChoice[]): LogLessonChoice | null {
@@ -36,6 +41,9 @@ export function LogLessonFlow({
   today,
   initialCohortId,
   initialPackageId,
+  userId,
+  tutors,
+  includeTest,
 }: LogLessonFlowProps) {
   const initialCohort = catalog.cohorts.find((cohort) => cohort.id === initialCohortId) ?? null;
   const initialStudent =
@@ -66,9 +74,24 @@ export function LogLessonFlow({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<LogLessonSweepResult | null>(null);
+  const [cover, setCover] = useState(false);
+  const [classScope, setClassScope] = useState<"mine" | "all">("mine");
+  const [allCatalog, setAllCatalog] = useState<LogLessonCatalog | null>(null);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [teacherId, setTeacherId] = useState("");
 
-  const cohort = catalog.cohorts.find((row) => row.id === cohortId) ?? null;
-  const student = catalog.students.find((row) => row.packageInstanceId === packageId) ?? null;
+  const listed =
+    cover && classScope === "all" ? (allCatalog ?? { cohorts: [], students: [] }) : catalog;
+  const cohort =
+    listed.cohorts.find((row) => row.id === cohortId) ??
+    allCatalog?.cohorts.find((row) => row.id === cohortId) ??
+    catalog.cohorts.find((row) => row.id === cohortId) ??
+    null;
+  const student =
+    listed.students.find((row) => row.packageInstanceId === packageId) ??
+    allCatalog?.students.find((row) => row.packageInstanceId === packageId) ??
+    catalog.students.find((row) => row.packageInstanceId === packageId) ??
+    null;
   const lessons = kind === "group" ? cohort?.lessons ?? [] : student?.lessons ?? [];
   const selected = lessons.find((lesson) => lesson.lessonId === lessonId) ?? null;
   const courseName = kind === "group" ? cohort?.courseName ?? "" : student?.courseName ?? "";
@@ -88,6 +111,11 @@ export function LogLessonFlow({
     setCohortId(next.id);
     setLessonId(suggestedLesson(next.lessons)?.lessonId ?? null);
     setPresent(Object.fromEntries(next.students.map((person) => [person.id, true])));
+    if (cover) {
+      setTeacherId(
+        defaultCoverTeacherId({ loggedInUserId: userId, assignedTutorId: next.assignedTutorId })
+      );
+    }
     setError(null);
     setStep(3);
   }
@@ -96,8 +124,39 @@ export function LogLessonFlow({
     setPackageId(next.packageInstanceId);
     setLessonId(suggestedLesson(next.lessons)?.lessonId ?? null);
     setAttended(true);
+    if (cover) {
+      setTeacherId(
+        defaultCoverTeacherId({ loggedInUserId: userId, assignedTutorId: next.assignedTutorId })
+      );
+    }
     setError(null);
     setStep(3);
+  }
+
+  function chooseCover(next: boolean) {
+    setCover(next);
+    setError(null);
+    if (!next) {
+      setClassScope("mine");
+      setTeacherId("");
+      return;
+    }
+    const assigned = cohort?.assignedTutorId ?? student?.assignedTutorId ?? null;
+    setTeacherId(defaultCoverTeacherId({ loggedInUserId: userId, assignedTutorId: assigned || null }));
+  }
+
+  async function showAllClasses() {
+    setClassScope("all");
+    if (allCatalog || loadingAll) return;
+    setLoadingAll(true);
+    const loaded = await loadAllClassesCatalogAction(includeTest);
+    setLoadingAll(false);
+    if ("error" in loaded) {
+      setError(loaded.error);
+      setClassScope("mine");
+      return;
+    }
+    setAllCatalog(loaded);
   }
 
   function validateDetails(): string | null {
@@ -122,6 +181,17 @@ export function LogLessonFlow({
       setError(problem ?? "Choose a lesson.");
       return;
     }
+    if (cover && !teacherId) {
+      setError("Choose who taught this lesson.");
+      return;
+    }
+    const teacher = tutors.find((row) => row.id === teacherId);
+    if (cover && teacher && !teacher.notionLinked) {
+      setError(
+        `${teacher.name} is not linked to a Notion tutor profile, so this cover lesson cannot be saved.`
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
     const saved = await saveTutorLessonAction({
@@ -133,6 +203,8 @@ export function LogLessonFlow({
       recordingUrl,
       notes,
       attendance,
+      isCoverSession: cover,
+      actualTutorId: cover ? teacherId : null,
     });
     setSaving(false);
     if (!saved.ok) {
@@ -164,16 +236,31 @@ export function LogLessonFlow({
         </p>
       ) : null}
 
+      {step < 5 ? (
+        <CoverLessonControls
+          cover={cover}
+          onCover={chooseCover}
+          teacherId={teacherId}
+          onTeacher={setTeacherId}
+          tutors={tutors}
+          showClassScope={step <= 2}
+          classScope={classScope}
+          onMine={() => setClassScope("mine")}
+          onAll={() => void showAllClasses()}
+          loadingAll={loadingAll}
+        />
+      ) : null}
+
       {step === 1 ? (
         <section>
           <h1 className="mt-2 font-heading text-2xl font-bold text-zinc-900">What did you teach?</h1>
           <div className="mt-6 space-y-3">
             <ChoiceCard
-              title={`Group class (${catalog.cohorts.length} active cohort${catalog.cohorts.length === 1 ? "" : "s"})`}
+              title={`Group class (${listed.cohorts.length} active cohort${listed.cohorts.length === 1 ? "" : "s"})`}
               onClick={() => chooseKind("group")}
             />
             <ChoiceCard
-              title={`1-1 lesson (${catalog.students.length} active student${catalog.students.length === 1 ? "" : "s"})`}
+              title={`1-1 lesson (${listed.students.length} active student${listed.students.length === 1 ? "" : "s"})`}
               onClick={() => chooseKind("one_to_one")}
             />
           </div>
@@ -185,10 +272,12 @@ export function LogLessonFlow({
           <BackButton onClick={() => setStep(1)} />
           <h1 className="mt-3 font-heading text-2xl font-bold text-zinc-900">Which cohort?</h1>
           <div className="mt-5 space-y-3">
-            {catalog.cohorts.length === 0 ? (
+            {cover && classScope === "all" && loadingAll ? (
+              <p className="text-sm text-zinc-500">Loading all classes…</p>
+            ) : listed.cohorts.length === 0 ? (
               <p className="text-sm text-zinc-500">No active group cohorts.</p>
             ) : (
-              catalog.cohorts.map((row) => (
+              listed.cohorts.map((row) => (
                 <button
                   key={row.id}
                   type="button"
@@ -196,6 +285,9 @@ export function LogLessonFlow({
                   className="min-h-11 w-full rounded-3xl border border-zinc-200 bg-white p-4 text-left shadow-sm"
                 >
                   <p className="text-base font-semibold text-zinc-900">{row.name}</p>
+                  {cover && classScope === "all" && row.assignedTutorName ? (
+                    <p className="mt-1 text-sm text-zinc-500">Assigned tutor: {row.assignedTutorName}</p>
+                  ) : null}
                   <p className="mt-1 text-sm text-zinc-500">
                     {row.schedule} · {row.studentCount} student{row.studentCount === 1 ? "" : "s"}
                   </p>
@@ -221,10 +313,12 @@ export function LogLessonFlow({
           <BackButton onClick={() => setStep(1)} />
           <h1 className="mt-3 font-heading text-2xl font-bold text-zinc-900">Which student?</h1>
           <div className="mt-5 space-y-3">
-            {catalog.students.length === 0 ? (
+            {cover && classScope === "all" && loadingAll ? (
+              <p className="text-sm text-zinc-500">Loading all classes…</p>
+            ) : listed.students.length === 0 ? (
               <p className="text-sm text-zinc-500">No active 1-1 students.</p>
             ) : (
-              catalog.students.map((row) => (
+              listed.students.map((row) => (
                 <button
                   key={row.packageInstanceId}
                   type="button"
@@ -232,6 +326,9 @@ export function LogLessonFlow({
                   className="min-h-11 w-full rounded-3xl border border-zinc-200 bg-white p-4 text-left shadow-sm"
                 >
                   <p className="text-base font-semibold text-zinc-900">{row.studentName}</p>
+                  {cover && classScope === "all" && row.assignedTutorName ? (
+                    <p className="mt-1 text-sm text-zinc-500">Assigned tutor: {row.assignedTutorName}</p>
+                  ) : null}
                   <p className="mt-1 text-sm text-zinc-500">
                     {row.courseName}
                     {row.schedule !== "Schedule not set" ? ` · ${row.schedule}` : ""}
@@ -629,6 +726,107 @@ function Row({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="font-semibold">{label}</dt>
       <dd>{value}</dd>
+    </div>
+  );
+}
+
+function CoverLessonControls({
+  cover,
+  onCover,
+  teacherId,
+  onTeacher,
+  tutors,
+  showClassScope,
+  classScope,
+  onMine,
+  onAll,
+  loadingAll,
+}: {
+  cover: boolean;
+  onCover: (next: boolean) => void;
+  teacherId: string;
+  onTeacher: (id: string) => void;
+  tutors: CoverTutorChoice[];
+  showClassScope: boolean;
+  classScope: "mine" | "all";
+  onMine: () => void;
+  onAll: () => void;
+  loadingAll: boolean;
+}) {
+  return (
+    <div className="mt-4 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <p className="text-sm font-semibold text-zinc-900">Was this a cover lesson?</p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onCover(false)}
+          className={`min-h-11 rounded-full border text-sm font-semibold ${
+            cover ? "border-zinc-200 text-zinc-700" : "border-violet-600 bg-violet-600 text-white"
+          }`}
+        >
+          No
+        </button>
+        <button
+          type="button"
+          onClick={() => onCover(true)}
+          className={`min-h-11 rounded-full border text-sm font-semibold ${
+            cover ? "border-violet-600 bg-violet-600 text-white" : "border-zinc-200 text-zinc-700"
+          }`}
+        >
+          Yes
+        </button>
+      </div>
+      {cover ? (
+        <div className="mt-4">
+          <label htmlFor="cover-teacher" className="text-sm font-semibold text-zinc-900">
+            Who taught this lesson?
+          </label>
+          <select
+            id="cover-teacher"
+            value={teacherId}
+            onChange={(event) => onTeacher(event.target.value)}
+            className="mt-2 min-h-11 w-full rounded-2xl border border-zinc-200 bg-white px-3 text-base text-zinc-900"
+          >
+            <option value="">Choose a tutor</option>
+            {tutors.map((tutor) => (
+              <option key={tutor.id} value={tutor.id}>
+                {tutor.name}
+                {tutor.notionLinked ? "" : " (no Notion link)"}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-sm text-zinc-500">Pay for this lesson goes to the tutor who taught it.</p>
+          {showClassScope ? (
+            <div className="mt-4">
+              <p className="text-sm font-semibold text-zinc-900">Which classes can you pick?</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={onMine}
+                  className={`min-h-11 rounded-full border text-sm font-semibold ${
+                    classScope === "mine"
+                      ? "border-violet-600 bg-violet-600 text-white"
+                      : "border-zinc-200 text-zinc-700"
+                  }`}
+                >
+                  My classes
+                </button>
+                <button
+                  type="button"
+                  onClick={onAll}
+                  className={`min-h-11 rounded-full border text-sm font-semibold ${
+                    classScope === "all"
+                      ? "border-violet-600 bg-violet-600 text-white"
+                      : "border-zinc-200 text-zinc-700"
+                  }`}
+                >
+                  {loadingAll && classScope === "all" ? "Loading…" : "All classes"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

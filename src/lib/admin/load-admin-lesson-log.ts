@@ -1,5 +1,6 @@
 import "server-only";
 
+import { coverTaughtByLabel } from "@/lib/tutoring/cover-lesson";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -31,6 +32,8 @@ export type AdminLessonLogEntry = {
   notionSyncError: string | null;
   notionSyncedAt: string | null;
   source: "notion" | "app";
+  isCoverSession: boolean;
+  coverLabel: string | null;
   dismissedAt: string | null;
   attentionReasons: LessonLogAttentionReason[];
   /** Linked curriculum lesson (lessons.id), when cohort + non-cancelled. */
@@ -103,6 +106,8 @@ type EntryRow = {
   notion_synced_at: string | null;
   source: string;
   dismissed_at?: string | null;
+  is_cover_session?: boolean | null;
+  actual_tutor_id?: string | null;
 };
 
 function asFieldSource(value: string | null): "notion" | "manual" {
@@ -172,7 +177,7 @@ export async function loadAdminLessonLogSnapshot(
   };
 
   const selectWithSources =
-    "id, notion_page_id, cohort_id, package_instance_id, lesson_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, status_source, reviewed_source, notes_source, notion_sync_status, notion_sync_error, notion_synced_at, source, dismissed_at";
+    "id, notion_page_id, cohort_id, package_instance_id, lesson_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, is_cover_session, actual_tutor_id, status, reviewed, status_source, reviewed_source, notes_source, notion_sync_status, notion_sync_error, notion_synced_at, source, dismissed_at";
   const selectWithoutSources =
     "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, notion_sync_status, notion_sync_error, notion_synced_at, source";
 
@@ -284,6 +289,7 @@ export async function loadAdminLessonLogSnapshot(
         ...(cohorts ?? []).map((c) => c.tutor_id),
         ...(instances ?? []).map((i) => i.tutor_id),
         ...(tutorMap ?? []).map((m) => m.tutor_id),
+        ...rows.map((row) => row.actual_tutor_id),
       ].filter((id): id is string => Boolean(id))
     ),
   ];
@@ -440,6 +446,10 @@ export async function loadAdminLessonLogSnapshot(
       notionSyncError: row.notion_sync_error,
       notionSyncedAt: row.notion_synced_at,
       source: row.source === "app" ? "app" : "notion",
+      isCoverSession: Boolean(row.is_cover_session),
+      coverLabel: row.is_cover_session
+        ? coverTaughtByLabel(row.actual_tutor_id ? profileById.get(row.actual_tutor_id) : null)
+        : null,
       dismissedAt: row.dismissed_at ?? null,
       attentionReasons,
       curriculumLessonId,

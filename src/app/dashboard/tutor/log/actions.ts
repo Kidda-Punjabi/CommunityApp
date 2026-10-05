@@ -2,7 +2,10 @@
 
 import { logTutorLessonSweep, retryTutorLessonNotion } from "@/lib/tutoring/log-lesson-sweep";
 import type { LogLessonSweepInput, LogLessonSweepResult } from "@/lib/tutoring/log-lesson-sweep";
+import { loadLogLessonCatalog } from "@/lib/tutoring/load-log-lesson-catalog";
+import type { LogLessonCatalog } from "@/lib/tutoring/load-log-lesson-catalog";
 import { canAccessTutorDashboard } from "@/lib/tutoring/tutor-access";
+import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -15,6 +18,18 @@ async function requireTutor() {
   const allowed = await canAccessTutorDashboard(supabase, user.id);
   if (!allowed) return { error: "Tutor access required." as const };
   return { supabase, userId: user.id };
+}
+
+export async function loadAllClassesCatalogAction(
+  includeTest: boolean
+): Promise<LogLessonCatalog | { error: string }> {
+  const auth = await requireTutor();
+  if ("error" in auth && auth.error) return { error: auth.error };
+  const { client: admin } = tryCreateServiceRoleClient();
+  return loadLogLessonCatalog(admin ?? auth.supabase!, auth.userId!, {
+    includeTest,
+    allClasses: true,
+  });
 }
 
 export async function saveTutorLessonAction(

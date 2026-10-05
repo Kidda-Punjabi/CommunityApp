@@ -2,9 +2,11 @@ import "server-only";
 
 import { getDisplayName } from "@/lib/profile/display-name";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
+import { resolveCoverLessonWrite } from "@/lib/tutoring/cover-lesson";
 import {
   compareLessonLogReadback,
   formatLogNotionTitle,
+  isActiveTeachingClass,
   isFoundationalCourse,
   isHttpUrl,
   lessonSlotLabel,
@@ -38,6 +40,8 @@ export type LogLessonSweepInput = {
   recordingUrl: string;
   notes: string;
   attendance: LogAttendanceMark[];
+  isCoverSession?: boolean;
+  actualTutorId?: string | null;
 };
 
 export type LogLessonSweepResult = {
@@ -94,18 +98,31 @@ async function loadTarget(
   userId: string,
   input: LogLessonSweepInput
 ): Promise<{ ok: true; target: TargetContext } | { ok: false; error: string }> {
+  const cover = input.isCoverSession === true;
   if (input.kind === "group") {
     const cohortId = input.cohortId?.trim() ?? "";
     if (!cohortId) return { ok: false, error: "Choose a cohort." };
-    const allowed = await canManageCohort(userClient, userId, cohortId);
-    if (!allowed) return { ok: false, error: "You are not the tutor for this cohort." };
 
     const { data: cohort } = await admin
       .from("cohorts")
-      .select("id, name, course_id, notion_page_id, courses(name)")
+      .select("id, name, course_id, notion_page_id, status, active, courses(name)")
       .eq("id", cohortId)
       .maybeSingle();
     if (!cohort) return { ok: false, error: "That cohort could not be found." };
+    if (cover) {
+      if (
+        !isActiveTeachingClass({
+          name: cohort.name as string,
+          active: cohort.active as boolean | null,
+          status: cohort.status as string | null,
+        })
+      ) {
+        return { ok: false, error: "That class is not active." };
+      }
+    } else {
+      const allowed = await canManageCohort(userClient, userId, cohortId);
+      if (!allowed) return { ok: false, error: "You are not the tutor for this cohort." };
+    }
     const course = Array.isArray(cohort.courses) ? cohort.courses[0] : cohort.courses;
     const courseName = (course as { name?: string } | null)?.name ?? "Course";
     const notionPageId = (cohort.notion_page_id as string | null)?.trim() ?? "";
@@ -133,10 +150,21 @@ async function loadTarget(
   if (!packageInstanceId) return { ok: false, error: "Choose a student." };
   const { data: instance } = await admin
     .from("package_instances")
-    .select("id, tutor_id, course_id, notion_page_id, courses(name)")
+    .select("id, name, tutor_id, course_id, notion_page_id, status, active, courses(name)")
     .eq("id", packageInstanceId)
     .maybeSingle();
-  if (!instance || instance.tutor_id !== userId) {
+  if (!instance) return { ok: false, error: "That student could not be found." };
+  if (cover) {
+    if (
+      !isActiveTeachingClass({
+        name: (instance.name as string) || "Package",
+        active: instance.active as boolean | null,
+        status: instance.status as string | null,
+      })
+    ) {
+      return { ok: false, error: "That class is not active." };
+    }
+  } else if (instance.tutor_id !== userId) {
     return { ok: false, error: "You are not the tutor for this student." };
   }
   const notionPageId = (instance.notion_page_id as string | null)?.trim() ?? "";
@@ -208,7 +236,7 @@ async function pushNotionForEntry(
   const { data: entry } = await admin
     .from("cohort_lesson_log_entries")
     .select(
-      "id, cohort_id, package_instance_id, lesson_id, lesson_title, lesson_date, recording_url, notes, notion_page_id, notion_tutor_user_id, logged_by"
+      "id, cohort_id, package_instance_id, lesson_id, lesson_title, lesson_date, recording_url, notes, notion_page_id, notion_tutor_user_id, is_cover_session, logged_by"
     )
     .eq("id", entryId)
     .maybeSingle();
@@ -291,6 +319,7 @@ async function pushNotionForEntry(
         notes: (entry.notes as string | null) ?? null,
         recordingUrl: (entry.recording_url as string | null) ?? null,
         notionTutorUserId: (entry.notion_tutor_user_id as string | null) ?? null,
+        isCoverSession: Boolean(entry.is_cover_session),
       });
       await admin
         .from("cohort_lesson_log_entries")
@@ -305,7 +334,9 @@ async function pushNotionForEntry(
     );
     const readback = await readLessonLogPage({
       pageId,
-      expectedTutorUserId: (entry.notion_tutor_user_id as string | null) ?? null,
+      expectedTutorUserId: entry.is_cover_session
+        ? ((entry.notion_tutor_user_id as string | null) ?? null)
+        : null,
       absentNames,
     });
     const submittedLesson = lessonTokenFromTitle(entry.lesson_title as string);
@@ -320,6 +351,7 @@ async function pushNotionForEntry(
       unmatchedPresentNames: leads.unmatchedNames,
       droppedExistingLeadIds: dropped,
       expectedLeadIds: leads.leadIds,
+      expectedCoverSession: Boolean(entry.is_cover_session),
     });
     const notionError = differences.length ? "Notion read-back did not match what was saved." : null;
     await markNotion(
@@ -401,11 +433,8 @@ export async function logTutorLessonSweep(
   const loaded = await loadTarget(admin, userClient, userId, input);
   if (!loaded.ok) return emptyResult(loaded.error);
 
-  const { data: tutorMap } = await admin
-    .from("notion_tutor_map")
-    .select("notion_user_id")
-    .eq("tutor_id", userId)
-    .maybeSingle();
+  const cover = await resolveCoverLessonWrite(admin, input);
+  if (!cover.ok) return emptyResult(cover.error);
 
   const slot = lessonSlotLabel(loaded.target.courseName, loaded.target.lessonNumber);
   const title = formatLogNotionTitle({
@@ -427,7 +456,7 @@ export async function logTutorLessonSweep(
     p_notes: input.notes.trim() || null,
     p_logged_by: userId,
     p_notion_page_id: pendingId,
-    p_notion_tutor_user_id: tutorMap?.notion_user_id ?? null,
+    p_notion_tutor_user_id: cover.notionTutorUserId,
     p_attendance: marks.map((mark) => ({
       studentId: mark.studentId,
       kidProfileId: mark.kidProfileId,
@@ -440,6 +469,16 @@ export async function logTutorLessonSweep(
     const message = rpcError?.message ?? "The lesson could not be saved.";
     return emptyResult(message.replace(/^.*ERROR:\s*/, "").slice(0, 240));
   }
+
+  const { error: coverError } = await admin
+    .from("cohort_lesson_log_entries")
+    .update({
+      is_cover_session: cover.isCoverSession,
+      actual_tutor_id: cover.actualTutorId,
+      actual_tutor_notion_user_id: cover.notionTutorUserId,
+    })
+    .eq("id", entryId);
+  if (coverError) return emptyResult(coverError.message);
 
   const notion = await pushNotionForEntry(admin, entryId as string);
   const unlockedCount = input.attendance.length;

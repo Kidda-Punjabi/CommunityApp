@@ -99,7 +99,8 @@ export type ReadbackField =
   | "Recording"
   | "Attendees"
   | "Absent"
-  | "Tutor";
+  | "Tutor"
+  | "Cover";
 
 export type ReadbackDifference = {
   field: ReadbackField;
@@ -117,6 +118,7 @@ export type LessonLogReadback = {
   absentNames: string[];
   tutorName: string;
   tutorMatched: boolean;
+  coverSession?: boolean;
   notionUrl: string | null;
 };
 
@@ -155,6 +157,7 @@ export function compareLessonLogReadback(options: {
   unmatchedPresentNames: string[];
   droppedExistingLeadIds?: string[];
   expectedLeadIds?: string[];
+  expectedCoverSession?: boolean;
 }): ReadbackDifference[] {
   const diffs: ReadbackDifference[] = [];
   const actual = options.actual;
@@ -231,8 +234,15 @@ export function compareLessonLogReadback(options: {
   if (!actual.tutorMatched) {
     diffs.push({
       field: "Tutor",
-      submitted: "Linked Notion tutor",
+      submitted: options.expectedCoverSession ? "Linked Notion tutor" : "No Actual Tutor",
       actual: actual.tutorName || "(not set on the page)",
+    });
+  }
+  if (Boolean(options.expectedCoverSession) !== Boolean(actual.coverSession)) {
+    diffs.push({
+      field: "Cover",
+      submitted: options.expectedCoverSession ? "Cover lesson" : "Not a cover lesson",
+      actual: actual.coverSession ? "Cover lesson" : "Not a cover lesson",
     });
   }
   return diffs;

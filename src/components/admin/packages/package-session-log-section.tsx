@@ -220,6 +220,9 @@ export function PackageSessionLogSection({
                 <p className="mt-0.5 text-xs text-zinc-600">
                   {entry.curriculumLessonLabel ?? entry.lessonTitle ?? "Untitled session"}
                 </p>
+                {entry.coverLabel ? (
+                  <p className="mt-0.5 text-[11px] font-medium text-violet-700">{entry.coverLabel}</p>
+                ) : null}
                 {entry.isUnlocked ? (
                   <p className="mt-0.5 text-[11px] font-medium text-emerald-700">Unlocked for students</p>
                 ) : entry.curriculumLessonLabel ? (

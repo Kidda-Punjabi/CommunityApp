@@ -38,6 +38,7 @@ export type ParsedLessonLogPage = {
   flashcardsUrl: string | null;
   notes: string | null;
   notionTutorUserId: string | null;
+  isCoverSession: boolean;
   status: "Scheduled" | "Completed" | "Cancelled" | null;
   reviewed: boolean;
 };
@@ -110,6 +111,7 @@ export function parseNotionLessonLogPage(page: {
       plainTextFromRichText(props.notes as { rich_text?: Array<{ plain_text?: string }> }) ||
       null,
     notionTutorUserId: tutorIds[0] ?? null,
+    isCoverSession: checkboxProp(props["Cover Session?"] as { checkbox?: boolean }),
     status: parseLessonLogStatus(
       selectName(props.Status as { select?: { name?: string } | null })
     ),
@@ -247,6 +249,16 @@ export async function upsertLessonLogEntryFromNotion(
   let syncStatus: "synced" | "error" = "synced";
   let syncError: string | null = null;
 
+  let actualTutorId: string | null = null;
+  if (page.notionTutorUserId) {
+    const { data: mapped } = await supabase
+      .from("notion_tutor_map")
+      .select("tutor_id")
+      .eq("notion_user_id", page.notionTutorUserId)
+      .maybeSingle();
+    actualTutorId = (mapped?.tutor_id as string | undefined) ?? null;
+  }
+
   if (!page.packageNotionPageId) {
     syncStatus = "error";
     syncError = "Notion lesson has no New Package DB relation.";
@@ -282,6 +294,9 @@ export async function upsertLessonLogEntryFromNotion(
       notes: page.notes,
       notes_source: "notion",
       notion_tutor_user_id: page.notionTutorUserId,
+      is_cover_session: page.isCoverSession,
+      actual_tutor_notion_user_id: page.notionTutorUserId,
+      actual_tutor_id: actualTutorId,
       notion_last_edited_at: page.lastEditedTime,
       status: page.status,
       status_source: "notion",

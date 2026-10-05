@@ -24,6 +24,7 @@ type NotionProperty = {
   relation?: Array<{ id?: string }>;
   has_more?: boolean;
   people?: Array<{ id?: string; name?: string }>;
+  checkbox?: boolean;
 };
 
 type NotionPage = {
@@ -63,6 +64,7 @@ export async function createLessonLogPage(options: {
   notes: string | null;
   recordingUrl: string | null;
   notionTutorUserId: string | null;
+  isCoverSession: boolean;
 }): Promise<string> {
   const properties: Record<string, unknown> = {
     Lesson: {
@@ -72,6 +74,7 @@ export async function createLessonLogPage(options: {
     "New Package DB": { relation: [{ id: options.packageNotionPageId }] },
     Status: { select: { name: "Completed" } },
     Reviewed: { checkbox: false },
+    "Cover Session?": { checkbox: Boolean(options.isCoverSession) },
   };
   if (options.notes?.trim()) {
     properties.notes = {
@@ -81,7 +84,7 @@ export async function createLessonLogPage(options: {
   if (options.recordingUrl?.trim()) {
     properties["Recording Link"] = { url: options.recordingUrl.trim() };
   }
-  if (options.notionTutorUserId?.trim()) {
+  if (options.isCoverSession && options.notionTutorUserId?.trim()) {
     properties["Actual Tutor (New)"] = {
       people: [{ id: options.notionTutorUserId.trim() }],
     };
@@ -241,7 +244,8 @@ export async function readLessonLogPage(options: {
   const tutorName = people[0]?.name?.trim() || (tutorId ? await tutorLabel(tutorId) : "");
   const expected = options.expectedTutorUserId?.replace(/-/g, "").toLowerCase() ?? "";
   const actual = tutorId.replace(/-/g, "").toLowerCase();
-  const tutorMatched = expected.length > 0 && actual === expected;
+  const tutorMatched = expected.length === 0 ? actual.length === 0 : actual === expected;
+  const coverSession = Boolean(properties["Cover Session?"]?.checkbox);
 
   return {
     title,
@@ -253,6 +257,7 @@ export async function readLessonLogPage(options: {
     absentNames: options.absentNames,
     tutorName,
     tutorMatched,
+    coverSession,
     notionUrl: page.url || notionPageUrl(options.pageId),
   };
 }

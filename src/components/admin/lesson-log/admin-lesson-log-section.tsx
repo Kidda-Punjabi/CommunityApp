@@ -590,11 +590,13 @@ export function AdminLessonLogSection() {
                                 {entry.reviewed ? " · Reviewed" : ""}
                                 {entry.reviewedSource === "manual" ? " (manual)" : ""}
                                 {entry.source === "app" ? " · from app" : ""}
-                                {entry.resolvedTutorName
-                                  ? ` · ${entry.resolvedTutorName}`
-                                  : entry.notionTutorUserId
-                                    ? " · Tutor unmapped"
-                                    : ""}
+                                {entry.coverLabel
+                                  ? ` · ${entry.coverLabel}`
+                                  : entry.resolvedTutorName
+                                    ? ` · ${entry.resolvedTutorName}`
+                                    : entry.notionTutorUserId
+                                      ? " · Tutor unmapped"
+                                      : ""}
                               </p>
                               {entry.curriculumLessonLabel && entry.lessonTitle ? (
                                 <p className="mt-0.5 text-[11px] text-zinc-500">

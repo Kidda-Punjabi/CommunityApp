@@ -1,5 +1,6 @@
 import "server-only";
 
+import { coverTaughtByLabel } from "@/lib/tutoring/cover-lesson";
 import { getDisplayName } from "@/lib/profile/display-name";
 import {
   kidProfileIdsInCohort,
@@ -57,6 +58,7 @@ export type ClassLessonRow = {
   notes: string | null;
   homeworkLabel: string | null;
   unlockEarly: boolean;
+  coverLabel: string | null;
 };
 
 export type ClassDetail = {
@@ -89,6 +91,8 @@ type LogRow = {
   recording_url: string | null;
   status: string | null;
   dismissed_at: string | null;
+  is_cover_session?: boolean | null;
+  actual_tutor_id?: string | null;
 };
 type Person = { id: string; name: string; kind: "student" | "kid" };
 
@@ -229,13 +233,13 @@ export async function loadTutorClassBoard(
     cohortIds.length
       ? reader
           .from("cohort_lesson_log_entries")
-          .select("id, cohort_id, package_instance_id, lesson_id, lesson_date, notes, recording_url, status, dismissed_at")
+          .select("id, cohort_id, package_instance_id, lesson_id, lesson_date, notes, recording_url, status, dismissed_at, is_cover_session, actual_tutor_id")
           .in("cohort_id", cohortIds)
       : Promise.resolve({ data: [] as LogRow[] }),
     instanceIds.length
       ? reader
           .from("cohort_lesson_log_entries")
-          .select("id, cohort_id, package_instance_id, lesson_id, lesson_date, notes, recording_url, status, dismissed_at")
+          .select("id, cohort_id, package_instance_id, lesson_id, lesson_date, notes, recording_url, status, dismissed_at, is_cover_session, actual_tutor_id")
           .in("package_instance_id", instanceIds)
       : Promise.resolve({ data: [] as LogRow[] }),
   ]);
@@ -560,6 +564,23 @@ async function buildDetail(options: {
     });
   }
 
+  const coverTutorIds = [
+    ...new Set(
+      options.logs
+        .map((row) => row.actual_tutor_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const { data: coverProfiles } = coverTutorIds.length
+    ? await options.reader
+        .from("profiles")
+        .select("id, full_name, preferred_name")
+        .in("id", coverTutorIds)
+    : { data: [] as Array<{ id: string; full_name: string | null; preferred_name: string | null }> };
+  const coverNameById = new Map(
+    (coverProfiles ?? []).map((profile) => [profile.id, getDisplayName(profile) ?? ""] as const)
+  );
+
   let unlockEarlyAssigned = false;
   const lessons: ClassLessonRow[] = courseLessons.map((lesson) => {
     const entry = logByLesson.get(lesson.id);
@@ -583,6 +604,9 @@ async function buildDetail(options: {
             ? homeworkLabel(submission?.status ?? null, submission?.approved ?? null)
             : null,
         unlockEarly: false,
+        coverLabel: entry.is_cover_session
+          ? coverTaughtByLabel(entry.actual_tutor_id ? coverNameById.get(entry.actual_tutor_id) : null)
+          : null,
       };
     }
     if (next?.lessonId === lesson.id) {
@@ -599,6 +623,7 @@ async function buildDetail(options: {
         notes: null,
         homeworkLabel: null,
         unlockEarly: false,
+        coverLabel: null,
       };
     }
     const alreadyUnlocked = options.unlockedLessonIds.has(lesson.id);
@@ -617,6 +642,7 @@ async function buildDetail(options: {
       notes: null,
       homeworkLabel: null,
       unlockEarly,
+      coverLabel: null,
     };
   });
 
@@ -685,7 +711,7 @@ export async function loadCohortClassDetail(
     kidProfileIdsInCohort(reader, cohortId),
     reader
       .from("cohort_lesson_log_entries")
-      .select("id, cohort_id, package_instance_id, lesson_id, lesson_date, notes, recording_url, status, dismissed_at")
+      .select("id, cohort_id, package_instance_id, lesson_id, lesson_date, notes, recording_url, status, dismissed_at, is_cover_session, actual_tutor_id")
       .eq("cohort_id", cohortId),
   ]);
   const people: Person[] = roster
@@ -774,7 +800,7 @@ export async function loadPackageClassDetail(
       .maybeSingle(),
     reader
       .from("cohort_lesson_log_entries")
-      .select("id, cohort_id, package_instance_id, lesson_id, lesson_date, notes, recording_url, status, dismissed_at")
+      .select("id, cohort_id, package_instance_id, lesson_id, lesson_date, notes, recording_url, status, dismissed_at, is_cover_session, actual_tutor_id")
       .eq("package_instance_id", packageInstanceId),
   ]);
   const kidProfileId =
