@@ -32,7 +32,9 @@ export function DeckSelectList({
   const [pickedWeek, setPickedWeek] = useState<number | null>(weeks[0] ?? null);
   const selectedWeek =
     pickedWeek != null && weeks.includes(pickedWeek) ? pickedWeek : (weeks[0] ?? null);
-  const visibleDecks = selectedWeek == null ? decks : decksForWeek(decks, selectedWeek);
+  const extraDecks = decks.filter((deck) => deck.weekNumber == null);
+  const visibleDecks =
+    selectedWeek == null ? decks : [...decksForWeek(decks, selectedWeek), ...extraDecks];
   const weekGroups = groupDecksByWeek(visibleDecks);
 
   if (decks.length === 0) {

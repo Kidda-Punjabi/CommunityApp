@@ -94,6 +94,23 @@ async function getLinkedDeckIds(
   return deckIds;
 }
 
+/** Course-level decks with no lesson link, such as Vocabulary - Master List. */
+async function isExtraPracticeDeck(
+  supabase: SupabaseClient,
+  courseId: string,
+  deckId: string
+): Promise<boolean> {
+  const { data: links } = await supabase
+    .from("set_course_links")
+    .select("lesson_id, course_id")
+    .eq("deck_id", deckId);
+
+  const rows = links ?? [];
+  const onCourse = rows.some((row) => row.course_id === courseId && row.lesson_id == null);
+  const hasLessonLink = rows.some((row) => row.lesson_id != null);
+  return onCourse && !hasLessonLink;
+}
+
 async function loadCardsForDeck(
   supabase: SupabaseClient,
   lessonId: string,
@@ -221,7 +238,13 @@ export async function loadFlashcardDeck(
   if (access.kind !== "ok") return access;
 
   const linkedDeckIds = await getLinkedDeckIds(supabase, lessonId);
-  if (!linkedDeckIds.includes(deckId)) {
+  const courseId = access.lesson.course_id;
+  const playableDeckIds = linkedDeckIds.includes(deckId)
+    ? linkedDeckIds
+    : courseId && (await isExtraPracticeDeck(supabase, courseId, deckId))
+      ? [...linkedDeckIds, deckId]
+      : linkedDeckIds;
+  if (!playableDeckIds.includes(deckId)) {
     return { kind: "not_found" as const };
   }
 
@@ -229,7 +252,7 @@ export async function loadFlashcardDeck(
     supabase,
     lessonId,
     deckId,
-    linkedDeckIds
+    playableDeckIds
   );
 
   if (!cardRows.length) {

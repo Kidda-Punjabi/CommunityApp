@@ -80,7 +80,14 @@ describe("buildGameDeckSummaries", () => {
         isPublic: true,
       },
     ],
-    enrollments: [{ courseId: BEGINNERS, deliveryMode: "group", cohortId: "cohort-1" }],
+    enrollments: [
+      {
+        courseId: BEGINNERS,
+        deliveryMode: "group",
+        cohortId: "cohort-1",
+        cohortStatus: "in_progress",
+      },
+    ],
     cohortUnlocks: [1, 2, 3, 4].map((week) => ({
       cohortId: "cohort-1",
       lessonId: `lesson-${week}`,
@@ -163,5 +170,243 @@ describe("buildGameDeckSummaries", () => {
       adminPreviewCourseIds: new Set(),
     });
     assert.deepEqual([...taughtIds], ["lesson-1"]);
+  });
+
+  it("shows every week when the student has course access but no unlock rows", () => {
+    const taughtIds = lessonIdsTaughtToStudent({
+      lessons: lessons.map((item) => ({
+        id: item.id,
+        courseId: item.courseId,
+        isFree: item.isFree,
+      })),
+      courses: [
+        {
+          id: BEGINNERS,
+          name: "Beginners Course",
+          requiredTier: "beginners",
+          isPublic: true,
+        },
+      ],
+      enrollments: [],
+      cohortUnlocks: [],
+      studentUnlockLessonIds: new Set(),
+      adminPreviewCourseIds: new Set(),
+    });
+    assert.deepEqual(
+      [...taughtIds].sort(),
+      lessons.map((item) => item.id).sort()
+    );
+  });
+
+  it("shows every week when the cohort is finished, even if old unlocks exist", () => {
+    const taughtIds = lessonIdsTaughtToStudent({
+      lessons: lessons.map((item) => ({
+        id: item.id,
+        courseId: item.courseId,
+        isFree: item.isFree,
+      })),
+      courses: [
+        {
+          id: BEGINNERS,
+          name: "Beginners Course",
+          requiredTier: "beginners",
+          isPublic: true,
+        },
+      ],
+      enrollments: [
+        {
+          courseId: BEGINNERS,
+          deliveryMode: "group",
+          cohortId: "cohort-28",
+          cohortStatus: "offboarding_complete",
+        },
+      ],
+      cohortUnlocks: [1, 2].map((week) => ({
+        cohortId: "cohort-28",
+        lessonId: `lesson-${week}`,
+      })),
+      studentUnlockLessonIds: new Set(),
+      adminPreviewCourseIds: new Set(),
+    });
+    assert.equal(taughtIds.has("lesson-5"), true);
+  });
+
+  it("shows every week when an active cohort has no unlock records", () => {
+    const taughtIds = lessonIdsTaughtToStudent({
+      lessons: [{ id: "lesson-1", courseId: BEGINNERS, isFree: false }],
+      courses: [
+        {
+          id: BEGINNERS,
+          name: "Beginners Course",
+          requiredTier: "beginners",
+          isPublic: true,
+        },
+      ],
+      enrollments: [
+        {
+          courseId: BEGINNERS,
+          deliveryMode: "group",
+          cohortId: "cohort-empty",
+          cohortStatus: "in_progress",
+        },
+      ],
+      cohortUnlocks: [],
+      studentUnlockLessonIds: new Set(),
+      adminPreviewCourseIds: new Set(),
+    });
+    assert.deepEqual([...taughtIds], ["lesson-1"]);
+  });
+
+  it("opens every community lesson when that course has no unlock rows", () => {
+    const communityLessons = [1, 2, 24].map((week) => ({
+      id: `community-${week}`,
+      courseId: COMMUNITY,
+      isFree: false,
+    }));
+    const taughtIds = lessonIdsTaughtToStudent({
+      lessons: communityLessons,
+      courses: [
+        {
+          id: COMMUNITY,
+          name: "Kidda Community",
+          requiredTier: "community",
+          isPublic: true,
+        },
+      ],
+      enrollments: [],
+      cohortUnlocks: [],
+      studentUnlockLessonIds: new Set(),
+      adminPreviewCourseIds: new Set(),
+    });
+    assert.deepEqual(
+      [...taughtIds].sort(),
+      communityLessons.map((item) => item.id).sort()
+    );
+  });
+
+  it("keeps a finished 1:1 package open and an active 1:1 filtered", () => {
+    const lessonsInput = [
+      { id: "lesson-1", courseId: BEGINNERS, isFree: false },
+      { id: "lesson-2", courseId: BEGINNERS, isFree: false },
+    ];
+    const courses = [
+      {
+        id: BEGINNERS,
+        name: "Beginners Course",
+        requiredTier: "beginners",
+        isPublic: true,
+      },
+    ];
+    const finished = lessonIdsTaughtToStudent({
+      lessons: lessonsInput,
+      courses,
+      enrollments: [
+        {
+          courseId: BEGINNERS,
+          deliveryMode: "one_to_one",
+          cohortId: null,
+          individualPackageInactive: true,
+        },
+      ],
+      cohortUnlocks: [],
+      studentUnlockLessonIds: new Set(["lesson-1"]),
+      adminPreviewCourseIds: new Set(),
+    });
+    assert.deepEqual([...finished].sort(), ["lesson-1", "lesson-2"]);
+
+    const active = lessonIdsTaughtToStudent({
+      lessons: lessonsInput,
+      courses,
+      enrollments: [
+        {
+          courseId: BEGINNERS,
+          deliveryMode: "one_to_one",
+          cohortId: null,
+        },
+      ],
+      cohortUnlocks: [],
+      studentUnlockLessonIds: new Set(["lesson-1"]),
+      adminPreviewCourseIds: new Set(),
+    });
+    assert.deepEqual([...active], ["lesson-1"]);
+  });
+});
+
+describe("extra practice and kid courses", () => {
+  it("lists lesson-unlinked decks under extra practice after the weeks", () => {
+    const weekLesson = lesson("lesson-1", 1, COMMUNITY);
+    const summaries = buildGameDeckSummaries({
+      lessons: [weekLesson],
+      links: [
+        { deckId: "week-deck", lessonId: weekLesson.id, courseId: COMMUNITY },
+        { deckId: "master", lessonId: null, courseId: COMMUNITY },
+        { deckId: "animals", lessonId: null, courseId: COMMUNITY },
+        { deckId: "week-deck", lessonId: null, courseId: COMMUNITY },
+      ],
+      sets: [
+        set("week-deck", "Vocabulary - Week 1", 1, 20),
+        set("master", "Vocabulary - Master List", null, 1292),
+        set("animals", "Vocabulary - Animals", null, 24),
+      ],
+      unlockedCourseIds: new Set([COMMUNITY]),
+      taughtLessonIds: new Set([weekLesson.id]),
+      englishCourseIds: null,
+    });
+
+    assert.deepEqual(
+      summaries.map((deck) => [deck.weekNumber, deck.setName, deck.lessonTitle]),
+      [
+        [1, "Vocabulary - Week 1", "Lesson 1"],
+        [null, "Vocabulary - Animals", "Extra practice"],
+        [null, "Vocabulary - Master List", "Extra practice"],
+      ]
+    );
+    assert.equal(decksForWeek(summaries, 1).some((deck) => deck.deckId === "master"), false);
+  });
+
+  it("shows a kid's private course weeks and hides them from a parent session", () => {
+    const kidsCourse = "kids-beginners";
+    const kidsLesson: DeckListLesson = {
+      ...lesson("kids-1", 1, kidsCourse),
+      courseName: "Kids Beginners Course (Level 1)",
+      courseTier: null,
+      isPublicCourse: false,
+    };
+    const shared = {
+      lessons: [kidsLesson],
+      links: [{ deckId: "kids-vocab", lessonId: kidsLesson.id, courseId: kidsCourse }],
+      sets: [set("kids-vocab", "Vocabulary - Week 1", 1, 12)],
+      unlockedCourseIds: new Set([kidsCourse]),
+      taughtLessonIds: new Set([kidsLesson.id]),
+      englishCourseIds: null,
+    };
+
+    assert.equal(buildGameDeckSummaries(shared).length, 0);
+    assert.equal(
+      buildGameDeckSummaries({ ...shared, privateCourseIds: new Set([kidsCourse]) }).length,
+      1
+    );
+  });
+
+  it("hides course-only decks when the student only has a free lesson on that course", () => {
+    const freeLesson = { ...lesson("community-1", 1, COMMUNITY), isFree: true };
+    const summaries = buildGameDeckSummaries({
+      lessons: [freeLesson],
+      links: [
+        { deckId: "week", lessonId: freeLesson.id, courseId: COMMUNITY },
+        { deckId: "master", lessonId: null, courseId: COMMUNITY },
+      ],
+      sets: [
+        set("week", "Week 1 - Welcome", 1, 14),
+        set("master", "Vocabulary - Master List", null, 1292),
+      ],
+      unlockedCourseIds: new Set(),
+      taughtLessonIds: new Set([freeLesson.id]),
+      englishCourseIds: null,
+    });
+    assert.deepEqual(
+      summaries.map((deck) => deck.deckId),
+      ["week"]
+    );
   });
 });
