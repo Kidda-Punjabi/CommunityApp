@@ -7,6 +7,7 @@ import { getDisplayName } from "@/lib/profile/display-name";
 import { kidProfileIdsInCohort, loadCohortMembershipRoster } from "@/lib/tutoring/cohort-attendance";
 import { resolveCoverLessonWrite } from "@/lib/tutoring/cover-lesson";
 import type { LessonLogEditAttendance } from "@/lib/tutoring/lesson-log-edit";
+import { submittedHomeworkActorIds } from "@/lib/tutoring/lesson-log-edit";
 import { patchLessonLogRecording, patchLoggedLessonOnNotion, resolvePresentLeads } from "@/lib/tutoring/log-lesson-notion";
 import { isHttpUrl } from "@/lib/tutoring/log-lesson-copy";
 import { syncCohortLessonRecordingFromLog } from "@/lib/tutoring/sync-cohort-recording-from-log";
@@ -204,6 +205,20 @@ export async function updateLoggedLessonAction(input: {
       }));
     const leads = await resolvePresentLeads(reader, present);
     const replaceAttendees = present.length === 0 || leads.leadIds.length > 0;
+    const submittedIds = await submittedHomeworkIdsForLesson(
+      reader,
+      entry.lesson_id as string,
+      roster.map((person) => person.id)
+    );
+    const submitted = roster
+      .filter((person) => submittedIds.includes(person.id))
+      .map((person) => ({
+        studentId: person.kind === "student" ? person.id : null,
+        kidProfileId: person.kind === "kid" ? person.id : null,
+        name: person.name,
+      }));
+    const homeworkLeads = await resolvePresentLeads(reader, submitted);
+    const replaceHomework = submitted.length === 0 || homeworkLeads.leadIds.length > 0;
     try {
       await patchLoggedLessonOnNotion({
         pageId,
@@ -211,6 +226,7 @@ export async function updateLoggedLessonAction(input: {
         isCoverSession: cover.isCoverSession,
         notionTutorUserId: cover.notionTutorUserId,
         attendeeLeadIds: replaceAttendees ? leads.leadIds : null,
+        homeworkLeadIds: replaceHomework ? homeworkLeads.leadIds : null,
       });
     } catch (notionError) {
       await reader
@@ -235,10 +251,12 @@ export async function updateLoggedLessonAction(input: {
       })
       .eq("id", input.entryId);
     refreshClassPaths(cohortId, packageInstanceId);
-    const missing = leads.unmatchedNames.length
-      ? ` No Notion lead for ${leads.unmatchedNames.join(", ")}.`
+    const missingNames = [...new Set([...leads.unmatchedNames, ...homeworkLeads.unmatchedNames])];
+    const missing = missingNames.length ? ` No Notion lead for ${missingNames.join(", ")}.` : "";
+    const homeworkNote = submitted.length
+      ? ` Homework for this lesson: ${submitted.map((person) => person.name).join(", ")}.`
       : "";
-    return { success: `Updated. The Notion lesson log was updated.${missing}` };
+    return { success: `Updated. The Notion lesson log was updated.${homeworkNote}${missing}` };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not update the lesson." };
   }
@@ -290,6 +308,26 @@ async function loadOwnedLessonLog(
     cohortId,
     packageInstanceId,
   };
+}
+
+async function submittedHomeworkIdsForLesson(
+  reader: Awaited<ReturnType<typeof requireTutor>>["reader"],
+  lessonId: string,
+  rosterIds: string[]
+): Promise<string[]> {
+  if (rosterIds.length === 0) return [];
+  const { data, error } = await reader
+    .from("homework_submissions")
+    .select("student_id, kid_profile_id")
+    .eq("lesson_id", lessonId)
+    .eq("is_practice", false);
+  if (error) return [];
+  return submittedHomeworkActorIds(
+    rosterIds,
+    (data ?? []).map((row) => ({
+      actorId: (row.kid_profile_id as string | null) ?? (row.student_id as string | null),
+    }))
+  );
 }
 
 async function classRoster(

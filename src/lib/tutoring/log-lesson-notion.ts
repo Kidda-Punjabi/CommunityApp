@@ -281,6 +281,7 @@ export async function patchLoggedLessonOnNotion(options: {
   isCoverSession: boolean;
   notionTutorUserId: string | null;
   attendeeLeadIds: string[] | null;
+  homeworkLeadIds?: string[] | null;
 }): Promise<void> {
   await notionJson(`/pages/${options.pageId}`, {
     method: "PATCH",

@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   classifyLookupCount,
   logCoversQueueTarget,
+  writebackWhenAppLessonLogExists,
   mergeRelationIds,
   relationPropertyForKind,
   shouldRetryFailed,
@@ -103,6 +104,11 @@ describe("logCoversQueueTarget", () => {
 });
 
 describe("relationPropertyForKind", () => {
+  it("writes homework onto the app lesson log and leaves attendance to that save", () => {
+    assert.equal(writebackWhenAppLessonLogExists("homework"), "use-app-page");
+    assert.equal(writebackWhenAppLessonLogExists("attendance"), "skip");
+  });
+
   it("maps attendance to Attendees and homework to Homework", () => {
     assert.equal(relationPropertyForKind("attendance"), "Attendees");
     assert.equal(relationPropertyForKind("homework"), "Homework");

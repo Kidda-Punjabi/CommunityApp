@@ -5,6 +5,19 @@ import type { CoverTutorChoice } from "@/lib/tutoring/cover-lesson";
 import { lessonListLabel, lessonSlotLabel } from "@/lib/tutoring/log-lesson-copy";
 import type { ClassDetail } from "@/lib/tutoring/load-tutor-classes";
 
+function HomeworkLine({
+  homework,
+}: {
+  homework: Array<{ id: string; name: string; submitted: boolean }>;
+}) {
+  const submitted = homework.filter((person) => person.submitted);
+  return (
+    <p className="mt-1 text-sm text-zinc-600">
+      Homework for this lesson: {submitted.length ? submitted.map((person) => person.name).join(", ") : "not submitted yet"}
+    </p>
+  );
+}
+
 export function ClassDetailView({
   detail,
   cohortId,
@@ -71,6 +84,7 @@ export function ClassDetailView({
                 <p className="mt-1 text-sm text-red-700">
                   {lesson.dateLabel ?? "Logged"} · {lesson.present}/{lesson.total} · recording missing
                 </p>
+                <HomeworkLine homework={lesson.homework} />
                 {lesson.coverLabel ? (
                   <p className="mt-1 text-sm font-medium text-violet-700">{lesson.coverLabel}</p>
                 ) : null}
@@ -87,6 +101,7 @@ export function ClassDetailView({
                     isCoverSession={lesson.isCoverSession}
                     actualTutorId={lesson.actualTutorId}
                     attendance={lesson.attendance}
+                    homework={lesson.homework}
                     tutors={tutors}
                   />
                 ) : null}
@@ -103,6 +118,7 @@ export function ClassDetailView({
                 <p className="mt-1 text-sm text-zinc-600">
                   {lesson.dateLabel ?? "Logged"} · {lesson.present}/{lesson.total} · recorded
                 </p>
+                <HomeworkLine homework={lesson.homework} />
                 {lesson.coverLabel ? (
                   <p className="mt-1 text-sm font-medium text-violet-700">{lesson.coverLabel}</p>
                 ) : null}
@@ -119,6 +135,7 @@ export function ClassDetailView({
                     isCoverSession={lesson.isCoverSession}
                     actualTutorId={lesson.actualTutorId}
                     attendance={lesson.attendance}
+                    homework={lesson.homework}
                     tutors={tutors}
                   />
                 ) : null}

@@ -12,6 +12,7 @@ import {
   mimeMatchesHomeworkRecordingPath,
 } from "@/lib/tutoring/homework-recording-upload";
 import { persistVoiceHomework } from "@/lib/tutoring/submit-homework";
+import { linkSubmittedHomeworkToAppLessonLog } from "@/lib/tutoring/sync-approved-homework-to-notion";
 import { homeworkStorageClient } from "@/lib/tutoring/homework-storage";
 import {
   HOMEWORK_ALREADY_SUBMITTED_MESSAGE,
@@ -134,6 +135,20 @@ export async function submitHomeworkRecording(
       durationSeconds,
     });
     if ("error" in persisted) return { error: persisted.error };
+
+    try {
+      const { client: admin } = tryCreateServiceRoleClient();
+      await linkSubmittedHomeworkToAppLessonLog(admin ?? supabase, {
+        studentId: actor.kind === "kid" ? null : actor.userId,
+        kidProfileId: actor.kind === "kid" ? actor.kidProfileId : null,
+        lessonId,
+      });
+    } catch (linkError) {
+      console.error(
+        "[homework] lesson log link failed",
+        linkError instanceof Error ? linkError.message : linkError
+      );
+    }
 
     revalidateHomeworkPaths(lessonId);
     return { success: "Homework submitted! Your tutor will review it soon." };

@@ -8,6 +8,8 @@ import { homeworkTimingWarningMessage } from "@/lib/tutoring/homework-submission
 import { getHomeworkSubmissionTiming } from "@/lib/tutoring/homework-near-lesson";
 import { homeworkWrite, resolveCourseActor } from "@/lib/kids/course-actor";
 import { persistTextHomework } from "@/lib/tutoring/submit-homework";
+import { linkSubmittedHomeworkToAppLessonLog } from "@/lib/tutoring/sync-approved-homework-to-notion";
+import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { revalidatePath } from "next/cache";
 
 export type CatchupActionResult = {
@@ -95,6 +97,20 @@ export async function submitTextHomeworkAction(
       answers,
     });
     if ("error" in persisted) return { error: persisted.error };
+
+    try {
+      const { client: admin } = tryCreateServiceRoleClient();
+      await linkSubmittedHomeworkToAppLessonLog(admin ?? supabase, {
+        studentId: actor.kind === "kid" ? null : actor.userId,
+        kidProfileId: actor.kind === "kid" ? actor.kidProfileId : null,
+        lessonId,
+      });
+    } catch (linkError) {
+      console.error(
+        "[homework] lesson log link failed",
+        linkError instanceof Error ? linkError.message : linkError
+      );
+    }
 
     revalidateCatchupPaths(lessonId);
     return { success: "Homework submitted! Your tutor will review your written answers." };

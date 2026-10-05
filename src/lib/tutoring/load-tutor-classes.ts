@@ -64,6 +64,7 @@ export type ClassLessonRow = {
   isCoverSession: boolean;
   actualTutorId: string | null;
   attendance: LessonLogEditAttendance[];
+  homework: Array<{ id: string; name: string; submitted: boolean }>;
 };
 
 export type ClassDetail = {
@@ -630,6 +631,11 @@ async function buildDetail(options: {
           kind: student.kind,
           attended: byActor?.get(student.id) ?? (byActor && byActor.size > 0 ? false : true),
         })),
+        homework: options.people.map((student) => ({
+          id: student.id,
+          name: student.name,
+          submitted: submissionByLessonActor.has(`${lesson.id}:${student.id}`),
+        })),
       };
     }
     if (next?.lessonId === lesson.id) {
@@ -651,6 +657,7 @@ async function buildDetail(options: {
         isCoverSession: false,
         actualTutorId: null,
         attendance: [],
+        homework: [],
       };
     }
     const alreadyUnlocked = options.unlockedLessonIds.has(lesson.id);
@@ -674,6 +681,7 @@ async function buildDetail(options: {
       isCoverSession: false,
       actualTutorId: null,
       attendance: [],
+      homework: [],
     };
   });
 

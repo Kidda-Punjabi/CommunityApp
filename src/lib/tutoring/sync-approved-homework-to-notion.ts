@@ -177,3 +177,51 @@ export async function syncApprovedHomeworkToNotion(
 
   return { notionNote: " Notion Homework updated." };
 }
+
+/** A submission belongs on the lesson log for that same lesson, once the class has been logged. */
+export async function linkSubmittedHomeworkToAppLessonLog(
+  supabase: SupabaseClient,
+  options: {
+    studentId: string | null;
+    kidProfileId: string | null;
+    lessonId: string;
+  }
+): Promise<void> {
+  const actorId = options.kidProfileId ?? options.studentId;
+  if (!actorId) return;
+  const cohortId = await resolveHomeworkCohortId(supabase, {
+    studentId: options.studentId,
+    kidProfileId: options.kidProfileId,
+    lessonId: options.lessonId,
+  });
+  if (!cohortId) return;
+  const notionPageId = await findLessonLogNotionPageId(supabase, cohortId, options.lessonId);
+  if (!notionPageId || notionPageId.startsWith("pending-")) return;
+
+  const [{ data: profiles }, { data: kids }] = await Promise.all([
+    supabase.from("profiles").select("id, full_name, preferred_name").eq("id", actorId).maybeSingle(),
+    supabase.from("kid_profiles").select("id, name").eq("id", actorId).maybeSingle(),
+  ]);
+  const studentName =
+    (kids?.name as string | null)?.trim() ||
+    (profiles?.preferred_name as string | null)?.trim() ||
+    (profiles?.full_name as string | null)?.trim() ||
+    "Student";
+  const [leadMatch] = await matchStudentsToNotionLeads(supabase, [
+    { studentId: actorId, studentName },
+  ]);
+  if (!leadMatch?.ok) return;
+
+  const existing = await readLessonLogAttendanceHomeworkFromNotion(notionPageId);
+  const already = existing.homeworkLeadIds.some(
+    (id) => id.replace(/-/g, "").toLowerCase() === leadMatch.leadPageId.replace(/-/g, "").toLowerCase()
+  );
+  if (already) return;
+  await pushLessonLogAttendanceHomeworkToNotion({
+    notionPageId,
+    attendeeLeadPageIds: existing.attendeeLeadIds,
+    homeworkLeadPageIds: [...existing.homeworkLeadIds, leadMatch.leadPageId],
+    updateAttendees: false,
+    updateHomework: true,
+  });
+}

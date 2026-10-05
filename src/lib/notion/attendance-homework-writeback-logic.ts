@@ -75,3 +75,13 @@ export function logCoversQueueTarget(
 export function relationPropertyForKind(kind: WritebackKind): "Attendees" | "Homework" {
   return kind === "attendance" ? "Attendees" : "Homework";
 }
+
+/**
+ * Attendance is already written by the app lesson log.
+ * Homework still has to be written onto that same page.
+ */
+export function writebackWhenAppLessonLogExists(
+  kind: WritebackKind
+): "skip" | "use-app-page" {
+  return kind === "homework" ? "use-app-page" : "skip";
+}

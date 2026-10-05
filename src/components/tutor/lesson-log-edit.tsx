@@ -12,6 +12,7 @@ export function LessonLogEdit({
   isCoverSession,
   actualTutorId,
   attendance,
+  homework,
   tutors,
 }: {
   entryId: string;
@@ -19,6 +20,7 @@ export function LessonLogEdit({
   isCoverSession: boolean;
   actualTutorId: string | null;
   attendance: LessonLogEditAttendance[];
+  homework: Array<{ id: string; name: string; submitted: boolean }>;
   tutors: CoverTutorChoice[];
 }) {
   const router = useRouter();
@@ -132,6 +134,26 @@ export function LessonLogEdit({
             );
           })}
         </ul>
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold text-zinc-900">Homework for this lesson</p>
+        <ul className="mt-2 flex flex-col gap-2">
+          {homework.map((person) => (
+            <li
+              key={person.id}
+              className="flex min-h-11 items-center justify-between gap-3 rounded-2xl bg-zinc-50 px-3 py-2"
+            >
+              <span className="text-sm font-medium text-zinc-900">{person.name}</span>
+              <span className={`text-sm font-semibold ${person.submitted ? "text-emerald-700" : "text-zinc-500"}`}>
+                {person.submitted ? "Submitted" : "Not yet"}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-sm text-zinc-500">
+          This is the homework for the lesson already taught. Update adds it to the same Notion lesson log as the attendance.
+        </p>
       </div>
 
       <div>

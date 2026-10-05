@@ -18,6 +18,7 @@ import {
   relationPropertyForKind,
   shouldRetryFailed,
   uniqueNotionIds,
+  writebackWhenAppLessonLogExists,
   type AppLogCoverageRow,
   type WritebackKind,
 } from "@/lib/notion/attendance-homework-writeback-logic";
@@ -447,6 +448,50 @@ async function packageInstanceIdsForQueueRow(
   ];
 }
 
+async function syncedAppLessonLogPageId(
+  supabase: SupabaseClient,
+  row: QueueRow
+): Promise<string | null> {
+  const packageInstanceIds = row.cohort_id ? [] : await packageInstanceIdsForQueueRow(supabase, row);
+  let query = supabase
+    .from("cohort_lesson_log_entries")
+    .select("notion_page_id, cohort_id, package_instance_id, lesson_id, source, notion_sync_status")
+    .eq("lesson_id", row.lesson_id)
+    .eq("source", "app")
+    .eq("notion_sync_status", "synced");
+
+  if (row.cohort_id) {
+    query = query.eq("cohort_id", row.cohort_id);
+  } else if (packageInstanceIds.length > 0) {
+    query = query.in("package_instance_id", packageInstanceIds);
+  } else {
+    return null;
+  }
+
+  const { data, error } = await query.limit(5);
+  if (error) throw error;
+
+  const match = (data ?? []).find((entry) => {
+    const logs: AppLogCoverageRow[] = [
+      {
+        cohortId: (entry.cohort_id as string | null) ?? null,
+        packageInstanceId: (entry.package_instance_id as string | null) ?? null,
+        lessonId: (entry.lesson_id as string | null) ?? null,
+        source: (entry.source as string | null) ?? null,
+        notionSyncStatus: (entry.notion_sync_status as string | null) ?? null,
+      },
+    ];
+    return logCoversQueueTarget(logs, {
+      cohortId: row.cohort_id,
+      packageInstanceIds,
+      lessonId: row.lesson_id,
+    });
+  });
+  const pageId = (match?.notion_page_id as string | null)?.trim() ?? "";
+  if (!pageId || pageId.startsWith("pending-")) return null;
+  return pageId;
+}
+
 async function coveredBySyncedAppLog(
   supabase: SupabaseClient,
   row: QueueRow
@@ -536,13 +581,31 @@ export async function processAttendanceHomeworkWriteback(
     if (row.status === "failed" && !shouldRetryFailed(row.attempts)) continue;
     result.processed += 1;
     try {
-      if (await coveredBySyncedAppLog(supabase, row)) {
+      if (writebackWhenAppLessonLogExists(row.kind) === "skip" && (await coveredBySyncedAppLog(supabase, row))) {
         await markQueueRow(supabase, row.id, {
           status: "skipped",
           last_error: APP_LOG_WRITEBACK_SKIP,
         });
         result.skipped += 1;
         continue;
+      }
+      if (writebackWhenAppLessonLogExists(row.kind) === "use-app-page") {
+        const pageId = await syncedAppLessonLogPageId(supabase, row);
+        if (pageId) {
+          const leadPageId = await resolveLeadPageId(row);
+          await appendLeadToRelation(pageId, relationPropertyForKind("homework"), leadPageId);
+          await markQueueRow(supabase, row.id, { status: "sent", last_error: null });
+          result.sent += 1;
+          continue;
+        }
+        if (await coveredBySyncedAppLog(supabase, row)) {
+          await markQueueRow(supabase, row.id, {
+            status: "skipped",
+            last_error: "lesson log has no Notion page yet",
+          });
+          result.skipped += 1;
+          continue;
+        }
       }
       const outcome = await processQueueRow(supabase, row);
       if (outcome.createdLessonLogPage) result.createdLessonLogPages += 1;
