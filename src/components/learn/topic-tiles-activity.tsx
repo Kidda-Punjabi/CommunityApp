@@ -5,6 +5,11 @@ import type { FlashcardDeckCard } from "@/lib/flashcards/types";
 import { TopicListenButton } from "@/components/learn/topic-listen-button";
 import { latinRomanised } from "@/lib/conjugation/romanised";
 import {
+  gurmukhiSequenceMatches,
+  sentenceTileDistractorTarget,
+  uniqueSentenceTileDistractors,
+} from "@/lib/free-lessons/sentence-tile-bank";
+import {
   pickCards,
   shuffleInPlace,
   stripTrailingRomanisation,
@@ -58,23 +63,20 @@ function buildBank(
 ): { target: string[]; bank: PhraseTile[]; phraseRomanised: string } {
   const phrase = cardPhrase(card);
   const correct = phrase.parts;
-  const correctSet = new Set(correct.map((part) => part.gurmukhi));
+  const answerWords = correct.map((part) => part.gurmukhi);
 
-  const decoyCandidates: Array<{ gurmukhi: string; romanised: string }> = [];
+  const deckWords: Array<{ gurmukhi: string; romanised: string }> = [];
   for (const other of shuffleInPlace(allCards.filter((item) => item.id !== card.id))) {
     for (const part of cardPhrase(other).parts) {
-      if (!correctSet.has(part.gurmukhi)) {
-        decoyCandidates.push(part);
-      }
+      deckWords.push(part);
     }
   }
 
-  const decoyCount = Math.min(
-    correct.length >= 4 ? 2 : 1,
-    decoyCandidates.length,
-    Math.max(1, correct.length)
+  const uniqueDistractors = uniqueSentenceTileDistractors(answerWords, deckWords);
+  const decoys = shuffleInPlace(uniqueDistractors).slice(
+    0,
+    sentenceTileDistractorTarget(correct.length)
   );
-  const decoys = shuffleInPlace(decoyCandidates).slice(0, decoyCount);
 
   const entries = [
     ...correct.map((part) => ({
@@ -176,7 +178,10 @@ export function TopicTilesActivity({
 
   function check() {
     if (feedback || built.length === 0) return;
-    const ok = built.map((tile) => tile.word).join(" ") === target.join(" ");
+    const ok = gurmukhiSequenceMatches(
+      built.map((tile) => tile.word),
+      target
+    );
     setFeedback(ok ? "correct" : "wrong");
     if (ok) correctCountRef.current += 1;
   }
