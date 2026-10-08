@@ -4,6 +4,7 @@ import {
   MISSING_ACCESS_INSTANCE_STATUSES,
   type EnrollmentGapsSnapshot,
   type EnrollmentGrantQueueRow,
+  type KidsCohortConfirmGap,
   type MissingAccessInstanceStatus,
   type MissingAccessRow,
 } from "@/lib/admin/enrollment-gaps-types";
@@ -124,18 +125,73 @@ async function loadMissingAccessInstances(
   return { rows };
 }
 
+export async function loadKidsCohortConfirmGaps(
+  supabase: SupabaseClient
+): Promise<{ rows: KidsCohortConfirmGap[]; error?: string }> {
+  const { data: cohorts, error: cohortError } = await supabase
+    .from("cohorts")
+    .select("id, name, notion_confirmed_count, courses!inner(content_track)")
+    .eq("courses.content_track", "kids");
+
+  if (cohortError) return { rows: [], error: cohortError.message };
+
+  const kidsCohorts = (cohorts ?? []).map((row) => ({
+    id: row.id as string,
+    name: row.name as string,
+    notionConfirmedCount:
+      typeof row.notion_confirmed_count === "number" ? row.notion_confirmed_count : 0,
+  }));
+  if (kidsCohorts.length === 0) return { rows: [] };
+
+  const { data: members, error: memberError } = await supabase
+    .from("cohort_members")
+    .select("cohort_id")
+    .in(
+      "cohort_id",
+      kidsCohorts.map((cohort) => cohort.id)
+    )
+    .is("left_at", null)
+    .not("kid_profile_id", "is", null);
+
+  if (memberError) return { rows: [], error: memberError.message };
+
+  const activeByCohort = new Map<string, number>();
+  for (const member of members ?? []) {
+    const cohortId = member.cohort_id as string;
+    activeByCohort.set(cohortId, (activeByCohort.get(cohortId) ?? 0) + 1);
+  }
+
+  const rows = kidsCohorts
+    .map((cohort) => {
+      const activeKidMembers = activeByCohort.get(cohort.id) ?? 0;
+      return {
+        cohortId: cohort.id,
+        cohortName: cohort.name,
+        notionConfirmedCount: cohort.notionConfirmedCount,
+        activeKidMembers,
+        gap: cohort.notionConfirmedCount - activeKidMembers,
+      };
+    })
+    .filter((row) => row.gap > 0)
+    .sort((a, b) => b.gap - a.gap || a.cohortName.localeCompare(b.cohortName));
+
+  return { rows };
+}
+
 export async function loadEnrollmentGaps(
   supabase: SupabaseClient
 ): Promise<EnrollmentGapsSnapshot> {
-  const [grantQueue, missingAccess] = await Promise.all([
+  const [grantQueue, missingAccess, kidsCohortGaps] = await Promise.all([
     loadUnresolvedGrantQueue(supabase),
     loadMissingAccessInstances(supabase),
+    loadKidsCohortConfirmGaps(supabase),
   ]);
 
-  const error = grantQueue.error ?? missingAccess.error;
+  const error = grantQueue.error ?? missingAccess.error ?? kidsCohortGaps.error;
   return {
     grantQueue: grantQueue.rows,
     missingAccess: missingAccess.rows,
+    kidsCohortGaps: kidsCohortGaps.rows,
     error,
   };
 }

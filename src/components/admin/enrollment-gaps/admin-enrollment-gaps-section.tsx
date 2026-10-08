@@ -10,6 +10,7 @@ import { setPackageInstanceAppAccessExpected } from "@/app/admin/packages/action
 import { AdminStatusPill } from "@/components/admin/admin-filter-pills";
 import type {
   EnrollmentGrantQueueRow,
+  KidsCohortConfirmGap,
   MissingAccessRow,
 } from "@/lib/admin/enrollment-gaps-types";
 import { notionPageHref } from "@/lib/admin/enrollment-gaps-types";
@@ -29,6 +30,7 @@ function formatDateTime(iso: string): string {
 export function AdminEnrollmentGapsSection() {
   const [grantQueue, setGrantQueue] = useState<EnrollmentGrantQueueRow[]>([]);
   const [missingAccess, setMissingAccess] = useState<MissingAccessRow[]>([]);
+  const [kidsCohortGaps, setKidsCohortGaps] = useState<KidsCohortConfirmGap[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -41,6 +43,7 @@ export function AdminEnrollmentGapsSection() {
       if (cancelled) return;
       setGrantQueue(result.grantQueue);
       setMissingAccess(result.missingAccess);
+      setKidsCohortGaps(result.kidsCohortGaps ?? []);
       setError(result.error ?? null);
       setLoading(false);
     });
@@ -105,6 +108,51 @@ export function AdminEnrollmentGapsSection() {
 
       {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
       {actionError ? <p className="mb-4 text-sm text-red-600">{actionError}</p> : null}
+
+      <section className="mb-10">
+        <div className="mb-3">
+          <h2 className="text-lg font-semibold tracking-tight text-zinc-900">
+            Kids cohorts short of Notion confirmed
+          </h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Notion confirmed count is higher than active kid memberships.
+          </p>
+        </div>
+        {loading ? (
+          <p className="text-sm text-zinc-500">Loading…</p>
+        ) : kidsCohortGaps.length === 0 ? (
+          <div className={ui.emptyState}>
+            <p className="text-lg font-semibold text-zinc-900">No kids cohort gap</p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Every kids cohort has at least as many active kid members as its Notion confirmed
+              count.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white">
+            <table className="min-w-[36rem] text-left text-sm">
+              <thead className="border-b border-zinc-100 bg-zinc-50/80 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                <tr>
+                  <th className="px-4 py-3">Cohort</th>
+                  <th className="px-3 py-3">Notion confirmed</th>
+                  <th className="px-3 py-3">Active kid members</th>
+                  <th className="px-3 py-3">Gap</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {kidsCohortGaps.map((row) => (
+                  <tr key={row.cohortId} className="hover:bg-zinc-50/50">
+                    <td className="px-4 py-3 font-semibold text-zinc-900">{row.cohortName}</td>
+                    <td className="px-3 py-3 text-zinc-600">{row.notionConfirmedCount}</td>
+                    <td className="px-3 py-3 text-zinc-600">{row.activeKidMembers}</td>
+                    <td className="px-3 py-3 font-semibold text-amber-700">{row.gap}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="mb-10">
         <div className="mb-3">

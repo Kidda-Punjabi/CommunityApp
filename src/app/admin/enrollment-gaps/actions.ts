@@ -16,6 +16,7 @@ export async function fetchEnrollmentGaps(): Promise<EnrollmentGapsSnapshot> {
     return {
       grantQueue: [],
       missingAccess: [],
+      kidsCohortGaps: [],
       error: error instanceof Error ? error.message : "Failed to load enrollment gaps.",
     };
   }

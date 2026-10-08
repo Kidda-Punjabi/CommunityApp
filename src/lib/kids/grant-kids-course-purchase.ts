@@ -4,6 +4,10 @@ import { completeGroupPurchaseAfterPayment } from "@/lib/group-purchase/complete
 import { cohortHoldExpiresAt } from "@/lib/group-purchase/cohort-capacity";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { packageSlugFromCheckoutKey } from "@/lib/stripe/sync-student-packages-from-payment";
+import {
+  fullKidGrantMissingNote,
+  missingFullKidGrantParts,
+} from "@/lib/kids/full-kid-grant";
 import { KIDS_BEGINNERS_PACKAGE_SLUG } from "@/lib/learning/kids-beginners";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
@@ -121,10 +125,37 @@ export async function resolveIsKidsCoursePurchase(
   return false;
 }
 
+function sameKidName(left: string, right: string): boolean {
+  return normalizeKidName(left).toLowerCase() === normalizeKidName(right).toLowerCase();
+}
+
+function isKidNameUniqueViolation(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === "23505") return true;
+  return (error.message ?? "").includes("kid_profiles_parent_name_lower_trim_idx");
+}
+
+async function findKidProfileByName(
+  supabase: SupabaseClient,
+  parentUserId: string,
+  name: string
+): Promise<{ kidProfileId: string } | { error: string } | null> {
+  const { data: existing, error: existingError } = await supabase
+    .from("kid_profiles")
+    .select("id, name")
+    .eq("parent_user_id", parentUserId);
+
+  if (existingError) return { error: existingError.message };
+
+  const match = (existing ?? []).find((row) => sameKidName(String(row.name ?? ""), name));
+  if (match?.id) return { kidProfileId: match.id as string };
+  return null;
+}
+
 export async function findOrCreateKidProfileForPurchase(
   supabase: SupabaseClient,
   parentUserId: string,
-  input: { kidProfileId?: string | null; kidName?: string | null }
+  input: { kidProfileId?: string | null; kidName?: string | null; ageTier?: string | null }
 ): Promise<{ kidProfileId: string } | { error: string }> {
   if (input.kidProfileId?.trim()) {
     const { data, error } = await supabase
@@ -141,17 +172,8 @@ export async function findOrCreateKidProfileForPurchase(
   const name = input.kidName ? normalizeKidName(input.kidName) : "";
   if (!name) return { error: "Child's name is required." };
 
-  const { data: existing, error: existingError } = await supabase
-    .from("kid_profiles")
-    .select("id, name")
-    .eq("parent_user_id", parentUserId);
-
-  if (existingError) return { error: existingError.message };
-
-  const match = (existing ?? []).find(
-    (row) => normalizeKidName(String(row.name ?? "")).toLowerCase() === name.toLowerCase()
-  );
-  if (match?.id) return { kidProfileId: match.id as string };
+  const existing = await findKidProfileByName(supabase, parentUserId, name);
+  if (existing) return existing;
 
   const { data: created, error: createError } = await supabase
     .from("kid_profiles")
@@ -159,10 +181,15 @@ export async function findOrCreateKidProfileForPurchase(
       parent_user_id: parentUserId,
       name,
       avatar_icon: DEFAULT_KID_AVATAR,
-      age_tier: DEFAULT_KID_AGE_TIER,
+      age_tier: input.ageTier?.trim() || DEFAULT_KID_AGE_TIER,
     })
     .select("id")
     .single();
+
+  if (createError && isKidNameUniqueViolation(createError)) {
+    const raced = await findKidProfileByName(supabase, parentUserId, name);
+    if (raced) return raced;
+  }
 
   if (createError || !created?.id) {
     return { error: createError?.message ?? "Could not create kid profile." };
@@ -400,6 +427,36 @@ export async function grantKidsCoursePurchaseFromSession(
   }
 
   const purchasedAt = new Date(session.created * 1000).toISOString();
+  const courseId = pkg.course_id as string;
+
+  if (cohortId) {
+    const already = await missingFullKidGrantParts(supabase, {
+      kidProfileId: kid.kidProfileId,
+      cohortId,
+      courseId,
+    });
+    if (already.length === 0) {
+      await supabase
+        .from("kids_course_purchase_grant_queue")
+        .update({
+          resolved: true,
+          resolved_at: new Date().toISOString(),
+          resolution_note: "granted",
+          kid_profile_id: kid.kidProfileId,
+        })
+        .eq("stripe_checkout_session_id", session.id)
+        .eq("resolved", false);
+      return { granted: true, queued: false };
+    }
+  }
+
+  const { data: existingPackage } = await supabase
+    .from("student_packages")
+    .select("id, status")
+    .eq("kid_profile_id", kid.kidProfileId)
+    .eq("package_id", pkg.id)
+    .maybeSingle();
+
   const { data: studentPackage, error: spError } = await supabase
     .from("student_packages")
     .upsert(
@@ -407,8 +464,8 @@ export async function grantKidsCoursePurchaseFromSession(
         user_id: null,
         kid_profile_id: kid.kidProfileId,
         package_id: pkg.id,
-        course_id: pkg.course_id,
-        status: "waiting_for_payment",
+        course_id: courseId,
+        status: existingPackage?.status === "confirmed" ? "confirmed" : "waiting_for_payment",
         purchased_at: purchasedAt,
         last_stripe_checkout_session_id: session.id,
       },
@@ -432,7 +489,7 @@ export async function grantKidsCoursePurchaseFromSession(
     return { granted: false, queued: true, error: message };
   }
 
-  const courseIdsToGrant = new Set<string>([pkg.course_id as string]);
+  const courseIdsToGrant = new Set<string>([courseId]);
   if (cohortId) {
     const { data: cohortCourse } = await supabase
       .from("cohorts")
@@ -506,7 +563,8 @@ export async function grantKidsCoursePurchaseFromSession(
       studentPackageId: studentPackage.id,
       kidProfileId: kid.kidProfileId,
     });
-    if (groupResult.error) {
+    if (groupResult.error || !groupResult.completed) {
+      const reason = groupResult.error ?? "Group placement did not finish.";
       await enqueueKidsCoursePurchaseGrant(supabase, {
         sessionId: session.id,
         parentEmail: email,
@@ -514,29 +572,83 @@ export async function grantKidsCoursePurchaseFromSession(
         kidName,
         kidProfileId: kid.kidProfileId,
         cohortId,
-        reason: groupResult.error,
+        reason,
         rawMetadata: (session.metadata ?? {}) as Record<string, unknown>,
       });
+      const missing = await missingFullKidGrantParts(supabase, {
+        kidProfileId: kid.kidProfileId,
+        cohortId,
+        courseId,
+      });
+      const note = missing.length > 0 ? fullKidGrantMissingNote(missing) : reason;
+      await supabase
+        .from("kids_course_purchase_grant_queue")
+        .update({ resolved: false, resolution_note: note })
+        .eq("stripe_checkout_session_id", session.id)
+        .eq("resolved", false);
       console.error(
         "[kids purchase grant] group placement failed:",
-        groupResult.error,
+        reason,
         "session=",
         session.id
       );
-      return { granted: false, queued: true, error: groupResult.error };
+      return { granted: false, queued: true, error: note };
     }
 
-    for (const courseId of courseIdsToGrant) {
-      const access = await grantKidCourseAccess(supabase, kid.kidProfileId, courseId);
+    const { data: confirmedPackage } = await supabase
+      .from("student_packages")
+      .select("id, status, enrollment_id")
+      .eq("id", studentPackage.id)
+      .maybeSingle();
+    if (
+      confirmedPackage?.enrollment_id &&
+      confirmedPackage.status !== "confirmed"
+    ) {
+      await supabase
+        .from("student_packages")
+        .update({ status: "confirmed" })
+        .eq("id", studentPackage.id);
+    }
+
+    for (const grantedCourseId of courseIdsToGrant) {
+      const access = await grantKidCourseAccess(supabase, kid.kidProfileId, grantedCourseId);
       if (access.error) {
         console.error(
           "[kids purchase grant] course_access retry failed:",
           access.error,
           "course=",
-          courseId
+          grantedCourseId
         );
       }
     }
+  }
+
+  const missing = cohortId
+    ? await missingFullKidGrantParts(supabase, {
+        kidProfileId: kid.kidProfileId,
+        cohortId,
+        courseId,
+      })
+    : ["cohort_members", "course_enrollments", "student_packages", "course_access"];
+
+  if (missing.length > 0) {
+    const note = fullKidGrantMissingNote(missing);
+    await enqueueKidsCoursePurchaseGrant(supabase, {
+      sessionId: session.id,
+      parentEmail: email,
+      parentUserId,
+      kidName,
+      kidProfileId: kid.kidProfileId,
+      cohortId,
+      reason: note,
+      rawMetadata: (session.metadata ?? {}) as Record<string, unknown>,
+    });
+    await supabase
+      .from("kids_course_purchase_grant_queue")
+      .update({ resolved: false, resolution_note: note })
+      .eq("stripe_checkout_session_id", session.id)
+      .eq("resolved", false);
+    return { granted: false, queued: true, error: note };
   }
 
   await supabase
@@ -545,6 +657,7 @@ export async function grantKidsCoursePurchaseFromSession(
       resolved: true,
       resolved_at: new Date().toISOString(),
       resolution_note: "granted",
+      kid_profile_id: kid.kidProfileId,
     })
     .eq("stripe_checkout_session_id", session.id)
     .eq("resolved", false);

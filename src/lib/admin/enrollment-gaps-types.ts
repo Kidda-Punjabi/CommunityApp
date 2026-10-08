@@ -27,9 +27,18 @@ export type MissingAccessRow = {
   courseName: string;
 };
 
+export type KidsCohortConfirmGap = {
+  cohortId: string;
+  cohortName: string;
+  notionConfirmedCount: number;
+  activeKidMembers: number;
+  gap: number;
+};
+
 export type EnrollmentGapsSnapshot = {
   grantQueue: EnrollmentGrantQueueRow[];
   missingAccess: MissingAccessRow[];
+  kidsCohortGaps: KidsCohortConfirmGap[];
   error?: string;
 };
 

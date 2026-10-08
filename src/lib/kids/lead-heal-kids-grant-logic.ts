@@ -15,6 +15,7 @@ function normalizeName(name: string): string {
  * A lead-heal row has no Stripe session. It identifies a child only when the
  * queue row names one profile, or the parent has exactly one profile.
  * Several profiles and no name or id stay unresolved.
+ * Zero profiles returns wait so the caller can create the account holder's child.
  */
 export function pickLeadHealKidProfile(
   kids: KidRow[],

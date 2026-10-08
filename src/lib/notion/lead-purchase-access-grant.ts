@@ -1,6 +1,7 @@
 import "server-only";
 
 import { setPackageRunRosterStatus } from "@/lib/admin/packages/roster-membership";
+import { missingFullKidGrantParts } from "@/lib/kids/full-kid-grant";
 import {
   enqueueLeadHealKidsCourse,
   LEAD_HEAL_KIDS_COURSE_REASON,
@@ -303,6 +304,22 @@ async function grantResolvedTarget(
   if (courseError) return { error: courseError.message };
 
   if (course?.content_track === "kids") {
+    if (target.kind === "cohort") {
+      const { data: existingKids, error: existingKidsError } = await supabase
+        .from("kid_profiles")
+        .select("id")
+        .eq("parent_user_id", profileId);
+      if (existingKidsError) return { error: existingKidsError.message };
+      for (const kid of existingKids ?? []) {
+        const missing = await missingFullKidGrantParts(supabase, {
+          kidProfileId: kid.id as string,
+          cohortId: target.runId,
+          courseId: target.courseId,
+        });
+        if (missing.length === 0) return { skipped: true };
+      }
+    }
+
     const queued = await enqueueLeadHealKidsCourse(supabase, profileId, target);
     if (queued.error) return { error: queued.error };
     if (queued.alreadySettled) return { skipped: true };
@@ -472,9 +489,84 @@ export async function grantAccessFromLinkedLeadPackages(
     }
   }
 
+  const courseIds = [...new Set(resolved.map((target) => target.courseId))];
+  const contentTrackByCourse = new Map<string, string | null>();
+  if (courseIds.length > 0) {
+    const { data: courseRows, error: courseTrackError } = await supabase
+      .from("courses")
+      .select("id, content_track")
+      .in("id", courseIds);
+    if (courseTrackError) {
+      result.errors.push(courseTrackError.message);
+      return result;
+    }
+    for (const row of courseRows ?? []) {
+      contentTrackByCourse.set(row.id as string, (row.content_track as string | null) ?? null);
+    }
+  }
+
+  const kidsTargets = resolved.filter(
+    (target) => contentTrackByCourse.get(target.courseId) === "kids"
+  );
+  const adultTargets = resolved.filter(
+    (target) => contentTrackByCourse.get(target.courseId) !== "kids"
+  );
+
+  for (const target of kidsTargets) {
+    console.info(
+      `[lead purchase grant] kids target requestId=${requestId} target=${target.kind}:${target.runId} (${target.label})`
+    );
+    const grant = await grantResolvedTarget(supabase, profileId, target);
+    if (grant.error) {
+      result.errors.push(grant.error);
+      const queued = await enqueueLeadPurchaseGrant(supabase, {
+        profileId,
+        notionLeadPageId: leadPageId,
+        leadEmail,
+        leadName,
+        reason: "grant_failed",
+        rawPackageData: {
+          packagePageIds: [target.notionPageId],
+          resolved: [target],
+          grantError: grant.error,
+          targetKind: target.kind,
+          targetRunId: target.runId,
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      if (queued.queued) result.queued += 1;
+      if (queued.error) result.errors.push(queued.error);
+      continue;
+    }
+    if (grant.grantedToKid) {
+      result.granted += 1;
+      result.details.push(`Granted ${target.kind} ${target.label} to the kid profile.`);
+      continue;
+    }
+    if (grant.queued) {
+      result.queued += 1;
+      result.details.push(
+        `Queued kids course ${target.label} (${LEAD_HEAL_KIDS_COURSE_REASON}).`
+      );
+      continue;
+    }
+    if (grant.skipped) {
+      result.skipped += 1;
+      result.details.push(`Kids course ${target.label} was already granted to a kid profile.`);
+    }
+  }
+
   const rawPackageData = {
     packagePageIds,
-    resolved: resolved.map((r) => ({
+    resolved: adultTargets.map((r) => ({
+      kind: r.kind,
+      runId: r.runId,
+      courseId: r.courseId,
+      label: r.label,
+      notionPageId: r.notionPageId,
+    })),
+    kids: kidsTargets.map((r) => ({
       kind: r.kind,
       runId: r.runId,
       courseId: r.courseId,
@@ -487,16 +579,28 @@ export async function grantAccessFromLinkedLeadPackages(
     timestamp: new Date().toISOString(),
   };
 
-  const decision = decideLeadPurchaseGrant({
-    liveCount: resolved.length,
-    unresolvedCount: unresolved.length,
-  });
+  // A kids cohort sitting next to one adult package used to be
+  // ambiguous_multiple_packages, so the kid was never queued. The kids target
+  // is granted above. Leave that single adult package on its existing path
+  // (not auto-granted) so mixed leads do not start creating adult enrollments.
+  const decision =
+    kidsTargets.length > 0 && adultTargets.length === 1 && unresolved.length === 0
+      ? {
+          type: "skip" as const,
+          detail: "Kids course handled separately from the other live package.",
+        }
+      : decideLeadPurchaseGrant({
+          liveCount: adultTargets.length,
+          unresolvedCount: unresolved.length,
+        });
 
   if (decision.type === "skip") {
-    result.skipped = 1;
-    result.details.push(decision.detail);
+    if (kidsTargets.length === 0) {
+      result.skipped = 1;
+      result.details.push(decision.detail);
+    }
     console.info(
-      `[lead purchase grant] skip-historical requestId=${requestId} profile=${profileId} lead=${leadPageId} historical=${historical.length} elapsed=${Date.now() - startTime}ms`
+      `[lead purchase grant] skip-historical requestId=${requestId} profile=${profileId} lead=${leadPageId} historical=${historical.length} kids=${kidsTargets.length} elapsed=${Date.now() - startTime}ms`
     );
     return result;
   }
@@ -524,7 +628,7 @@ export async function grantAccessFromLinkedLeadPackages(
       );
     }
     if (queued.queued) {
-      result.queued = 1;
+      result.queued += 1;
       result.details.push(`Queued (${reason}).`);
     } else {
       result.details.push(`Could not queue (${reason}).`);
@@ -537,7 +641,7 @@ export async function grantAccessFromLinkedLeadPackages(
     return result;
   }
 
-  const target = resolved[0]!;
+  const target = adultTargets[0]!;
   console.info(
     `[lead purchase grant] granting requestId=${requestId} target=${target.kind}:${target.runId} (${target.label})`
   );
@@ -563,7 +667,7 @@ export async function grantAccessFromLinkedLeadPackages(
         targetRunId: target.runId,
       },
     });
-    if (queued.queued) result.queued = 1;
+    if (queued.queued) result.queued += 1;
     if (queued.error) {
       result.errors.push(queued.error);
       console.error(
@@ -575,7 +679,7 @@ export async function grantAccessFromLinkedLeadPackages(
   }
 
   if (grant.grantedToKid) {
-    result.granted = 1;
+    result.granted += 1;
     result.details.push(`Granted ${target.kind} ${target.label} to the kid profile.`);
     console.info(
       `[lead purchase grant] KID SUCCESS requestId=${requestId} profile=${profileId} lead=${leadPageId} ${target.kind}=${target.runId} label=${target.label} elapsed=${Date.now() - startTime}ms`
@@ -584,7 +688,7 @@ export async function grantAccessFromLinkedLeadPackages(
   }
 
   if (grant.queued) {
-    result.queued = 1;
+    result.queued += 1;
     result.details.push(
       `Queued kids course ${target.label} (${LEAD_HEAL_KIDS_COURSE_REASON}) until a kid profile exists.`
     );
@@ -595,12 +699,12 @@ export async function grantAccessFromLinkedLeadPackages(
   }
 
   if (grant.skipped) {
-    result.skipped = 1;
+    result.skipped += 1;
     result.details.push(`Kids course ${target.label} was already granted to a kid profile.`);
     return result;
   }
 
-  result.granted = 1;
+  result.granted += 1;
   result.details.push(`Granted ${target.kind} ${target.label} (${target.runId}).`);
   if (historical.length > 0) {
     result.details.push(
@@ -723,8 +827,8 @@ export async function maybeGrantAccessAfterLeadLink(
 /**
  * Heal path for already-linked profiles (e.g. password login). Signup/auth-callback
  * own the primary trigger; this covers cases where grant never ran after linking.
- * Skips the Notion round-trip when the profile already has a confirmed package or
- * active cohort membership (idempotent fast path).
+ * Each package is checked on its own. An older unrelated package must not hide a
+ * kids cohort that still has no kid enrollment.
  */
 export async function maybeGrantAccessForLinkedProfile(
   supabase: SupabaseClient,
@@ -749,57 +853,6 @@ export async function maybeGrantAccessForLinkedProfile(
         `[lead purchase grant] linked-profile heal skip — no notion_lead_page_id profile=${profileId}`
       );
       return null;
-    }
-
-    const [{ count: memberCount }, { count: packageCount }] = await Promise.all([
-      supabase
-        .from("cohort_members")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", profileId)
-        .is("left_at", null),
-      supabase
-        .from("student_packages")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", profileId)
-        .eq("status", "confirmed"),
-    ]);
-
-    if ((memberCount ?? 0) > 0 || (packageCount ?? 0) > 0) {
-      console.info(
-        `[lead purchase grant] linked-profile heal skip — already has access profile=${profileId} members=${memberCount ?? 0} packages=${packageCount ?? 0}`
-      );
-      return {
-        attempted: false,
-        granted: 0,
-        queued: 0,
-        skipped: 1,
-        errors: [],
-        details: ["Already has cohort membership or confirmed package."],
-      };
-    }
-
-    const { count: kidsHealCount, error: kidsHealError } = await supabase
-      .from("kids_course_purchase_grant_queue")
-      .select("id", { count: "exact", head: true })
-      .eq("parent_user_id", profileId)
-      .eq("reason", LEAD_HEAL_KIDS_COURSE_REASON);
-    if (!kidsHealError && (kidsHealCount ?? 0) > 0) {
-      const { data: authUser } = await supabase.auth.admin.getUserById(profileId);
-      const email = authUser.user?.email?.trim();
-      if (email) {
-        const { drainKidsCoursePurchaseGrantQueue } = await import(
-          "@/lib/kids/grant-kids-course-purchase"
-        );
-        await drainKidsCoursePurchaseGrantQueue(profileId, email);
-      }
-      return {
-        attempted: true,
-        granted: 0,
-        queued: 0,
-        skipped: 1,
-        errors: [],
-        details: ["Kids course lead is already on the kid grant queue."],
-      };
     }
 
     console.info(
