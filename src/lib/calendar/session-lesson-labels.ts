@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
+import { isCompletedLessonLogEntry } from "@/lib/lessons/lesson-log-progress";
 import { assignLessonLabels, formatUpcomingLessonLabel } from "@/lib/calendar/session-lesson-label-utils";
 import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -105,14 +105,21 @@ export async function attachLessonLabelsToSessions<T extends ScheduledSessionRow
   if (cohortIds.length > 0) {
     const { data: logRows, error } = await supabase
       .from("cohort_lesson_log_entries")
-      .select("cohort_id, status")
+      .select("cohort_id, status, dismissed_at")
       .in("cohort_id", cohortIds);
 
     if (error) throw error;
 
     for (const row of logRows ?? []) {
       if (!row.cohort_id) continue;
-      if (!isCountableLessonLogStatus(row.status as string | null)) continue;
+      if (
+        !isCompletedLessonLogEntry({
+          status: row.status as string | null,
+          dismissed_at: (row.dismissed_at as string | null) ?? null,
+        })
+      ) {
+        continue;
+      }
       completedByCohort.set(
         row.cohort_id,
         (completedByCohort.get(row.cohort_id) ?? 0) + 1

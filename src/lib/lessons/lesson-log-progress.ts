@@ -28,6 +28,14 @@ export function isCountableLessonLogStatus(status: string | null | undefined): b
   return status !== "Cancelled";
 }
 
+/** Dismissed rows stay in the table but do not count as a completed lesson. */
+export function isCompletedLessonLogEntry(row: {
+  status?: string | null;
+  dismissed_at?: string | null;
+}): boolean {
+  return isCountableLessonLogStatus(row.status) && !row.dismissed_at;
+}
+
 /** Assign week numbers by chronological order (date, then id). */
 export function numberLessonLogEntries<T extends { id: string; lessonDate: string }>(
   entries: T[]

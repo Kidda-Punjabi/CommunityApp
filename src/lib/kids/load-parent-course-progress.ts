@@ -1,7 +1,7 @@
 import "server-only";
 
 import { deriveCohortCurrentWeek } from "@/lib/calendar/cohort-week-progress";
-import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
+import { isCompletedLessonLogEntry } from "@/lib/lessons/lesson-log-progress";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { getHomeworkTimingState } from "@/lib/tutoring/homework-near-lesson";
 import type { KidProfile } from "@/lib/kids/types";
@@ -140,7 +140,7 @@ export async function loadParentKidsCourseProgress(
         groupCohortIds.length
           ? unlockDb
               .from("cohort_lesson_log_entries")
-              .select("cohort_id, lesson_id, lesson_date, status")
+              .select("cohort_id, lesson_id, lesson_date, status, dismissed_at")
               .in("cohort_id", groupCohortIds)
               .not("lesson_id", "is", null)
               .lte("lesson_date", today)
@@ -174,7 +174,14 @@ export async function loadParentKidsCourseProgress(
 
     const happenedByCohort = new Map<string, Set<string>>();
     for (const row of logRows ?? []) {
-      if (!isCountableLessonLogStatus(row.status as string | null)) continue;
+      if (
+        !isCompletedLessonLogEntry({
+          status: row.status as string | null,
+          dismissed_at: (row.dismissed_at as string | null) ?? null,
+        })
+      ) {
+        continue;
+      }
       const cohortId = row.cohort_id as string;
       const lessonId = row.lesson_id as string;
       if (!cohortId || !lessonId) continue;

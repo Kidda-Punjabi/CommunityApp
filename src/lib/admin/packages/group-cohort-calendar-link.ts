@@ -27,6 +27,10 @@ import {
 } from "@/lib/calendar/uk-display-time";
 import { assignmentForLessonNumber, type LessonRef } from "@/lib/calendar/lesson-assignment";
 import {
+  cohortWeekNumberWriteError,
+  guardedClassSessions,
+} from "@/lib/calendar/cohort-week-number-guard";
+import {
   isoFromDateInput,
   weekdayFromDateInput,
 } from "@/lib/admin/package-schedule";
@@ -420,6 +424,14 @@ export async function insertGroupCohortCalendarLinkedSessions(
     lessonNumber: lesson.lesson_number as number,
   }));
 
+  const { data: cohortSessions, error: cohortSessionsError } = await supabase
+    .from("tutor_scheduled_sessions")
+    .select("id, cohort_id, title, status, match_method, starts_at, week_number, google_event_id")
+    .eq("cohort_id", params.cohortId)
+    .neq("status", "cancelled");
+
+  if (cohortSessionsError) return { ok: false, error: cohortSessionsError.message };
+
   const now = new Date().toISOString();
   const rows = params.included.map((occurrence) => ({
     tutor_id: params.tutorId,
@@ -440,6 +452,33 @@ export async function insertGroupCohortCalendarLinkedSessions(
     ...assignmentForLessonNumber(occurrence.weekNumber, lessons),
     updated_at: now,
   }));
+
+  const replacedEventIds = new Set(rows.map((row) => row.google_event_id));
+  const kept = guardedClassSessions(
+    (cohortSessions ?? []).map((session) => ({
+      id: session.id as string,
+      cohort_id: params.cohortId,
+      title: (session.title as string | null) ?? "",
+      status: (session.status as string | null) ?? null,
+      match_method: (session.match_method as string | null) ?? null,
+      starts_at: session.starts_at as string,
+      week_number: (session.week_number as number | null) ?? null,
+      google_event_id: session.google_event_id as string,
+    }))
+  ).filter((session) => !replacedEventIds.has(session.google_event_id));
+  const weekError = cohortWeekNumberWriteError([
+    ...kept.map((session) => ({
+      id: session.id,
+      startsAt: session.starts_at,
+      weekNumber: session.week_number,
+    })),
+    ...rows.map((row) => ({
+      id: row.google_event_id,
+      startsAt: row.starts_at,
+      weekNumber: row.week_number,
+    })),
+  ]);
+  if (weekError) return { ok: false, error: weekError };
 
   const { error } = await supabase
     .from("tutor_scheduled_sessions")

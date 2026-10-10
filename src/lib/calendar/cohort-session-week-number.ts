@@ -1,5 +1,5 @@
 import { sessionWeekNumberIsFrozen } from "./lesson-assignment";
-import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
+import { isCompletedLessonLogEntry } from "@/lib/lessons/lesson-log-progress";
 import type { ScheduledSessionRow } from "@/lib/calendar/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -132,14 +132,21 @@ async function loadCompletedCountByCohort(
 
   const { data, error } = await adminClient
     .from("cohort_lesson_log_entries")
-    .select("cohort_id, status")
+    .select("cohort_id, status, dismissed_at")
     .in("cohort_id", cohortIds);
 
   if (error) throw error;
 
   for (const row of data ?? []) {
     if (!row.cohort_id) continue;
-    if (!isCountableLessonLogStatus(row.status as string | null)) continue;
+    if (
+      !isCompletedLessonLogEntry({
+        status: row.status as string | null,
+        dismissed_at: (row.dismissed_at as string | null) ?? null,
+      })
+    ) {
+      continue;
+    }
     completedByCohort.set(
       row.cohort_id,
       (completedByCohort.get(row.cohort_id) ?? 0) + 1

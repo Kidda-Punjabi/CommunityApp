@@ -7,7 +7,7 @@ export default function AdminCohortSessionIntegrityPage() {
     <CohortOpsIssueList
       kind="integrity"
       title="Cohort session integrity"
-      description="Kidda Class sessions still scheduled on a bank holiday, week-number problems, or sessions stored on the wrong cohort."
+      description="Kidda Class sessions still scheduled on a bank holiday, week numbers that skip, repeat, or run backwards, duplicate lesson logs, or sessions stored on the wrong cohort."
     />
   );
 }

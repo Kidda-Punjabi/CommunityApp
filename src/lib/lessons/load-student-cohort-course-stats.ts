@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
+import { isCompletedLessonLogEntry } from "@/lib/lessons/lesson-log-progress";
 import { resolveCourseActor, studentActorFilter } from "@/lib/kids/course-actor";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -53,7 +53,7 @@ export async function loadStudentCohortCourseStats(
   const today = new Date().toISOString().slice(0, 10);
   const { data: logRows, error: logError } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("lesson_id, lesson_date, status")
+    .select("lesson_id, lesson_date, status, dismissed_at")
     .eq("cohort_id", cohortId)
     .not("lesson_id", "is", null)
     .lte("lesson_date", today);
@@ -66,7 +66,12 @@ export async function loadStudentCohortCourseStats(
   const availableLessonIds = [
     ...new Set(
       (logRows ?? [])
-        .filter((row) => isCountableLessonLogStatus(row.status as string | null))
+        .filter((row) =>
+          isCompletedLessonLogEntry({
+            status: row.status as string | null,
+            dismissed_at: (row.dismissed_at as string | null) ?? null,
+          })
+        )
         .map((row) => row.lesson_id as string)
         .filter(Boolean)
     ),

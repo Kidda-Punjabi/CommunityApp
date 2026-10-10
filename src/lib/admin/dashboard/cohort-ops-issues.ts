@@ -1,4 +1,14 @@
 import { isUkBankHoliday } from "@/lib/admin/dashboard/uk-bank-holidays";
+import {
+  formatUkWeekDate,
+  formatWeekSequence,
+  formatWeekToken,
+  inspectCohortWeekNumbers,
+  isGuardedCohortClassSession,
+  isOneToOneSessionTitle,
+  sortCohortWeekSessions,
+} from "@/lib/calendar/cohort-week-number-guard";
+import { cohortAnchorTitlesByCohort } from "@/lib/calendar/cohort-session-week-number";
 import { formatSessionWhenUk } from "@/lib/calendar/uk-display-time";
 
 export const COHORT_OPS_STATUSES = [
@@ -21,6 +31,7 @@ export type CohortOpsIssueCode =
   | "no_connection"
   | "bank_holiday"
   | "week_sequence"
+  | "duplicate_lesson_log"
   | "null_week_number"
   | "mis_tagged";
 
@@ -35,6 +46,34 @@ export type CohortOpsIssue = {
   fixInstruction: string | null;
   sessionId: string | null;
   sessionStartsAt: string | null;
+  weekRows?: CohortWeekSequenceRow[];
+  gapKeys?: string[];
+  duplicateEntries?: DuplicateLessonLogEntry[];
+};
+
+export type CohortWeekSequenceRow = {
+  sessionId: string;
+  startsAt: string;
+  dateLabel: string;
+  weekNumber: number | null;
+  weekLabel: string;
+  renumberedWeek: number;
+};
+
+export type DuplicateLessonLogEntry = {
+  entryId: string;
+  title: string | null;
+  status: string | null;
+  lessonLabel: string | null;
+  hasRecording: boolean;
+  source: string | null;
+  notionUrl: string | null;
+};
+
+export type DuplicateLessonLogGroup = {
+  cohortId: string;
+  lessonDate: string;
+  entries: DuplicateLessonLogEntry[];
 };
 
 export type CohortOpsCohort = {
@@ -53,6 +92,7 @@ export type CohortOpsSession = {
   status: string;
   weekNumber: number | null;
   googleRecurringEventId: string | null;
+  matchMethod: string | null;
 };
 
 export type CohortNameRef = {
@@ -67,6 +107,8 @@ export type CohortOpsInput = {
   activeMemberCountByCohortId: ReadonlyMap<string, number>;
   tutorNameById: ReadonlyMap<string, string | null>;
   connectedTutorIds: ReadonlySet<string>;
+  acknowledgedWeekGapKeys?: ReadonlyMap<string, ReadonlySet<string>>;
+  duplicateLogGroups?: DuplicateLessonLogGroup[];
 };
 
 const SETUP_CODES = new Set<CohortOpsIssueCode>([
@@ -78,6 +120,7 @@ const SETUP_CODES = new Set<CohortOpsIssueCode>([
 const INTEGRITY_CODES = new Set<CohortOpsIssueCode>([
   "bank_holiday",
   "week_sequence",
+  "duplicate_lesson_log",
   "null_week_number",
   "mis_tagged",
 ]);
@@ -88,6 +131,7 @@ const ISSUE_ORDER: CohortOpsIssueCode[] = [
   "no_connection",
   "bank_holiday",
   "week_sequence",
+  "duplicate_lesson_log",
   "null_week_number",
   "mis_tagged",
 ];
@@ -101,6 +145,7 @@ export const SETUP_ISSUE_BREAKDOWN: Array<{ code: CohortOpsIssueCode; label: str
 export const INTEGRITY_ISSUE_BREAKDOWN: Array<{ code: CohortOpsIssueCode; label: string }> = [
   { code: "bank_holiday", label: "bank holiday" },
   { code: "week_sequence", label: "week numbers" },
+  { code: "duplicate_lesson_log", label: "duplicate lesson logs" },
   { code: "null_week_number", label: "missing week number" },
   { code: "mis_tagged", label: "mis-tagged session" },
 ];
@@ -122,9 +167,11 @@ export function isExactKiddaClassTitle(title: string, cohortName: string): boole
   return title.trim().toLowerCase() === exactKiddaClassTitle(cohortName);
 }
 
-export function isOneToOneSessionTitle(title: string): boolean {
-  return /\b1\s*[-–:]\s*1\b/i.test(title) || /\bone[\s-]to[\s-]one\b/i.test(title);
+export function isWeekIntegrityStatus(status: string | null | undefined): boolean {
+  return isLiveCohortStatus(status) || status === "offboarding_complete";
 }
+
+export { isOneToOneSessionTitle };
 
 export function distinctCohortCount(issues: CohortOpsIssue[]): number {
   return new Set(issues.map((issue) => issue.cohortId)).size;
@@ -215,9 +262,42 @@ export function evaluateCohortOpsIssues(input: CohortOpsInput): CohortOpsIssue[]
         fixInstruction: draft.fixInstruction,
         sessionId: draft.sessionId,
         sessionStartsAt: draft.sessionStartsAt,
+        weekRows: draft.weekRows,
+        gapKeys: draft.gapKeys,
+        duplicateEntries: draft.duplicateEntries,
       });
     }
   }
+
+  const weekCohorts = input.cohorts
+    .filter((cohort) => isWeekIntegrityStatus(cohort.status) && !isTestCohortName(cohort.name))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  for (const cohort of weekCohorts) {
+    const tutorName = cohort.tutorId ? (input.tutorNameById.get(cohort.tutorId) ?? null) : null;
+    const sessions = sessionsByCohort.get(cohort.id) ?? [];
+    const drafts = [
+      weekSequenceDraft(cohort.id, sessions, input.acknowledgedWeekGapKeys?.get(cohort.id)),
+      ...duplicateLogDrafts(cohort.id, input.duplicateLogGroups ?? []),
+    ].filter((draft): draft is IssueDraft => draft != null);
+    for (const draft of drafts) {
+      issues.push({
+        cohortId: cohort.id,
+        cohortName: cohort.name,
+        tutorName,
+        startDate: cohort.startDate,
+        issueCode: draft.issueCode,
+        issueLabel: draft.issueLabel,
+        fixUrl: draft.fixUrl,
+        fixInstruction: draft.fixInstruction,
+        sessionId: draft.sessionId,
+        sessionStartsAt: draft.sessionStartsAt,
+        weekRows: draft.weekRows,
+        gapKeys: draft.gapKeys,
+        duplicateEntries: draft.duplicateEntries,
+      });
+    }
+  }
+
   return issues;
 }
 
@@ -303,20 +383,6 @@ function integrityDrafts(
     });
   }
 
-  const weekLabel = weekSequenceLabel(ownScheduled.map((session) => session.weekNumber));
-  if (weekLabel) {
-    drafts.push({
-      issueCode: "week_sequence",
-      issueLabel: weekLabel,
-      fixUrl: null,
-      fixInstruction:
-        "Renumber these classes so week numbers run 1, 2, 3… with no duplicates. There is no screen for week renumbering.",
-      sessionId: null,
-      sessionStartsAt: null,
-      sortAt: "",
-    });
-  }
-
   for (const session of ownScheduled) {
     if (session.weekNumber != null) continue;
     const when = formatSessionWhenUk(session.startsAt);
@@ -399,30 +465,107 @@ function misTaggedDraft(
   };
 }
 
-function weekSequenceLabel(weekNumbers: Array<number | null>): string | null {
-  const weeks = weekNumbers.filter((week): week is number => week != null);
-  const seen = new Set<number>();
-  const duplicates = new Set<number>();
-  for (const week of weeks) {
-    if (seen.has(week)) duplicates.add(week);
-    seen.add(week);
+function weekSequenceDraft(
+  cohortId: string,
+  sessions: CohortOpsSession[],
+  acknowledgedGapKeys: ReadonlySet<string> | undefined
+): IssueDraft | null {
+  const anchors = cohortAnchorTitlesByCohort(
+    sessions.map((session) => ({
+      cohort_id: cohortId,
+      title: session.title,
+      status: session.status,
+      match_method: session.matchMethod,
+    }))
+  ).get(cohortId);
+  const classSessions = sessions.filter((session) =>
+    isGuardedCohortClassSession(
+      {
+        cohort_id: cohortId,
+        title: session.title,
+        status: session.status,
+        match_method: session.matchMethod,
+      },
+      anchors
+    )
+  );
+  const weekSessions = classSessions.map((session) => ({
+    id: session.id,
+    startsAt: session.startsAt,
+    weekNumber: session.weekNumber,
+  }));
+  const report = inspectCohortWeekNumbers(weekSessions);
+  const openGaps = report.gaps.filter((gap) => !acknowledgedGapKeys?.has(gap.key));
+  if (report.duplicates.length === 0 && report.outOfOrder.length === 0 && openGaps.length === 0) {
+    return null;
   }
-  const unique = [...seen].sort((a, b) => a - b);
-  const gaps: string[] = [];
-  if (unique.length > 0 && unique[0] !== 1) gaps.push(`starts at ${unique[0]}`);
-  for (let index = 1; index < unique.length; index += 1) {
-    if (unique[index] !== unique[index - 1]! + 1) {
-      gaps.push(`${unique[index - 1]} → ${unique[index]}`);
-    }
-  }
-  if (duplicates.size === 0 && gaps.length === 0) return null;
 
-  const parts: string[] = [];
-  if (duplicates.size > 0) {
-    parts.push(`duplicated weeks ${[...duplicates].sort((a, b) => a - b).join(", ")}`);
+  const ordered = sortCohortWeekSessions(weekSessions);
+  const parts: string[] = [formatWeekSequence(weekSessions)];
+  if (report.duplicates.length > 0) {
+    parts.push(`Duplicate weeks ${report.duplicates.join(", ")}.`);
   }
-  if (gaps.length > 0) {
-    parts.push(`not continuous from 1 (${gaps.join("; ")})`);
+  if (report.outOfOrder.length > 0) {
+    const hit = report.outOfOrder[0]!;
+    const later = ordered.find((session) => session.id === hit.sessionId);
+    parts.push(
+      `Out of order: ${later ? formatUkWeekDate(later.startsAt) : "a later class"} is week ${hit.weekNumber} after week ${hit.previousWeekNumber}.`
+    );
   }
-  return `Week numbers are ${parts.join(" and ")}.`;
+  if (openGaps.length > 0) {
+    parts.push(`Gap ${openGaps.map((gap) => gap.key).join(", ")}.`);
+  }
+
+  return {
+    issueCode: "week_sequence",
+    issueLabel: parts.join(" "),
+    fixUrl: null,
+    fixInstruction:
+      openGaps.length > 0
+        ? "Gaps can stay. Mark a gap as intentional, or renumber every class by date."
+        : "Renumber these classes by date so each week number is used once, in order.",
+    sessionId: null,
+    sessionStartsAt: null,
+    sortAt: ordered[0]?.startsAt ?? "",
+    weekRows: ordered.map((session, index) => ({
+      sessionId: session.id,
+      startsAt: session.startsAt,
+      dateLabel: formatUkWeekDate(session.startsAt),
+      weekNumber: session.weekNumber,
+      weekLabel: formatWeekToken(session.weekNumber),
+      renumberedWeek: index + 1,
+    })),
+    gapKeys: openGaps.map((gap) => gap.key),
+  };
+}
+
+function duplicateLogDrafts(
+  cohortId: string,
+  groups: DuplicateLessonLogGroup[]
+): IssueDraft[] {
+  return groups
+    .filter((group) => group.cohortId === cohortId && group.entries.length > 1)
+    .map((group) => ({
+      issueCode: "duplicate_lesson_log" as const,
+      issueLabel: `${group.entries.length} lesson logs on ${formatLessonDate(group.lessonDate)}.`,
+      fixUrl: null,
+      fixInstruction:
+        "Dismiss the extra log. Dismissed rows stay in the database and drop out of lesson linking and completed counts.",
+      sessionId: null,
+      sessionStartsAt: null,
+      sortAt: group.lessonDate,
+      duplicateEntries: group.entries,
+    }));
+}
+
+function formatLessonDate(value: string): string {
+  const day = value.slice(0, 10);
+  const date = new Date(`${day}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }

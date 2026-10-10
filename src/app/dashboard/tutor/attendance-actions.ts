@@ -152,18 +152,21 @@ export async function saveCohortLessonAttendance(
         .maybeSingle();
       const lessonNumber = Number(lesson?.lesson_number) || 0;
 
-      const { isCountableLessonLogStatus } = await import(
+      const { isCompletedLessonLogEntry } = await import(
         "@/lib/lessons/lesson-log-progress"
       );
       const { data: logRows } = await admin
         .from("cohort_lesson_log_entries")
-        .select("id, notion_page_id, status, lesson_date, lesson_id")
+        .select("id, notion_page_id, status, lesson_date, lesson_id, dismissed_at")
         .eq("cohort_id", cohortId)
         .order("lesson_date", { ascending: true })
         .order("id", { ascending: true });
 
       const countable = (logRows ?? []).filter((row) =>
-        isCountableLessonLogStatus(row.status as string | null)
+        isCompletedLessonLogEntry({
+          status: row.status as string | null,
+          dismissed_at: (row.dismissed_at as string | null) ?? null,
+        })
       );
       // Prefer the log row already linked to this curriculum lesson; fall back to
       // chronological position among non-cancelled entries (lesson N → index N-1).

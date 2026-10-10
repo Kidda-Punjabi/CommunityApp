@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
+import { isCompletedLessonLogEntry } from "@/lib/lessons/lesson-log-progress";
 import {
   matchStudentsToNotionLeads,
   pushLessonLogAttendanceHomeworkToNotion,
@@ -69,13 +69,16 @@ async function findLessonLogNotionPageId(
 
   const { data: logRows } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, notion_page_id, status, lesson_date, lesson_id")
+    .select("id, notion_page_id, status, lesson_date, lesson_id, dismissed_at")
     .eq("cohort_id", cohortId)
     .order("lesson_date", { ascending: true })
     .order("id", { ascending: true });
 
   const countable = (logRows ?? []).filter((row) =>
-    isCountableLessonLogStatus(row.status as string | null)
+    isCompletedLessonLogEntry({
+      status: row.status as string | null,
+      dismissed_at: (row.dismissed_at as string | null) ?? null,
+    })
   );
   const matchedByLessonId = countable.find((row) => row.lesson_id === lessonId);
   const matched =

@@ -15,8 +15,10 @@ import {
   type CohortOpsSession,
 } from "./cohort-ops-issues";
 
+const COHORT_35 = "11111111-1111-4111-8111-111111111111";
 const COHORT_37 = "06378eee-6e8b-42d0-a59a-2caa426eddd8";
 const COHORT_44 = "1912cdde-680c-4104-98db-70103f75e658";
+const COHORT_45 = "22222222-2222-4222-8222-222222222222";
 const COHORT_50 = "4b782420-c0b8-4e3c-8298-dfce8ce839cd";
 const TUTOR = "tutor-1";
 
@@ -40,6 +42,7 @@ function session(overrides: Partial<CohortOpsSession> = {}): CohortOpsSession {
     status: "scheduled",
     weekNumber: 1,
     googleRecurringEventId: "rec-1",
+    matchMethod: "calendar_link",
     ...overrides,
   };
 }
@@ -185,7 +188,9 @@ describe("integrity issues", () => {
       ["bank_holiday", "week_sequence"]
     );
     assert.equal(issues[0]?.sessionId, "holiday");
-    assert.match(issues[1]?.issueLabel ?? "", /not continuous from 1/);
+    assert.match(issues[1]?.issueLabel ?? "", /13 Jul=W1, 27 Jul=W3, 31 Aug=W8/);
+    assert.match(issues[1]?.issueLabel ?? "", /Gap 1→3, 3→8/);
+    assert.deepEqual(issues[1]?.gapKeys, ["1→3", "3→8"]);
     assert.equal(issues[0]?.fixUrl, null);
     assert.equal(issues[1]?.fixUrl, null);
   });
@@ -273,6 +278,101 @@ describe("integrity issues", () => {
       issues.some((issue) => issue.sessionId === "meeting"),
       false
     );
+  });
+
+  it("lists an offboarding cohort with a week gap and hides an acknowledged gap", () => {
+    const sessions = [
+      session({
+        id: "a",
+        cohortId: COHORT_35,
+        title: "Kidda Class - Cohort 35",
+        weekNumber: 1,
+        startsAt: "2026-06-25T18:00:00.000Z",
+      }),
+      session({
+        id: "b",
+        cohortId: COHORT_35,
+        title: "Kidda Class - Cohort 35",
+        weekNumber: 3,
+        startsAt: "2026-07-02T18:00:00.000Z",
+      }),
+    ];
+    const cohorts = [cohort({ id: COHORT_35, name: "Cohort 35", status: "offboarding_complete" })];
+    const open = integrityIssues(
+      evaluateCohortOpsIssues(
+        input({
+          cohorts,
+          cohortNames: [{ id: COHORT_35, name: "Cohort 35" }],
+          sessions,
+        })
+      )
+    );
+    assert.equal(open[0]?.issueCode, "week_sequence");
+    assert.match(open[0]?.issueLabel ?? "", /Gap 1→3/);
+
+    const acknowledged = integrityIssues(
+      evaluateCohortOpsIssues(
+        input({
+          cohorts,
+          cohortNames: [{ id: COHORT_35, name: "Cohort 35" }],
+          sessions,
+          acknowledgedWeekGapKeys: new Map([[COHORT_35, new Set(["1→3"])]]),
+        })
+      )
+    );
+    assert.equal(
+      acknowledged.some((issue) => issue.issueCode === "week_sequence"),
+      false
+    );
+  });
+
+  it("lists duplicate lesson logs for a cohort date", () => {
+    const issues = integrityIssues(
+      evaluateCohortOpsIssues(
+        input({
+          cohorts: [cohort({ id: COHORT_45, name: "Cohort 45", status: "in_progress" })],
+          cohortNames: [{ id: COHORT_45, name: "Cohort 45" }],
+          sessions: [
+            session({
+              id: "class",
+              cohortId: COHORT_45,
+              title: "Kidda Class - Cohort 45",
+              weekNumber: 1,
+              startsAt: "2026-09-14T18:00:00.000Z",
+            }),
+          ],
+          duplicateLogGroups: [
+            {
+              cohortId: COHORT_45,
+              lessonDate: "2026-09-21",
+              entries: [
+                {
+                  entryId: "real",
+                  title: null,
+                  status: "Completed",
+                  lessonLabel: "Lesson 2 — Greetings",
+                  hasRecording: false,
+                  source: "notion",
+                  notionUrl: "https://notion.so/real",
+                },
+                {
+                  entryId: "blank",
+                  title: "Kidda - Cohort 45 - 2026-09-21",
+                  status: null,
+                  lessonLabel: "Lesson 3 — Family",
+                  hasRecording: false,
+                  source: "notion",
+                  notionUrl: "https://notion.so/blank",
+                },
+              ],
+            },
+          ],
+        })
+      )
+    );
+    const duplicate = issues.find((issue) => issue.issueCode === "duplicate_lesson_log");
+    assert.equal(duplicate?.duplicateEntries?.length, 2);
+    assert.match(duplicate?.issueLabel ?? "", /21 Sept 2026/);
   });
 
   it("does not treat a continuous week run as a failure", () => {

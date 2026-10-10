@@ -1,7 +1,7 @@
 import "server-only";
 
 import { assignMissingLessonIds } from "@/lib/lessons/lesson-log-lesson-assign";
-import { isCountableLessonLogStatus } from "@/lib/lessons/lesson-log-progress";
+import { isCompletedLessonLogEntry } from "@/lib/lessons/lesson-log-progress";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type LinkedCurriculumLesson = {
@@ -46,7 +46,7 @@ export async function resolveCurriculumLessonForCohortLogEntry(
 
   const { data: logRows, error: logError } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, lesson_date, status")
+    .select("id, lesson_date, status, dismissed_at")
     .eq("cohort_id", cohortId)
     .order("lesson_date", { ascending: true })
     .order("id", { ascending: true });
@@ -54,7 +54,10 @@ export async function resolveCurriculumLessonForCohortLogEntry(
   if (logError) throw logError;
 
   const countable = (logRows ?? []).filter((row) =>
-    isCountableLessonLogStatus(row.status as string | null)
+    isCompletedLessonLogEntry({
+      status: row.status as string | null,
+      dismissed_at: (row.dismissed_at as string | null) ?? null,
+    })
   );
   const index = countable.findIndex((row) => row.id === entryId);
   if (index < 0) return null;
@@ -127,7 +130,7 @@ export async function syncCohortLessonLogLessonIds(
 
   const { data: logRows, error: logError } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, lesson_date, status, lesson_id")
+    .select("id, lesson_date, status, lesson_id, dismissed_at")
     .eq("cohort_id", cohortId)
     .order("lesson_date", { ascending: true })
     .order("id", { ascending: true });
@@ -138,7 +141,10 @@ export async function syncCohortLessonLogLessonIds(
   }
 
   const countable = (logRows ?? []).filter((row) =>
-    isCountableLessonLogStatus(row.status as string | null)
+    isCompletedLessonLogEntry({
+      status: row.status as string | null,
+      dismissed_at: (row.dismissed_at as string | null) ?? null,
+    })
   );
   const updates = assignMissingLessonIds(
     countable.map((row) => ({ lessonId: (row.lesson_id as string | null) ?? null })),
@@ -159,9 +165,16 @@ export async function syncCohortLessonLogLessonIds(
     }
   }
 
-  // Cancelled / non-countable rows should not keep a curriculum link.
+  // Cancelled, dismissed, and other non-countable rows should not keep a curriculum link.
   for (const row of logRows ?? []) {
-    if (isCountableLessonLogStatus(row.status as string | null)) continue;
+    if (
+      isCompletedLessonLogEntry({
+        status: row.status as string | null,
+        dismissed_at: (row.dismissed_at as string | null) ?? null,
+      })
+    ) {
+      continue;
+    }
     if (!row.lesson_id) continue;
     const { error } = await supabase
       .from("cohort_lesson_log_entries")

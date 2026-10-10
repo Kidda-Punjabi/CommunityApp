@@ -2,7 +2,7 @@ import "server-only";
 
 import {
   computeNextLessonAfterLog,
-  isCountableLessonLogStatus,
+  isCompletedLessonLogEntry,
   numberLessonLogEntries,
   resolveNextLessonTitle,
   type CohortLessonProgress,
@@ -70,7 +70,7 @@ export async function loadLessonLogEntriesForCohorts(
 
   const { data, error } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, cohort_id, lesson_date, lesson_title, recording_url, notes, status")
+    .select("id, cohort_id, lesson_date, lesson_title, recording_url, notes, status, dismissed_at")
     .in("cohort_id", cohortIds)
     .order("lesson_date", { ascending: true });
 
@@ -93,7 +93,14 @@ export async function loadLessonLogEntriesForCohorts(
 
   for (const row of data ?? []) {
     if (!row.cohort_id) continue;
-    if (!isCountableLessonLogStatus(row.status as string | null)) continue;
+    if (
+      !isCompletedLessonLogEntry({
+        status: row.status as string | null,
+        dismissed_at: (row.dismissed_at as string | null) ?? null,
+      })
+    ) {
+      continue;
+    }
     const list = rawByCohort.get(row.cohort_id) ?? [];
     list.push({
       id: row.id,

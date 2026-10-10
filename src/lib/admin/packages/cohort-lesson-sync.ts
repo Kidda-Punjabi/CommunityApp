@@ -8,6 +8,11 @@ import {
   type LessonSyncLesson,
 } from "@/lib/calendar/lesson-assignment";
 import {
+  cohortWeekNumberWriteError,
+  isGuardedCohortClassSession,
+  isOneToOneSessionTitle,
+} from "@/lib/calendar/cohort-week-number-guard";
+import {
   cohortAnchorTitlesByCohort,
   isCohortClassSession,
   type CohortClassSessionMatchInput,
@@ -130,7 +135,7 @@ export async function confirmCohortIndividualLessonSync(
         .eq("course_id", cohort.course_id),
       supabase
         .from("tutor_scheduled_sessions")
-        .select("id, cohort_id, title, status, match_method")
+        .select("id, cohort_id, title, status, match_method, starts_at, week_number")
         .eq("cohort_id", input.cohortId)
         .neq("status", "cancelled"),
     ]);
@@ -171,20 +176,58 @@ export async function confirmCohortIndividualLessonSync(
     seenLessons.add(mapping.lessonId);
   }
 
+  const loadedSessions = (sessionRows ?? []).map((session) => ({
+    id: session.id as string,
+    cohort_id: input.cohortId,
+    title: session.title as string,
+    status: session.status as string | null,
+    match_method: session.match_method as string | null,
+    starts_at: session.starts_at as string,
+    week_number: (session.week_number as number | null) ?? null,
+  }));
+  const anchorTitles = cohortAnchorTitlesByCohort(loadedSessions).get(input.cohortId);
+  const proposedWeeks = loadedSessions
+    .filter((session) => isGuardedCohortClassSession(session, anchorTitles))
+    .map((session) => {
+      const mapping = input.mappings.find((row) => row.sessionId === session.id);
+      if (!mapping) {
+        return { id: session.id, startsAt: session.starts_at, weekNumber: session.week_number };
+      }
+      const lesson = mapping.lessonId ? lessonById.get(mapping.lessonId) : undefined;
+      return {
+        id: session.id,
+        startsAt: session.starts_at,
+        weekNumber: lesson ? lesson.lessonNumber : null,
+      };
+    });
+  const weekError = cohortWeekNumberWriteError(proposedWeeks);
+  if (weekError) return { ok: false, error: weekError };
+
   const now = new Date().toISOString();
   for (const mapping of input.mappings) {
     const lesson = mapping.lessonId ? lessonById.get(mapping.lessonId) : undefined;
     const assignment = lesson
       ? assignmentForLessonNumber(lesson.lessonNumber, [lesson])
       : needsLessonAssignmentWrite();
+    const loaded = loadedSessions.find((session) => session.id === mapping.sessionId);
+    const leaveWeekNumber = loaded ? isOneToOneSessionTitle(loaded.title) : false;
+    const update: {
+      lesson_id: string | null;
+      lesson_assignment_status: typeof assignment.lesson_assignment_status;
+      week_number?: number | null;
+      match_method: "calendar_link";
+      updated_at: string;
+    } = {
+      lesson_id: assignment.lesson_id,
+      lesson_assignment_status: assignment.lesson_assignment_status,
+      match_method: "calendar_link",
+      updated_at: now,
+    };
+    if (!leaveWeekNumber) update.week_number = assignment.week_number;
 
     const { error } = await supabase
       .from("tutor_scheduled_sessions")
-      .update({
-        ...assignment,
-        match_method: "calendar_link",
-        updated_at: now,
-      })
+      .update(update)
       .eq("id", mapping.sessionId)
       .eq("cohort_id", input.cohortId);
 
