@@ -14,6 +14,8 @@ const initial: ForumActionResult = {};
 export function NewForumPostForm() {
   const [state, formAction, pending] = useActionState(createForumPost, initial);
   const [pollOn, setPollOn] = useState(false);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
   const [rulesOpen, setRulesOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -32,6 +34,8 @@ export function NewForumPostForm() {
           name="title"
           required
           maxLength={200}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
           className="mt-1 w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
         />
       </div>
@@ -58,6 +62,8 @@ export function NewForumPostForm() {
           name="body"
           required
           rows={8}
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
           className="mt-1 w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
         />
       </div>

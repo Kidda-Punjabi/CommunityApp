@@ -13,6 +13,7 @@ const initial: ForumActionResult = {};
 export function ForumIntroPostForm() {
   const [state, formAction, pending] = useActionState(createForumIntroPost, initial);
   const formRef = useRef<HTMLFormElement>(null);
+  const [body, setBody] = useState("");
   const [rulesOpen, setRulesOpen] = useState(false);
 
   useEffect(() => {
@@ -34,6 +35,8 @@ export function ForumIntroPostForm() {
           name="body"
           required
           rows={8}
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
           placeholder="Introduce yourself — share your name, why you joined Kidda, and a fun fact about you."
           className="mt-2 w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
         />

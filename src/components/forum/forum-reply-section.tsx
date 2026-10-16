@@ -168,6 +168,7 @@ export function ForumReplyForm({
   const boundAction = createForumReply.bind(null, postId, parentReplyId);
   const [state, formAction, pending] = useActionState(boundAction, initial);
   const formRef = useRef<HTMLFormElement>(null);
+  const [body, setBody] = useState("");
   const [rulesOpen, setRulesOpen] = useState(state.needsRules === true);
 
   useEffect(() => {
@@ -195,6 +196,8 @@ export function ForumReplyForm({
         name="body"
         required
         rows={compact ? 3 : 4}
+        value={body}
+        onChange={(event) => setBody(event.target.value)}
         placeholder={parentReplyId ? "Write your reply…" : "Share your thoughts or answer…"}
         className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
       />

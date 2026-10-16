@@ -23,6 +23,8 @@ export function ForumPostManage({ post, viewerUserId, isMasterAdmin }: ForumPost
   const canDelete = isAuthor || isMasterAdmin;
 
   const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(post.title);
+  const [body, setBody] = useState(post.body);
   const [deletePending, startDelete] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const boundUpdate = updateForumPost.bind(null, post.id);
@@ -51,14 +53,16 @@ export function ForumPostManage({ post, viewerUserId, isMasterAdmin }: ForumPost
         <input
           name="title"
           required
-          defaultValue={post.title}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
           className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900"
         />
         <textarea
           name="body"
           required
           rows={6}
-          defaultValue={post.body}
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
           className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900"
         />
         {state.error ? (
