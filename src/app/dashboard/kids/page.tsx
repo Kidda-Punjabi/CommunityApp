@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { KidLucideIcon } from "@/components/kids/kid-lucide-icon";
 import { loadKidBedtimeStoriesForParent } from "@/lib/kids/bedtime-stories";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 import { loadKidSession } from "@/lib/kids/session";
 import { createClient } from "@/lib/supabase/server";
@@ -32,6 +34,7 @@ export default async function KidsHomePage() {
   const kid = session.activeKidProfile;
   if (!kid) redirect("/dashboard/profile/kids");
 
+  const nativeApp = await getIsNativeApp();
   const { stories, parentIsPremium, tableReady } = await loadKidBedtimeStoriesForParent(
     supabase,
     user.id,
@@ -84,7 +87,7 @@ export default async function KidsHomePage() {
           <section className="rounded-3xl bg-white p-5 shadow-md">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xl font-bold text-zinc-900">Bedtime stories</h2>
-              {!parentIsPremium ? (
+              {!parentIsPremium && !nativeApp ? (
                 <Link
                   href={PREMIUM_UNLOCK_PATH}
                   className="text-xs font-semibold text-violet-600"
@@ -108,7 +111,16 @@ export default async function KidsHomePage() {
                   >
                     <span className="font-semibold">{story.title}</span>
                     {!story.unlocked ? (
-                      <span className="mt-0.5 block text-xs">Unlock with Premium</span>
+                      <span className="mt-0.5 block text-xs">
+                        {nativeApp ? (
+                          <>
+                            <span aria-hidden="true">🔒 </span>
+                            {NATIVE_LOCKED_MESSAGE}
+                          </>
+                        ) : (
+                          "Unlock with Premium"
+                        )}
+                      </span>
                     ) : story.playableAudioUrl ? (
                       <audio
                         className="mt-2 w-full"

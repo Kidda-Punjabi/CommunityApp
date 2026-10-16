@@ -14,6 +14,7 @@ import type { QuizProgressRow } from "@/lib/progress/quiz-progress";
 import type { LessonWithCourse } from "@/app/dashboard/learn/types";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import { BackLink } from "@/components/navigation/back-link";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { ui } from "@/lib/ui/styles";
 import type { ReactNode } from "react";
 
@@ -60,7 +61,7 @@ type LearnLessonListProps = {
   scheduleSessionByLessonId?: Map<string, StudentScheduledSession>;
 };
 
-export function LearnLessonList({
+export async function LearnLessonList({
   title,
   subtitle,
   lessons,
@@ -90,6 +91,7 @@ export function LearnLessonList({
   statusLegendPosition = "top",
   scheduleSessionByLessonId,
 }: LearnLessonListProps) {
+  const nativeApp = await getIsNativeApp();
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
 
   function lessonAccess(lesson: LessonWithCourse) {
@@ -276,6 +278,7 @@ export function LearnLessonList({
                 unitLabel={unitLabel}
                 hasCatchupSegments={catchupLessonIds?.has(lesson.id) ?? false}
                 hasSubmittedFeedback={feedbackSubmittedLessonIds?.has(lesson.id) ?? false}
+                nativeApp={nativeApp}
                 homeworkCatchupReturn={
                   homeworkFocusLessonId === lesson.id ? (catchupReturn ?? null) : null
                 }

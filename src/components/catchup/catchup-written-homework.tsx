@@ -7,6 +7,7 @@ import {
 } from "@/app/catchup/catchup-actions";
 import type { HomeworkTextQuestion } from "@/lib/catchup/load-segment-questions";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
+import { hapticSuccess } from "@/lib/native/haptics";
 import { ui } from "@/lib/ui/styles";
 
 type CatchupWrittenHomeworkProps = {
@@ -114,6 +115,7 @@ export function CatchupWrittenHomework({
           return;
         }
         setSuccess(result.success ?? "Homework submitted!");
+        void hapticSuccess();
       } finally {
         submitLockRef.current = false;
       }

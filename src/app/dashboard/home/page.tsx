@@ -4,6 +4,7 @@ import { getHomeTabData } from "@/lib/cache/tab-page-cache";
 import { loadEverydayPunjabiPathItems } from "@/lib/free-lessons/load-path-items";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { createClient } from "@/lib/supabase/server";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -13,6 +14,7 @@ export default async function HomePage() {
   if (!session) redirect("/login");
 
   const supabase = await createClient();
+  const nativeApp = await getIsNativeApp();
   const [{ dashboard }, pathItems] = await Promise.all([
     getHomeTabData(session.user.id),
     loadEverydayPunjabiPathItems(supabase, session.user.id),
@@ -36,7 +38,7 @@ export default async function HomePage() {
         )}
       </section>
 
-      {dashboard.isFreeTier ? (
+      {dashboard.isFreeTier && !nativeApp ? (
         <section className={ui.section}>
           <HubCard>
             <h2 className="text-lg font-medium text-zinc-900">

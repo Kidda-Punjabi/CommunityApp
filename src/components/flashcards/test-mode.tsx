@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { SessionProgressBar } from "@/components/session-progress-bar";
 import type { FlashcardDeckCard, FlashcardDeckContext } from "@/lib/flashcards/types";
 import { deckPracticeHref, pickDistinctTexts, shuffleArray } from "@/lib/flashcards/utils";
+import { hapticSuccess } from "@/lib/native/haptics";
 
 type FlashcardTestModeProps = {
   deck: FlashcardDeckContext;
@@ -88,6 +89,7 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
     setSelected(optionText);
     if (optionText === question.correctAnswer) {
       setScore((prev) => prev + 1);
+      void hapticSuccess();
     }
   }
 

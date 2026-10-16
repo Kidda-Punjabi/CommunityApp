@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 import type { KidBedtimeStory } from "@/lib/kids/bedtime-stories";
 
-export function KidBedtimeStoriesPanel({
+export async function KidBedtimeStoriesPanel({
   stories,
   parentIsPremium,
   tableReady,
@@ -12,12 +14,13 @@ export function KidBedtimeStoriesPanel({
   tableReady: boolean;
 }) {
   if (!tableReady) return null;
+  const nativeApp = await getIsNativeApp();
 
   return (
     <section className="rounded-3xl bg-white p-5 shadow-md">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold text-zinc-900">Bedtime stories</h2>
-        {!parentIsPremium ? (
+        {!parentIsPremium && !nativeApp ? (
           <Link href={PREMIUM_UNLOCK_PATH} className="text-xs font-semibold text-violet-600">
             Premium →
           </Link>
@@ -38,7 +41,16 @@ export function KidBedtimeStoriesPanel({
             >
               <span className="font-semibold">{story.title}</span>
               {!story.unlocked ? (
-                <span className="mt-0.5 block text-xs">Unlock with Premium</span>
+                <span className="mt-0.5 block text-xs">
+                  {nativeApp ? (
+                    <>
+                      <span aria-hidden="true">🔒 </span>
+                      {NATIVE_LOCKED_MESSAGE}
+                    </>
+                  ) : (
+                    "Unlock with Premium"
+                  )}
+                </span>
               ) : story.playableAudioUrl ? (
                 <audio
                   className="mt-2 w-full"

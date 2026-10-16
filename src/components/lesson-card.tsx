@@ -22,6 +22,7 @@ import type { FlashcardProgressRow } from "@/lib/progress/flashcard-progress";
 import type { QuizProgressRow } from "@/lib/progress/quiz-progress";
 import type { StudentScheduledSession } from "@/lib/calendar/types";
 import type { FlashcardSetInfo } from "@/lib/learning/match-lesson-content";
+import { lessonHomeworkPath } from "@/lib/tutoring/homework-href";
 import { formatSessionWhen } from "@/lib/calendar/reschedule-policy";
 import { pressableClass } from "@/lib/ui/pressable";
 import { cn, ui } from "@/lib/ui/styles";
@@ -87,6 +88,7 @@ type LessonCardProps = {
   hasSubmittedFeedback?: boolean;
   homeworkCatchupReturn?: string | null;
   scheduleSession?: StudentScheduledSession | null;
+  nativeApp?: boolean;
 };
 
 export function LessonCard({
@@ -110,6 +112,7 @@ export function LessonCard({
   hasSubmittedFeedback = false,
   homeworkCatchupReturn = null,
   scheduleSession = null,
+  nativeApp = false,
 }: LessonCardProps) {
   const hasPresentation = Boolean(lesson.presentation_url);
   const hasPdf = SHOW_LESSON_PDF && Boolean(lesson.pdf_url);
@@ -168,12 +171,18 @@ export function LessonCard({
               {formatLessonCardTitle(lesson.title)}
             </p>
             <p className="mt-0.5 text-xs text-zinc-500">
-              Unlock with {requiredCourseLabel ?? "this course"}.
+              {nativeApp
+                ? "This course isn't on your account."
+                : `Unlock with ${requiredCourseLabel ?? "this course"}.`}
             </p>
           </div>
-          <Link href="/dashboard/membership" className={lessonContentRowButtonClass}>
-            View plans
-          </Link>
+          {nativeApp ? (
+            <span aria-hidden="true">🔒</span>
+          ) : (
+            <Link href="/dashboard/membership" className={lessonContentRowButtonClass}>
+              View plans
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -233,9 +242,16 @@ export function LessonCard({
           <LessonScheduleBlock scheduleSession={scheduleSession} />
 
           {isTutorLocked ? (
-            <p className="mt-3 text-sm text-zinc-500">
-              Content unlocks after your tutor opens this lesson.
-            </p>
+            <div className="mt-3 space-y-3">
+              <p className="text-sm text-zinc-500">
+                Content unlocks after your tutor opens this lesson.
+              </p>
+              {showHomework ? (
+                <Link href={lessonHomeworkPath(lesson.id, homeworkCatchupReturn)} className={ui.btnSecondary}>
+                  Record homework
+                </Link>
+              ) : null}
+            </div>
           ) : (
             <>
               <LessonActivityTiles

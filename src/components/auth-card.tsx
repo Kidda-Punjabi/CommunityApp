@@ -6,11 +6,11 @@ type AuthCardProps = {
   title: string;
   subtitle: string;
   children: React.ReactNode;
-  footer: {
+  footer?: {
     text: string;
     linkText: string;
     href: string;
-  };
+  } | null;
 };
 
 export async function AuthCard({ title, subtitle, children, footer }: AuthCardProps) {
@@ -27,12 +27,14 @@ export async function AuthCard({ title, subtitle, children, footer }: AuthCardPr
 
         <div className={`${ui.card} p-8`}>{children}</div>
 
-        <p className="mt-6 text-center text-sm text-zinc-500">
-          {footer.text}{" "}
-          <Link href={footer.href} className="font-medium text-violet-600 hover:text-violet-500">
-            {footer.linkText}
-          </Link>
-        </p>
+        {footer ? (
+          <p className="mt-6 text-center text-sm text-zinc-500">
+            {footer.text}{" "}
+            <Link href={footer.href} className="font-medium text-violet-600 hover:text-violet-500">
+              {footer.linkText}
+            </Link>
+          </p>
+        ) : null}
       </div>
     </div>
   );

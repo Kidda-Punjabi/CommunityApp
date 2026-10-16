@@ -16,6 +16,7 @@ import type {
   TutorBookingCredit,
   TutorOneToOneBooking,
 } from "@/lib/tutoring/availability/types";
+import { useNativeApp } from "@/lib/native/native-app-context";
 import { ui } from "@/lib/ui/styles";
 import { useActionState, useEffect, useState, useTransition } from "react";
 
@@ -47,14 +48,18 @@ export function BookOneToOneSection({
   const [state, formAction, pending] = useActionState(createOneToOneBooking, initial);
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
 
+  const nativeApp = useNativeApp();
   const activeCredit = credits[0] ?? null;
   const availableCreditCount = credits.length;
   const showSection = credits.length > 0 || Boolean(context) || bookings.length > 0;
   const canBrowseSlots = Boolean(context?.bookingEnabled && !context.tutorUnresolved);
   const canBookWithCredit = Boolean(canBrowseSlots && activeCredit);
-  const canPurchaseWithSlot = Boolean(canBrowseSlots && !activeCredit && checkoutConfigured);
+  const canPurchaseWithSlot =
+    !nativeApp && Boolean(canBrowseSlots && !activeCredit && checkoutConfigured);
   const tutorLabel = context?.tutorName ?? "your tutor";
-  const showPicker = canBrowseSlots && (Boolean(activeCredit) || canPurchaseWithSlot || checkoutConfigured);
+  const showPicker =
+    canBrowseSlots &&
+    (Boolean(activeCredit) || (!nativeApp && (canPurchaseWithSlot || checkoutConfigured)));
 
   useEffect(() => {
     if (!canBrowseSlots || !context?.tutorId) return;
@@ -132,19 +137,19 @@ export function BookOneToOneSection({
             {availableCreditCount === 1 ? "" : "s"}
           </p>
         ) : null}
-        {paymentMessage ? (
+        {paymentMessage && !nativeApp ? (
           <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
             {paymentMessage}
           </p>
         ) : null}
         {context?.tutorUnresolved ? (
           <p className="mt-1 text-sm text-zinc-500">
-            You have a paid session credit, but we could not match you to a tutor for self-serve
+            You have a {nativeApp ? "session" : "paid session"} credit, but we could not match you to a tutor for self-serve
             booking. Contact support and we will get you scheduled.
           </p>
         ) : !context?.bookingEnabled && activeCredit ? (
           <p className="mt-1 text-sm text-zinc-500">
-            You have {credits.length} paid session credit{credits.length === 1 ? "" : "s"}.{" "}
+            You have {credits.length} {nativeApp ? "session" : "paid session"} credit{credits.length === 1 ? "" : "s"}.{" "}
             {tutorLabel} hasn&apos;t opened self-serve booking yet — message them to schedule, or
             check back here when booking is enabled.
           </p>
@@ -268,7 +273,7 @@ export function BookOneToOneSection({
             </div>
           ) : null}
 
-          {!activeCredit && !checkoutConfigured && context?.bookingEnabled ? (
+          {!nativeApp && !activeCredit && !checkoutConfigured && context?.bookingEnabled ? (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               Checkout isn&apos;t configured for 1-to-1 sessions yet. Contact support to book.
             </p>

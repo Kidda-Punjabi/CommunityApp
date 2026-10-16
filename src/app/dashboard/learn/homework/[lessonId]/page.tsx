@@ -105,7 +105,7 @@ export default async function LessonHomeworkPage({ params, searchParams }: PageP
           />
         </div>
       ) : submissionType !== "text" ? (
-        <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-10 mt-6 rounded-3xl border border-zinc-200/80 bg-white/95 p-4 shadow-[0_8px_32px_-8px_rgba(24,24,27,0.18)] backdrop-blur">
+        <div className="kidda-bottom-chrome sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-10 mt-6 rounded-3xl border border-zinc-200/80 bg-white/95 p-4 shadow-[0_8px_32px_-8px_rgba(24,24,27,0.18)] backdrop-blur">
           <p className="text-sm font-semibold text-zinc-900">
             {submission ? "Your homework" : "Record homework"}
           </p>

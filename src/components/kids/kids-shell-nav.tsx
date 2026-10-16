@@ -39,7 +39,7 @@ export function KidsShellNav({ ageTier }: { ageTier: string }) {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-sky-200 bg-gradient-to-t from-sky-100 to-white/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md">
+    <nav className="kidda-bottom-chrome fixed inset-x-0 bottom-0 z-50 border-t border-sky-200 bg-gradient-to-t from-sky-100 to-white/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md">
       <div className="mx-auto flex max-w-lg items-stretch justify-around px-2">
         {items.map((item) => (
           <Link

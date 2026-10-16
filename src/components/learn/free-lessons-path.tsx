@@ -6,6 +6,8 @@ import { SingleMasteryRing } from "@/components/learn/single-mastery-ring";
 import { getTopicVisual } from "@/lib/free-lessons/topic-visuals";
 import type { TopicStageFills } from "@/lib/free-lessons/stages";
 import type { TopicLockReason } from "@/lib/free-lessons/unlock";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { useNativeApp } from "@/lib/native/native-app-context";
 import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 
 export type FreeLessonPathItem = {
@@ -23,17 +25,20 @@ type FreeLessonsPathProps = {
 };
 
 function TopicNode({ item }: { item: FreeLessonPathItem }) {
+  const nativeApp = useNativeApp();
   const visual = getTopicVisual(item.title, item.sortIndex);
   const { Icon } = visual;
   const locked = item.lockReason !== "none";
   const showPremiumCue = item.needsPremium && locked;
-  const href =
-    item.lockReason === "premium" ||
-    (item.lockReason === "sequence" && item.needsPremium)
-      ? PREMIUM_UNLOCK_PATH
-      : item.lockReason === "none"
-        ? `/dashboard/learn/free/${item.id}`
-        : undefined;
+  const premiumLocked =
+    item.lockReason === "premium" || (item.lockReason === "sequence" && item.needsPremium);
+  const href = premiumLocked
+    ? nativeApp
+      ? undefined
+      : PREMIUM_UNLOCK_PATH
+    : item.lockReason === "none"
+      ? `/dashboard/learn/free/${item.id}`
+      : undefined;
 
   const emptyFills = { vocab: 0, sentences: 0, conversation: 0 };
   const fills = locked ? emptyFills : item.fills;
@@ -57,7 +62,7 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
         } ${href ? "group-hover:scale-105 group-active:scale-95" : ""}`}
       >
         {locked ? (
-          item.lockReason === "premium" ? (
+          item.lockReason === "premium" && !nativeApp ? (
             <Crown className="h-6 w-6 fill-white" strokeWidth={2} aria-hidden />
           ) : (
             <Lock className="h-5 w-5" strokeWidth={2.25} aria-hidden />
@@ -92,8 +97,15 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
         <span className="mt-1 text-center text-xs text-zinc-400">Keep going</span>
       ) : null}
       {showPremiumCue ? (
-        <span className="mt-1 text-center text-xs font-medium text-violet-600">
-          Unlocks with Premium
+        <span className="mt-1 text-center text-xs font-medium text-zinc-500">
+          {nativeApp ? (
+            <>
+              <span aria-hidden="true">🔒 </span>
+              {NATIVE_LOCKED_MESSAGE}
+            </>
+          ) : (
+            "Unlocks with Premium"
+          )}
         </span>
       ) : null}
     </>

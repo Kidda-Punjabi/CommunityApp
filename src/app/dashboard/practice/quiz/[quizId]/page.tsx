@@ -1,6 +1,8 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { QuizPlayer } from "@/components/quiz-player";
 import { canUserAccessQuiz } from "@/lib/membership/lesson-access";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -21,14 +23,17 @@ export default async function QuizPracticePage({ params, searchParams }: QuizPag
   const access = await canUserAccessQuiz(supabase, user!.id, quizId);
 
   if (!access.allowed) {
+    const nativeApp = await getIsNativeApp();
     return (
       <div className="flex flex-1 flex-col px-4 py-6">
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           {access.levelLocked
             ? `Complete level ${access.previousLevel} first to unlock this quiz.`
-            : `This quiz requires ${access.requiredCourseLabel ?? "a membership upgrade"}.`}
+            : nativeApp
+              ? NATIVE_LOCKED_MESSAGE
+              : `This quiz requires ${access.requiredCourseLabel ?? "a membership upgrade"}.`}
         </p>
-        {access.levelLocked ? (
+        {access.levelLocked || nativeApp ? (
           <BackLink
             fallbackHref="/dashboard/games"
             className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"

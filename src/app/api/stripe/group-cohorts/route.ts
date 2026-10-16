@@ -8,6 +8,7 @@ import { getCohortCheckoutRemainingSpots } from "@/lib/group-purchase/cohort-cap
 import { packageSlugForCheckoutKey } from "@/lib/group-purchase/checkout-keys";
 import { syncGroupCohortsForCourseFromNotion } from "@/lib/notion/sync-group-cohorts-for-checkout";
 import { createClient } from "@/lib/supabase/server";
+import { rejectNativePurchase } from "@/lib/native/reject-native-purchase";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { NextResponse } from "next/server";
 
@@ -15,6 +16,9 @@ import { NextResponse } from "next/server";
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
+  const blocked = rejectNativePurchase(request);
+  if (blocked) return blocked;
+
   const { searchParams } = new URL(request.url);
   const checkoutKey = searchParams.get("checkoutKey")?.trim() ?? "";
 

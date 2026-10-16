@@ -130,7 +130,7 @@ export function EnglishBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-emerald-200/70 bg-emerald-50/95 shadow-[0_-4px_24px_-8px_rgba(5,150,105,0.12)] backdrop-blur-md">
+      <nav className="kidda-bottom-chrome fixed inset-x-0 bottom-0 z-50 border-t border-emerald-200/70 bg-emerald-50/95 shadow-[0_-4px_24px_-8px_rgba(5,150,105,0.12)] backdrop-blur-md">
       <div className="mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5">
         {navItems.map((item) => {
           const active = item.match(pathname);

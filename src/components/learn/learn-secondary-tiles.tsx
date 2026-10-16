@@ -38,21 +38,16 @@ export function LearnSecondaryTiles({
         const status = tile.id === "community" ? communityStatus : tile.status;
         const Icon = tile.Icon;
         const muted = tile.id === "community" && communityLocked;
-        return (
-          <NavLink
-            key={tile.id}
-            href={href}
-            data-tour={`learn-tile-${tile.id}`}
-            className={cn(
-              pressableClass,
-              "flex min-h-[7.5rem] flex-col rounded-2xl p-3.5 shadow-[0_1px_8px_-4px_rgba(24,24,27,0.06)]",
-              muted
-                ? "bg-zinc-100 text-zinc-600 hover:bg-zinc-50"
-                : tile.id === "resources"
-                  ? "bg-sky-100 text-sky-950 hover:bg-sky-50"
-                  : "bg-rose-100 text-rose-950 hover:bg-rose-50"
-            )}
-          >
+        const shell = cn(
+          "flex min-h-[7.5rem] flex-col rounded-2xl p-3.5 shadow-[0_1px_8px_-4px_rgba(24,24,27,0.06)]",
+          muted
+            ? "bg-zinc-100 text-zinc-600"
+            : tile.id === "resources"
+              ? "bg-sky-100 text-sky-950"
+              : "bg-rose-100 text-rose-950"
+        );
+        const body = (
+          <>
             <span
               className={cn(
                 "flex h-9 w-9 items-center justify-center rounded-xl",
@@ -71,6 +66,7 @@ export function LearnSecondaryTiles({
                 muted ? "text-zinc-600" : tile.id === "resources" ? "text-sky-950" : "text-rose-950"
               )}
             >
+              {!href ? <span aria-hidden="true">🔒 </span> : null}
               {tile.title}
             </p>
             <p
@@ -81,6 +77,27 @@ export function LearnSecondaryTiles({
             >
               {status}
             </p>
+          </>
+        );
+        if (!href) {
+          return (
+            <div key={tile.id} data-tour={`learn-tile-${tile.id}`} className={shell}>
+              {body}
+            </div>
+          );
+        }
+        return (
+          <NavLink
+            key={tile.id}
+            href={href}
+            data-tour={`learn-tile-${tile.id}`}
+            className={cn(
+              pressableClass,
+              shell,
+              muted ? "hover:bg-zinc-50" : tile.id === "resources" ? "hover:bg-sky-50" : "hover:bg-rose-50"
+            )}
+          >
+            {body}
           </NavLink>
         );
       })}

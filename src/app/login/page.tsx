@@ -4,6 +4,7 @@ import { UseAnotherAccountButton } from "@/components/auth/use-another-account-b
 import { getContinueAsUser } from "@/lib/auth/continue-as-user";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { planRedirect } from "@/lib/navigation/redirect-guard";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { LoginForm } from "./login-form";
@@ -26,6 +27,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     if (destination) redirect(destination);
   }
 
+  const nativeApp = await getIsNativeApp();
   const rememberedEmail = continueAs?.email ?? emailParam?.trim() ?? "";
   const showRememberedLogin =
     !continueAs?.sessionActive && Boolean(rememberedEmail && continueAs);
@@ -40,11 +42,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             ? "Enter your password to continue"
             : "Sign in to your Kidda account"
       }
-      footer={{
-        text: "Don't have an account?",
-        linkText: "Sign up",
-        href: "/signup",
-      }}
+      footer={
+        nativeApp
+          ? null
+          : {
+              text: "Don't have an account?",
+              linkText: "Sign up",
+              href: "/signup",
+            }
+      }
     >
       {message && (
         <p className="mb-5 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{message}</p>

@@ -1,5 +1,8 @@
+"use client";
+
 import { switchAccount } from "@/app/login/switch-account";
 import type { ContinueAsUser } from "@/lib/auth/continue-as-user";
+import { useNativeApp } from "@/lib/native/native-app-context";
 import Link from "next/link";
 
 type ContinueAsUserCardProps = {
@@ -33,6 +36,7 @@ export function ContinueAsUserCard({
   variant = "auth",
   showSwitchLink = true,
 }: ContinueAsUserCardProps) {
+  const nativeApp = useNativeApp();
   const continueHref = user.sessionActive ? "/dashboard/learn" : `/login?email=${encodeURIComponent(user.email)}`;
 
   if (variant === "home") {
@@ -60,12 +64,14 @@ export function ContinueAsUserCard({
               Use another account
             </button>
           </form>
-          <Link
-            href="/signup"
-            className="rounded-lg border border-zinc-300 bg-white px-6 py-3 text-center text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
-          >
-            Create account
-          </Link>
+          {nativeApp ? null : (
+            <Link
+              href="/signup"
+              className="rounded-lg border border-zinc-300 bg-white px-6 py-3 text-center text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
+            >
+              Create account
+            </Link>
+          )}
         </div>
       </div>
     );
