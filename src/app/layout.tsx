@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Poppins } from "next/font/google";
+import { headers } from "next/headers";
 import { Suspense } from "react";
 import { AuthRedirectHandler } from "@/components/auth-redirect-handler";
+import { NativeBridge } from "@/components/native/native-bridge";
 import { loadSiteBranding } from "@/lib/branding/load-site-branding";
+import { NativeAppProvider } from "@/lib/native/native-app-context";
+import { isNativeAppRequest } from "@/lib/native/platform";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -36,25 +40,31 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export const viewport = {
+export const viewport: Viewport = {
   themeColor: "#fafafa",
+  viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nativeApp = isNativeAppRequest(await headers());
+
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} min-h-dvh bg-zinc-50 antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} min-h-dvh bg-zinc-50 antialiased${nativeApp ? " kidda-native" : ""}`}
     >
       <body className="flex min-h-dvh flex-1 flex-col bg-zinc-50">
-        <Suspense fallback={null}>
-          <AuthRedirectHandler />
-        </Suspense>
-        {children}
+        <NativeAppProvider isNative={nativeApp}>
+          <NativeBridge />
+          <Suspense fallback={null}>
+            <AuthRedirectHandler />
+          </Suspense>
+          {children}
+        </NativeAppProvider>
       </body>
     </html>
   );

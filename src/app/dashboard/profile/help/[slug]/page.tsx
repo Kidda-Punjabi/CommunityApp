@@ -1,5 +1,7 @@
 import { HelpArticleDetailView } from "@/components/help/help-article-detail-view";
 import { loadPublishedHelpArticleBySlug } from "@/lib/help/articles";
+import { helpArticleIsPurchase } from "@/lib/native/help-purchase";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 
@@ -17,6 +19,7 @@ export default async function StudentHelpArticlePage({ params }: HelpArticlePage
 
   const article = await loadPublishedHelpArticleBySlug(supabase, slug);
   if (!article) notFound();
+  if ((await getIsNativeApp()) && helpArticleIsPurchase(article)) notFound();
 
   return (
     <HelpArticleDetailView

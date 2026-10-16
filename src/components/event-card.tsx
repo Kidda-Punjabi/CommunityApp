@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { HubCard, StatusBadge } from "@/components/ui/hub-primitives";
 import { TIER_LABELS, type MembershipTier } from "@/lib/membership/tiers";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { useNativeApp } from "@/lib/native/native-app-context";
 
 export type EventItem = {
   id: string;
@@ -81,6 +85,7 @@ export function EventCard({
   requiredTier,
   recurrenceLabel,
 }: EventCardProps) {
+  const nativeApp = useNativeApp();
   const joinUrl = event.meeting_url || event.external_url;
   const metaLine = formatEventMeta(event, recurrenceLabel);
 
@@ -110,19 +115,28 @@ export function EventCard({
 
       {!canAccess && (
         <div className="mt-4 space-y-2">
-          <p className="text-sm text-zinc-500">
-            Unlock with{" "}
-            <span className="font-medium text-zinc-700">
-              {requiredTier ? TIER_LABELS[requiredTier] : "a course purchase"}
-            </span>
-            .
-          </p>
-          <Link
-            href="/courses"
-            className="text-sm font-medium text-violet-600 hover:text-violet-500"
-          >
-            View courses
-          </Link>
+          {nativeApp ? (
+            <p className="text-sm text-zinc-500">
+              <span aria-hidden="true">🔒 </span>
+              {NATIVE_LOCKED_MESSAGE}
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-zinc-500">
+                Unlock with{" "}
+                <span className="font-medium text-zinc-700">
+                  {requiredTier ? TIER_LABELS[requiredTier] : "a course purchase"}
+                </span>
+                .
+              </p>
+              <Link
+                href="/courses"
+                className="text-sm font-medium text-violet-600 hover:text-violet-500"
+              >
+                View courses
+              </Link>
+            </>
+          )}
         </div>
       )}
 

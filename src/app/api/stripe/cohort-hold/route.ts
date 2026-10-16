@@ -2,10 +2,14 @@ import "server-only";
 
 import { cohortHoldExpiresAt, getCohortCheckoutRemainingSpots } from "@/lib/group-purchase/cohort-capacity";
 import { isCohortNotionSyncFresh } from "@/lib/group-purchase/cohort-picker-display";
+import { rejectNativePurchase } from "@/lib/native/reject-native-purchase";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
+  const blocked = rejectNativePurchase(request);
+  if (blocked) return blocked;
+
   let cohortId: string;
 
   try {

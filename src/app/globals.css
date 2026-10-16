@@ -377,3 +377,38 @@ h6 {
 .driver-popover.kidda-tour-popover .driver-popover-navigation-btns {
   gap: 0.35rem;
 }
+
+/* iOS shell only. Insets are 0 in a normal browser, and these rules are also scoped to the app class. */
+html.kidda-native body {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+html.kidda-native .fixed.inset-0 {
+  top: env(safe-area-inset-top, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html.kidda-native .fixed.top-0:not(.inset-0),
+html.kidda-native .sticky.top-0 {
+  top: env(safe-area-inset-top, 0px);
+}
+
+html.kidda-native input,
+html.kidda-native textarea,
+html.kidda-native select {
+  font-size: 16px !important;
+}
+
+html.kidda-native button,
+html.kidda-native [role="button"],
+html.kidda-native .kidda-no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html.kidda-keyboard-open .fixed.bottom-0,
+html.kidda-keyboard-open .kidda-bottom-chrome {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

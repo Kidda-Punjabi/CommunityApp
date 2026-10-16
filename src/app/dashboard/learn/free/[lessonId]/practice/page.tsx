@@ -6,6 +6,7 @@ import { fetchTopicMasteryMap } from "@/lib/free-lessons/mastery";
 import { resolveTopicUnlockState } from "@/lib/free-lessons/unlock";
 import { STAGE_DEPTH_MAX, type TopicStageId } from "@/lib/free-lessons/stages";
 import { hasPremiumAccess } from "@/lib/membership/premium-access";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { createClient } from "@/lib/supabase/server";
@@ -71,7 +72,7 @@ export default async function FreeLessonPracticePage({
   });
 
   if (!unlock.accessible) {
-    if (unlock.lockReason === "premium") redirect(PREMIUM_UNLOCK_PATH);
+    if (unlock.lockReason === "premium" && !(await getIsNativeApp())) redirect(PREMIUM_UNLOCK_PATH);
     redirect(`/dashboard/learn/free/${lessonId}`);
   }
 

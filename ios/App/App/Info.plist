@@ -66,6 +66,12 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Kidda uses your microphone to record homework and for speaking practice</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Kidda uses your camera for photo translation</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Kidda lets you choose a photo to translate</string>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDarkContent</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>

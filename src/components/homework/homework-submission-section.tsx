@@ -18,9 +18,12 @@ import {
   recordingExtensionForBlob,
   useAudioRecorder,
 } from "@/lib/audio/use-audio-recorder";
+import { HOMEWORK_RECORDING_UPLOAD_ERROR } from "@/lib/tutoring/homework-recording-upload";
+import { uploadHomeworkRecordingToSignedUrl } from "@/lib/tutoring/upload-homework-recording";
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import { lessonContentRowButtonClass } from "@/components/lesson-card";
+import { hapticSuccess } from "@/lib/native/haptics";
 import { ui } from "@/lib/ui/styles";
 
 type HomeworkSubmitRecording = (
@@ -171,6 +174,7 @@ function HomeworkRecorderBody({
           }
 
           setActionSuccess(result.success ?? "Homework submitted!");
+          void hapticSuccess();
           recorder.discardRecording();
           router.refresh();
           return;
@@ -187,6 +191,7 @@ function HomeworkRecorderBody({
         }
 
         setActionSuccess(result.success ?? "Homework submitted!");
+        void hapticSuccess();
         recorder.discardRecording();
         router.refresh();
       } catch {

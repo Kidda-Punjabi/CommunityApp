@@ -9,6 +9,8 @@ import {
   type TopicStageFills,
   type TopicStageId,
 } from "@/lib/free-lessons/stages";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { useNativeApp } from "@/lib/native/native-app-context";
 import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 
 type TopicHubCardProps = {
@@ -40,6 +42,7 @@ export function TopicHubCard({
   accessible,
   lockReason,
 }: TopicHubCardProps) {
+  const nativeApp = useNativeApp();
   const visual = getTopicVisual(title, sortIndex);
   const { Icon } = visual;
   const mastered =
@@ -86,20 +89,28 @@ export function TopicHubCard({
         {lockReason === "sequence"
           ? "Finish the previous topic to unlock this one."
           : lockReason === "premium"
-            ? "This topic is part of Premium. Unlock to keep practising in order."
+            ? nativeApp
+              ? NATIVE_LOCKED_MESSAGE
+              : "This topic is part of Premium. Unlock to keep practising in order."
             : mastered
               ? "All three stages complete — words, sentences, and speaking."
               : `Stage ${stage} of 3 · ${TOPIC_STAGES[stage - 1].label} (level ${depth} of 5)`}
       </p>
 
       <div className="mt-8 flex w-full flex-col gap-3 text-left">
-        {lockReason === "premium" ? (
+        {lockReason === "premium" && !nativeApp ? (
           <Link
             href={PREMIUM_UNLOCK_PATH}
             className="rounded-2xl bg-violet-600 px-5 py-3.5 text-center text-sm font-semibold text-white hover:bg-violet-500"
           >
             Unlock with Premium
           </Link>
+        ) : null}
+        {lockReason === "premium" && nativeApp ? (
+          <p className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-center text-sm text-zinc-600">
+            <span aria-hidden="true">🔒 </span>
+            {NATIVE_LOCKED_MESSAGE}
+          </p>
         ) : null}
 
         {lockReason === "sequence" ? (

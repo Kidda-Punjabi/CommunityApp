@@ -27,6 +27,8 @@ import {
 } from "@/lib/learning/kids-courses";
 import { loadAdultClassCards } from "@/lib/learning/load-adult-class-cards";
 import { getLearnTrack, learnTrackPath } from "@/lib/learning/learn-catalog";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { courseDetailPath } from "@/lib/learn/course-levels";
 import { loadRegisteredComingSoonLevels } from "@/lib/learn/course-interest";
 import { loadKidProgressSummariesForParent } from "@/lib/kids/load-kid-progress-summary";
@@ -165,21 +167,26 @@ export default async function LearnPage() {
         )
       : null;
 
+  const nativeApp = await getIsNativeApp();
+  const lockedLabel = nativeApp ? NATIVE_LOCKED_MESSAGE : "Unlock to start";
+
   const foundationalStatus = foundationalLocked
-    ? "Unlock to start"
+    ? lockedLabel
     : foundationalProgress && foundationalProgress.totalLessons > 0
       ? `${foundationalProgress.completedLessons} of ${foundationalProgress.totalLessons} lessons`
       : "Lessons ready";
 
   const beginnersStatus = beginnersLocked
-    ? "Unlock to start"
+    ? lockedLabel
     : beginnersGate?.gated
       ? shortStartsStatus(beginnersGate.startDate)
       : "Lessons ready";
 
-  const communityStatus = communityLocked ? "Unlock to start" : "Lessons ready";
+  const communityStatus = communityLocked ? lockedLabel : "Lessons ready";
   const communityHref = communityLocked
-    ? community.unlockUrl ?? "/courses/community"
+    ? nativeApp
+      ? ""
+      : community.unlockUrl ?? "/courses/community"
     : learnTrackPath("community");
 
   const classCards =
@@ -260,11 +267,14 @@ export default async function LearnPage() {
               tourId="learn-tile-foundational"
               href={
                 foundationalLocked
-                  ? foundational.unlockUrl ?? "/courses/foundational"
+                  ? nativeApp
+                    ? undefined
+                    : foundational.unlockUrl ?? "/courses/foundational"
                   : learnTrackPath("foundational")
               }
               status={foundationalStatus}
               percent={foundationalLocked ? null : foundationalPercent}
+              locked={nativeApp && foundationalLocked}
             />
           )}
           {classTiers.has("beginners") || (kidProfileCount > 0 && beginnersLocked) ? null : (
@@ -273,10 +283,13 @@ export default async function LearnPage() {
               tourId="learn-tile-beginners"
               href={
                 beginnersLocked
-                  ? beginners.unlockUrl ?? "/courses/beginners"
+                  ? nativeApp
+                    ? undefined
+                    : beginners.unlockUrl ?? "/courses/beginners"
                   : learnTrackPath("beginners")
               }
               status={beginnersStatus}
+              locked={nativeApp && beginnersLocked}
             />
           )}
           <LearnCourseRow

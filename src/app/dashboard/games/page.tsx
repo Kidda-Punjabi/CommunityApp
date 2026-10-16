@@ -15,6 +15,7 @@ import {
   getCachedAuthSession,
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 import { redirect } from "next/navigation";
 
 export default async function GamesPage() {
@@ -31,6 +32,7 @@ export default async function GamesPage() {
   const olderKid =
     kidSession.activeKidProfile && !usesKidsShell(kidSession.activeKidProfile.age_tier);
 
+  const nativeApp = await getIsNativeApp();
   const englishMode = isEnglishGamesScope(scope);
   const hasFoundationalAccess = hasTierAccess(courseAccess, "foundational");
   const vocabularyGames = GAME_CATALOG.filter((g) => {
@@ -53,7 +55,7 @@ export default async function GamesPage() {
         <p className="mt-1 text-sm text-zinc-500">
           {englishMode
             ? "Play vocabulary games with your Learn English flashcards."
-            : isPremium
+            : isPremium || nativeApp
               ? "Play vocabulary and grammar games to reinforce what you've learned."
               : hasFoundationalAccess
                 ? "Foundational Course includes Sound Match and Vowel Match, plus the first four games. Premium unlocks the full catalogue."

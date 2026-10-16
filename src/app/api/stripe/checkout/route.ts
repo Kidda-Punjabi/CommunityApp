@@ -2,10 +2,14 @@ import {
   appendPaymentLinkParams,
   createCheckoutSession,
 } from "@/lib/stripe/create-checkout-session";
+import { rejectNativePurchase } from "@/lib/native/reject-native-purchase";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
+  const blocked = rejectNativePurchase(request);
+  if (blocked) return blocked;
+
   if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_")) {
     return NextResponse.json({ error: "Stripe is not configured." }, { status: 503 });
   }

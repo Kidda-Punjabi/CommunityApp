@@ -1,22 +1,31 @@
 import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 
-export function FlashcardAccessDenied({
+export async function FlashcardAccessDenied({
   requiredCourseLabel,
 }: {
   requiredCourseLabel: string | null;
 }) {
+  const nativeApp = await getIsNativeApp();
+
   return (
     <div className="flex flex-1 flex-col px-4 py-6">
-      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-        These flashcards require {requiredCourseLabel ?? "a membership upgrade"}.
+      <p className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700">
+        <span aria-hidden="true">🔒 </span>
+        {nativeApp
+          ? NATIVE_LOCKED_MESSAGE
+          : `These flashcards require ${requiredCourseLabel ?? "a membership upgrade"}.`}
       </p>
-      <Link
-        href="/dashboard/membership"
-        className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
-      >
-        View membership plans →
-      </Link>
+      {nativeApp ? null : (
+        <Link
+          href="/dashboard/membership"
+          className="mt-4 text-sm font-medium text-violet-600 hover:text-violet-500"
+        >
+          View membership plans →
+        </Link>
+      )}
     </div>
   );
 }

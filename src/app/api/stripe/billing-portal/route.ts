@@ -1,11 +1,15 @@
 import "server-only";
 
+import { rejectNativePurchase } from "@/lib/native/reject-native-purchase";
 import { getAppUrl } from "@/lib/stripe/server";
 import { createClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe/server";
 import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const blocked = rejectNativePurchase(request);
+  if (blocked) return blocked;
+
   if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_")) {
     return NextResponse.json({ error: "Stripe is not configured." }, { status: 503 });
   }

@@ -4,6 +4,8 @@ import type { GameCatalogEntry } from "@/lib/games/catalog";
 import { GAMES_TILE_WIDTH_CLASS } from "@/components/games/games-horizontal-row";
 import { GameTileCornerBadge } from "@/components/games/game-tile-corner";
 import { GAMES_PREMIUM_UNLOCK_URL } from "@/lib/games/premium-gating";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { useNativeApp } from "@/lib/native/native-app-context";
 import { recordLastPlayedGame } from "@/lib/games/last-played";
 import { ui } from "@/lib/ui/styles";
 import { Lock } from "lucide-react";
@@ -23,12 +25,11 @@ function scoreLabel(personalBest: number | null): string {
 }
 
 export function GameGridTile({ game, personalBest, locked = false }: GameGridTileProps) {
+  const nativeApp = useNativeApp();
   if (locked) {
-    return (
-      <Link
-        href={GAMES_PREMIUM_UNLOCK_URL}
-        className={`${ui.cardBordered} ${GAMES_TILE_WIDTH_CLASS} relative flex min-h-[9.25rem] flex-col p-4 opacity-80`}
-      >
+    const className = `${ui.cardBordered} ${GAMES_TILE_WIDTH_CLASS} relative flex min-h-[9.25rem] flex-col p-4 opacity-80`;
+    const body = (
+      <>
         <div className="flex items-start justify-between gap-2">
           <span
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-zinc-100 text-xl grayscale"
@@ -41,9 +42,15 @@ export function GameGridTile({ game, personalBest, locked = false }: GameGridTil
         <p className="mt-3 line-clamp-3 font-heading text-sm font-semibold leading-snug text-zinc-700">
           {game.title}
         </p>
-        <p className="mt-auto pt-2 text-xs font-medium text-violet-600">
-          Unlock with Premium
+        <p className="mt-auto pt-2 text-xs font-medium text-zinc-500">
+          {nativeApp ? NATIVE_LOCKED_MESSAGE : "Unlock with Premium"}
         </p>
+      </>
+    );
+    if (nativeApp) return <div className={className}>{body}</div>;
+    return (
+      <Link href={GAMES_PREMIUM_UNLOCK_URL} className={className}>
+        {body}
       </Link>
     );
   }

@@ -6,6 +6,7 @@ import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host
 import { useEffect, useRef, useState } from "react";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { useAudioManager } from "@/lib/audio/audio-manager";
+import { hapticSuccess } from "@/lib/native/haptics";
 import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { gameDeckHubHref } from "@/lib/flashcards/utils";
@@ -228,6 +229,7 @@ export function FlashcardMatchMode({
 
     if (firstTile.cardId === tile.cardId) {
       playSound("correct");
+      void hapticSuccess();
       setMatchedCardIds((prev) => new Set(prev).add(tile.cardId));
       setPairsMatched((prev) => prev + 1);
       setSelectedTileId(null);

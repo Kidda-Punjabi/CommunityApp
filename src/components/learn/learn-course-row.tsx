@@ -1,5 +1,6 @@
 import { NavLink } from "@/components/ui/nav-link";
 import { RegisterInterestButton } from "@/components/learn/register-interest-button";
+import { Lock } from "lucide-react";
 import {
   LEARN_COURSE_LEVELS,
   type LearnCourseLevelId,
@@ -15,6 +16,7 @@ type LearnCourseRowProps = {
   comingSoon?: boolean;
   tourId?: string;
   interestRegistered?: boolean;
+  locked?: boolean;
 };
 
 export function LearnCourseRow({
@@ -25,6 +27,7 @@ export function LearnCourseRow({
   comingSoon = false,
   tourId,
   interestRegistered = false,
+  locked = false,
 }: LearnCourseRowProps) {
   const theme = LEARN_COURSE_LEVELS[level];
   const Icon = theme.Icon;
@@ -113,6 +116,7 @@ export function LearnCourseRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className={cn("font-heading text-base font-semibold leading-snug", theme.ink)}>
+              {locked ? <Lock className="mr-1 inline h-4 w-4" aria-hidden /> : null}
               {theme.title}
             </p>
             {percent != null ? (

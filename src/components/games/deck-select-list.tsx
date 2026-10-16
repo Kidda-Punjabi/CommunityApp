@@ -10,6 +10,8 @@ import {
   groupDecksByWeek,
   sortedWeekNumbers,
 } from "@/lib/games/game-deck-weeks";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { useNativeApp } from "@/lib/native/native-app-context";
 import { ui } from "@/lib/ui/styles";
 
 type DeckSelectListProps = {
@@ -28,6 +30,7 @@ export function DeckSelectList({
   onSelectDeck,
   hideEmptyBackLink = false,
 }: DeckSelectListProps) {
+  const nativeApp = useNativeApp();
   const weeks = sortedWeekNumbers(decks);
   const [pickedWeek, setPickedWeek] = useState<number | null>(weeks[0] ?? null);
   const selectedWeek =
@@ -40,9 +43,13 @@ export function DeckSelectList({
   if (decks.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">
-        <p className="text-lg font-semibold text-zinc-900">No decks available</p>
+        <p className="text-lg font-semibold text-zinc-900">
+          {nativeApp ? "🔒 No decks available" : "No decks available"}
+        </p>
         <p className="mt-2 text-sm text-zinc-500">
-          Unlock a course with flashcard sets to play {gameTitle}.
+          {nativeApp
+            ? NATIVE_LOCKED_MESSAGE
+            : `Unlock a course with flashcard sets to play ${gameTitle}.`}
         </p>
         {hideEmptyBackLink ? null : (
           <BackLink

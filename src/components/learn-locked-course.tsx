@@ -2,6 +2,8 @@ import { BackLink } from "@/components/navigation/back-link";
 import Link from "next/link";
 import { BOOK_CALL_PATH } from "@/lib/booking/constants";
 import type { LearnTrack } from "@/lib/learning/learn-catalog";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { getIsNativeApp } from "@/lib/native/platform-server";
 
 type LearnLockedCourseProps = {
   track: LearnTrack;
@@ -12,7 +14,8 @@ function isInternalUrl(url: string): boolean {
   return url.startsWith("/");
 }
 
-export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps) {
+export async function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps) {
+  const nativeApp = await getIsNativeApp();
   const unlockHref = track.unlockUrl ?? `/courses/${track.id}`;
 
   return (
@@ -24,39 +27,45 @@ export function LearnLockedCourse({ track, lessonCount }: LearnLockedCourseProps
           🔒
         </span>
         <h1 className="mt-4 text-2xl font-bold text-zinc-900">{track.title}</h1>
-        <p className="mt-3 max-w-sm text-sm text-zinc-600">
-          Unlock {track.lockProductName ?? track.title} to access all{" "}
-          {lessonCount} lesson{lessonCount === 1 ? "" : "s"}.
-        </p>
-        {isInternalUrl(unlockHref) ? (
-          <Link
-            href={`${unlockHref}#pricing`}
-            className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-          >
-            View course & buy
-          </Link>
+        {nativeApp ? (
+          <p className="mt-3 max-w-sm text-sm text-zinc-600">{NATIVE_LOCKED_MESSAGE}</p>
         ) : (
-          <a
-            href={unlockHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
-          >
-            View course & buy
-          </a>
+          <>
+            <p className="mt-3 max-w-sm text-sm text-zinc-600">
+              Unlock {track.lockProductName ?? track.title} to access all{" "}
+              {lessonCount} lesson{lessonCount === 1 ? "" : "s"}.
+            </p>
+            {isInternalUrl(unlockHref) ? (
+              <Link
+                href={`${unlockHref}#pricing`}
+                className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+              >
+                View course & buy
+              </Link>
+            ) : (
+              <a
+                href={unlockHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500"
+              >
+                View course & buy
+              </a>
+            )}
+            <Link
+              href={BOOK_CALL_PATH}
+              className="mt-3 text-sm font-medium text-violet-600 hover:text-violet-500"
+            >
+              Book a call with our team
+            </Link>
+            <Link
+              href="/dashboard/profile/billing"
+              className="mt-2 text-sm font-medium text-zinc-500 hover:text-violet-600"
+            >
+              View billing & purchases
+            </Link>
+          </>
         )}
-        <Link
-          href={BOOK_CALL_PATH}
-          className="mt-3 text-sm font-medium text-violet-600 hover:text-violet-500"
-        >
-          Book a call with our team
-        </Link>
-        <Link
-          href="/dashboard/profile/billing"
-          className="mt-2 text-sm font-medium text-zinc-500 hover:text-violet-600"
-        >
-          View billing & purchases
-        </Link>
       </div>
     </div>
   );

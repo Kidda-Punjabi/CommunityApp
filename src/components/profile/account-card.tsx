@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { BookCallSheet } from "@/components/profile/book-call-sheet";
 import { useKidSession } from "@/components/kids/kid-session-provider";
+import { useNativeApp } from "@/lib/native/native-app-context";
 import {
   AccountListRow,
   HubCard,
@@ -15,6 +16,7 @@ type AccountCardProps = {
 export function AccountCard({ isFreeOnly }: AccountCardProps) {
   const [bookCallOpen, setBookCallOpen] = useState(false);
   const { activeKidProfile } = useKidSession();
+  const nativeApp = useNativeApp();
   const showChangePassword = activeKidProfile === null;
   const showReportIssue = activeKidProfile === null;
 
@@ -22,12 +24,16 @@ export function AccountCard({ isFreeOnly }: AccountCardProps) {
     <>
       <HubCard>
         <div className="divide-y divide-zinc-100">
-          <AccountListRow href="/dashboard/membership/premium" label="Kidda Premium" />
-          <AccountListRow href="/dashboard/profile/billing" label="Billing and purchases" />
-          <AccountListRow
-            href="/courses"
-            label={isFreeOnly ? "Browse courses" : "Buy another course"}
-          />
+          {nativeApp ? null : (
+            <>
+              <AccountListRow href="/dashboard/membership/premium" label="Kidda Premium" />
+              <AccountListRow href="/dashboard/profile/billing" label="Billing and purchases" />
+              <AccountListRow
+                href="/courses"
+                label={isFreeOnly ? "Browse courses" : "Buy another course"}
+              />
+            </>
+          )}
           <AccountListRow href="/dashboard/profile/sound" label="Sound effects" />
           <AccountListRow href="/dashboard/profile/kids/manage" label="Manage kid profiles & PIN" />
           <AccountListRow href="/dashboard/profile/feedback" label="Share lesson feedback" />
@@ -35,11 +41,14 @@ export function AccountCard({ isFreeOnly }: AccountCardProps) {
           {showReportIssue ? (
             <AccountListRow href="/dashboard/profile/report-issue" label="Report an issue" />
           ) : null}
-          <AccountListRow
-            label="Book a call with the team"
-            onClick={() => setBookCallOpen(true)}
-          />
+          {nativeApp ? null : (
+            <AccountListRow
+              label="Book a call with the team"
+              onClick={() => setBookCallOpen(true)}
+            />
+          )}
           <AccountListRow href="/dashboard/profile/notifications" label="Notification settings" />
+          <AccountListRow href="/dashboard/profile/delete" label="Delete account" />
           {showChangePassword ? (
             <AccountListRow href="/dashboard/profile/password" label="Change password" />
           ) : null}

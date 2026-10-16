@@ -5,6 +5,8 @@ import Link from "next/link";
 import type { PreparedEvent } from "@/components/upcoming-events-list";
 import { HubCard, StatusBadge } from "@/components/ui/hub-primitives";
 import { TIER_LABELS } from "@/lib/membership/tiers";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { useNativeApp } from "@/lib/native/native-app-context";
 
 type NextClassCardProps = {
   prepared: PreparedEvent;
@@ -60,6 +62,7 @@ function tierBadgeLabel(prepared: PreparedEvent): string {
 }
 
 export function NextClassCard({ prepared }: NextClassCardProps) {
+  const nativeApp = useNativeApp();
   const { event, canAccess, requiredTier } = prepared;
   const joinUrl = event.meeting_url || event.external_url;
   const [countdown, setCountdown] = useState(() => formatCountdown(event.starts_at));
@@ -99,19 +102,28 @@ export function NextClassCard({ prepared }: NextClassCardProps) {
 
         {!canAccess ? (
           <div className="mt-4 space-y-2">
-            <p className="text-sm text-zinc-500">
-              Unlock with{" "}
-              <span className="font-medium text-zinc-700">
-                {requiredTier ? TIER_LABELS[requiredTier] : "a course purchase"}
-              </span>
-              .
-            </p>
-            <Link
-              href="/courses"
-              className="text-sm font-medium text-violet-600 hover:text-violet-500"
-            >
-              View courses
-            </Link>
+            {nativeApp ? (
+              <p className="text-sm text-zinc-500">
+                <span aria-hidden="true">🔒 </span>
+                {NATIVE_LOCKED_MESSAGE}
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-zinc-500">
+                  Unlock with{" "}
+                  <span className="font-medium text-zinc-700">
+                    {requiredTier ? TIER_LABELS[requiredTier] : "a course purchase"}
+                  </span>
+                  .
+                </p>
+                <Link
+                  href="/courses"
+                  className="text-sm font-medium text-violet-600 hover:text-violet-500"
+                >
+                  View courses
+                </Link>
+              </>
+            )}
           </div>
         ) : null}
 

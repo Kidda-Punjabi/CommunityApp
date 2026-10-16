@@ -1,4 +1,6 @@
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { isNativeAppRequest } from "@/lib/native/platform";
+import { nativePurchaseRedirect } from "@/lib/native/purchase-paths";
 import {
   AUTH_RECOVERY_COOKIE,
   authCallbackNextPath,
@@ -73,7 +75,10 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const referralCode = normalizeReferralCode(request.nextUrl.searchParams.get("ref"));
+  const nativeApp = isNativeAppRequest(request.headers);
+  const referralCode = nativeApp
+    ? null
+    : normalizeReferralCode(request.nextUrl.searchParams.get("ref"));
 
   function withReferralCookie(response: NextResponse) {
     if (!referralCode) return response;
@@ -141,6 +146,18 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/auth/callback";
       url.searchParams.set("next", "/reset-password");
       return NextResponse.redirect(url);
+    }
+  }
+
+  if (nativeApp) {
+    const purchaseDestination = nativePurchaseRedirect(request.nextUrl.pathname);
+    if (purchaseDestination) {
+      const response = redirectTo(request, purchaseDestination, { count: 0 });
+      if (response) return response;
+    }
+    if (!user && request.nextUrl.pathname === "/") {
+      const response = redirectTo(request, "/login", { count: 0 });
+      if (response) return response;
     }
   }
 

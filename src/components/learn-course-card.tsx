@@ -1,7 +1,11 @@
+"use client";
+
 import { NavLink } from "@/components/ui/nav-link";
 import type { LearnTrack } from "@/lib/learning/learn-catalog";
 import { learnTrackPath } from "@/lib/learning/learn-catalog";
 import { CourseProgressBar } from "@/components/course-progress-bar";
+import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { useNativeApp } from "@/lib/native/native-app-context";
 import { ui } from "@/lib/ui/styles";
 
 type LearnCourseCardProps = {
@@ -23,6 +27,7 @@ export function LearnCourseCard({
   lessonCount,
   courseProgress,
 }: LearnCourseCardProps) {
+  const nativeApp = useNativeApp();
   const showLock = !track.alwaysUnlocked && locked;
   const showOpensOn = !showLock && Boolean(opensOnMessage);
   const showProgress =
@@ -47,10 +52,18 @@ export function LearnCourseCard({
             Course
           </p>
           <p className="mt-0.5 font-heading font-semibold text-zinc-900">{track.title}</p>
-          <p className="mt-0.5 truncate text-sm text-zinc-500">{subtitle}</p>
-          <NavLink href={salesHref} className={`mt-2.5 inline-flex ${ui.btnSecondary}`}>
-            Find out more
-          </NavLink>
+          <p className="mt-0.5 text-sm text-zinc-500">
+            {nativeApp ? NATIVE_LOCKED_MESSAGE : subtitle}
+          </p>
+          {nativeApp ? (
+            <p className="mt-2.5 text-sm" aria-hidden="true">
+              🔒
+            </p>
+          ) : (
+            <NavLink href={salesHref} className={`mt-2.5 inline-flex ${ui.btnSecondary}`}>
+              Find out more
+            </NavLink>
+          )}
         </div>
       </div>
     );

@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { dismissIntroPitch } from "@/app/dashboard/intro-pitch/actions";
 import { BOOK_CALL_PATH } from "@/lib/booking/constants";
+import { useNativeApp } from "@/lib/native/native-app-context";
 import {
   INTRO_PITCH_SCREENS,
-  INTRO_PITCH_TOTAL_SCREENS,
   type IntroPitchScreen,
 } from "@/lib/intro-pitch/screens";
 
@@ -15,8 +15,8 @@ type IntroPitchOverlayProps = {
   onClose: () => void;
 };
 
-function ProgressBar({ step }: { step: number }) {
-  const pct = ((step + 1) / INTRO_PITCH_TOTAL_SCREENS) * 100;
+function ProgressBar({ step, total }: { step: number; total: number }) {
+  const pct = ((step + 1) / total) * 100;
 
   return (
     <div className="space-y-2">
@@ -27,7 +27,7 @@ function ProgressBar({ step }: { step: number }) {
         />
       </div>
       <p className="text-center text-xs text-zinc-500">
-        {step + 1} of {INTRO_PITCH_TOTAL_SCREENS}
+        {step + 1} of {total}
       </p>
     </div>
   );
@@ -107,8 +107,12 @@ export function IntroPitchOverlay({ isTestMode, onClose }: IntroPitchOverlayProp
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  const screen = INTRO_PITCH_SCREENS[step];
-  const isLastScreen = step >= INTRO_PITCH_TOTAL_SCREENS - 1;
+  const nativeApp = useNativeApp();
+  const screens = nativeApp
+    ? INTRO_PITCH_SCREENS.filter((item) => item.id !== "cta")
+    : INTRO_PITCH_SCREENS;
+  const screen = screens[Math.min(step, screens.length - 1)];
+  const isLastScreen = step >= screens.length - 1;
 
   async function finish() {
     setSaving(true);
@@ -154,7 +158,7 @@ export function IntroPitchOverlay({ isTestMode, onClose }: IntroPitchOverlayProp
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          <ProgressBar step={step} />
+          <ProgressBar step={step} total={screens.length} />
 
           <div className="mt-6 space-y-4">
             <h2 className="text-xl font-bold leading-snug text-zinc-900">{screen.title}</h2>
@@ -201,19 +205,25 @@ export function IntroPitchOverlay({ isTestMode, onClose }: IntroPitchOverlayProp
         <div className="space-y-2 border-t border-zinc-100 px-5 py-4">
           {isLastScreen ? (
             <>
-              <button
-                type="button"
-                onClick={() => void handleBookCall()}
-                disabled={saving}
-                className="w-full rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-              >
-                Book a free call with our team
-              </button>
+              {nativeApp ? null : (
+                <button
+                  type="button"
+                  onClick={() => void handleBookCall()}
+                  disabled={saving}
+                  className="w-full rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+                >
+                  Book a free call with our team
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void handleSkip()}
                 disabled={saving}
-                className="w-full rounded-xl px-4 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                className={
+                  nativeApp
+                    ? "w-full rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+                    : "w-full rounded-xl px-4 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                }
               >
                 Explore the app
               </button>
