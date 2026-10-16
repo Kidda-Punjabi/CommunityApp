@@ -547,6 +547,23 @@ CREATE POLICY "Forum members read posts"
     )
   );
 
+CREATE OR REPLACE FUNCTION public.forum_reply_parent_ok(p_post_id uuid, p_parent_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p_parent_id IS NULL
+    OR EXISTS (
+      SELECT 1
+      FROM public.forum_replies parent
+      WHERE parent.id = p_parent_id
+        AND parent.post_id = p_post_id
+        AND parent.status = 'visible'
+    );
+$$;
+
 DROP POLICY IF EXISTS "Forum members create replies" ON public.forum_replies;
 CREATE POLICY "Forum members create replies"
   ON public.forum_replies FOR INSERT TO authenticated
@@ -558,15 +575,7 @@ CREATE POLICY "Forum members create replies"
       SELECT 1 FROM public.forum_posts p
       WHERE p.id = forum_replies.post_id AND p.status = 'visible'
     )
-    AND (
-      parent_reply_id IS NULL
-      OR EXISTS (
-        SELECT 1 FROM public.forum_replies parent
-        WHERE parent.id = forum_replies.parent_reply_id
-          AND parent.post_id = forum_replies.post_id
-          AND parent.status = 'visible'
-      )
-    )
+    AND public.forum_reply_parent_ok(post_id, parent_reply_id)
   );
 
 DROP POLICY IF EXISTS "Forum members read replies" ON public.forum_replies;
