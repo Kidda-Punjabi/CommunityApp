@@ -8,6 +8,7 @@ import { KidsShellRouteGuard } from "@/components/kids/kids-shell-route-guard";
 import { TabNavProvider } from "@/components/navigation/tab-nav-provider";
 import { LastPlayedGameTracker } from "@/components/games/last-played-tracker";
 import { ActivityDateSync } from "@/components/activity-date-sync";
+import { PushPermissionPrompt } from "@/components/native/push-permission-prompt";
 import { ViewAsBanner } from "@/components/view-as-banner";
 import { FirstRunProvider } from "@/components/first-run/first-run-provider";
 import { TourProvider } from "@/components/tours/tour-provider";
@@ -142,6 +143,7 @@ export default async function DashboardLayout({
                   }`}
                 >
                   <ActivityDateSync />
+                  <PushPermissionPrompt />
                   <LastPlayedGameTracker />
                   {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
                   <div

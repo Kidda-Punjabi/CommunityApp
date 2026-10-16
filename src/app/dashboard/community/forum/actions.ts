@@ -291,14 +291,31 @@ export async function createForumReply(
     }
   }
 
-  const { error } = await supabase.from("forum_replies").insert({
-    post_id: postId,
-    author_id: userId,
-    body,
-    ...(parentId ? { parent_reply_id: parentId } : {}),
-  });
+  const { data: reply, error } = await supabase
+    .from("forum_replies")
+    .insert({
+      post_id: postId,
+      author_id: userId,
+      body,
+      ...(parentId ? { parent_reply_id: parentId } : {}),
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: friendlyForumError(error.message) };
+
+  if (reply?.id) {
+    const { notifyForumReply } = await import("@/lib/push/forum");
+    await notifyForumReply({
+      postId,
+      replyId: reply.id,
+      authorId: userId,
+      body,
+      parentReplyId: parentId,
+    }).catch((pushError) => {
+      console.error("[push] forum reply", pushError);
+    });
+  }
 
   revalidatePath(`/dashboard/community/forum/${postId}`);
   revalidatePath("/dashboard/community/forum");

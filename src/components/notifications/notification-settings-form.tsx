@@ -8,6 +8,7 @@ import {
   type ActionResult,
 } from "@/app/dashboard/notifications/actions";
 import type { NotificationSettings } from "@/lib/notifications/load-notifications";
+import { PushSettingsSwitch } from "@/components/native/push-settings-switch";
 import { ui } from "@/lib/ui/styles";
 
 const initial: ActionResult = {};
@@ -27,12 +28,61 @@ export function NotificationSettingsForm({ settings }: NotificationSettingsFormP
         <p className="mt-1 text-sm text-zinc-500">Choose what you want to hear about in the app.</p>
       </div>
 
-      <form action={formAction} className={ui.card}>
+      <form action={formAction} className={`${ui.card} space-y-4`}>
+        <PushSettingsSwitch />
         <ul className="space-y-4">
           <SettingRow
+            name="class_reminders"
+            label="Class reminders"
+            description="Before your classes, and when a new lesson is unlocked"
+            defaultChecked={settings.classReminders}
+          />
+          <SettingRow
+            name="lesson_scheduling"
+            label="Class changes"
+            description="When a class moves, is cancelled, or your cohort is confirmed"
+            defaultChecked={settings.lessonScheduling}
+          />
+          <SettingRow
+            name="homework_due"
+            label="Homework reminders"
+            description="When homework is ready or due before your next class"
+            defaultChecked={settings.homeworkDue}
+          />
+          <SettingRow
+            name="homework_reviews"
+            label="Homework feedback"
+            description="When your tutor reviews your homework"
+            defaultChecked={settings.homeworkReviews}
+          />
+          <SettingRow
+            name="community_sessions"
+            label="Community sessions"
+            description="When a Community session is on today or about to start"
+            defaultChecked={settings.communitySessions}
+          />
+          <SettingRow
+            name="forum_activity"
+            label="Forum replies"
+            description="Replies to your posts and poll results"
+            defaultChecked={settings.forumActivity}
+          />
+          <SettingRow
+            name="streaks"
+            label="Streak reminders"
+            description="When a practice streak needs you, or hits a milestone"
+            defaultChecked={settings.streaks}
+          />
+          <SettingRow
+            name="weekly_recap"
+            label="Weekly recap"
+            description="A Sunday summary of your week in Punjabi"
+            defaultChecked={settings.weeklyRecap}
+          />
+          <SettingRow
             name="friend_requests"
-            label="Friend requests"
-            description="When someone sends you a friend request"
+            label="Friends"
+            description="When someone sends or accepts a friend request"
             defaultChecked={settings.friendRequests}
           />
           <SettingRow
@@ -58,12 +108,6 @@ export function NotificationSettingsForm({ settings }: NotificationSettingsFormP
             label="Game challenges"
             description="When a friend challenges you to beat their score"
             defaultChecked={settings.gameChallenges}
-          />
-          <SettingRow
-            name="homework_reviews"
-            label="Homework feedback"
-            description="When your tutor reviews your homework"
-            defaultChecked={settings.homeworkReviews}
           />
         </ul>
 

@@ -13,6 +13,7 @@ import {
   type CalendarSessionSnapshot,
   type CarriedSessionFields,
 } from "@/lib/calendar/plan-calendar-event-write";
+import { notifyClassScheduleChanges } from "@/lib/push/class-changes";
 
 const DB_CHUNK_SIZE = 100;
 
@@ -37,6 +38,7 @@ type ExistingSessionRow = {
   starts_at: string;
   lesson_id: string | null;
   lesson_assignment_status: string | null;
+  title: string;
 };
 
 type SessionUpsertRow = {
@@ -190,7 +192,7 @@ export async function syncTutorGoogleCalendar(
       adminClient
         .from("tutor_scheduled_sessions")
         .select(
-          "id, google_event_id, google_recurring_event_id, cohort_id, student_id, rescheduling_allowed, match_method, starts_at, lesson_id, lesson_assignment_status"
+          "id, google_event_id, google_recurring_event_id, cohort_id, student_id, rescheduling_allowed, match_method, starts_at, lesson_id, lesson_assignment_status, title"
         )
         .eq("tutor_id", tutorId),
     ]);
@@ -331,6 +333,52 @@ export async function syncTutorGoogleCalendar(
         .in("google_event_id", chunk);
       if (deleteError) throw deleteError;
     });
+  }
+
+  const existingById = new Map(
+    ((existingSessions ?? []) as ExistingSessionRow[]).map((row) => [row.id, row])
+  );
+  const existingByGoogleId = new Map(
+    ((existingSessions ?? []) as ExistingSessionRow[]).map((row) => [row.google_event_id, row])
+  );
+  try {
+    await notifyClassScheduleChanges(adminClient, [
+      ...inPlaceUpdates.flatMap((update) => {
+        const existing = existingById.get(update.id);
+        const nextStart = String(update.payload.starts_at ?? "");
+        if (!existing || !nextStart || existing.starts_at === nextStart) return [];
+        return [
+          {
+            sessionId: update.id,
+            studentId: existing.student_id,
+            cohortId: existing.cohort_id,
+            title: String(update.payload.title ?? existing.title),
+            matchMethod: existing.match_method,
+            startsAt: existing.starts_at,
+            oldStartsAt: existing.starts_at,
+            newStartsAt: nextStart,
+            kind: "moved" as const,
+          },
+        ];
+      }),
+      ...cancelledEventIdsToDelete.flatMap((googleEventId) => {
+        const existing = existingByGoogleId.get(googleEventId);
+        if (!existing) return [];
+        return [
+          {
+            sessionId: existing.id,
+            studentId: existing.student_id,
+            cohortId: existing.cohort_id,
+            title: existing.title,
+            matchMethod: existing.match_method,
+            startsAt: existing.starts_at,
+            kind: "cancelled" as const,
+          },
+        ];
+      }),
+    ]);
+  } catch (pushError) {
+    console.error("[calendar sync] class change push failed", pushError);
   }
 
   if (cohortIdsToRefresh.size > 0) {

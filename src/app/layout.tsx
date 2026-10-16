@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { Suspense } from "react";
 import { AuthRedirectHandler } from "@/components/auth-redirect-handler";
 import { NativeBridge } from "@/components/native/native-bridge";
+import { PushManager } from "@/components/native/push-manager";
 import { loadSiteBranding } from "@/lib/branding/load-site-branding";
 import { NativeAppProvider } from "@/lib/native/native-app-context";
 import { isNativeAppRequest } from "@/lib/native/platform";
@@ -60,6 +61,7 @@ export default async function RootLayout({
       <body className="flex min-h-dvh flex-1 flex-col bg-zinc-50">
         <NativeAppProvider isNative={nativeApp}>
           <NativeBridge />
+          <PushManager />
           <Suspense fallback={null}>
             <AuthRedirectHandler />
           </Suspense>

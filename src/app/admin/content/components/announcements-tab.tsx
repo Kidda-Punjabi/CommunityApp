@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import Link from "next/link";
+import { useActionState, useEffect, useState } from "react";
+import { countActivePushDevices } from "@/app/admin/push-log/actions";
 import {
   publishAnnouncement,
   type ActionResult,
@@ -16,6 +18,11 @@ export function AnnouncementsTab() {
   const [state, formAction, pending] = useActionState(publishAnnouncement, initial);
   const [audience, setAudience] = useState<AudienceMode>("all");
   const [selectedMembers, setSelectedMembers] = useState<AdminMemberOption[]>([]);
+  const [deviceCount, setDeviceCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    void countActivePushDevices().then(setDeviceCount).catch(() => setDeviceCount(null));
+  }, []);
 
   const submitLabel =
     audience === "all"
@@ -32,7 +39,10 @@ export function AnnouncementsTab() {
     <div className="max-w-lg rounded-xl border border-zinc-200 bg-white p-6">
       <h2 className="text-lg font-semibold text-zinc-900">Send announcement</h2>
       <p className="mt-1 text-sm text-zinc-500">
-        In-app notification for members who have announcements enabled.
+        In-app notification for members who have announcements enabled.{" "}
+        <Link href="/admin/push-log" className="font-medium text-violet-700">
+          Push log
+        </Link>
       </p>
 
       <form action={formAction} className="mt-5 space-y-4">
@@ -90,6 +100,18 @@ export function AnnouncementsTab() {
             className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900"
           />
         </div>
+        <label className="flex items-start gap-2 text-sm text-zinc-700">
+          <input type="checkbox" name="send_push" className="mt-1" />
+          <span>
+            Send as push notification
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Off by default.
+              {deviceCount == null
+                ? ""
+                : ` This will reach ${deviceCount} active device${deviceCount === 1 ? "" : "s"}.`}
+            </span>
+          </span>
+        </label>
         {state.error && <p className="text-sm text-red-600">{state.error}</p>}
         {state.success && <p className="text-sm text-green-700">{state.success}</p>}
         <button

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
+import { isStreakMilestone } from "@/lib/push/policy";
 
 export type StreakResult = {
   current_streak: number;
@@ -57,7 +58,11 @@ export async function recordStreakActivity(
   });
 
   if (error) throw error;
-  return parseStreakResult(data);
+  const result = parseStreakResult(data);
+  if (typeof window !== "undefined" && isStreakMilestone(result.current_streak)) {
+    void fetch("/api/push/streak-milestone", { method: "POST" }).catch(() => undefined);
+  }
+  return result;
 }
 
 /** @deprecated Use recordStreakActivity */

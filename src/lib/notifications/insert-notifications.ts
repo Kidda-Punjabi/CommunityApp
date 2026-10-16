@@ -29,4 +29,14 @@ export async function insertRoutedNotifications(
   );
 
   if (error) throw error;
+
+  const userIds = rows.map((row) => row.user_id).filter((id): id is string => Boolean(id));
+  const kidProfileIds = rows
+    .map((row) => row.kid_profile_id)
+    .filter((id): id is string => Boolean(id));
+  void import("@/lib/push/from-notification")
+    .then((mod) => mod.pushInsertedNotifications({ userIds, kidProfileIds }))
+    .catch((pushError) => {
+      console.error("[push] notification hook", pushError);
+    });
 }

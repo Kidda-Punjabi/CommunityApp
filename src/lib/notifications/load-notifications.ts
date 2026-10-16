@@ -32,6 +32,13 @@ export type NotificationSettings = {
   announcements: boolean;
   gameChallenges: boolean;
   homeworkReviews: boolean;
+  lessonScheduling: boolean;
+  classReminders: boolean;
+  homeworkDue: boolean;
+  communitySessions: boolean;
+  forumActivity: boolean;
+  streaks: boolean;
+  weeklyRecap: boolean;
 };
 
 type ActorProfile = {
@@ -200,6 +207,13 @@ export async function loadNotificationSettings(
     announcements: boolean;
     game_challenges: boolean;
     homework_reviews: boolean;
+    lesson_scheduling?: boolean;
+    class_reminders?: boolean;
+    homework_due?: boolean;
+    community_sessions?: boolean;
+    forum_activity?: boolean;
+    streaks?: boolean;
+    weekly_recap?: boolean;
   };
 
   return {
@@ -209,6 +223,13 @@ export async function loadNotificationSettings(
     announcements: row.announcements,
     gameChallenges: row.game_challenges ?? true,
     homeworkReviews: row.homework_reviews ?? true,
+    lessonScheduling: row.lesson_scheduling ?? true,
+    classReminders: row.class_reminders ?? true,
+    homeworkDue: row.homework_due ?? true,
+    communitySessions: row.community_sessions ?? true,
+    forumActivity: row.forum_activity ?? true,
+    streaks: row.streaks ?? true,
+    weeklyRecap: row.weekly_recap ?? true,
   };
 }
 

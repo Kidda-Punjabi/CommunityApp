@@ -147,6 +147,7 @@ export async function sendHomeworkDueReminders(
         .eq("student_id", target.studentId)
         .eq("session_id", target.sessionId)
         .eq("lesson_id", candidate.lessonId)
+        .eq("reminder_kind", "email")
         .maybeSingle();
       if (existingLog?.id) continue;
 

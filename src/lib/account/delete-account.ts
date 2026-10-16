@@ -233,6 +233,7 @@ export async function deleteCurrentAccount(
   await removeStorageObjects(admin, user.id, extraFiles);
 
   await admin.from("forum_reports").update({ reporter_id: null }).eq("reporter_id", user.id);
+  await admin.from("device_push_tokens").delete().eq("user_id", user.id);
 
   const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
   if (deleteError) return { error: deleteError.message };

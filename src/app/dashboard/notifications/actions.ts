@@ -66,6 +66,13 @@ export async function updateNotificationSettings(
     p_announcements: formData.get("announcements") === "on",
     p_game_challenges: formData.get("game_challenges") === "on",
     p_homework_reviews: formData.get("homework_reviews") === "on",
+    p_lesson_scheduling: formData.get("lesson_scheduling") === "on",
+    p_class_reminders: formData.get("class_reminders") === "on",
+    p_homework_due: formData.get("homework_due") === "on",
+    p_community_sessions: formData.get("community_sessions") === "on",
+    p_forum_activity: formData.get("forum_activity") === "on",
+    p_streaks: formData.get("streaks") === "on",
+    p_weekly_recap: formData.get("weekly_recap") === "on",
   });
 
   if (error) return { error: error.message };
@@ -97,6 +104,7 @@ export async function publishAnnouncement(
     p_title: title,
     p_body: body,
     p_recipient_user_ids: audience === "selected" ? recipientIds : null,
+    p_send_push: formData.get("send_push") === "on",
   });
 
   if (error) return { error: error.message };
