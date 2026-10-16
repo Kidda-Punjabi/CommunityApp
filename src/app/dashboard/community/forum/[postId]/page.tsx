@@ -1,14 +1,16 @@
 import { ForumCategoryBadge } from "@/components/forum/forum-category-badge";
 import { ForumEditedLabel } from "@/components/forum/forum-edited-label";
+import { ForumItemMenu } from "@/components/forum/forum-item-menu";
 import { ForumLikeButton } from "@/components/forum/forum-like-button";
+import { ForumPollCard } from "@/components/forum/forum-poll";
 import { ForumPostManage } from "@/components/forum/forum-post-manage";
 import { ForumReplyForm, ForumReplyThread } from "@/components/forum/forum-reply-section";
-import { ForumReportDialog } from "@/components/forum/forum-report-dialog";
 import { StaffRoleBadge } from "@/components/forum/staff-role-badge";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { isMasterAdmin } from "@/lib/auth/admin-access";
 import { canAccessForum, forumComposerPath, loadForumOnboardingState } from "@/lib/forum/access";
-import { loadForumPostDetail } from "@/lib/forum/load-forum";
+import { loadForumPoll, loadForumPostDetail, viewerForumSuspended } from "@/lib/forum/load-forum";
+import { FORUM_SUSPENDED_MESSAGE } from "@/lib/forum/safety";
 import type { ForumReply } from "@/lib/forum/types";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
@@ -46,9 +48,11 @@ export default async function ForumPostPage({ params }: PageProps) {
   const detail = await loadForumPostDetail(supabase, user.id, postId);
   if (!detail) notFound();
 
-  const [onboarding, viewerIsMasterAdmin] = await Promise.all([
+  const [onboarding, viewerIsMasterAdmin, poll, suspended] = await Promise.all([
     loadForumOnboardingState(supabase, user.id),
     isMasterAdmin(user.id, supabase),
+    loadForumPoll(supabase, user.id, postId),
+    viewerForumSuspended(supabase, user.id),
   ]);
   const canReply = onboarding.hasAgreedGuidelines && onboarding.hasCompletedIntro;
   const composerHref = forumComposerPath(onboarding);
@@ -92,6 +96,7 @@ export default async function ForumPostPage({ params }: PageProps) {
         </div>
 
         <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700">{post.body}</p>
+        {poll ? <ForumPollCard poll={poll} /> : null}
 
         <div className="mt-4 flex items-center gap-4 border-t border-zinc-100 pt-4">
           <ForumLikeButton
@@ -101,7 +106,15 @@ export default async function ForumPostPage({ params }: PageProps) {
             initialLiked={post.likedByViewer}
             initialCount={post.likeCount}
           />
-          <ForumReportDialog targetType="post" targetId={post.id} />
+          <ForumItemMenu
+            targetType="post"
+            targetId={post.id}
+            postId={post.id}
+            authorId={post.author.id}
+            authorName={post.author.displayName}
+            viewerUserId={user.id}
+            isMasterAdmin={viewerIsMasterAdmin}
+          />
         </div>
 
         <ForumPostManage
@@ -115,11 +128,21 @@ export default async function ForumPostPage({ params }: PageProps) {
         <h2 className="mb-4 font-heading text-lg font-semibold text-zinc-900">
           {replyCount} repl{replyCount === 1 ? "y" : "ies"}
         </h2>
-        <ForumReplyThread replies={replies} postId={post.id} canReply={canReply} />
+        <ForumReplyThread
+          replies={replies}
+          postId={post.id}
+          canReply={canReply && !suspended}
+          viewerUserId={user.id}
+          isMasterAdmin={viewerIsMasterAdmin}
+        />
       </section>
 
       <div className="mt-6">
-        {canReply ? (
+        {suspended ? (
+          <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+            {FORUM_SUSPENDED_MESSAGE}
+          </p>
+        ) : canReply ? (
           <ForumReplyForm postId={post.id} />
         ) : (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

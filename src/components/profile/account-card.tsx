@@ -47,6 +47,9 @@ export function AccountCard({ isFreeOnly }: AccountCardProps) {
               onClick={() => setBookCallOpen(true)}
             />
           )}
+          {activeKidProfile === null ? (
+            <AccountListRow href="/dashboard/profile/blocked" label="Blocked users" />
+          ) : null}
           <AccountListRow href="/dashboard/profile/notifications" label="Notification settings" />
           <AccountListRow href="/dashboard/profile/delete" label="Delete account" />
           {showChangePassword ? (

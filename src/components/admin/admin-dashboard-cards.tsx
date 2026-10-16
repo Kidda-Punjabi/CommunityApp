@@ -26,7 +26,7 @@ const slotsByGroup: Record<AdminDashboardCard["group"], DashboardCardId[]> = {
     "package_onboarding",
     "payment_setup",
   ],
-  requests: ["cohort_switch", "reschedule", "cohort_change", "issue_reports"],
+  requests: ["cohort_switch", "reschedule", "cohort_change", "issue_reports", "forum_reports"],
   cohorts: ["cohorts_setup", "session_integrity"],
   ops: ["missing_recordings", "hidden_homework"],
 };

@@ -8,11 +8,13 @@ import { ui } from "@/lib/ui/styles";
 
 type ForumFeedProps = {
   posts: ForumPostSummary[];
+  viewerUserId: string;
+  isMasterAdmin?: boolean;
 };
 
 type ForumFilter = "all" | "introductions";
 
-export function ForumFeed({ posts }: ForumFeedProps) {
+export function ForumFeed({ posts, viewerUserId, isMasterAdmin = false }: ForumFeedProps) {
   const [filter, setFilter] = useState<ForumFilter>("all");
 
   const filtered = useMemo(() => {
@@ -56,7 +58,12 @@ export function ForumFeed({ posts }: ForumFeedProps) {
       ) : (
         <div className={ui.stack}>
           {filtered.map((post) => (
-            <ForumPostCard key={post.id} post={post} />
+            <ForumPostCard
+              key={post.id}
+              post={post}
+              viewerUserId={viewerUserId}
+              isMasterAdmin={isMasterAdmin}
+            />
           ))}
         </div>
       )}

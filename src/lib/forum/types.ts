@@ -1,7 +1,23 @@
 import type { AppRole } from "@/lib/auth/admin-access";
 
-export type ForumContentStatus = "visible" | "hidden" | "removed" | "deleted";
-export type ForumReportStatus = "open" | "resolved" | "dismissed";
+export type ForumContentStatus =
+  | "visible"
+  | "hidden"
+  | "removed"
+  | "deleted"
+  | "hidden_pending_review";
+export type ForumReportStatus = "open" | "dismissed" | "actioned";
+
+export type ForumPollView = {
+  id: string;
+  question: string;
+  closesAt: string | null;
+  allowMultiple: boolean;
+  closed: boolean;
+  totalVotes: number;
+  viewerOptionIds: string[];
+  options: { id: string; label: string; votes: number; position: number }[];
+};
 
 export type ForumAuthor = {
   id: string;

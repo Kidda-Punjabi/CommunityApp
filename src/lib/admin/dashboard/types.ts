@@ -6,6 +6,7 @@ export type DashboardCardId =
   | "reschedule"
   | "cohort_change"
   | "issue_reports"
+  | "forum_reports"
   | "enrollment_gaps"
   | "unresolved_enrollments"
   | "payment_setup"

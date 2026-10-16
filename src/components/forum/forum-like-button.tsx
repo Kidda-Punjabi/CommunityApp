@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toggleForumPostLike, toggleForumReplyLike } from "@/app/dashboard/community/forum/actions";
+import { ForumRulesSheet } from "@/components/forum/forum-rules-sheet";
 
 type ForumLikeButtonProps = {
   targetType: "post" | "reply";
@@ -22,6 +23,8 @@ export function ForumLikeButton({
 }: ForumLikeButtonProps) {
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function handleClick() {
@@ -29,6 +32,7 @@ export function ForumLikeButton({
     const nextCount = Math.max(0, count + (nextLiked ? 1 : -1));
     setLiked(nextLiked);
     setCount(nextCount);
+    setError(null);
 
     startTransition(async () => {
       const result =
@@ -36,9 +40,16 @@ export function ForumLikeButton({
           ? await toggleForumPostLike(targetId)
           : await toggleForumReplyLike(targetId, postId);
 
+      if (result.needsRules) {
+        setLiked(liked);
+        setCount(count);
+        setRulesOpen(true);
+        return;
+      }
       if (result.error) {
         setLiked(liked);
         setCount(count);
+        setError(result.error);
       }
     });
   }
@@ -46,6 +57,7 @@ export function ForumLikeButton({
   const iconSize = size === "sm" ? "h-4 w-4" : "h-5 w-5";
 
   return (
+    <span className="inline-flex flex-col">
     <button
       type="button"
       onClick={handleClick}
@@ -75,5 +87,15 @@ export function ForumLikeButton({
       </svg>
       <span>{count}</span>
     </button>
+    {error ? <span className="max-w-xs text-xs text-red-600">{error}</span> : null}
+    <ForumRulesSheet
+      open={rulesOpen}
+      onClose={() => setRulesOpen(false)}
+      onAgreed={() => {
+        setRulesOpen(false);
+        handleClick();
+      }}
+    />
+    </span>
   );
 }

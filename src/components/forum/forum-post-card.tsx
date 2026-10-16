@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ForumCategoryBadge } from "@/components/forum/forum-category-badge";
+import { ForumItemMenu } from "@/components/forum/forum-item-menu";
 import { ForumLikeButton } from "@/components/forum/forum-like-button";
 import { StaffRoleBadge } from "@/components/forum/staff-role-badge";
 import { UserAvatar } from "@/components/profile/user-avatar";
@@ -19,9 +20,11 @@ function formatForumDate(iso: string): string {
 
 type ForumPostCardProps = {
   post: ForumPostSummary;
+  viewerUserId: string;
+  isMasterAdmin?: boolean;
 };
 
-export function ForumPostCard({ post }: ForumPostCardProps) {
+export function ForumPostCard({ post, viewerUserId, isMasterAdmin = false }: ForumPostCardProps) {
   const bodySnippet = post.bodySnippet;
   return (
     <article className={ui.cardBordered}>
@@ -62,14 +65,25 @@ export function ForumPostCard({ post }: ForumPostCardProps) {
         <span className="text-xs text-zinc-500">
           {post.replyCount} repl{post.replyCount === 1 ? "y" : "ies"}
         </span>
-        <ForumLikeButton
-          targetType="post"
-          targetId={post.id}
-          postId={post.id}
-          initialLiked={post.likedByViewer}
-          initialCount={post.likeCount}
-          size="sm"
-        />
+        <span className="flex items-center gap-2">
+          <ForumLikeButton
+            targetType="post"
+            targetId={post.id}
+            postId={post.id}
+            initialLiked={post.likedByViewer}
+            initialCount={post.likeCount}
+            size="sm"
+          />
+          <ForumItemMenu
+            targetType="post"
+            targetId={post.id}
+            postId={post.id}
+            authorId={post.author.id}
+            authorName={post.author.displayName}
+            viewerUserId={viewerUserId}
+            isMasterAdmin={isMasterAdmin}
+          />
+        </span>
       </div>
     </article>
   );

@@ -1,19 +1,26 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   createForumIntroPost,
   type ForumActionResult,
 } from "@/app/dashboard/community/forum/actions";
+import { ForumRulesSheet } from "@/components/forum/forum-rules-sheet";
 import { ui } from "@/lib/ui/styles";
 
 const initial: ForumActionResult = {};
 
 export function ForumIntroPostForm() {
   const [state, formAction, pending] = useActionState(createForumIntroPost, initial);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
+
+  useEffect(() => {
+    if (state.needsRules) setRulesOpen(true);
+  }, [state.needsRules]);
 
   return (
-    <form action={formAction} className={`${ui.cardBordered} space-y-4`}>
+    <form ref={formRef} action={formAction} className={`${ui.cardBordered} space-y-4`}>
       <div>
         <p className="text-sm text-zinc-600">
           Welcome to the community! Before you join discussions, say hello so other members can
@@ -41,6 +48,14 @@ export function ForumIntroPostForm() {
       <button type="submit" disabled={pending} className={ui.btnPrimary}>
         {pending ? "Posting…" : "Post introduction"}
       </button>
+      <ForumRulesSheet
+        open={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        onAgreed={() => {
+          setRulesOpen(false);
+          formRef.current?.requestSubmit();
+        }}
+      />
     </form>
   );
 }

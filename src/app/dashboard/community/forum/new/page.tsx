@@ -3,6 +3,8 @@ import {
   canAccessForum,
   loadForumOnboardingState,
 } from "@/lib/forum/access";
+import { viewerForumSuspended } from "@/lib/forum/load-forum";
+import { FORUM_SUSPENDED_MESSAGE } from "@/lib/forum/safety";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -15,6 +17,16 @@ export default async function NewForumPostPage() {
   const { supabase, user } = session;
   if (!(await canAccessForum(supabase, user.id))) {
     redirect("/dashboard/community/forum");
+  }
+
+  if (await viewerForumSuspended(supabase, user.id)) {
+    return (
+      <div className={ui.page}>
+        <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          {FORUM_SUSPENDED_MESSAGE}
+        </p>
+      </div>
+    );
   }
 
   const onboarding = await loadForumOnboardingState(supabase, user.id);

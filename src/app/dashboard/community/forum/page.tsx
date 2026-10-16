@@ -1,12 +1,14 @@
 import { ForumFeed } from "@/components/forum/forum-feed";
 import { requireForumAccessAllowed } from "@/lib/kids/guards";
+import { isMasterAdmin } from "@/lib/auth/admin-access";
 import {
   canAccessForum,
   canModerateForum,
   forumComposerPath,
   loadForumOnboardingState,
 } from "@/lib/forum/access";
-import { loadForumPosts } from "@/lib/forum/load-forum";
+import { loadForumPosts, viewerForumSuspended } from "@/lib/forum/load-forum";
+import { FORUM_SUSPENDED_MESSAGE } from "@/lib/forum/safety";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -30,10 +32,12 @@ export default async function ForumPage() {
     );
   }
 
-  const [posts, onboarding, isModerator] = await Promise.all([
+  const [posts, onboarding, isModerator, viewerIsMasterAdmin, suspended] = await Promise.all([
     loadForumPosts(supabase, user.id),
     loadForumOnboardingState(supabase, user.id),
     canModerateForum(supabase, user.id),
+    isMasterAdmin(user.id, supabase),
+    viewerForumSuspended(supabase, user.id),
   ]);
 
   if (onboarding.hasAgreedGuidelines && !onboarding.hasCompletedIntro) {
@@ -54,13 +58,18 @@ export default async function ForumPage() {
           </Link>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">Forum</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Ask questions and learn from other members and tutors.
+            Ask questions and learn from other members and tutors.{" "}
+            <Link href="/dashboard/community/forum/guidelines" className="font-medium text-violet-600">
+              Community rules
+            </Link>
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
-          <Link href={composerHref} className={ui.btnPrimary}>
-            New post
-          </Link>
+          {suspended ? null : (
+            <Link href={composerHref} className={ui.btnPrimary}>
+              New post
+            </Link>
+          )}
           {isModerator ? (
             <Link
               href="/dashboard/community/forum/moderation"
@@ -71,6 +80,12 @@ export default async function ForumPage() {
           ) : null}
         </div>
       </div>
+
+      {suspended ? (
+        <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          {FORUM_SUSPENDED_MESSAGE}
+        </div>
+      ) : null}
 
       {!onboarding.hasAgreedGuidelines ? (
         <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -87,7 +102,7 @@ export default async function ForumPage() {
           <p className="text-sm text-zinc-600">No posts yet. Be the first to start a conversation.</p>
         </div>
       ) : (
-        <ForumFeed posts={posts} />
+        <ForumFeed posts={posts} viewerUserId={user.id} isMasterAdmin={viewerIsMasterAdmin} />
       )}
     </div>
   );

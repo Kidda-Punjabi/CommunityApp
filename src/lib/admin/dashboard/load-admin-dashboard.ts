@@ -216,6 +216,7 @@ export async function loadAdminDashboard(
     rescheduleAges,
     cohortChangePending,
     issueAges,
+    forumReportAges,
     enrollmentGaps,
     unresolved,
     onboarding,
@@ -229,6 +230,14 @@ export async function loadAdminDashboard(
     loadPendingRescheduleRequestCreatedAts(supabase),
     countPendingCohortChangeRequests(supabase),
     loadOpenIssueReportCreatedAts(supabase),
+    supabase
+      .from("forum_reports")
+      .select("created_at")
+      .eq("status", "open")
+      .then(({ data, error }) => ({
+        createdAts: (data ?? []).map((row) => row.created_at as string),
+        error: error?.message,
+      })),
     loadEnrollmentGapsCard(supabase),
     loadUnresolvedEnrollmentsCard(supabase),
     loadAdminOnboardingQueue(supabase),
@@ -288,6 +297,15 @@ export async function loadAdminDashboard(
       tone: pendingTone(issueAges.createdAts),
       group: "requests",
     },
+    {
+      id: "forum_reports",
+      label: "Forum moderation",
+      hint: "Open forum reports",
+      href: "/admin/forum-moderation",
+      count: forumReportAges.createdAts.length,
+      tone: ageTone(forumReportAges.createdAts, 24 * 60 * 60 * 1000, nowMs),
+      group: "requests",
+    },
     enrollmentGaps.card,
     unresolved.card,
     {
@@ -344,6 +362,7 @@ export async function loadAdminDashboard(
     rescheduleAges.error,
     cohortChangePending.error,
     issueAges.error,
+    forumReportAges.error,
     enrollmentGaps.error,
     unresolved.error,
     onboarding.error,

@@ -3,7 +3,7 @@ import { getDisplayName } from "@/lib/profile/display-name";
 import { loadCurrentUserAppRoles } from "@/lib/tutoring/tutor-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FORUM_STAFF_ROLES } from "./access";
-import type { ForumAuthor, ForumPostDetail, ForumPostPreview, ForumPostSummary, ForumReply, ForumReportRow } from "./types";
+import type { ForumAuthor, ForumPollView, ForumPostDetail, ForumPostPreview, ForumPostSummary, ForumReply, ForumReportRow } from "./types";
 import { buildReplyTree } from "./build-reply-tree";
 
 type ProfileRow = {
@@ -429,6 +429,68 @@ export async function loadOpenForumReports(
       targetPreview: reply?.body.slice(0, 120) ?? "(Reply unavailable)",
       reporterName,
     };
+  });
+}
+
+export async function loadForumPoll(
+  supabase: SupabaseClient,
+  viewerUserId: string,
+  postId: string
+): Promise<ForumPollView | null> {
+  const { data: poll } = await supabase
+    .from("forum_polls")
+    .select("id, question, closes_at, allow_multiple")
+    .eq("post_id", postId)
+    .maybeSingle();
+  if (!poll) return null;
+
+  const [{ data: options }, { data: ownVotes }, { data: counts }] = await Promise.all([
+    supabase
+      .from("forum_poll_options")
+      .select("id, label, position")
+      .eq("poll_id", poll.id)
+      .order("position", { ascending: true }),
+    supabase.from("forum_poll_votes").select("option_id").eq("poll_id", poll.id).eq("user_id", viewerUserId),
+    supabase.rpc("forum_poll_results", { p_poll_id: poll.id }),
+  ]);
+
+  const countByOption = new Map<string, number>();
+  for (const row of (counts ?? []) as { option_id: string; votes: number }[]) {
+    countByOption.set(row.option_id, Number(row.votes ?? 0));
+  }
+  const mapped = (options ?? []).map((option) => ({
+    id: option.id,
+    label: option.label,
+    position: option.position,
+    votes: countByOption.get(option.id) ?? 0,
+  }));
+  const totalVotes = mapped.reduce((sum, option) => sum + option.votes, 0);
+  const closesAt = poll.closes_at as string | null;
+
+  return {
+    id: poll.id,
+    question: poll.question,
+    closesAt,
+    allowMultiple: Boolean(poll.allow_multiple),
+    closed: Boolean(closesAt && new Date(closesAt).getTime() <= Date.now()),
+    totalVotes,
+    viewerOptionIds: (ownVotes ?? []).map((vote) => vote.option_id),
+    options: mapped,
+  };
+}
+
+export async function viewerForumSuspended(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("forum_user_suspensions")
+    .select("suspended_until, lifted_at")
+    .eq("user_id", userId)
+    .is("lifted_at", null);
+  return (data ?? []).some((row) => {
+    if (!row.suspended_until) return true;
+    return new Date(row.suspended_until).getTime() > Date.now();
   });
 }
 

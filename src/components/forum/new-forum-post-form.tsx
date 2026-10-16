@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   createForumPost,
   type ForumActionResult,
 } from "@/app/dashboard/community/forum/actions";
+import { ForumRulesSheet } from "@/components/forum/forum-rules-sheet";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
@@ -12,9 +13,16 @@ const initial: ForumActionResult = {};
 
 export function NewForumPostForm() {
   const [state, formAction, pending] = useActionState(createForumPost, initial);
+  const [pollOn, setPollOn] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (state.needsRules) setRulesOpen(true);
+  }, [state.needsRules]);
 
   return (
-    <form action={formAction} className={`${ui.cardBordered} space-y-4`}>
+    <form ref={formRef} action={formAction} className={`${ui.cardBordered} space-y-4`}>
       <div>
         <label htmlFor="forum-title" className="block text-sm font-medium text-zinc-700">
           Title
@@ -54,6 +62,43 @@ export function NewForumPostForm() {
         />
       </div>
 
+      <label className="flex items-center gap-2 text-sm text-zinc-700">
+        <input
+          type="checkbox"
+          name="poll_enabled"
+          checked={pollOn}
+          onChange={(event) => setPollOn(event.target.checked)}
+        />
+        Add poll
+      </label>
+      {pollOn ? (
+        <div className="space-y-3 rounded-2xl border border-zinc-200 p-4">
+          <input
+            name="poll_question"
+            required
+            placeholder="Poll question"
+            className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm"
+          />
+          {[1, 2, 3, 4, 5, 6].map((index) => (
+            <input
+              key={index}
+              name={`poll_option_${index}`}
+              required={index <= 2}
+              placeholder={`Option ${index}${index <= 2 ? "" : " (optional)"}`}
+              className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm"
+            />
+          ))}
+          <label className="block text-sm text-zinc-600">
+            Closes
+            <input type="datetime-local" name="poll_closes_at" className="mt-1 w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm" />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-zinc-700">
+            <input type="checkbox" name="poll_allow_multiple" />
+            Allow multiple choices
+          </label>
+        </div>
+      ) : null}
+
       {state.error && (
         <p className="text-sm text-red-600" role="alert">
           {state.error}
@@ -76,6 +121,14 @@ export function NewForumPostForm() {
           Cancel
         </Link>
       </div>
+      <ForumRulesSheet
+        open={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        onAgreed={() => {
+          setRulesOpen(false);
+          formRef.current?.requestSubmit();
+        }}
+      />
     </form>
   );
 }

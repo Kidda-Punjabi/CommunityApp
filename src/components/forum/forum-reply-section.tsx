@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   createForumReply,
   type ForumActionResult,
 } from "@/app/dashboard/community/forum/actions";
+import { ForumItemMenu } from "@/components/forum/forum-item-menu";
 import { ForumLikeButton } from "@/components/forum/forum-like-button";
-import { ForumReportDialog } from "@/components/forum/forum-report-dialog";
+import { ForumRulesSheet } from "@/components/forum/forum-rules-sheet";
 import { StaffRoleBadge } from "@/components/forum/staff-role-badge";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import type { ForumReply } from "@/lib/forum/types";
@@ -29,6 +30,8 @@ type ForumReplyThreadProps = {
   replies: ForumReply[];
   postId: string;
   canReply: boolean;
+  viewerUserId: string;
+  isMasterAdmin?: boolean;
   depth?: number;
 };
 
@@ -36,6 +39,8 @@ export function ForumReplyThread({
   replies,
   postId,
   canReply,
+  viewerUserId,
+  isMasterAdmin = false,
   depth = 0,
 }: ForumReplyThreadProps) {
   return (
@@ -46,6 +51,8 @@ export function ForumReplyThread({
           reply={reply}
           postId={postId}
           canReply={canReply}
+          viewerUserId={viewerUserId}
+          isMasterAdmin={isMasterAdmin}
           depth={depth}
         />
       ))}
@@ -57,10 +64,19 @@ type ForumReplyItemProps = {
   reply: ForumReply;
   postId: string;
   canReply: boolean;
+  viewerUserId: string;
+  isMasterAdmin: boolean;
   depth: number;
 };
 
-function ForumReplyItem({ reply, postId, canReply, depth }: ForumReplyItemProps) {
+function ForumReplyItem({
+  reply,
+  postId,
+  canReply,
+  viewerUserId,
+  isMasterAdmin,
+  depth,
+}: ForumReplyItemProps) {
   const [showReplyForm, setShowReplyForm] = useState(false);
   const visualDepth = Math.min(depth, FORUM_REPLY_MAX_VISUAL_DEPTH);
 
@@ -91,7 +107,15 @@ function ForumReplyItem({ reply, postId, canReply, depth }: ForumReplyItemProps)
               initialCount={reply.likeCount}
               size="sm"
             />
-            <ForumReportDialog targetType="reply" targetId={reply.id} />
+            <ForumItemMenu
+              targetType="reply"
+              targetId={reply.id}
+              postId={postId}
+              authorId={reply.author.id}
+              authorName={reply.author.displayName}
+              viewerUserId={viewerUserId}
+              isMasterAdmin={isMasterAdmin}
+            />
             {canReply ? (
               <button
                 type="button"
@@ -117,6 +141,8 @@ function ForumReplyItem({ reply, postId, canReply, depth }: ForumReplyItemProps)
               replies={reply.children}
               postId={postId}
               canReply={canReply}
+              viewerUserId={viewerUserId}
+              isMasterAdmin={isMasterAdmin}
               depth={visualDepth + 1}
             />
           ) : null}
@@ -141,13 +167,20 @@ export function ForumReplyForm({
 }: ForumReplyFormProps) {
   const boundAction = createForumReply.bind(null, postId, parentReplyId);
   const [state, formAction, pending] = useActionState(boundAction, initial);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [rulesOpen, setRulesOpen] = useState(state.needsRules === true);
 
   useEffect(() => {
     if (state.success && onPosted) onPosted();
   }, [state.success, onPosted]);
 
+  useEffect(() => {
+    if (state.needsRules) setRulesOpen(true);
+  }, [state.needsRules]);
+
   return (
     <form
+      ref={formRef}
       action={formAction}
       className={
         compact
@@ -182,6 +215,14 @@ export function ForumReplyForm({
       >
         {pending ? "Posting…" : "Post reply"}
       </button>
+      <ForumRulesSheet
+        open={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        onAgreed={() => {
+          setRulesOpen(false);
+          formRef.current?.requestSubmit();
+        }}
+      />
     </form>
   );
 }
