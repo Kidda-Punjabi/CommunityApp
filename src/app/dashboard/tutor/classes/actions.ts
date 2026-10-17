@@ -7,7 +7,7 @@ import { getDisplayName } from "@/lib/profile/display-name";
 import { kidProfileIdsInCohort, loadCohortMembershipRoster } from "@/lib/tutoring/cohort-attendance";
 import { resolveCoverLessonWrite } from "@/lib/tutoring/cover-lesson";
 import type { LessonLogEditAttendance } from "@/lib/tutoring/lesson-log-edit";
-import { patchLessonLogRecording, patchLoggedLessonOnNotion, readLessonLogPage, resolvePresentLeads } from "@/lib/tutoring/log-lesson-notion";
+import { patchLessonLogProperties, patchLessonLogRecording, readLessonLogPage, resolvePresentLeads } from "@/lib/tutoring/log-lesson-notion";
 import {
   compareLessonLogReadback,
   formatLogNotionTitle,
@@ -151,19 +151,12 @@ export async function updateLoggedLessonAction(input: {
   lessonId: string;
   lessonDate: string;
   notes: string;
-  recordingUrl: string;
-  attendance: LessonLogEditAttendance[];
-  homeworkSubmittedIds: string[];
   isCoverSession: boolean;
   actualTutorId: string | null;
 }): Promise<ClassActionResult> {
   try {
     const lessonDate = input.lessonDate.trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(lessonDate)) return { error: "Choose the date you taught." };
-    const recordingUrl = input.recordingUrl.trim();
-    if (recordingUrl && !isHttpUrl(recordingUrl)) {
-      return { error: "Enter a recording link that starts with http or https." };
-    }
 
     const { reader, auth, userId } = await requireTutor();
     const owned = await loadOwnedLessonLog(reader, auth, userId, input.entryId);
@@ -218,12 +211,6 @@ export async function updateLoggedLessonAction(input: {
     });
     if (!cover.ok) return { error: cover.error };
 
-    const roster = await classRoster(reader, cohortId, packageInstanceId);
-    const allowed = new Map(roster.map((person) => [person.id, person]));
-    const marks = input.attendance.filter((person) => allowed.has(person.id));
-    if (marks.length === 0) return { error: "Add who attended before saving." };
-    const homeworkIds = input.homeworkSubmittedIds.filter((id) => allowed.has(id));
-
     const { error: updateError } = await reader
       .from("cohort_lesson_log_entries")
       .update({
@@ -231,7 +218,6 @@ export async function updateLoggedLessonAction(input: {
         lesson_title: title,
         lesson_date: lessonDate,
         notes: input.notes.trim() || null,
-        recording_url: recordingUrl || null,
         is_cover_session: cover.isCoverSession,
         actual_tutor_id: cover.actualTutorId,
         actual_tutor_notion_user_id: cover.notionTutorUserId,
@@ -241,49 +227,18 @@ export async function updateLoggedLessonAction(input: {
     if (updateError) return { error: updateError.message };
 
     if (input.lessonId !== entry.lesson_id) {
-      const moved = await clearLessonRows(reader, cohortId, packageInstanceId, entry.lesson_id);
+      const moved = await moveLessonRows(reader, cohortId, packageInstanceId, entry.lesson_id, input.lessonId);
       if (moved) return { error: moved };
+      const unlockError = await writeUnlock(reader, {
+        userId,
+        cohortId,
+        packageInstanceId,
+        previousLessonId: entry.lesson_id,
+        lessonId: input.lessonId,
+        marks: [],
+      });
+      if (unlockError) return { error: unlockError };
     }
-
-    const attendanceError = await writeAttendance(reader, {
-      userId,
-      cohortId,
-      packageInstanceId,
-      lessonId: input.lessonId,
-      marks,
-    });
-    if (attendanceError) return { error: attendanceError };
-
-    const homeworkError = await writeHomeworkMarks(reader, {
-      userId,
-      cohortId,
-      lessonId: input.lessonId,
-      marks: roster.map((person) => ({
-        ...person,
-        completed: homeworkIds.includes(person.id),
-      })),
-    });
-    if (homeworkError) return { error: homeworkError };
-
-    const unlockError = await writeUnlock(reader, {
-      userId,
-      cohortId,
-      packageInstanceId,
-      previousLessonId: entry.lesson_id,
-      lessonId: input.lessonId,
-      marks,
-    });
-    if (unlockError) return { error: unlockError };
-
-    const recordingError = await syncRecording(reader, {
-      userId,
-      cohortId,
-      packageInstanceId,
-      lessonId: input.lessonId,
-      entryId: input.entryId,
-      recordingUrl,
-    });
-    if (recordingError) return { error: recordingError };
 
     const pageId = entry.notion_page_id?.trim() ?? "";
     if (!pageId || pageId.startsWith("pending-")) {
@@ -291,35 +246,21 @@ export async function updateLoggedLessonAction(input: {
       return { success: "Updated in the app. This lesson has no Notion page yet.", confirmed: false, readAt: londonTimeLabel() };
     }
 
-    const present = marks
-      .filter((person) => person.attended)
-      .map((person) => ({
-        studentId: person.kind === "student" ? person.id : null,
-        kidProfileId: person.kind === "kid" ? person.id : null,
-        name: allowed.get(person.id)?.name || person.name,
-      }));
-    const leads = await resolvePresentLeads(reader, present);
-    const submitted = roster
-      .filter((person) => homeworkIds.includes(person.id))
-      .map((person) => ({
-        studentId: person.kind === "student" ? person.id : null,
-        kidProfileId: person.kind === "kid" ? person.id : null,
-        name: person.name,
-      }));
-    const homeworkLeads = await resolvePresentLeads(reader, submitted);
-    const replaceAttendees = present.length === 0 || leads.leadIds.length > 0;
-    const replaceHomework = submitted.length === 0 || homeworkLeads.leadIds.length > 0;
     try {
-      await patchLoggedLessonOnNotion({
-        pageId,
-        title,
-        lessonDate,
-        notes: input.notes.trim(),
-        recordingUrl: recordingUrl || null,
-        isCoverSession: cover.isCoverSession,
-        notionTutorUserId: cover.notionTutorUserId,
-        attendeeLeadIds: replaceAttendees ? leads.leadIds : null,
-        homeworkLeadIds: replaceHomework ? homeworkLeads.leadIds : null,
+      await patchLessonLogProperties(pageId, {
+        Lesson: {
+          title: [{ type: "text", text: { content: title.slice(0, 2000) } }],
+        },
+        "Lesson Date": { date: { start: lessonDate } },
+        notes: {
+          rich_text: input.notes.trim()
+            ? [{ type: "text", text: { content: input.notes.trim().slice(0, 2000) } }]
+            : [],
+        },
+        "Cover Session?": { checkbox: cover.isCoverSession },
+        "Actual Tutor (New)": {
+          people: cover.notionTutorUserId?.trim() ? [{ id: cover.notionTutorUserId.trim() }] : [],
+        },
       });
     } catch (notionError) {
       await reader
@@ -335,22 +276,21 @@ export async function updateLoggedLessonAction(input: {
       return { error: `Updated in the app. Notion lesson log was not updated: ${message}` };
     }
 
-    const absentNames = marks.filter((person) => !person.attended).map((person) => person.name);
     const readback = await readLessonLogPage({
       pageId,
       expectedTutorUserId: cover.notionTutorUserId,
-      absentNames,
+      absentNames: [],
     });
     const differences = compareLessonLogReadback({
       submittedTitle: title,
       submittedDate: lessonDate,
       submittedLesson: title.match(/\b(?:Week|Lesson) \d+\b/)?.[0] ?? title,
-      submittedRecordingUrl: recordingUrl,
-      submittedPresentNames: present.map((person) => person.name),
-      submittedAbsentNames: absentNames,
+      submittedRecordingUrl: readback.recordingUrl,
+      submittedPresentNames: readback.attendeeNames,
+      submittedAbsentNames: [],
       actual: readback,
-      unmatchedPresentNames: leads.unmatchedNames,
-      expectedLeadIds: replaceAttendees ? leads.leadIds : undefined,
+      unmatchedPresentNames: [],
+      expectedLeadIds: readback.attendeeLeadIds,
       expectedCoverSession: cover.isCoverSession,
       expectedNotionTutorUserId: cover.notionTutorUserId,
     });
@@ -372,6 +312,111 @@ export async function updateLoggedLessonAction(input: {
     };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not update the lesson." };
+  }
+}
+
+export async function saveLoggedLessonAttendanceAction(input: {
+  entryId: string;
+  attendance: LessonLogEditAttendance[];
+}): Promise<ClassActionResult> {
+  try {
+    const { reader, auth, userId } = await requireTutor();
+    const owned = await loadOwnedLessonLog(reader, auth, userId, input.entryId);
+    if ("error" in owned) return { error: owned.error };
+    const roster = await classRoster(reader, owned.cohortId, owned.packageInstanceId);
+    const allowed = new Map(roster.map((person) => [person.id, person]));
+    const marks = input.attendance.filter((person) => allowed.has(person.id));
+    if (marks.length === 0) return { error: "Add who attended before saving." };
+
+    const attendanceError = await writeAttendance(reader, {
+      userId,
+      cohortId: owned.cohortId,
+      packageInstanceId: owned.packageInstanceId,
+      lessonId: owned.entry.lesson_id,
+      marks,
+    });
+    if (attendanceError) return { error: attendanceError };
+
+    const pageId = owned.entry.notion_page_id?.trim() ?? "";
+    if (pageId && !pageId.startsWith("pending-")) {
+      const present = marks
+        .filter((person) => person.attended)
+        .map((person) => ({
+          studentId: person.kind === "student" ? person.id : null,
+          kidProfileId: person.kind === "kid" ? person.id : null,
+          name: allowed.get(person.id)?.name || person.name,
+        }));
+      const leads = await resolvePresentLeads(reader, present);
+      if (present.length === 0 || leads.leadIds.length > 0) {
+        try {
+          await patchLessonLogProperties(pageId, {
+            Attendees: { relation: leads.leadIds.map((id) => ({ id })) },
+          });
+        } catch (notionError) {
+          refreshClassPaths(owned.cohortId, owned.packageInstanceId);
+          const message = notionError instanceof Error ? notionError.message : "Notion could not be updated.";
+          return { error: `Saved in the app. Notion attendance was not updated: ${message}` };
+        }
+      }
+    }
+
+    refreshClassPaths(owned.cohortId, owned.packageInstanceId);
+    return { success: "Attendance saved." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not save attendance." };
+  }
+}
+
+export async function saveLoggedLessonHomeworkAction(input: {
+  entryId: string;
+  homeworkSubmittedIds: string[];
+}): Promise<ClassActionResult> {
+  try {
+    const { reader, auth, userId } = await requireTutor();
+    const owned = await loadOwnedLessonLog(reader, auth, userId, input.entryId);
+    if ("error" in owned) return { error: owned.error };
+    const roster = await classRoster(reader, owned.cohortId, owned.packageInstanceId);
+    const allowed = new Set(roster.map((person) => person.id));
+    const homeworkIds = input.homeworkSubmittedIds.filter((id) => allowed.has(id));
+
+    const homeworkError = await writeHomeworkMarks(reader, {
+      userId,
+      cohortId: owned.cohortId,
+      lessonId: owned.entry.lesson_id,
+      marks: roster.map((person) => ({
+        ...person,
+        completed: homeworkIds.includes(person.id),
+      })),
+    });
+    if (homeworkError) return { error: homeworkError };
+
+    const pageId = owned.entry.notion_page_id?.trim() ?? "";
+    if (pageId && !pageId.startsWith("pending-") && owned.cohortId) {
+      const submitted = roster
+        .filter((person) => homeworkIds.includes(person.id))
+        .map((person) => ({
+          studentId: person.kind === "student" ? person.id : null,
+          kidProfileId: person.kind === "kid" ? person.id : null,
+          name: person.name,
+        }));
+      const leads = await resolvePresentLeads(reader, submitted);
+      if (submitted.length === 0 || leads.leadIds.length > 0) {
+        try {
+          await patchLessonLogProperties(pageId, {
+            Homework: { relation: leads.leadIds.map((id) => ({ id })) },
+          });
+        } catch (notionError) {
+          refreshClassPaths(owned.cohortId, owned.packageInstanceId);
+          const message = notionError instanceof Error ? notionError.message : "Notion could not be updated.";
+          return { error: `Saved in the app. Notion homework was not updated: ${message}` };
+        }
+      }
+    }
+
+    refreshClassPaths(owned.cohortId, owned.packageInstanceId);
+    return { success: "Homework saved." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not save homework." };
   }
 }
 
@@ -456,26 +501,31 @@ async function loadOwnedLessonLog(
   };
 }
 
-async function clearLessonRows(
+async function moveLessonRows(
   reader: Awaited<ReturnType<typeof requireTutor>>["reader"],
   cohortId: string | null,
   packageInstanceId: string | null,
-  lessonId: string
+  fromLessonId: string,
+  toLessonId: string
 ): Promise<string | null> {
   const attendance = cohortId
-    ? await reader.from("cohort_lesson_attendance").delete().eq("cohort_id", cohortId).eq("lesson_id", lessonId)
+    ? await reader
+        .from("cohort_lesson_attendance")
+        .update({ lesson_id: toLessonId })
+        .eq("cohort_id", cohortId)
+        .eq("lesson_id", fromLessonId)
     : await reader
         .from("cohort_lesson_attendance")
-        .delete()
+        .update({ lesson_id: toLessonId })
         .eq("package_instance_id", packageInstanceId)
-        .eq("lesson_id", lessonId);
+        .eq("lesson_id", fromLessonId);
   if (attendance.error) return attendance.error.message;
   if (cohortId) {
     const homework = await reader
       .from("cohort_lesson_homework")
-      .delete()
+      .update({ lesson_id: toLessonId })
       .eq("cohort_id", cohortId)
-      .eq("lesson_id", lessonId);
+      .eq("lesson_id", fromLessonId);
     if (homework.error) return homework.error.message;
   }
   return null;
@@ -690,64 +740,6 @@ async function writeAttendance(
     if (insertError) return insertError.message;
   }
   return null;
-}
-
-async function syncRecording(
-  reader: Awaited<ReturnType<typeof requireTutor>>["reader"],
-  input: {
-    userId: string;
-    cohortId: string | null;
-    packageInstanceId: string | null;
-    lessonId: string;
-    entryId: string;
-    recordingUrl: string;
-  }
-): Promise<string | null> {
-  if (input.cohortId) {
-    await syncCohortLessonRecordingFromLog(reader, {
-      cohortId: input.cohortId,
-      lessonId: input.lessonId,
-      recordingUrl: input.recordingUrl || null,
-      uploadedBy: input.userId,
-    });
-    return null;
-  }
-  if (!input.packageInstanceId) return null;
-  const { data: link } = await reader
-    .from("student_packages")
-    .select("user_id")
-    .eq("package_instance_id", input.packageInstanceId)
-    .neq("status", "withdrawn")
-    .limit(1)
-    .maybeSingle();
-  const studentId = (link?.user_id as string | null) ?? null;
-  if (!studentId) return null;
-  const { data: existing } = await reader
-    .from("lesson_recordings")
-    .select("id")
-    .eq("lesson_id", input.lessonId)
-    .eq("student_id", studentId)
-    .maybeSingle();
-  if (!input.recordingUrl) {
-    if (existing?.id) {
-      const { error } = await reader.from("lesson_recordings").delete().eq("id", existing.id);
-      if (error) return error.message;
-    }
-    return null;
-  }
-  const payload = {
-    lesson_id: input.lessonId,
-    student_id: studentId,
-    cohort_id: null,
-    storage_path: input.recordingUrl,
-    uploaded_by: input.userId,
-    lesson_log_entry_id: input.entryId,
-    updated_at: new Date().toISOString(),
-  };
-  const recordingWrite = existing?.id
-    ? await reader.from("lesson_recordings").update(payload).eq("id", existing.id)
-    : await reader.from("lesson_recordings").insert(payload);
-  return recordingWrite.error?.message ?? null;
 }
 
 export async function unlockKidLessonEarlyAction(

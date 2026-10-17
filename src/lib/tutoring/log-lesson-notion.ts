@@ -263,6 +263,19 @@ export async function readLessonLogPage(options: {
   };
 }
 
+export async function patchLessonLogProperties(
+  pageId: string,
+  properties: Record<string, unknown>
+): Promise<void> {
+  await notionJson(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      archived: false,
+      properties,
+    }),
+  });
+}
+
 export async function patchLessonLogRecording(pageId: string, url: string): Promise<void> {
   await notionJson(`/pages/${pageId}`, {
     method: "PATCH",
