@@ -316,8 +316,14 @@ async function pushNotionForEntry(
   const pending = pageId.startsWith("pending-");
   try {
     if (pending) {
+      const pageTitle = String(entry.lesson_title ?? "").trim();
+      if (!pageTitle || pageTitle.toLowerCase() === "new page") {
+        const message = "The lesson needs a title before its Notion page can be created.";
+        await markNotion(admin, entryId, null, "error", message);
+        return { readback: null, differences: [], notionError: message, confirmed: false };
+      }
       pageId = await createLessonLogPage({
-        title: entry.lesson_title as string,
+        title: pageTitle,
         lessonDate: String(entry.lesson_date).slice(0, 10),
         packageNotionPageId,
         notes: (entry.notes as string | null) ?? null,

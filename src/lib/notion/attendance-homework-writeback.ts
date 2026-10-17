@@ -22,6 +22,7 @@ import {
   type AppLogCoverageRow,
   type WritebackKind,
 } from "@/lib/notion/attendance-homework-writeback-logic";
+import { formatLogNotionTitle } from "@/lib/tutoring/log-lesson-copy";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AttendanceHomeworkWritebackResult = {
@@ -293,13 +294,17 @@ async function findLessonLogPagesForPackageDate(
 
 async function createCompletedLessonLogPage(
   packageNotionPageId: string,
-  lessonDate: string
+  lessonDate: string,
+  title: string
 ): Promise<string> {
   const created = await notionJson<{ id: string }>("/pages", {
     method: "POST",
     body: JSON.stringify({
       parent: { database_id: NOTION_LESSONS_LOG_DATA_SOURCE_ID },
       properties: {
+        Lesson: {
+          title: [{ type: "text", text: { content: title.slice(0, 2000) } }],
+        },
         "New Package DB": { relation: [{ id: packageNotionPageId }] },
         "Lesson Date": { date: { start: lessonDate } },
         Status: { select: { name: "Completed" } },
@@ -311,14 +316,15 @@ async function createCompletedLessonLogPage(
 
 async function resolveLessonLogPageId(
   packageNotionPageId: string,
-  lessonDate: string
+  lessonDate: string,
+  title: string
 ): Promise<{ pageId: string; created: boolean }> {
   const existing = await findLessonLogPagesForPackageDate(packageNotionPageId, lessonDate);
   const count = classifyLookupCount(existing);
   if (count === "many") throw new WritebackSkip("ambiguous lessons log pages");
   if (count === "one") return { pageId: existing[0]!, created: false };
 
-  const pageId = await createCompletedLessonLogPage(packageNotionPageId, lessonDate);
+  const pageId = await createCompletedLessonLogPage(packageNotionPageId, lessonDate, title);
   return { pageId, created: true };
 }
 
@@ -530,13 +536,54 @@ async function coveredBySyncedAppLog(
   });
 }
 
+async function lessonLogTitle(
+  supabase: SupabaseClient,
+  row: QueueRow,
+  lessonDate: string
+): Promise<string> {
+  const { data: lesson } = await supabase
+    .from("lessons")
+    .select("lesson_number, courses(name)")
+    .eq("id", row.lesson_id)
+    .maybeSingle();
+  const courseJoin = Array.isArray(lesson?.courses) ? lesson.courses[0] : lesson?.courses;
+  const courseName = (courseJoin as { name?: string } | null)?.name ?? "Course";
+  const lessonNumber = (lesson?.lesson_number as number | null) ?? null;
+
+  let name = "Class";
+  if (row.cohort_id) {
+    const { data: cohort } = await supabase.from("cohorts").select("name").eq("id", row.cohort_id).maybeSingle();
+    name = (cohort?.name as string | null)?.trim() || name;
+  } else {
+    const packageInstanceIds = await packageInstanceIdsForQueueRow(supabase, row);
+    const packageInstanceId = packageInstanceIds[0];
+    if (packageInstanceId) {
+      const { data: instance } = await supabase
+        .from("package_instances")
+        .select("name")
+        .eq("id", packageInstanceId)
+        .maybeSingle();
+      name = (instance?.name as string | null)?.trim() || name;
+    }
+  }
+
+  if (lessonNumber == null) return `${name} - ${lessonDate}`;
+  return formatLogNotionTitle({
+    name,
+    courseName,
+    lessonNumber,
+    lessonDate,
+  });
+}
+
 async function processQueueRow(
   supabase: SupabaseClient,
   row: QueueRow
 ): Promise<{ createdLessonLogPage: boolean }> {
   const leadPageId = await resolveLeadPageId(row);
   const { lessonDate, packageNotionPageId } = await resolveCohortAndDate(supabase, row);
-  const lessonLog = await resolveLessonLogPageId(packageNotionPageId, lessonDate);
+  const title = await lessonLogTitle(supabase, row, lessonDate);
+  const lessonLog = await resolveLessonLogPageId(packageNotionPageId, lessonDate, title);
   await appendLeadToRelation(
     lessonLog.pageId,
     relationPropertyForKind(row.kind),
