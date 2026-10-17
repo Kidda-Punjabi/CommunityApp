@@ -1,5 +1,5 @@
 import { bindTraceRequest, perfAls, rememberTrace, traceForId } from "@/lib/perf/context";
-import { installGlobalFetch } from "@/lib/perf/fetch";
+import { installGlobalFetch, tracedFetch } from "@/lib/perf/fetch";
 import { persistTrace, serverTimingHeader, summarizeTrace } from "@/lib/perf/persist";
 import { createTrace, type PerfTrace } from "@/lib/perf/types";
 import { Server as HttpServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -43,6 +43,7 @@ function attach(req: IncomingMessage, res: ServerResponse, trace: PerfTrace) {
 
 export function installPerfTracing() {
   installGlobalFetch();
+  (globalThis as { __kiddaTracedFetch?: typeof fetch }).__kiddaTracedFetch = tracedFetch;
   const server = HttpServer.prototype as HttpServer & { __kiddaPerfPatched?: boolean };
   if (server.__kiddaPerfPatched) return;
   server.__kiddaPerfPatched = true;

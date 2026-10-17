@@ -1,5 +1,9 @@
-import { tracedFetch } from "@/lib/perf/fetch";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+function supabaseFetch(input: RequestInfo | URL, init?: RequestInit) {
+  const traced = (globalThis as { __kiddaTracedFetch?: typeof fetch }).__kiddaTracedFetch;
+  return (traced ?? fetch)(input, init);
+}
 
 export function createServiceRoleClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,7 +20,7 @@ export function createServiceRoleClient() {
       persistSession: false,
       autoRefreshToken: false,
     },
-    global: { fetch: tracedFetch },
+    global: { fetch: supabaseFetch },
   });
 }
 
