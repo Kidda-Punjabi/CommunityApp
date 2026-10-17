@@ -68,8 +68,9 @@ export function tracedFetch(input: RequestInfo | URL, init?: RequestInit): Promi
 }
 
 export function installGlobalFetch() {
-  const holder = globalThis as { __kiddaOriginalFetch?: typeof fetch };
-  if (globalThis.fetch === tracedFetch) return;
+  const holder = globalThis as { __kiddaOriginalFetch?: typeof fetch; __kiddaFetchPatched?: boolean };
+  if (holder.__kiddaFetchPatched) return;
   holder.__kiddaOriginalFetch = globalThis.fetch.bind(globalThis);
+  holder.__kiddaFetchPatched = true;
   globalThis.fetch = tracedFetch;
 }
