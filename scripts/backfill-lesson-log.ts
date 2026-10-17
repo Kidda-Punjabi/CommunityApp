@@ -186,21 +186,22 @@ async function main() {
             skipped += 1;
             return;
           }
+          const title = page.title?.trim() ?? "";
+          const row: Record<string, unknown> = {
+            notion_page_id: page.pageId,
+            cohort_id: target.cohortId,
+            package_instance_id: target.packageInstanceId,
+            lesson_date: page.lessonDate,
+            slides_url: page.slidesUrl,
+            flashcards_url: page.flashcardsUrl,
+            notes: page.notes,
+            notion_tutor_user_id: page.notionTutorUserId,
+            notion_last_edited_at: page.lastEditedTime,
+            source: "notion",
+          };
+          if (title && title.toLowerCase() !== "new page") row.lesson_title = title;
           const { error } = await supabase.from("cohort_lesson_log_entries").upsert(
-            {
-              notion_page_id: page.pageId,
-              cohort_id: target.cohortId,
-              package_instance_id: target.packageInstanceId,
-              lesson_title: page.title,
-              lesson_date: page.lessonDate,
-              recording_url: page.recordingUrl,
-              slides_url: page.slidesUrl,
-              flashcards_url: page.flashcardsUrl,
-              notes: page.notes,
-              notion_tutor_user_id: page.notionTutorUserId,
-              notion_last_edited_at: page.lastEditedTime,
-              source: "notion",
-            },
+            row,
             { onConflict: "notion_page_id" }
           );
           if (error) throw new Error(error.message);

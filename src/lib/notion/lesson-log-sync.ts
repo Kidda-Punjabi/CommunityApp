@@ -1215,7 +1215,8 @@ export async function updateLessonLogManualFields(
     patch.notes_source = "manual";
   }
   if (fields.recordingUrl !== undefined) {
-    patch.recording_url = fields.recordingUrl?.trim() || null;
+    const nextRecording = fields.recordingUrl?.trim() ?? "";
+    if (nextRecording) patch.recording_url = nextRecording;
   }
 
   if (Object.keys(patch).length === 0) {

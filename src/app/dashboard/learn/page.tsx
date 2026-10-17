@@ -198,6 +198,48 @@ export default async function LearnPage() {
   const classTiers = new Set(classCards.map((card) => card.tier));
 
   if (actor.kind === "kid") {
+    const enrolledAdult = access.courses.find(
+      (course) =>
+        access.unlockedCourseIds.has(course.id) &&
+        (course.required_tier === "beginners" || course.required_tier === "foundational")
+    );
+    if (enrolledAdult?.required_tier === "beginners" || enrolledAdult?.required_tier === "foundational") {
+      const trackId = enrolledAdult.required_tier;
+      const adultLessons = filterLessonsForTrack(allLessons, access.courses, trackId).filter((lesson) =>
+        canAccessLessonInContext(access, lesson)
+      );
+      const adultProgress = summarizeCourseProgress(adultLessons, completionMap);
+      const adultPercent =
+        adultProgress.totalLessons > 0
+          ? Math.round((adultProgress.completedLessons / adultProgress.totalLessons) * 100)
+          : null;
+      return (
+        <div className={ui.page}>
+          <HomeStreakProvider
+            initial={{
+              streak: dashboard.stats.streak,
+              longestStreak: dashboard.stats.longestStreak,
+              redemptionAvailable: dashboard.stats.redemptionAvailable,
+              streakAtRisk: dashboard.stats.streakAtRisk,
+              streakWarning: dashboard.stats.streakWarning,
+              rescueStreak: dashboard.stats.rescueStreak,
+            }}
+          >
+            {greeting}
+            <Link
+              href={learnTrackPath(trackId)}
+              className="block rounded-3xl bg-white p-4 shadow-sm"
+            >
+              <p className="font-heading text-base font-semibold text-zinc-900">{enrolledAdult.name}</p>
+              <p className="mt-1 text-sm text-zinc-600">
+                {adultPercent != null ? `${adultPercent}% of lessons` : "Open this week's lesson"}
+              </p>
+            </Link>
+          </HomeStreakProvider>
+        </div>
+      );
+    }
+
     const beginnerCourse = kidsCourses[0] ?? null;
     const beginnerLessons = beginnerCourse
       ? filterLessonsForCourse(allLessons, beginnerCourse.id)

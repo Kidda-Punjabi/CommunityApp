@@ -28,6 +28,8 @@ export async function syncCohortLessonRecordingFromLog(
   }
 ): Promise<void> {
   const url = normalizeRecordingUrl(params.recordingUrl);
+  // A blank value must not remove a recording the tutor already saved.
+  if (!url) return;
 
   const { data: existing } = await supabase
     .from("lesson_recordings")
@@ -35,13 +37,6 @@ export async function syncCohortLessonRecordingFromLog(
     .eq("lesson_id", params.lessonId)
     .eq("cohort_id", params.cohortId)
     .maybeSingle();
-
-  if (!url) {
-    if (existing?.id) {
-      await supabase.from("lesson_recordings").delete().eq("id", existing.id);
-    }
-    return;
-  }
 
   const payload = {
     lesson_id: params.lessonId,

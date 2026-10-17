@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateLoggedLessonAction, type ClassActionResult } from "@/app/dashboard/tutor/classes/actions";
+import {
+  saveClassRecordingAction,
+  saveLoggedLessonAttendanceAction,
+  saveLoggedLessonHomeworkAction,
+  updateLoggedLessonAction,
+  type ClassActionResult,
+} from "@/app/dashboard/tutor/classes/actions";
 import type { CoverTutorChoice } from "@/lib/tutoring/cover-lesson";
 import type { LessonLogEditAttendance } from "@/lib/tutoring/lesson-log-edit";
 import { isFoundationalCourse, lessonListLabel } from "@/lib/tutoring/log-lesson-copy";
@@ -90,43 +96,7 @@ export function LessonLogEdit({
   return (
     <form
       className="mt-3 flex flex-col gap-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        setError(null);
-        setResult(null);
-        const teacher = tutors.find((row) => row.id === teacherId);
-        if (cover && !teacherId) {
-          setError("Choose who taught this lesson.");
-          return;
-        }
-        if (cover && teacher && !teacher.notionLinked) {
-          setError(`${teacher.name} is not linked to a Notion tutor profile, so this cover lesson cannot be saved.`);
-          return;
-        }
-        startTransition(async () => {
-          const saved = await updateLoggedLessonAction({
-            entryId,
-            lessonId: selectedLessonId,
-            lessonDate: date,
-            notes: note,
-            recordingUrl: url,
-            isCoverSession: cover,
-            actualTutorId: cover ? teacherId : null,
-            attendance: attendance.map((person) => ({
-              ...person,
-              attended: present[person.id] !== false,
-            })),
-            homeworkSubmittedIds: homework.filter((person) => submitted[person.id]).map((person) => person.id),
-          });
-          if (saved.error && !saved.differences) {
-            setError(saved.error);
-            return;
-          }
-          setResult(saved);
-          setError(saved.error ?? null);
-          router.refresh();
-        });
-      }}
+      onSubmit={(event) => event.preventDefault()}
     >
       <label className="text-sm font-semibold text-zinc-900">
         {isFoundationalCourse(courseName) ? "Lesson" : "Week"}
@@ -165,6 +135,26 @@ export function LessonLogEdit({
           className="mt-1 min-h-11 w-full rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
         />
       </label>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          setError(null);
+          setResult(null);
+          startTransition(async () => {
+            const saved = await saveClassRecordingAction(entryId, url);
+            if (saved.error) {
+              setError(saved.error);
+              return;
+            }
+            setResult(saved);
+            router.refresh();
+          });
+        }}
+        className="min-h-11 self-start rounded-full bg-violet-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {pending ? "Saving" : "Save recording"}
+      </button>
 
       <label className="text-sm font-semibold text-zinc-900">
         Carry over to next lesson
@@ -207,6 +197,32 @@ export function LessonLogEdit({
             );
           })}
         </ul>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setError(null);
+            setResult(null);
+            startTransition(async () => {
+              const saved = await saveLoggedLessonAttendanceAction({
+                entryId,
+                attendance: attendance.map((person) => ({
+                  ...person,
+                  attended: present[person.id] !== false,
+                })),
+              });
+              if (saved.error) {
+                setError(saved.error);
+                return;
+              }
+              setResult(saved);
+              router.refresh();
+            });
+          }}
+          className="mt-3 min-h-11 rounded-full border border-violet-200 bg-white px-4 text-sm font-semibold text-violet-700 disabled:opacity-60"
+        >
+          {pending ? "Saving" : "Save attendance"}
+        </button>
       </div>
 
       <div>
@@ -241,8 +257,31 @@ export function LessonLogEdit({
           })}
         </ul>
         <p className="mt-2 text-sm text-zinc-500">
-          This is the homework for the lesson already taught. Update writes it on the same Notion lesson log.
+          This is the homework for the lesson already taught. Saving it writes that field on the same Notion lesson log.
         </p>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setError(null);
+            setResult(null);
+            startTransition(async () => {
+              const saved = await saveLoggedLessonHomeworkAction({
+                entryId,
+                homeworkSubmittedIds: homework.filter((person) => submitted[person.id]).map((person) => person.id),
+              });
+              if (saved.error) {
+                setError(saved.error);
+                return;
+              }
+              setResult(saved);
+              router.refresh();
+            });
+          }}
+          className="mt-3 min-h-11 rounded-full border border-violet-200 bg-white px-4 text-sm font-semibold text-violet-700 disabled:opacity-60"
+        >
+          {pending ? "Saving" : "Save homework"}
+        </button>
       </div>
 
       <div>
@@ -292,7 +331,10 @@ export function LessonLogEdit({
       </div>
 
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
-      {result && !result.error ? (
+      {result?.success && result.confirmed == null && !result.error ? (
+        <p className="text-sm text-emerald-700">{result.success}</p>
+      ) : null}
+      {result && !result.error && result.confirmed != null ? (
         <div className={`rounded-3xl p-4 text-sm ${result.confirmed ? "bg-emerald-50 text-emerald-950" : "bg-red-50 text-red-950"}`}>
           <p className="font-semibold">
             {result.confirmed
@@ -318,11 +360,41 @@ export function LessonLogEdit({
 
       <div className="flex gap-2">
         <button
-          type="submit"
+          type="button"
           disabled={pending}
+          onClick={() => {
+            setError(null);
+            setResult(null);
+            const teacher = tutors.find((row) => row.id === teacherId);
+            if (cover && !teacherId) {
+              setError("Choose who taught this lesson.");
+              return;
+            }
+            if (cover && teacher && !teacher.notionLinked) {
+              setError(`${teacher.name} is not linked to a Notion tutor profile, so this cover lesson cannot be saved.`);
+              return;
+            }
+            startTransition(async () => {
+              const saved = await updateLoggedLessonAction({
+                entryId,
+                lessonId: selectedLessonId,
+                lessonDate: date,
+                notes: note,
+                isCoverSession: cover,
+                actualTutorId: cover ? teacherId : null,
+              });
+              if (saved.error && !saved.differences) {
+                setError(saved.error);
+                return;
+              }
+              setResult(saved);
+              setError(saved.error ?? null);
+              router.refresh();
+            });
+          }}
           className="min-h-11 flex-1 rounded-full bg-violet-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
         >
-          {pending ? "Updating" : "Update"}
+          {pending ? "Updating" : "Save lesson details"}
         </button>
         <button
           type="button"
