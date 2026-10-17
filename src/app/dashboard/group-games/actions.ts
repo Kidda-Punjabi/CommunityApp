@@ -28,7 +28,6 @@ import {
 } from "@/lib/game-rooms/race";
 import { loadChadoPauriFlashcards } from "@/lib/games/chado-pauri/load-flashcards";
 import { loadGameRoom } from "@/lib/game-rooms/load-room";
-import { rejectIfKidCommunityBlocked } from "@/lib/kids/guards";
 import { createClient } from "@/lib/supabase/server";
 
 export type GroupGameActionResult = { error?: string; roomId?: string };
@@ -64,9 +63,6 @@ export async function createGameRoom(
     soundMatchGroups: gameType === "sound_match_group" ? soundMatchGroups : undefined,
   });
 
-  const access = await rejectIfKidCommunityBlocked();
-  if (access.blocked) return { error: access.error };
-
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("create_game_room", {
     p_game_type: gameType,
@@ -86,9 +82,6 @@ export async function joinGameRoomByCode(
 ): Promise<GroupGameActionResult> {
   const code = String(formData.get("join_code") ?? "").trim();
   if (!code) return { error: "Enter a room code." };
-
-  const access = await rejectIfKidCommunityBlocked();
-  if (access.blocked) return { error: access.error };
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("join_game_room", {
