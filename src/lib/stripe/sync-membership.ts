@@ -180,6 +180,18 @@ export async function syncMembershipFromStripeEvent(event: Stripe.Event) {
     if (!userId) return { updated: false, unlockedTiers: [] as PaidCourseTier[] };
 
     if (full.status !== "active" && full.status !== "trialing") {
+      const endedCommunity =
+        full.metadata?.checkout_key === "community" ||
+        full.items.data.some((item) => {
+          const price = item.price;
+          const product = price.product;
+          const productId = typeof product === "string" ? product : product?.id ?? null;
+          return tierFromStripeIds(productId, price.id) === "community";
+        });
+      if (endedCommunity) {
+        const { removeCommunityCalendarGuest } = await import("@/lib/community/calendar-invite");
+        await removeCommunityCalendarGuest(createServiceRoleClient(), userId);
+      }
       return { updated: false, unlockedTiers: [] as PaidCourseTier[] };
     }
 

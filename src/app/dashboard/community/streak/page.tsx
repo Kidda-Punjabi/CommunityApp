@@ -1,8 +1,8 @@
 import { loadCommunityHome, memberHasCommunity } from "@/lib/community/load-home";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
+import { CommunityPageHeader } from "@/components/community/community-page-header";
 import { ui } from "@/lib/ui/styles";
-import Link from "next/link";
 
 export default async function CommunityStreakPage() {
   const { user } = await requireNoKidCommunityAccess();
@@ -16,8 +16,7 @@ export default async function CommunityStreakPage() {
       : `Start a new streak on ${home.weekdayLabel ?? "your session day"}.`;
   return (
     <div className={ui.page}>
-      <Link href="/dashboard/community" className="text-sm font-semibold text-violet-700">Community</Link>
-      <h1 className="mt-2 font-heading text-2xl font-bold">Streak</h1>
+      <CommunityPageHeader title="Streak" />
       <p className="mt-3 text-sm text-zinc-700">{copy}</p>
       <p className="mt-2 text-sm text-zinc-500">Filled dots are main sessions you checked in for. Bonus sessions don't change this streak.</p>
       {home.sessionsStarted ? (

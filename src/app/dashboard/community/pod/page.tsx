@@ -2,8 +2,8 @@ import { loadCommunityHome, memberHasCommunity } from "@/lib/community/load-home
 import { levelFillVar, levelLabel } from "@/lib/community/levels";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
+import { CommunityPageHeader } from "@/components/community/community-page-header";
 import { ui } from "@/lib/ui/styles";
-import Link from "next/link";
 
 export default async function CommunityPodPage() {
   const { user } = await requireNoKidCommunityAccess();
@@ -12,8 +12,7 @@ export default async function CommunityPodPage() {
   const home = await loadCommunityHome(admin, user.id);
   return (
     <div className={ui.page}>
-      <Link href="/dashboard/community" className="text-sm font-semibold text-violet-700">Community</Link>
-      <h1 className="mt-2 font-heading text-2xl font-bold">{home.pod ? `You're in ${home.pod.name}` : "Your pod"}</h1>
+      <CommunityPageHeader title={home.pod ? `You're in ${home.pod.name}` : "Your pod"} />
       <ul className="mt-4 space-y-3">
         {home.podmates.map((mate) => (
           <li key={mate.userId} className="flex min-h-11 items-center gap-3">

@@ -265,6 +265,35 @@ export async function addAttendeeToGoogleCalendarEvent(
   return { hangoutLink: event.hangoutLink };
 }
 
+/** Removes one guest from an event. sendUpdates=all tells Google to email them. */
+export async function removeAttendeeFromGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  attendeeEmail: string
+): Promise<void> {
+  const normalized = attendeeEmail.trim().toLowerCase();
+  if (!normalized) return;
+  const event = await getGoogleCalendarEvent(accessToken, calendarId, eventId);
+  const existing = event.attendees ?? [];
+  if (!existing.some((attendee) => attendee.email?.trim().toLowerCase() === normalized)) return;
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      attendees: existing.filter((attendee) => attendee.email?.trim().toLowerCase() !== normalized),
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Google Calendar remove attendee failed: ${text}`);
+  }
+}
+
 export type CreateGoogleCalendarEventParams = {
   summary: string;
   description?: string;

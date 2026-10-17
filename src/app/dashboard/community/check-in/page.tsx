@@ -1,9 +1,9 @@
 import { CheckInForm } from "@/components/community/check-in-form";
+import { CommunityPageHeader } from "@/components/community/community-page-header";
 import { levelFillVar } from "@/lib/community/levels";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ui } from "@/lib/ui/styles";
-import Link from "next/link";
 
 export default async function CheckInPage({
   searchParams,
@@ -32,10 +32,7 @@ export default async function CheckInPage({
 
   return (
     <div className={`${ui.page} !py-4`}>
-      <Link href="/dashboard/community" className="text-sm font-semibold text-violet-700">
-        Community
-      </Link>
-      <h1 className="mt-2 font-heading text-2xl font-bold text-zinc-900">Check in</h1>
+      <CommunityPageHeader title="Check in" />
       <p className="mt-1 text-sm text-zinc-600">{session?.title ?? "Community session"}</p>
       {row?.status === "live" && occurrence ? (
         <CheckInForm occurrenceId={occurrence} />

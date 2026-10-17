@@ -16,7 +16,9 @@ export type DashboardCardId =
   | "hidden_homework"
   | "session_integrity"
   | "community_today"
-  | "community_not_placed";
+  | "community_not_placed"
+  | "community_switches"
+  | "community_invites";
 
 export type AdminDashboardCard = {
   id: DashboardCardId;

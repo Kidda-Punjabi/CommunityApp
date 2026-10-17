@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomInt } from "node:crypto";
+import { syncCommunityCalendarGuest } from "@/lib/community/calendar-invite";
 import { makeCheckinCode } from "@/lib/community/checkin-code";
 import { choosePod, type OpenPod } from "@/lib/community/pods";
 import { currentStreak, type StreakOccurrence } from "@/lib/community/streak";
@@ -9,15 +10,15 @@ import type { CommunityBand } from "@/lib/community/constants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function chooseMainSession(admin: SupabaseClient, userId: string, sessionId: string) {
-  const { data: session, error } = await admin.from("community_sessions").select("id").eq("id", sessionId).maybeSingle();
+  const started = Date.now();
+  const [{ data: session, error }, { data: existing, error: existingError }] = await Promise.all([
+    admin.from("community_sessions").select("id").eq("id", sessionId).eq("is_active", true).maybeSingle(),
+    admin.from("community_memberships_meta").select("main_session_id").eq("user_id", userId).maybeSingle(),
+  ]);
   if (error) throw error;
-  if (!session) return { error: "That session is not available." };
-  const { data: existing, error: existingError } = await admin
-    .from("community_memberships_meta")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
   if (existingError) throw existingError;
+  if (!session) return { error: "That session is not available." };
+  const previous = (existing?.main_session_id as string | null) ?? null;
   if (existing) {
     const { error: updateError } = await admin
       .from("community_memberships_meta")
@@ -31,7 +32,11 @@ export async function chooseMainSession(admin: SupabaseClient, userId: string, s
     });
     if (insertError) throw insertError;
   }
-  return { ok: true };
+  const invite = previous === sessionId
+    ? { ok: true }
+    : await syncCommunityCalendarGuest(admin, userId, previous, sessionId);
+  console.info(`[community] pickMainSession ${Date.now() - started}ms invite=${invite.ok}`);
+  return { ok: true as const, calendarInvite: invite.ok };
 }
 
 export async function assignMemberPod(admin: SupabaseClient, userId: string) {

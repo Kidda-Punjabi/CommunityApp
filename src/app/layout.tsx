@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Poppins } from "next/font/google";
+import { DM_Sans, Geist, Geist_Mono, Poppins } from "next/font/google";
 import { headers } from "next/headers";
 import { Suspense } from "react";
 import { AuthRedirectHandler } from "@/components/auth-redirect-handler";
@@ -22,6 +22,12 @@ const geistMono = Geist_Mono({
 
 const poppins = Poppins({
   variable: "--font-poppins",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -56,7 +62,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} min-h-dvh bg-zinc-50 antialiased${nativeApp ? " kidda-native" : ""}`}
+      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} ${dmSans.variable} min-h-dvh bg-zinc-50 antialiased${nativeApp ? " kidda-native" : ""}`}
     >
       <body className="flex min-h-dvh flex-1 flex-col bg-zinc-50">
         <NativeAppProvider isNative={nativeApp}>

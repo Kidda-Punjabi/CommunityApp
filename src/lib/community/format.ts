@@ -35,6 +35,34 @@ export function canJoinSession(startsAt: string, endsAt: string, now = new Date(
   return now.getTime() >= start - 2 * 60 * 1000 && now.getTime() < end;
 }
 
+export function zoneCity(timeZone: string): string {
+  return (timeZone.split("/").pop() ?? timeZone).replaceAll("_", " ");
+}
+
+export function formatClockShort(iso: string, timeZone: string): string {
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(iso));
+  return formatted.replace(":00", "").replace(" ", "").toLowerCase();
+}
+
+export function formatWeekdayDate(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(new Date(iso)).replace(",", "");
+}
+
+export function formatStartDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
 export function googleCalendarUrl(title: string, startsAt: string, endsAt: string): string {
   const stamp = (iso: string) =>
     new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");

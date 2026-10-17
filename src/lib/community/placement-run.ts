@@ -10,6 +10,7 @@ import {
 } from "@/lib/community/placement-engine";
 import { assignMemberPod } from "@/lib/community/mutations";
 import type { PublicItem, PublicOption } from "@/lib/community/placement-public";
+import { PUNJABI_LESSON_VOICE_ID } from "@/lib/elevenlabs/constants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type { PublicItem, PublicOption };
@@ -40,17 +41,36 @@ function shuffle<T>(items: T[], seed: string): T[] {
   return copy;
 }
 
-function toPublic(item: BankItem, seed: string): PublicItem {
-  const options = shuffle(item.options, seed).map((option) => ({
-    id: option.id,
-    label: option.label,
-    speak: option.roman ?? (item.item_type === "S" ? option.label : null),
-  }));
+async function signedClip(admin: SupabaseClient, path: string | undefined): Promise<string | null> {
+  if (!path) return null;
+  const signed = await admin.storage.from("placement-audio").createSignedUrl(path, 60 * 30);
+  return signed.data?.signedUrl ?? null;
+}
+
+async function toPublic(admin: SupabaseClient, item: BankItem, seed: string): Promise<PublicItem> {
+  const { data } = await admin
+    .from("placement_test_audio")
+    .select("option_id, storage_path, created_at")
+    .eq("item_id", item.id)
+    .eq("voice_id", PUNJABI_LESSON_VOICE_ID)
+    .order("created_at", { ascending: false });
+  const paths = new Map<string, string>();
+  for (const row of data ?? []) {
+    const key = (row.option_id as string | null) ?? "prompt";
+    if (!paths.has(key)) paths.set(key, row.storage_path as string);
+  }
+  const options = await Promise.all(
+    shuffle(item.options, seed).map(async (option) => ({
+      id: option.id,
+      label: option.label,
+      audioUrl: await signedClip(admin, paths.get(option.id)),
+    }))
+  );
   return {
     id: item.id,
     prompt: item.prompt,
     roman: item.item_type === "S" ? null : item.roman,
-    speak: item.roman,
+    audioUrl: await signedClip(admin, paths.get("prompt")),
     options,
     kind: item.item_type === "S" ? "say" : item.item_type === "SOUND" ? "sound" : "meaning",
   };
@@ -95,7 +115,7 @@ export async function beginPlacement(admin: SupabaseClient, userId: string, unde
   return {
     attemptId: data.id as string,
     deadline: new Date(Date.parse(data.created_at) + TEST_MS).toISOString(),
-    item: item ? toPublic(item, `${data.id}:${item.id}`) : null,
+    item: item ? await toPublic(admin, item, `${data.id}:${item.id}`) : null,
   };
 }
 
@@ -182,6 +202,6 @@ export async function answerPlacement(
   return {
     correct,
     correctOptionId: current.options.find((option) => option.correct)?.id ?? optionId,
-    item: toPublic(next, `${attemptId}:${next.id}`),
+    item: await toPublic(admin, next, `${attemptId}:${next.id}`),
   };
 }

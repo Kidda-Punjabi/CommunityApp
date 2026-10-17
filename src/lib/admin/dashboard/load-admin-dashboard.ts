@@ -255,9 +255,17 @@ export async function loadAdminDashboard(
   const { setup, integrity } = cohortOpsCards(cohortOps.issues, cohortOps.error, nowMs);
 
   let unplacedCount = 0;
+  let switchCount = 0;
+  let inviteFailCount = 0;
   try {
     const { loadUnplacedMembers } = await import("@/lib/community/not-placed");
     unplacedCount = (await loadUnplacedMembers(supabase)).length;
+    const [{ count: switches }, { count: invites }] = await Promise.all([
+      supabase.from("community_session_switch_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("community_memberships_meta").select("user_id", { count: "exact", head: true }).eq("calendar_invite_status", "failed"),
+    ]);
+    switchCount = switches ?? 0;
+    inviteFailCount = invites ?? 0;
   } catch (unplacedError) {
     console.error("[admin dashboard] community not placed", unplacedError);
   }
@@ -368,6 +376,24 @@ export async function loadAdminDashboard(
       href: "/admin/community/not-placed",
       count: unplacedCount,
       tone: unplacedCount > 0 ? "warning" : "ok",
+      group: "ops",
+    },
+    {
+      id: "community_switches",
+      label: "Session switch requests",
+      hint: "Members asking to change their main session",
+      href: "/admin/community/switches",
+      count: switchCount,
+      tone: switchCount > 0 ? "warning" : "ok",
+      group: "ops",
+    },
+    {
+      id: "community_invites",
+      label: "Calendar invite failed",
+      hint: "Guests who were not added to Arsh's series",
+      href: "/admin/community/invites",
+      count: inviteFailCount,
+      tone: inviteFailCount > 0 ? "warning" : "ok",
       group: "ops",
     },
     {

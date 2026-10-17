@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCommunityStaff } from "@/lib/community/member-guard";
+import { syncCommunityCalendarGuest } from "@/lib/community/calendar-invite";
 import {
   assignMemberPod,
   checkInMember,
+  chooseMainSession,
   endCommunitySession,
   setOccurrenceWeek,
   startCommunitySession,
@@ -51,5 +53,33 @@ export async function suggestPod(userId: string) {
   const { admin } = await staff();
   const result = await assignMemberPod(admin, userId);
   revalidatePath("/admin/community/not-placed");
+  return result;
+}
+
+export async function approveSessionSwitch(requestId: string) {
+  const { admin, userId } = await staff();
+  const { data: request, error } = await admin
+    .from("community_session_switch_requests")
+    .select("id, user_id, to_session_id, status")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (error || !request || request.status !== "pending") return { error: "That request is not waiting." };
+  const moved = await chooseMainSession(admin, request.user_id as string, request.to_session_id as string);
+  if ("error" in moved && moved.error) return moved;
+  await assignMemberPod(admin, request.user_id as string);
+  await admin.from("community_session_switch_requests").update({
+    status: "approved",
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: userId,
+  }).eq("id", requestId);
+  revalidatePath("/admin/community/switches");
+  return { ok: true as const };
+}
+
+export async function retryCalendarInvite(memberId: string) {
+  const { admin } = await staff();
+  const { data } = await admin.from("community_memberships_meta").select("main_session_id").eq("user_id", memberId).maybeSingle();
+  const result = await syncCommunityCalendarGuest(admin, memberId, null, (data?.main_session_id as string | null) ?? null);
+  revalidatePath("/admin/community/invites");
   return result;
 }

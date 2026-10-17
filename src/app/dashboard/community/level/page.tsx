@@ -2,6 +2,7 @@ import { loadCommunityHome, memberHasCommunity } from "@/lib/community/load-home
 import { levelFillVar, levelInkVar, levelLabel } from "@/lib/community/levels";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
+import { CommunityPageHeader } from "@/components/community/community-page-header";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
@@ -12,8 +13,7 @@ export default async function CommunityLevelPage() {
   const home = await loadCommunityHome(admin, user.id);
   return (
     <div className={ui.page}>
-      <Link href="/dashboard/community" className="text-sm font-semibold text-violet-700">Community</Link>
-      <h1 className="mt-2 font-heading text-2xl font-bold">Your level</h1>
+      <CommunityPageHeader title="Your level" />
       {home.level == null ? (
         <Link href="/dashboard/community/placement" className={`${ui.btnPrimary} mt-4`}>Take the 2-minute test</Link>
       ) : (
