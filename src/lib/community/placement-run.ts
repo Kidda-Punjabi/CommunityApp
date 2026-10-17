@@ -8,7 +8,7 @@ import {
   startLevelFromProfile,
   type PlacementState,
 } from "@/lib/community/placement-engine";
-import { assignMemberPod } from "@/lib/community/mutations";
+import { applyRetakeResult, assertRetakeAllowed, recordPlacementLevel } from "@/lib/community/level-move";
 import type { PublicItem, PublicOption } from "@/lib/community/placement-public";
 import { PUNJABI_LESSON_VOICE_ID } from "@/lib/elevenlabs/constants";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -96,7 +96,17 @@ function parseState(value: unknown, start: number): PlacementState {
   return value as PlacementState;
 }
 
-export async function beginPlacement(admin: SupabaseClient, userId: string, understand: number, reply: number) {
+export async function beginPlacement(
+  admin: SupabaseClient,
+  userId: string,
+  understand: number,
+  reply: number,
+  purpose: "placement" | "retake" = "placement"
+) {
+  if (purpose === "retake") {
+    const allowed = await assertRetakeAllowed(admin, userId);
+    if ("error" in allowed) return allowed;
+  }
   const start = startLevelFromProfile(understand, reply);
   const state = initialPlacementState(start);
   const items = await loadBank(admin);
@@ -108,6 +118,7 @@ export async function beginPlacement(admin: SupabaseClient, userId: string, unde
       start_level: start,
       answers: [],
       engine: state,
+      purpose,
     })
     .select("id, created_at")
     .single();
@@ -124,7 +135,8 @@ async function complete(
   attemptId: string,
   userId: string,
   state: PlacementState,
-  answers: unknown[]
+  answers: unknown[],
+  purpose: string
 ) {
   const scores = scorePlacement(state);
   const { error } = await admin
@@ -141,9 +153,11 @@ async function complete(
     })
     .eq("id", attemptId);
   if (error) throw error;
-  const { error: levelError } = await admin.from("profiles").update({ kidda_level: scores.kiddaLevel }).eq("id", userId);
-  if (levelError) throw levelError;
-  const pod = await assignMemberPod(admin, userId);
+  if (purpose === "retake") {
+    const outcome = await applyRetakeResult(admin, userId, scores.kiddaLevel);
+    return { scores, ...outcome };
+  }
+  const pod = await recordPlacementLevel(admin, userId, scores.kiddaLevel);
   return { scores, podName: "name" in pod ? pod.name : null };
 }
 
@@ -156,7 +170,7 @@ export async function answerPlacement(
 ) {
   const { data: attempt, error } = await admin
     .from("placement_test_attempts")
-    .select("id, user_id, start_level, answers, engine, created_at, completed_at")
+    .select("id, user_id, start_level, answers, engine, created_at, completed_at, purpose")
     .eq("id", attemptId)
     .maybeSingle();
   if (error) throw error;
@@ -168,7 +182,7 @@ export async function answerPlacement(
   const timedOut = Date.now() - Date.parse(attempt.created_at) > TEST_MS;
   if (timedOut) {
     state = finishPlacement(state, true);
-    const done = await complete(admin, attemptId, userId, state, attempt.answers ?? []);
+    const done = await complete(admin, attemptId, userId, state, attempt.answers ?? [], (attempt.purpose as string) ?? "placement");
     return { timedOut: true, ...done, item: null };
   }
 
@@ -185,7 +199,7 @@ export async function answerPlacement(
   const next = expected(items, state);
   if (!next || state.phase === "done") {
     const finished = state.phase === "done" ? state : finishPlacement(state);
-    const done = await complete(admin, attemptId, userId, finished, answers);
+    const done = await complete(admin, attemptId, userId, finished, answers, (attempt.purpose as string) ?? "placement");
     return {
       correct,
       correctOptionId: current.options.find((option) => option.correct)?.id ?? optionId,

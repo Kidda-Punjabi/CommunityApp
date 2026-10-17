@@ -12,12 +12,14 @@ export function Celebration({
   mates,
   when,
   invited,
+  hideCalendar = false,
 }: {
   level: number;
   podName: string;
   mates: { userId: string; name: string; level: number | null }[];
   when: string;
   invited: boolean;
+  hideCalendar?: boolean;
 }) {
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -59,7 +61,7 @@ export function Celebration({
           </div>
           <p className="mt-2 text-xs text-[#6B5F8A]">{mates.length} {mates.length === 1 ? "member" : "members"}</p>
           <p className="mt-2 text-sm font-semibold">{when}</p>
-          <p className="mt-1 text-sm text-[#4A3F66]">{invited ? "Added to your calendar" : "We'll send your calendar invite shortly"}</p>
+          {hideCalendar ? null : <p className="mt-1 text-sm text-[#4A3F66]">{invited ? "Added to your calendar" : "We'll send your calendar invite shortly"}</p>}
         </div>
       </div>
     </OnboardingFrame>

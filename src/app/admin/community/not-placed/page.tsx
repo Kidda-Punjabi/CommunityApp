@@ -1,4 +1,4 @@
-import { suggestPod } from "@/app/admin/community/actions";
+import { setMemberLevel, suggestPod } from "@/app/admin/community/actions";
 import { loadUnplacedMembers } from "@/lib/community/not-placed";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ui } from "@/lib/ui/styles";
@@ -39,6 +39,18 @@ export default async function NotPlacedPage() {
                     ) : (
                       `Level ${member.level}`
                     )}
+                    <form action={async (formData) => {
+                      "use server";
+                      const level = Number(formData.get("level"));
+                      const reason = String(formData.get("reason") ?? "");
+                      await setMemberLevel(member.userId, level, reason);
+                    }} className="mt-2 flex flex-col gap-1">
+                      <select name="level" defaultValue={member.level ?? 1} className="h-11 rounded-lg border border-zinc-200 px-2 text-sm">
+                        {Array.from({ length: 10 }, (_, level) => <option key={level} value={level}>Level {level}</option>)}
+                      </select>
+                      <input name="reason" required placeholder="Reason" className="h-11 rounded-lg border border-zinc-200 px-2 text-sm" />
+                      <button type="submit" className="h-11 rounded-lg bg-violet-700 text-sm font-semibold text-white">Set level</button>
+                    </form>
                   </td>
                   <td>
                     {member.podName ? (

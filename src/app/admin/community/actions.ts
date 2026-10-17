@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireCommunityStaff } from "@/lib/community/member-guard";
 import { syncCommunityCalendarGuest } from "@/lib/community/calendar-invite";
+import { setMemberLevel as writeMemberLevel } from "@/lib/community/level-move";
 import {
   assignMemberPod,
   checkInMember,
@@ -46,6 +47,13 @@ export async function addCheckIn(occurrenceId: string, email: string) {
   if (!data) return { error: "No member with that email." };
   const result = await checkInMember(admin, data as string, occurrenceId, "", true);
   revalidatePath("/admin/community/today");
+  return result;
+}
+
+export async function setMemberLevel(userId: string, level: number, reason: string) {
+  const { admin, userId: actorId } = await staff();
+  const result = await writeMemberLevel(admin, actorId, userId, level, reason);
+  revalidatePath("/admin/community/not-placed");
   return result;
 }
 
