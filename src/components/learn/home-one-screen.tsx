@@ -1,10 +1,11 @@
 import { CommunityHomeTile } from "@/components/community/check-in-ui";
 import { RegisterInterestButton } from "@/components/learn/register-interest-button";
+import { AppTile } from "@/components/ui/app-tile";
 import { NavLink } from "@/components/ui/nav-link";
+import { levelFillVar } from "@/lib/community/levels";
 import type { AdultClassCard } from "@/lib/learning/load-adult-class-cards";
 import type { ParentKidProgressSummary } from "@/lib/kids/load-kid-progress-summary";
-import { levelFillVar } from "@/lib/community/levels";
-import { Award, Wrench } from "lucide-react";
+import { Award, Check, ChevronRight, Smile, Wrench } from "lucide-react";
 
 type CourseTile = {
   key: "foundational" | "beginners" | "intermediate" | "advanced";
@@ -33,7 +34,14 @@ function formatWhen(iso: string, timeZone: string): string {
     hourCycle: "h23",
     timeZone,
   });
-  return `${date} · ${time}`;
+  return `${date}, ${time}`;
+}
+
+function courseSubtitle(course: CourseTile): string {
+  if (course.comingSoon) return "Coming soon";
+  if (!course.enrolled) return "This course isn't on your account";
+  if (course.weekLesson && course.when) return `${course.weekLesson} · ${course.when}`;
+  return "Your course";
 }
 
 export function HomeOneScreen({
@@ -43,7 +51,6 @@ export function HomeOneScreen({
   communityLocked,
   communityLiveCheckIn = false,
   kids,
-  timeZone,
 }: {
   courses: CourseTile[];
   communityHref: string;
@@ -53,113 +60,98 @@ export function HomeOneScreen({
   kids: ParentKidProgressSummary[];
   timeZone: string;
 }) {
-  const shown = kids.slice(0, kids.length > 4 ? 3 : 4);
-  const extra = kids.length > 4 ? kids.length - 3 : 0;
+  const enrolledKids = kids.filter((kid) => kid.courseId);
+  const shownAvatars = enrolledKids.slice(0, 3);
+  const extraAvatars = kids.length - shownAvatars.length;
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="grid flex-1 grid-cols-2 gap-2">
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
         {courses.map((course) => {
+          const subtitle = courseSubtitle(course);
+          const right = course.comingSoon ? (
+            course.interestRegistered ? (
+              <span className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-white px-3 text-xs font-bold text-[#075E47]">
+                <Check className="h-3.5 w-3.5" aria-hidden />
+                Interest registered
+              </span>
+            ) : (
+              <RegisterInterestButton
+                courseTitle={course.title}
+                courseLevel={course.key === "advanced" ? "advanced" : "intermediate"}
+                initiallyRegistered={false}
+                className="relative h-9 bg-[#5B21B6] px-3 text-xs font-bold text-white before:absolute before:-inset-y-1 before:inset-x-0"
+              />
+            )
+          ) : course.enrolled && course.href ? (
+            <ChevronRight className="h-5 w-5 shrink-0" aria-hidden style={{ color: course.ink }} />
+          ) : null;
+          const className = "flex h-[68px] w-full shrink-0 items-center gap-3 rounded-[20px] px-4";
+          const style = { background: course.fill, color: course.ink };
           const body = (
             <>
-              <p className="text-[13px] font-extrabold leading-tight">{course.title}</p>
-              {course.weekLesson ? (
-                <>
-                  <p className="text-[10px] font-bold uppercase tracking-wide">Your course</p>
-                  <p className="mt-1 text-[11px] font-semibold leading-snug">{course.weekLesson}</p>
-                </>
-              ) : (
-                <p className="mt-1 text-[11px] font-semibold leading-snug">
-                  {course.comingSoon ? "Coming soon" : course.enrolled ? "Your course" : "This course isn't on your account"}
-                </p>
-              )}
-              {course.when ? <p className="mt-auto pt-1 text-[11px] font-bold">{course.when}</p> : null}
-              {course.comingSoon ? (
-                <span className="mt-1">
-                  {course.interestRegistered ? (
-                    <span className="inline-flex rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-bold">Interest registered</span>
-                  ) : (
-                    <RegisterInterestButton
-                      courseTitle={course.title}
-                      courseLevel={course.key === "advanced" ? "advanced" : "intermediate"}
-                      initiallyRegistered={false}
-                      compact
-                    />
-                  )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-heading text-base font-bold leading-tight text-[#1F1640]">
+                  {course.title}
                 </span>
-              ) : null}
+                <span className="mt-0.5 block truncate text-[11px] font-semibold leading-tight">{subtitle}</span>
+              </span>
+              {right}
             </>
           );
-          const className = "flex min-h-[5.5rem] flex-col rounded-[20px] p-2.5";
-          const style = { background: course.fill, color: course.ink };
-          if (course.href) {
+          if (course.href && course.enrolled) {
             return (
-              <NavLink key={course.key} href={course.href} className={className} style={style}>
+              <NavLink key={course.key} href={course.href} data-testid="course-row" className={className} style={style}>
                 {body}
               </NavLink>
             );
           }
           return (
-            <div key={course.key} className={className} style={style}>
+            <div key={course.key} data-testid="course-row" className={className} style={style}>
               {body}
             </div>
           );
         })}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 content-start gap-2">
         <CommunityHomeTile
           href={communityLocked ? communityHref || undefined : communityHref}
           status={communityStatus}
           showLive={!communityLocked && communityLiveCheckIn}
         />
-        <Shortcut href="/dashboard/learn/resources" title="Resources" status="Tools & shortcuts" icon={<Wrench className="h-4 w-4" />} />
-        <Shortcut href="/dashboard/learn/certificates" title="Certificates" status="Your awards" icon={<Award className="h-4 w-4" />} />
-      </div>
-      {kids.length > 0 ? (
-        <section className="rounded-[20px] bg-white px-3 py-2">
-          <h2 className="text-xs font-extrabold text-[#1F1640]">How your kids are doing</h2>
-          <div className="mt-1 flex justify-between gap-1">
-            {shown.map((kid) => {
-              const enrolled = Boolean(kid.courseId);
-              const color = kid.currentLevelNumber != null ? levelFillVar(Math.min(9, Math.max(0, kid.currentLevelNumber))) : "#0E9F78";
-              return (
-                <NavLink key={kid.kidProfileId} href={`/dashboard/learn/kids-progress/${kid.kidProfileId}`} className="flex min-h-11 min-w-0 flex-1 flex-col items-center">
+        {kids.length > 0 ? (
+          <AppTile
+            href="/dashboard/learn/your-kids"
+            title="Your kids"
+            subtitle={`${kids.length} ${kids.length === 1 ? "kid" : "kids"} · ${enrolledKids.length} enrolled`}
+            icon={<Smile className="h-4 w-4" />}
+            corner={
+              <span className="flex items-center">
+                {shownAvatars.map((kid, index) => (
                   <span
-                    className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-[#1F1640] ${enrolled ? "" : "border-2 border-dashed border-[#C4B5FD]"}`}
-                    style={enrolled ? { boxShadow: `0 0 0 2px ${color}` } : undefined}
+                    key={kid.kidProfileId}
+                    className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F7F5FC] text-[10px] font-bold text-[#1F1640]"
+                    style={{
+                      marginLeft: index === 0 ? 0 : -6,
+                      boxShadow: `0 0 0 2px ${levelFillVar(Math.min(9, Math.max(0, kid.currentLevelNumber ?? 0)))}`,
+                    }}
                   >
                     {kid.kidName.slice(0, 1)}
                   </span>
-                  <span className="mt-0.5 max-w-full truncate text-[10px] font-bold">{kid.kidName.split(" ")[0]}</span>
-                  <span className="text-[9px] text-[#6B5F8A]">{enrolled ? kid.currentLevelLabel ?? "Kids Level 1" : "Not enrolled"}</span>
-                </NavLink>
-              );
-            })}
-            {extra > 0 ? (
-              <NavLink href="/dashboard/learn/kids-progress" className="flex min-h-11 flex-1 flex-col items-center">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed border-[#C4B5FD] text-xs font-bold">+{extra}</span>
-              </NavLink>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
+                ))}
+                {extraAvatars > 0 ? (
+                  <span className="-ml-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-dashed border-[#C4B5FD] bg-white text-[10px] font-bold text-[#3B1A8C]">
+                    +{extraAvatars}
+                  </span>
+                ) : null}
+              </span>
+            }
+          />
+        ) : null}
+        <AppTile href="/dashboard/learn/resources" title="Resources" subtitle="Tools & shortcuts" icon={<Wrench className="h-4 w-4" />} />
+        <AppTile href="/dashboard/learn/certificates" title="Certificates" subtitle="Your awards" icon={<Award className="h-4 w-4" />} />
+      </div>
     </div>
-  );
-}
-
-function Shortcut({ href, title, status, icon }: { href?: string; title: string; status: string; icon: React.ReactNode }) {
-  const body = (
-    <>
-      <span className="text-[#5B21B6]">{icon}</span>
-      <span className="text-[11px] font-extrabold leading-tight">{title}</span>
-      <span className="text-[9px] font-semibold text-[#6B5F8A]">{status}</span>
-    </>
-  );
-  const className = "flex min-h-16 flex-col items-center justify-center gap-0.5 rounded-[18px] bg-white px-1 py-2 text-center text-[#1F1640]";
-  if (!href) return <div className={className}>{body}</div>;
-  return (
-    <NavLink href={href} className={className}>
-      {body}
-    </NavLink>
   );
 }
 

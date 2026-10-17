@@ -35,9 +35,7 @@ import {
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
 import { memberNeedsLiveCheckIn } from "@/lib/community/check-in-by-code";
-import { xpRoad, xpTargetForLevel } from "@/lib/community/level-progress";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
-import { bandForLevel, bandLabel, levelFillVar } from "@/lib/community/levels";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 import {
@@ -287,15 +285,8 @@ export default async function LearnPage() {
     );
   }
 
-  const [{ data: me }, { data: levelSettings }] = await Promise.all([
-    supabase.from("profiles").select("kidda_level, total_xp, xp_at_level_start, timezone").eq("id", user.id).maybeSingle(),
-    supabase.from("community_level_settings").select("xp_to_unlock").eq("id", 1).maybeSingle(),
-  ]);
-  const kiddaLevel = me?.kidda_level as number | null;
+  const { data: me } = await supabase.from("profiles").select("timezone").eq("id", user.id).maybeSingle();
   const timeZone = (me?.timezone as string) || "Europe/London";
-  const earned = Math.max(0, Number(me?.total_xp ?? 0) - Number(me?.xp_at_level_start ?? 0));
-  const target = kiddaLevel == null ? null : xpTargetForLevel(kiddaLevel, (levelSettings?.xp_to_unlock as Record<string, number> | null) ?? null);
-  const road = target == null ? null : xpRoad(earned, target);
   const foundationalClass = courseWhen(classCards, "foundational", timeZone);
   const beginnersClass = courseWhen(classCards, "beginners", timeZone);
   const communityLiveCheckIn = communityLocked ? false : await memberNeedsLiveCheckIn(createServiceRoleClient(), user.id);
@@ -313,16 +304,6 @@ export default async function LearnPage() {
         }}
       >
         {greeting}
-        {kiddaLevel == null ? null : (
-          <Link href="/dashboard/community/level" className="mb-2 flex items-center gap-3 rounded-[20px] bg-white px-3 py-2">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full text-lg font-extrabold text-white" style={{ background: "#5B21B6", boxShadow: `0 0 0 3px ${levelFillVar(kiddaLevel)}` }}>{kiddaLevel}</span>
-            <span>
-              <span className="block text-sm font-extrabold text-[#1F1640]">Level {kiddaLevel} · {bandLabel(bandForLevel(kiddaLevel))}</span>
-              <span className="block text-[11px] font-semibold text-[#6B5F8A]">{road ? `${road.earned} of ${road.target} XP to your Level ${kiddaLevel + 1} check` : "Top level"}</span>
-              <span className="block text-[11px] text-[#6B5F8A]">Live sessions earn the most XP</span>
-            </span>
-          </Link>
-        )}
         <HomeOneScreen
           timeZone={timeZone}
           communityHref={communityHref}

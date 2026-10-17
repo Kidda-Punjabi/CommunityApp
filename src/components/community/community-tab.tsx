@@ -1,17 +1,19 @@
 import { SessionCheckInButtons } from "@/components/community/check-in-ui";
+import { AppTile } from "@/components/ui/app-tile";
 import { canJoinSession, daysUntilLabel, formatSessionClock } from "@/lib/community/format";
 import type { CommunityHome } from "@/lib/community/load-home";
 import { bandFillVar, bandForLevel, bandInkVar, bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
 import { freshLabel } from "@/lib/forum/unread";
+import { CalendarPlus, Folder, MessageCircle, Play, Trophy, Users } from "lucide-react";
 import Link from "next/link";
 
 const TILES = [
-  { href: "/dashboard/community/forum", label: "Forum", icon: "💬", forum: true },
-  { href: "/dashboard/community/pod", label: "Your pod", icon: "👥", forum: false },
-  { href: "/dashboard/community/practice", label: "Practice", icon: "▶", forum: false },
-  { href: "/dashboard/community/topics", label: "Topics", icon: "🗂", forum: false },
-  { href: "/dashboard/community/bonus", label: "Bonus sessions", icon: "+", forum: false },
-  { href: "/dashboard/community/trophies", label: "Trophies & wins", icon: "🏆", forum: false },
+  { href: "/dashboard/community/forum", label: "Forum", icon: MessageCircle, forum: true },
+  { href: "/dashboard/community/pod", label: "Your pod", icon: Users, forum: false },
+  { href: "/dashboard/community/practice", label: "Practice", icon: Play, forum: false },
+  { href: "/dashboard/community/topics", label: "Topics", icon: Folder, forum: false },
+  { href: "/dashboard/community/bonus", label: "Bonus sessions", icon: CalendarPlus, forum: false },
+  { href: "/dashboard/community/trophies", label: "Trophies & wins", icon: Trophy, forum: false },
 ] as const;
 
 export function CommunityTab({
@@ -23,6 +25,8 @@ export function CommunityTab({
   replies = 0,
   anyLive = false,
   checkedIntoNext = false,
+  checkReady = false,
+  cooldownUntil = null,
 }: {
   home: CommunityHome;
   earned: number;
@@ -32,6 +36,8 @@ export function CommunityTab({
   replies?: number;
   anyLive?: boolean;
   checkedIntoNext?: boolean;
+  checkReady?: boolean;
+  cooldownUntil?: string | null;
 }) {
   const next = home.next;
   const live = next?.status === "live";
@@ -43,7 +49,7 @@ export function CommunityTab({
       : `Start a new streak on ${home.weekdayLabel ?? "your session day"}`;
 
   return (
-    <div className="space-y-3 font-[family-name:var(--font-community)] text-[#1F1640]">
+    <div className="flex flex-col gap-2 font-[family-name:var(--font-community)] text-[#1F1640]">
       <section className="rounded-[24px] bg-[#5B21B6] p-4 text-white">
         <p className="text-sm text-violet-100">{live ? "Live now" : "Next session"}</p>
         <h2 className="mt-1 font-heading text-2xl font-extrabold">
@@ -64,12 +70,14 @@ export function CommunityTab({
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Link href="/dashboard/community/level" className="rounded-[20px] bg-white p-4">
-          <p className="text-xs text-[#6B5F8A]">Level</p>
-          <p className="mt-1 font-heading text-lg font-extrabold" style={{ color: home.level == null ? undefined : levelInkVar(home.level) }}>
-            {home.level == null ? "Not set" : `Level ${home.level}`}
-          </p>
+      <div className="grid grid-cols-2 content-start gap-2">
+        <div className="rounded-[20px] bg-white p-3">
+          <Link href="/dashboard/community/level">
+            <p className="text-xs text-[#6B5F8A]">Level</p>
+            <p className="mt-1 font-heading text-lg font-extrabold" style={{ color: home.level == null ? undefined : levelInkVar(home.level) }}>
+              {home.level == null ? "Not set" : `Level ${home.level}`}
+            </p>
+          </Link>
           {home.level != null ? (
             <>
               <span className="mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: bandFillVar(bandForLevel(home.level)), color: bandInkVar(bandForLevel(home.level)) }}>
@@ -78,12 +86,30 @@ export function CommunityTab({
               <span className="mt-2 block h-1.5 rounded-full bg-[#F7F5FC]">
                 <span className="block h-1.5 rounded-full" style={{ width: `${percent}%`, background: levelFillVar(home.level) }} />
               </span>
-              <span className="mt-1 block text-[11px] font-semibold text-[#6B5F8A]">
-                {target == null ? "Top level" : `${earned} of ${target} XP to your Level ${home.level + 1} check`}
-              </span>
+              {cooldownUntil ? (
+                <span className="mt-1 block text-[11px] font-semibold text-[#6B5F8A]">
+                  Try again on {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: home.timezone }).format(new Date(cooldownUntil))}
+                </span>
+              ) : checkReady && target != null ? (
+                <>
+                  <span className="mt-1 block text-[11px] font-semibold text-[#6B5F8A]">
+                    Your Level {home.level + 1} check is ready
+                  </span>
+                  <Link
+                    href="/dashboard/community/level/retake"
+                    className="mt-2 inline-flex h-9 items-center rounded-full bg-[#FDE68A] px-3 text-xs font-bold text-[#3B1A8C]"
+                  >
+                    Take the check
+                  </Link>
+                </>
+              ) : (
+                <span className="mt-1 block text-[11px] font-semibold text-[#6B5F8A]">
+                  {target == null ? "Top level" : `${earned} of ${target} XP to your Level ${home.level + 1} check`}
+                </span>
+              )}
             </>
           ) : null}
-        </Link>
+        </div>
         <Link href="/dashboard/community/streak" className="rounded-[20px] bg-white p-4">
           <p className="text-xs text-[#6B5F8A]">Streak</p>
           <p className="mt-1 font-heading text-lg font-extrabold">{streakCopy}</p>
@@ -97,20 +123,19 @@ export function CommunityTab({
         </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 content-start gap-2">
         {TILES.map((tile) => {
+          const Icon = tile.icon;
           const badge = tile.forum ? freshLabel(fresh) : null;
           return (
-            <Link
+            <AppTile
               key={tile.href}
               href={tile.href}
-              className={`relative flex min-h-16 flex-col items-center justify-center gap-1 rounded-[20px] px-2 py-3 text-center ${tile.forum ? "bg-[#5B21B6] text-white" : "bg-white"}`}
-            >
-              {badge ? <span className="absolute right-2 top-2 rounded-full bg-[#FDE68A] px-1.5 py-0.5 text-[10px] font-extrabold text-[#3B1A8C]">{badge}</span> : null}
-              <span className={`flex h-8 w-8 items-center justify-center rounded-xl text-sm ${tile.forum ? "bg-white/15" : "bg-[#F1ECFF]"}`}>{tile.icon}</span>
-              <span className="text-xs font-bold">{tile.label}</span>
-              {tile.forum && replies > 0 ? <span className="text-[10px] font-semibold text-violet-100">{replies} {replies === 1 ? "reply" : "replies"} to you</span> : null}
-            </Link>
+              title={tile.label}
+              subtitle={tile.forum && replies > 0 ? `${replies} ${replies === 1 ? "reply" : "replies"} to you` : undefined}
+              icon={<Icon className="h-4 w-4" />}
+              badge={badge}
+            />
           );
         })}
       </div>

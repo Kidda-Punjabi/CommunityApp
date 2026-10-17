@@ -6,7 +6,7 @@ import type { CheckInSuccess } from "@/lib/community/check-in-types";
 import { levelFillVar } from "@/lib/community/levels";
 import { isNativeApp } from "@/lib/native/platform";
 import { notifyXpEarned } from "@/lib/points/notify-points-earned";
-import { NavLink } from "@/components/ui/nav-link";
+import { AppTile } from "@/components/ui/app-tile";
 import { Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -262,9 +262,7 @@ export function SessionCheckInButtons({
   const checkInClass = anyLive
     ? "inline-flex h-14 items-center rounded-[18px] bg-[#FDE68A] px-4 text-sm font-bold text-[#3B1A8C]"
     : "inline-flex h-14 items-center rounded-[18px] bg-white/20 px-4 text-sm font-bold text-white";
-  const joinClass = anyLive
-    ? "inline-flex h-14 items-center rounded-[18px] bg-white/20 px-4 text-sm font-bold text-white"
-    : "inline-flex h-14 items-center rounded-[18px] bg-[#FDE68A] px-4 text-sm font-bold text-[#3B1A8C]";
+  const joinClass = "inline-flex h-14 items-center rounded-[18px] bg-[#FDE68A] px-4 text-sm font-bold text-[#3B1A8C]";
 
   return (
     <>
@@ -284,7 +282,7 @@ export function SessionCheckInButtons({
           Join
         </a>
       ) : (
-        <span className="inline-flex h-14 items-center rounded-[18px] bg-white/20 px-4 text-sm font-bold">Join</span>
+        <span className="inline-flex h-14 items-center rounded-[18px] bg-[#FDE68A] px-4 text-sm font-bold text-[#3B1A8C]">Join</span>
       )}
       <button type="button" data-testid="check-in-button" className={checkInClass} onClick={() => setOpen(true)}>
         {anyLive ? "Live now" : "Check in"}
@@ -311,25 +309,9 @@ export function CommunityHomeTile({
   showLive: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const className = "flex min-h-16 flex-col items-center justify-center gap-0.5 rounded-[18px] bg-white px-1 py-2 text-center text-[#1F1640]";
-  const body = (
-    <>
-      <span className="text-[#5B21B6]">
-        <Users className="h-4 w-4" />
-      </span>
-      <span className="text-[11px] font-extrabold leading-tight">Community</span>
-      {showLive ? <span className="h-4" aria-hidden /> : <span className="text-[9px] font-semibold text-[#6B5F8A]">{status}</span>}
-    </>
-  );
   return (
-    <div className="relative">
-      {href ? (
-        <NavLink href={href} className={className}>
-          {body}
-        </NavLink>
-      ) : (
-        <div className={className}>{body}</div>
-      )}
+    <div className="relative h-24">
+      <AppTile href={href} title="Community" subtitle={status} icon={<Users className="h-4 w-4" />} />
       {showLive ? (
         <button
           type="button"

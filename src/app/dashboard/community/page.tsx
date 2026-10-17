@@ -51,6 +51,8 @@ async function CommunityHome({ userId }: { userId: string }) {
       earned={view?.done ?? 0}
       target={view && view.level < 9 ? view.goal : null}
       percent={view?.percent ?? 0}
+      checkReady={Boolean(view?.unlocked)}
+      cooldownUntil={view?.cooldownUntil ?? null}
       fresh={unread.fresh}
       replies={unread.replies}
       anyLive={live.anyLive}
