@@ -129,6 +129,10 @@ type ReviewedPlaybackQueryRow = {
   submitted_at: string;
   approved: boolean | null;
   tutor_comment: string | null;
+  tutor_feedback_audio_path: string | null;
+  tutor_feedback_audio_mime: string | null;
+  tutor_feedback_audio_duration_seconds: number | null;
+  reviewed_by: string | null;
 };
 
 async function loadReviewedPlaybacksForActors(
@@ -140,7 +144,7 @@ async function loadReviewedPlaybacksForActors(
   const { data, error } = await supabase
     .from("homework_submissions")
     .select(
-      "id, student_id, kid_profile_id, lesson_id, storage_path, duration_seconds, submission_type, text_answers, submitted_at, approved, tutor_comment"
+      "id, student_id, kid_profile_id, lesson_id, storage_path, duration_seconds, submission_type, text_answers, submitted_at, approved, tutor_comment, tutor_feedback_audio_path, tutor_feedback_audio_mime, tutor_feedback_audio_duration_seconds, reviewed_by"
     )
     .eq("status", "reviewed")
     .eq("is_practice", false)
@@ -171,6 +175,10 @@ async function loadReviewedPlaybacksForActors(
       textAnswers: row.text_answers,
       approved: row.approved,
       tutorComment: row.tutor_comment,
+      tutorFeedbackAudioPath: row.tutor_feedback_audio_path,
+      tutorFeedbackAudioMime: row.tutor_feedback_audio_mime,
+      tutorFeedbackAudioDurationSeconds: row.tutor_feedback_audio_duration_seconds,
+      reviewedBy: row.reviewed_by,
     });
   }
   return [...byKey.values()];

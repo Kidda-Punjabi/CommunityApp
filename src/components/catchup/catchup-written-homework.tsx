@@ -6,6 +6,7 @@ import {
   submitTextHomeworkAction,
 } from "@/app/catchup/catchup-actions";
 import type { HomeworkTextQuestion } from "@/lib/catchup/load-segment-questions";
+import { TutorFeedbackPlayer } from "@/components/homework/tutor-feedback-player";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
 import { hapticSuccess } from "@/lib/native/haptics";
 import { ui } from "@/lib/ui/styles";
@@ -64,6 +65,12 @@ export function CatchupWrittenHomework({
           </p>
           {existingSubmission.tutorComment ? (
             <p className="mt-2 text-sm text-zinc-700">{existingSubmission.tutorComment}</p>
+          ) : null}
+          {existingSubmission.tutorFeedbackAudioPath ? (
+            <TutorFeedbackPlayer
+              storagePath={existingSubmission.tutorFeedbackAudioPath}
+              durationSeconds={existingSubmission.tutorFeedbackAudioDurationSeconds}
+            />
           ) : null}
         </div>
         <button type="button" onClick={onComplete} className={ui.btnPrimary}>

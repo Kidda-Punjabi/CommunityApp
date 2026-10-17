@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { TutorFeedbackPlayer } from "@/components/homework/tutor-feedback-player";
 import { KidLucideIcon } from "@/components/kids/kid-lucide-icon";
 import { PinPad } from "@/components/kids/pin-pad";
 import { kidAgeTierLabel } from "@/lib/kids/constants";
@@ -182,6 +183,12 @@ function KidCourseProgressCard({ progress }: { progress: ParentKidCourseProgress
                 </p>
                 {lesson.tutorComment ? (
                   <p className="mt-1 text-zinc-600">Tutor (homework): {lesson.tutorComment}</p>
+                ) : null}
+                {lesson.tutorFeedbackAudioPath ? (
+                  <TutorFeedbackPlayer
+                    storagePath={lesson.tutorFeedbackAudioPath}
+                    durationSeconds={lesson.tutorFeedbackAudioDurationSeconds}
+                  />
                 ) : null}
                 {lesson.attendanceNote ? (
                   <p className="mt-1 text-zinc-600">Tutor (attendance): {lesson.attendanceNote}</p>

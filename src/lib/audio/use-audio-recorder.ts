@@ -43,13 +43,17 @@ export function recordingExtensionForBlob(blob: Blob): string {
   return extensionForMime(blob.type || getPreferredRecordingMimeType());
 }
 
-export function useAudioRecorder(): UseAudioRecorderResult {
+export function useAudioRecorder(options?: {
+  maxDurationSeconds?: number;
+}): UseAudioRecorderResult {
   const [state, setState] = useState<AudioRecorderState>("idle");
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const maxDurationRef = useRef(options?.maxDurationSeconds);
+  maxDurationRef.current = options?.maxDurationSeconds;
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -151,16 +155,21 @@ export function useAudioRecorder(): UseAudioRecorderResult {
       setDurationSeconds(0);
 
       timerRef.current = setInterval(() => {
-        if (startedAtRef.current) {
-          setDurationSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
-        }
-      }, 500);
+        if (!startedAtRef.current) return;
+        const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+        setDurationSeconds(elapsed);
+        const maxDuration = maxDurationRef.current;
+        if (maxDuration == null || elapsed < maxDuration) return;
+        const active = mediaRecorderRef.current;
+        if (active && active.state === "recording") active.stop();
+        clearTimer();
+      }, 250);
     } catch {
       stopStream();
       setError("Microphone access is required to record homework.");
       setState("idle");
     }
-  }, [discardRecording, stopStream]);
+  }, [clearTimer, discardRecording, stopStream]);
 
   useEffect(() => {
     return () => {

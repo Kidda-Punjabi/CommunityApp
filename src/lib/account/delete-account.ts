@@ -215,10 +215,25 @@ export async function deleteCurrentAccount(
   const extraFiles: Array<{ bucket: string; path: string }> = [];
   const { data: homework } = await admin
     .from("homework_submissions")
-    .select("storage_path")
+    .select("storage_path, tutor_feedback_audio_path")
     .eq("student_id", user.id);
   for (const row of homework ?? []) {
     if (row.storage_path) extraFiles.push({ bucket: "homework-recordings", path: row.storage_path });
+    if (row.tutor_feedback_audio_path) {
+      extraFiles.push({ bucket: "homework-recordings", path: row.tutor_feedback_audio_path });
+    }
+  }
+  if (kidIds.length > 0) {
+    const { data: kidHomework } = await admin
+      .from("homework_submissions")
+      .select("storage_path, tutor_feedback_audio_path")
+      .in("kid_profile_id", kidIds);
+    for (const row of kidHomework ?? []) {
+      if (row.storage_path) extraFiles.push({ bucket: "homework-recordings", path: row.storage_path });
+      if (row.tutor_feedback_audio_path) {
+        extraFiles.push({ bucket: "homework-recordings", path: row.tutor_feedback_audio_path });
+      }
+    }
   }
   const { data: discounts } = await admin
     .from("student_discount_requests")

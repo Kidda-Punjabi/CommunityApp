@@ -78,6 +78,36 @@ export async function getHomeworkPlaybackUrl(
   }
 }
 
+export async function getTutorFeedbackPlaybackUrl(
+  storagePath: string
+): Promise<HomeworkActionResult> {
+  try {
+    if (!storagePath.startsWith("feedback/")) return { error: "Could not load audio." };
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: "You must be signed in." };
+
+    const { data: readable } = await supabase
+      .from("homework_submissions")
+      .select("id")
+      .eq("tutor_feedback_audio_path", storagePath)
+      .maybeSingle();
+    if (!readable) return { error: "Could not load audio." };
+
+    const playbackUrl = await createHomeworkPlaybackUrl(
+      homeworkStorageClient(supabase),
+      storagePath
+    );
+    if (!playbackUrl) return { error: "Could not load audio." };
+    return { playbackUrl };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not load audio." };
+  }
+}
+
 export async function getHomeworkNearLessonWarning(
   lessonId: string
 ): Promise<HomeworkActionResult> {

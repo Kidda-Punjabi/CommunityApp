@@ -1,5 +1,6 @@
 import { TutorHomeworkReview } from "@/components/tutor/tutor-homework-review";
 import { TutorPageHeader } from "@/components/tutor/tutor-page-header";
+import { isMasterAdmin } from "@/lib/auth/admin-access";
 import { loadHomeworkReviewBoard } from "@/lib/tutoring/homework-review-board";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
@@ -10,6 +11,7 @@ export default async function TutorHomeworkPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const board = await loadHomeworkReviewBoard(supabase, user!.id);
+  const viewerIsAdmin = await isMasterAdmin(user!.id, supabase);
 
   return (
     <div className={ui.page}>
@@ -21,6 +23,8 @@ export default async function TutorHomeworkPage() {
         submissions={board.pendingSubmissions}
         packages={board.packages}
         reviewedSubmissions={board.reviewedSubmissions}
+        viewerUserId={user!.id}
+        viewerIsAdmin={viewerIsAdmin}
         fullPage
       />
     </div>

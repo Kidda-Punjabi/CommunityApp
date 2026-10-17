@@ -23,6 +23,8 @@ export type ParentKidLessonProgress = {
   homeworkTiming: "on_time" | "late" | "post_lesson" | "unknown" | null;
   homeworkUiStatus: ParentKidHomeworkUiStatus;
   tutorComment: string | null;
+  tutorFeedbackAudioPath: string | null;
+  tutorFeedbackAudioDurationSeconds: number | null;
   attended: boolean | null;
   attendanceNote: string | null;
   attendanceUiStatus: ParentKidAttendanceUiStatus;
@@ -240,7 +242,9 @@ export async function loadParentKidsCourseProgress(
         lessonIds.length
           ? supabase
               .from("homework_submissions")
-              .select("lesson_id, status, tutor_comment, submitted_at")
+              .select(
+                "lesson_id, status, tutor_comment, tutor_feedback_audio_path, tutor_feedback_audio_duration_seconds, submitted_at"
+              )
               .eq("kid_profile_id", profile.id)
               .eq("is_practice", false)
               .in("lesson_id", lessonIds)
@@ -248,7 +252,9 @@ export async function loadParentKidsCourseProgress(
         lessonIds.length
           ? supabase
               .from("homework_submissions")
-              .select("lesson_id, status, tutor_comment, submitted_at")
+              .select(
+                "lesson_id, status, tutor_comment, tutor_feedback_audio_path, tutor_feedback_audio_duration_seconds, submitted_at"
+              )
               .eq("student_id", parentUserId)
               .is("kid_profile_id", null)
               .eq("is_practice", false)
@@ -335,6 +341,11 @@ export async function loadParentKidsCourseProgress(
             lessonHappened
           ),
           tutorComment,
+          tutorFeedbackAudioPath:
+            (homework?.tutor_feedback_audio_path as string | null | undefined) ?? null,
+          tutorFeedbackAudioDurationSeconds:
+            (homework?.tutor_feedback_audio_duration_seconds as number | null | undefined) ??
+            null,
           attended,
           attendanceNote,
           attendanceUiStatus: attendanceUiStatus(attended),

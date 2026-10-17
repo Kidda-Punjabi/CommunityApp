@@ -11,6 +11,7 @@ import {
   type HomeworkActionResult,
 } from "@/app/dashboard/learn/homework-actions";
 import { HomeworkAudioPlayer } from "@/components/homework/homework-audio-player";
+import { TutorFeedbackPlayer } from "@/components/homework/tutor-feedback-player";
 import { HOMEWORK_RECORDING_UPLOAD_ERROR } from "@/lib/tutoring/homework-recording-upload";
 import { uploadHomeworkRecordingToSignedUrl } from "@/lib/tutoring/upload-homework-recording";
 import {
@@ -220,6 +221,12 @@ function HomeworkRecorderBody({
           </p>
           {localSubmission.tutorComment ? (
             <p className="mt-2 text-sm text-zinc-700">{localSubmission.tutorComment}</p>
+          ) : null}
+          {localSubmission.tutorFeedbackAudioPath ? (
+            <TutorFeedbackPlayer
+              storagePath={localSubmission.tutorFeedbackAudioPath}
+              durationSeconds={localSubmission.tutorFeedbackAudioDurationSeconds}
+            />
           ) : null}
         </div>
         {localSubmission.submissionType === "text" && localSubmission.textAnswers?.length ? (

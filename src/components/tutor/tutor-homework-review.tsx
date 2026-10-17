@@ -2,7 +2,19 @@
 
 import { ChevronDown } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
-import { reviewHomeworkSubmission } from "@/app/dashboard/tutor/homework-actions";
+import {
+  reviewHomeworkSubmission,
+  setTutorFeedbackAudio,
+} from "@/app/dashboard/tutor/homework-actions";
+import { TutorFeedbackPlayer } from "@/components/homework/tutor-feedback-player";
+import {
+  TutorVoiceNoteControl,
+  type PendingVoiceNote,
+} from "@/components/tutor/tutor-voice-note-control";
+import {
+  removeTutorFeedbackAudio,
+  uploadTutorFeedbackAudio,
+} from "@/lib/tutoring/upload-tutor-feedback-audio";
 import {
   HomeworkAudioPlayer,
   type HomeworkPlaybackRate,
@@ -24,6 +36,9 @@ type RosterPill = "awaiting" | "reviewed" | "not_submitted";
 type LockedReview = {
   approved: boolean | null;
   tutorComment: string | null;
+  tutorFeedbackAudioPath: string | null;
+  tutorFeedbackAudioDurationSeconds: number | null;
+  reviewedBy: string | null;
 };
 
 type ReviewListRow = HomeworkBoardPendingRow & {
@@ -37,6 +52,8 @@ type TutorHomeworkReviewProps = {
   packages?: HomeworkReviewPackage[];
   reviewedSubmissions?: ReviewedHomeworkPlayback[];
   fullPage?: boolean;
+  viewerUserId: string;
+  viewerIsAdmin: boolean;
 };
 
 function indexReviewedSubmissions(
@@ -64,6 +81,10 @@ function reviewedPlaybackFromRow(
     textAnswers: row.textAnswers,
     approved: outcome.approved,
     tutorComment: outcome.tutorComment,
+    tutorFeedbackAudioPath: outcome.tutorFeedbackAudioPath,
+    tutorFeedbackAudioMime: null,
+    tutorFeedbackAudioDurationSeconds: outcome.tutorFeedbackAudioDurationSeconds,
+    reviewedBy: outcome.reviewedBy,
   };
 }
 
@@ -146,29 +167,128 @@ function HomeworkReviewCard({
   playbackRate,
   onPlaybackRateChange,
   reviewed = null,
+  viewerUserId,
+  viewerIsAdmin,
 }: {
   submission: PendingHomeworkReviewRow;
   onReviewed?: (submissionId: string, outcome: LockedReview) => void;
   playbackRate: HomeworkPlaybackRate;
   onPlaybackRateChange: (rate: HomeworkPlaybackRate) => void;
   reviewed?: LockedReview | null;
+  viewerUserId: string;
+  viewerIsAdmin: boolean;
 }) {
   const [comment, setComment] = useState("");
+  const [voiceNote, setVoiceNote] = useState<PendingVoiceNote | null>(null);
+  const [savedNote, setSavedNote] = useState<{
+    path: string;
+    durationSeconds: number | null;
+  } | null>(
+    reviewed?.tutorFeedbackAudioPath
+      ? {
+          path: reviewed.tutorFeedbackAudioPath,
+          durationSeconds: reviewed.tutorFeedbackAudioDurationSeconds,
+        }
+      : null
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const locked = reviewed != null;
+  const canEditNote = Boolean(
+    reviewed && (viewerIsAdmin || reviewed.reviewedBy === viewerUserId)
+  );
 
   function submitReview(approved: boolean) {
     if (!onReviewed || locked) return;
     setError(null);
     const tutorComment = comment.trim() || null;
+    const note = voiceNote;
     startTransition(async () => {
-      const result = await reviewHomeworkSubmission(submission.id, approved, tutorComment);
+      let uploadedPath: string | null = null;
+      if (note) {
+        const uploaded = await uploadTutorFeedbackAudio({
+          submissionId: submission.id,
+          blob: note.blob,
+          mimeType: note.mimeType,
+        });
+        if ("error" in uploaded) {
+          setError(uploaded.error);
+          return;
+        }
+        uploadedPath = uploaded.path;
+      }
+      const result = await reviewHomeworkSubmission(
+        submission.id,
+        approved,
+        tutorComment,
+        note && uploadedPath
+          ? {
+              path: uploadedPath,
+              mimeType: note.mimeType,
+              durationSeconds: note.durationSeconds,
+            }
+          : null
+      );
+      if (result.error) {
+        if (uploadedPath) await removeTutorFeedbackAudio(uploadedPath);
+        setError(result.error);
+        return;
+      }
+      if (uploadedPath) {
+        setSavedNote({
+          path: uploadedPath,
+          durationSeconds: note?.durationSeconds ?? null,
+        });
+      }
+      onReviewed(submission.id, {
+        approved,
+        tutorComment,
+        tutorFeedbackAudioPath: uploadedPath,
+        tutorFeedbackAudioDurationSeconds: note?.durationSeconds ?? null,
+        reviewedBy: viewerUserId,
+      });
+    });
+  }
+
+  function saveReplacement() {
+    if (!canEditNote || !voiceNote) return;
+    setError(null);
+    const note = voiceNote;
+    startTransition(async () => {
+      const uploaded = await uploadTutorFeedbackAudio({
+        submissionId: submission.id,
+        blob: note.blob,
+        mimeType: note.mimeType,
+      });
+      if ("error" in uploaded) {
+        setError(uploaded.error);
+        return;
+      }
+      const result = await setTutorFeedbackAudio(submission.id, {
+        path: uploaded.path,
+        mimeType: note.mimeType,
+        durationSeconds: note.durationSeconds,
+      });
+      if (result.error) {
+        await removeTutorFeedbackAudio(uploaded.path);
+        setError(result.error);
+        return;
+      }
+      setSavedNote({ path: uploaded.path, durationSeconds: note.durationSeconds });
+      setVoiceNote(null);
+    });
+  }
+
+  function deleteSavedNote() {
+    if (!canEditNote || !savedNote) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await setTutorFeedbackAudio(submission.id, null);
       if (result.error) {
         setError(result.error);
         return;
       }
-      onReviewed(submission.id, { approved, tutorComment });
+      setSavedNote(null);
     });
   }
 
@@ -229,11 +349,35 @@ function HomeworkReviewCard({
       </div>
 
       {locked && reviewed ? (
-        <div className="mt-4">
-          <p className="text-xs font-medium text-zinc-500">Comment</p>
-          <p className="mt-1.5 whitespace-pre-wrap text-sm text-zinc-800">
-            {reviewed.tutorComment?.trim() || "No comment"}
-          </p>
+        <div className="mt-4 space-y-3">
+          <div>
+            <p className="text-xs font-medium text-zinc-500">Comment</p>
+            <p className="mt-1.5 whitespace-pre-wrap text-sm text-zinc-800">
+              {reviewed.tutorComment?.trim() || "No comment"}
+            </p>
+          </div>
+          {savedNote ? (
+            <TutorFeedbackPlayer
+              storagePath={savedNote.path}
+              durationSeconds={savedNote.durationSeconds}
+            />
+          ) : null}
+          {canEditNote ? (
+            <div className="space-y-2">
+              <TutorVoiceNoteControl disabled={pending} onChange={setVoiceNote} />
+              {voiceNote ? (
+                <button type="button" className={ui.btnPrimary} disabled={pending} onClick={saveReplacement}>
+                  {pending ? "Saving…" : savedNote ? "Replace voice note" : "Save voice note"}
+                </button>
+              ) : null}
+              {savedNote ? (
+                <button type="button" className={ui.btnSecondary} disabled={pending} onClick={deleteSavedNote}>
+                  Delete voice note
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
       ) : (
       <div className="mt-4 space-y-3">
@@ -247,6 +391,8 @@ function HomeworkReviewCard({
             className="mt-1.5 block w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
           />
         </label>
+
+        <TutorVoiceNoteControl disabled={pending} onChange={setVoiceNote} />
 
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
@@ -354,6 +500,9 @@ function studentRosterEntry(
       lockedReview: {
         approved: reviewed.approved,
         tutorComment: reviewed.tutorComment,
+        tutorFeedbackAudioPath: reviewed.tutorFeedbackAudioPath,
+        tutorFeedbackAudioDurationSeconds: reviewed.tutorFeedbackAudioDurationSeconds,
+        reviewedBy: reviewed.reviewedBy,
       },
     };
   }
@@ -366,6 +515,8 @@ export function TutorHomeworkReview({
   packages = [],
   reviewedSubmissions = [],
   fullPage = false,
+  viewerUserId,
+  viewerIsAdmin,
 }: TutorHomeworkReviewProps) {
   const [tab, setTab] = useState<HomeworkReviewTab>("packages");
   const [lockedReviews, setLockedReviews] = useState<
@@ -460,6 +611,8 @@ export function TutorHomeworkReview({
               playbackRate={playbackRate}
               onPlaybackRateChange={changePlaybackRate}
               reviewed={submission.lockedReview ?? null}
+              viewerUserId={viewerUserId}
+              viewerIsAdmin={viewerIsAdmin}
             />
           ))}
         </ul>
@@ -615,6 +768,8 @@ export function TutorHomeworkReview({
                                           playbackRate={playbackRate}
                                           onPlaybackRateChange={changePlaybackRate}
                                           reviewed={lockedReview}
+                                          viewerUserId={viewerUserId}
+                                          viewerIsAdmin={viewerIsAdmin}
                                         />
                                       </ul>
                                     ) : null}

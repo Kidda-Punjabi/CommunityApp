@@ -70,6 +70,10 @@ export type ReviewedHomeworkPlayback = {
   textAnswers: Array<{ question_number: number; answer_text: string }> | null;
   approved: boolean | null;
   tutorComment: string | null;
+  tutorFeedbackAudioPath: string | null;
+  tutorFeedbackAudioMime: string | null;
+  tutorFeedbackAudioDurationSeconds: number | null;
+  reviewedBy: string | null;
 };
 
 export function encodeHomeworkPackageId(ref: HomeworkPackageRef): string {

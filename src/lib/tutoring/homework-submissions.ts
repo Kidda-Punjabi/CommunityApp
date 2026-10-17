@@ -21,6 +21,9 @@ export type HomeworkSubmissionView = {
   status: HomeworkSubmissionStatus;
   approved: boolean | null;
   tutorComment: string | null;
+  tutorFeedbackAudioPath: string | null;
+  tutorFeedbackAudioMime: string | null;
+  tutorFeedbackAudioDurationSeconds: number | null;
   submittedAt: string;
 };
 
@@ -35,6 +38,9 @@ type HomeworkRow = {
   status: HomeworkSubmissionStatus;
   approved: boolean | null;
   tutor_comment: string | null;
+  tutor_feedback_audio_path?: string | null;
+  tutor_feedback_audio_mime?: string | null;
+  tutor_feedback_audio_duration_seconds?: number | null;
   submitted_at: string;
 };
 
@@ -50,6 +56,9 @@ function toView(row: HomeworkRow): HomeworkSubmissionView {
     status: row.status,
     approved: row.approved,
     tutorComment: row.tutor_comment,
+    tutorFeedbackAudioPath: row.tutor_feedback_audio_path ?? null,
+    tutorFeedbackAudioMime: row.tutor_feedback_audio_mime ?? null,
+    tutorFeedbackAudioDurationSeconds: row.tutor_feedback_audio_duration_seconds ?? null,
     submittedAt: row.submitted_at,
   };
 }
@@ -117,7 +126,7 @@ export function homeworkReviewDisplayName(input: {
 }
 
 const HOMEWORK_VIEW_SELECT =
-  "id, lesson_id, storage_path, mime_type, duration_seconds, submission_type, text_answers, status, approved, tutor_comment, submitted_at";
+  "id, lesson_id, storage_path, mime_type, duration_seconds, submission_type, text_answers, status, approved, tutor_comment, tutor_feedback_audio_path, tutor_feedback_audio_mime, tutor_feedback_audio_duration_seconds, submitted_at";
 
 export async function fetchHomeworkSubmissionsForUser(
   supabase: SupabaseClient,

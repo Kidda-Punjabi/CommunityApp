@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import {
+  HOMEWORK_RECORDINGS_BUCKET,
   loadHomeworkCohortRoster as fetchHomeworkCohortRoster,
   type HomeworkCohortRosterStudent,
 } from "@/lib/tutoring/homework-submissions";
@@ -10,7 +11,15 @@ import { syncApprovedHomeworkToNotion } from "@/lib/tutoring/sync-approved-homew
 import { canAccessTutorDashboard, canManageCohort } from "@/lib/tutoring/tutor-access";
 import { revalidatePath } from "next/cache";
 import type { HomeworkActionResult } from "@/app/dashboard/learn/homework-actions";
-import { getHomeworkPlaybackUrl } from "@/app/dashboard/learn/homework-actions";
+import {
+  getHomeworkPlaybackUrl,
+  getTutorFeedbackPlaybackUrl,
+} from "@/app/dashboard/learn/homework-actions";
+import {
+  parseTutorFeedbackAudio,
+  TUTOR_FEEDBACK_MAX_BYTES,
+  type TutorFeedbackAudioMeta,
+} from "@/lib/tutoring/tutor-feedback-audio";
 
 export type TutorHomeworkActionResult = HomeworkActionResult;
 
@@ -34,19 +43,43 @@ function revalidateTutorHomeworkPaths() {
   revalidatePath("/dashboard/learn");
 }
 
+async function feedbackFileReady(
+  supabase: Awaited<ReturnType<typeof requireTutorHomeworkAction>>["supabase"],
+  meta: TutorFeedbackAudioMeta
+): Promise<string | null> {
+  const storage = tryCreateServiceRoleClient();
+  if (!storage.client) return "The voice note could not be saved.";
+  const info = await storage.client.storage.from(HOMEWORK_RECORDINGS_BUCKET).info(meta.path);
+  if (info.error || !info.data) return "The voice note could not be saved.";
+  const size = info.data.size;
+  if (typeof size === "number" && (size <= 0 || size > TUTOR_FEEDBACK_MAX_BYTES)) {
+    await supabase.storage.from(HOMEWORK_RECORDINGS_BUCKET).remove([meta.path]);
+    return "Voice notes can be up to 2 minutes.";
+  }
+  return null;
+}
+
 export async function reviewHomeworkSubmission(
   submissionId: string,
   approved: boolean,
-  tutorComment: string | null
+  tutorComment: string | null,
+  voiceNote: TutorFeedbackAudioMeta | null = null
 ): Promise<TutorHomeworkActionResult> {
   try {
     const { supabase, userId } = await requireTutorHomeworkAction();
+    const feedback = voiceNote ? parseTutorFeedbackAudio(submissionId, voiceNote) : null;
+    if (voiceNote && !feedback) return { error: "The voice note could not be saved." };
 
-    if (!approved && !tutorComment?.trim()) {
-      return { error: "Please add a comment when suggesting improvement." };
+    if (!approved && !tutorComment?.trim() && !feedback) {
+      return { error: "Add a comment or a voice note when suggesting improvement." };
     }
 
-    const { error } = await supabase
+    if (feedback) {
+      const fileError = await feedbackFileReady(supabase, feedback);
+      if (fileError) return { error: fileError };
+    }
+
+    const { data, error } = await supabase
       .from("homework_submissions")
       .update({
         status: "reviewed",
@@ -54,11 +87,30 @@ export async function reviewHomeworkSubmission(
         tutor_comment: tutorComment?.trim() || null,
         reviewed_by: userId,
         reviewed_at: new Date().toISOString(),
+        ...(feedback
+          ? {
+              tutor_feedback_audio_path: feedback.path,
+              tutor_feedback_audio_mime: feedback.mimeType,
+              tutor_feedback_audio_duration_seconds: feedback.durationSeconds,
+            }
+          : {}),
       })
       .eq("id", submissionId)
-      .eq("status", "pending_review");
+      .eq("status", "pending_review")
+      .select("id");
 
-    if (error) return { error: error.message };
+    if (error) {
+      if (feedback) {
+        await supabase.storage.from(HOMEWORK_RECORDINGS_BUCKET).remove([feedback.path]);
+      }
+      return { error: error.message };
+    }
+    if (!data?.length) {
+      if (feedback) {
+        await supabase.storage.from(HOMEWORK_RECORDINGS_BUCKET).remove([feedback.path]);
+      }
+      return { error: "This homework is no longer waiting for review." };
+    }
 
     let notionNote = "";
     if (approved) {
@@ -116,4 +168,62 @@ export async function loadHomeworkCohortRoster(
   }
 }
 
-export { getHomeworkPlaybackUrl };
+export async function setTutorFeedbackAudio(
+  submissionId: string,
+  voiceNote: TutorFeedbackAudioMeta | null
+): Promise<TutorHomeworkActionResult> {
+  try {
+    const { supabase } = await requireTutorHomeworkAction();
+    const feedback = voiceNote ? parseTutorFeedbackAudio(submissionId, voiceNote) : null;
+    if (voiceNote && !feedback) return { error: "The voice note could not be saved." };
+    if (feedback) {
+      const fileError = await feedbackFileReady(supabase, feedback);
+      if (fileError) return { error: fileError };
+    }
+
+    const { data: existing, error: loadError } = await supabase
+      .from("homework_submissions")
+      .select("tutor_feedback_audio_path")
+      .eq("id", submissionId)
+      .eq("status", "reviewed")
+      .maybeSingle();
+    if (loadError) return { error: loadError.message };
+    if (!existing) return { error: "You cannot change this voice note." };
+
+    const previousPath = (existing.tutor_feedback_audio_path as string | null) ?? null;
+    const { data, error } = await supabase
+      .from("homework_submissions")
+      .update({
+        tutor_feedback_audio_path: feedback?.path ?? null,
+        tutor_feedback_audio_mime: feedback?.mimeType ?? null,
+        tutor_feedback_audio_duration_seconds: feedback?.durationSeconds ?? null,
+      })
+      .eq("id", submissionId)
+      .eq("status", "reviewed")
+      .select("id");
+
+    if (error) {
+      if (feedback) {
+        await supabase.storage.from(HOMEWORK_RECORDINGS_BUCKET).remove([feedback.path]);
+      }
+      return { error: error.message };
+    }
+    if (!data?.length) {
+      if (feedback) {
+        await supabase.storage.from(HOMEWORK_RECORDINGS_BUCKET).remove([feedback.path]);
+      }
+      return { error: "You cannot change this voice note." };
+    }
+
+    if (previousPath && previousPath !== feedback?.path) {
+      await supabase.storage.from(HOMEWORK_RECORDINGS_BUCKET).remove([previousPath]);
+    }
+
+    revalidateTutorHomeworkPaths();
+    return { success: feedback ? "Voice note saved." : "Voice note deleted." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "The voice note could not be saved." };
+  }
+}
+
+export { getHomeworkPlaybackUrl, getTutorFeedbackPlaybackUrl };
