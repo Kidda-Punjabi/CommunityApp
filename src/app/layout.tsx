@@ -3,6 +3,7 @@ import { DM_Sans, Geist, Geist_Mono, Poppins } from "next/font/google";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { noteRequest } from "@/lib/perf/context";
+import { installGlobalFetch } from "@/lib/perf/fetch";
 import { persistTrace } from "@/lib/perf/persist";
 import { Suspense } from "react";
 import { AuthRedirectHandler } from "@/components/auth-redirect-handler";
@@ -37,6 +38,7 @@ const dmSans = DM_Sans({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
+  if (process.env.PERF_TRACE === "1") installGlobalFetch();
   const branding = await loadSiteBranding();
 
   return {
@@ -61,6 +63,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  if (process.env.PERF_TRACE === "1") installGlobalFetch();
   const headerList = await headers();
   const nativeApp = isNativeAppRequest(headerList);
   if (process.env.PERF_TRACE === "1") {
