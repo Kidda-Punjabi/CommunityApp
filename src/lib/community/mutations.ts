@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomInt } from "node:crypto";
 import { syncCommunityCalendarGuest } from "@/lib/community/calendar-invite";
-import { makeCheckinCode } from "@/lib/community/checkin-code";
+import { makeCheckinCode, pickUnusedCode } from "@/lib/community/checkin-code";
 import { choosePod, type OpenPod } from "@/lib/community/pods";
 import { currentStreak, type StreakOccurrence } from "@/lib/community/streak";
 import { insertRoutedNotifications } from "@/lib/notifications/insert-notifications";
@@ -138,6 +138,17 @@ async function sessionAudience(admin: SupabaseClient, sessionId: string): Promis
   return [...ids];
 }
 
+async function unusedLiveCode(admin: SupabaseClient): Promise<string> {
+  const { data, error } = await admin
+    .from("community_session_occurrences")
+    .select("checkin_code")
+    .eq("status", "live")
+    .not("checkin_code", "is", null);
+  if (error) throw error;
+  const taken = new Set((data ?? []).map((row) => row.checkin_code as string));
+  return pickUnusedCode(taken, () => makeCheckinCode(() => randomInt(0, 256)));
+}
+
 export async function startCommunitySession(admin: SupabaseClient, actorId: string, occurrenceId: string) {
   const { data: occurrence, error } = await admin
     .from("community_session_occurrences")
@@ -149,16 +160,23 @@ export async function startCommunitySession(admin: SupabaseClient, actorId: stri
   if (occurrence.status === "ended" || occurrence.status === "cancelled") {
     return { error: "This session has already finished." };
   }
-  const code = makeCheckinCode(() => randomInt(0, 256));
-  const { error: updateError } = await admin
-    .from("community_session_occurrences")
-    .update({
-      status: "live",
-      checkin_code: code,
-      started_by: actorId,
-      started_at: new Date().toISOString(),
-    })
-    .eq("id", occurrenceId);
+  let updateError: { code?: string; message: string } | null = null;
+  let code = "";
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    code = await unusedLiveCode(admin);
+    const updated = await admin
+      .from("community_session_occurrences")
+      .update({
+        status: "live",
+        checkin_code: code,
+        started_by: actorId,
+        started_at: new Date().toISOString(),
+      })
+      .eq("id", occurrenceId);
+    updateError = updated.error;
+    if (!updateError) break;
+    if (updateError.code !== "23505") throw updateError;
+  }
   if (updateError) throw updateError;
 
   const session = Array.isArray(occurrence.community_sessions)

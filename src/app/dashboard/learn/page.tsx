@@ -34,7 +34,9 @@ import {
   getCachedAuthSession,
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
+import { memberNeedsLiveCheckIn } from "@/lib/community/check-in-by-code";
 import { xpRoad, xpTargetForLevel } from "@/lib/community/level-progress";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { bandForLevel, bandLabel, levelFillVar } from "@/lib/community/levels";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -254,6 +256,7 @@ export default async function LearnPage() {
   const road = target == null ? null : xpRoad(earned, target);
   const foundationalClass = courseWhen(classCards, "foundational", timeZone);
   const beginnersClass = courseWhen(classCards, "beginners", timeZone);
+  const communityLiveCheckIn = communityLocked ? false : await memberNeedsLiveCheckIn(createServiceRoleClient(), user.id);
 
   return (
     <div className={`${ui.page} !flex !h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] !flex-col !overflow-hidden !py-3`}>
@@ -283,6 +286,7 @@ export default async function LearnPage() {
           communityHref={communityHref}
           communityStatus={communityStatus}
           communityLocked={communityLocked}
+          communityLiveCheckIn={communityLiveCheckIn}
           kids={kidProgressSummaries}
           courses={[
             {

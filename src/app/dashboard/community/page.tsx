@@ -1,4 +1,5 @@
 import { CommunityTab } from "@/components/community/community-tab";
+import { liveCheckInFlags } from "@/lib/community/check-in-by-code";
 import { loadCommunityHome, memberHasCommunity } from "@/lib/community/load-home";
 import { loadLevelView } from "@/lib/community/level-view";
 import { loadForumUnread } from "@/lib/forum/unread";
@@ -43,6 +44,7 @@ async function CommunityHome({ userId }: { userId: string }) {
     loadForumUnread(admin, userId),
   ]);
   if (!home.mainSessionId || home.level == null) redirect("/dashboard/community/welcome");
+  const live = await liveCheckInFlags(admin, userId, home.next?.id ?? null);
   return (
     <CommunityTab
       home={home}
@@ -51,6 +53,8 @@ async function CommunityHome({ userId }: { userId: string }) {
       percent={view?.percent ?? 0}
       fresh={unread.fresh}
       replies={unread.replies}
+      anyLive={live.anyLive}
+      checkedIntoNext={live.checkedIntoNext}
     />
   );
 }

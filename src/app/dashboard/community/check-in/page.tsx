@@ -34,10 +34,12 @@ export default async function CheckInPage({
     <div className={`${ui.page} !py-4`}>
       <CommunityPageHeader title="Check in" />
       <p className="mt-1 text-sm text-zinc-600">{session?.title ?? "Community session"}</p>
-      {row?.status === "live" && occurrence ? (
-        <CheckInForm occurrenceId={occurrence} />
+      {occurrence && row?.status !== "live" ? (
+        <p className="mt-4 text-sm text-zinc-600">Check-in opens when the session is live</p>
       ) : (
-        <p className="mt-4 text-sm text-zinc-600">Check-in opens when the session is live.</p>
+        <div className="mt-4">
+          <CheckInForm occurrenceId={row?.status === "live" ? occurrence : undefined} />
+        </div>
       )}
       <div className="mt-6 flex flex-wrap gap-2">
         {(checkins ?? []).map((checkin) => {

@@ -1,3 +1,4 @@
+import { SessionCheckInButtons } from "@/components/community/check-in-ui";
 import { canJoinSession, daysUntilLabel, formatSessionClock } from "@/lib/community/format";
 import type { CommunityHome } from "@/lib/community/load-home";
 import { bandFillVar, bandForLevel, bandInkVar, bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
@@ -20,6 +21,8 @@ export function CommunityTab({
   percent,
   fresh = 0,
   replies = 0,
+  anyLive = false,
+  checkedIntoNext = false,
 }: {
   home: CommunityHome;
   earned: number;
@@ -27,6 +30,8 @@ export function CommunityTab({
   percent: number;
   fresh?: number;
   replies?: number;
+  anyLive?: boolean;
+  checkedIntoNext?: boolean;
 }) {
   const next = home.next;
   const live = next?.status === "live";
@@ -50,18 +55,12 @@ export function CommunityTab({
             : "We'll show the time here as soon as it's on the calendar."}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {next?.meetUrl && (live || joinReady) ? (
-            <a href={next.meetUrl} target="_blank" rel="noreferrer" className="inline-flex h-14 items-center rounded-[18px] bg-[#FDE68A] px-4 text-sm font-bold text-[#3B1A8C]">
-              Join
-            </a>
-          ) : (
-            <span className="inline-flex h-14 items-center rounded-[18px] bg-white/20 px-4 text-sm font-bold">Join</span>
-          )}
-          {live && next ? (
-            <Link href={`/dashboard/community/check-in?occurrence=${next.id}`} className="inline-flex h-14 items-center rounded-[18px] bg-white px-4 text-sm font-bold text-[#5B21B6]">
-              Check in
-            </Link>
-          ) : null}
+          <SessionCheckInButtons
+            meetUrl={next?.meetUrl ?? null}
+            canJoin={Boolean(next?.meetUrl && (live || joinReady))}
+            anyLive={anyLive}
+            returnToCheckIn={Boolean(live && next && !checkedIntoNext)}
+          />
         </div>
       </section>
 

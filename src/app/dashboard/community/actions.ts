@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { syncCommunityCalendarGuest } from "@/lib/community/calendar-invite";
 import { requireCommunityMember } from "@/lib/community/member-guard";
-import { assignMemberPod, checkInMember, chooseMainSession } from "@/lib/community/mutations";
+import { checkInByCodeForMember, completeOccurrenceCheckIn } from "@/lib/community/check-in-by-code";
+import { assignMemberPod, chooseMainSession } from "@/lib/community/mutations";
 
 export async function pickMainSession(sessionId: string) {
   const started = Date.now();
@@ -59,5 +60,23 @@ export async function placeInPod() {
 export async function submitCheckIn(occurrenceId: string, code: string) {
   const member = await requireCommunityMember();
   if ("error" in member) return { error: member.error };
-  return checkInMember(member.admin, member.userId, occurrenceId, code, false);
+  const result = await completeOccurrenceCheckIn(member.admin, member.userId, occurrenceId, code);
+  if ("ok" in result && result.ok) {
+    revalidatePath("/dashboard/community");
+    revalidatePath("/dashboard/learn");
+    revalidatePath("/dashboard/community/check-in");
+  }
+  return result;
+}
+
+export async function checkInByCode(code: string) {
+  const member = await requireCommunityMember();
+  if ("error" in member) return { error: member.error };
+  const result = await checkInByCodeForMember(member.admin, member.userId, code);
+  if ("ok" in result && result.ok) {
+    revalidatePath("/dashboard/community");
+    revalidatePath("/dashboard/learn");
+    revalidatePath("/dashboard/community/check-in");
+  }
+  return result;
 }

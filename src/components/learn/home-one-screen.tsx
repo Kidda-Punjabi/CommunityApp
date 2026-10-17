@@ -1,9 +1,10 @@
+import { CommunityHomeTile } from "@/components/community/check-in-ui";
 import { RegisterInterestButton } from "@/components/learn/register-interest-button";
 import { NavLink } from "@/components/ui/nav-link";
 import type { AdultClassCard } from "@/lib/learning/load-adult-class-cards";
 import type { ParentKidProgressSummary } from "@/lib/kids/load-kid-progress-summary";
 import { levelFillVar } from "@/lib/community/levels";
-import { Award, Users, Wrench } from "lucide-react";
+import { Award, Wrench } from "lucide-react";
 
 type CourseTile = {
   key: "foundational" | "beginners" | "intermediate" | "advanced";
@@ -40,6 +41,7 @@ export function HomeOneScreen({
   communityHref,
   communityStatus,
   communityLocked,
+  communityLiveCheckIn = false,
   kids,
   timeZone,
 }: {
@@ -47,6 +49,7 @@ export function HomeOneScreen({
   communityHref: string;
   communityStatus: string;
   communityLocked: boolean;
+  communityLiveCheckIn?: boolean;
   kids: ParentKidProgressSummary[];
   timeZone: string;
 }) {
@@ -103,7 +106,11 @@ export function HomeOneScreen({
         })}
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <Shortcut href={communityLocked ? communityHref || undefined : communityHref} title="Community" status={communityStatus} icon={<Users className="h-4 w-4" />} />
+        <CommunityHomeTile
+          href={communityLocked ? communityHref || undefined : communityHref}
+          status={communityStatus}
+          showLive={!communityLocked && communityLiveCheckIn}
+        />
         <Shortcut href="/dashboard/learn/resources" title="Resources" status="Tools & shortcuts" icon={<Wrench className="h-4 w-4" />} />
         <Shortcut href="/dashboard/learn/certificates" title="Certificates" status="Your awards" icon={<Award className="h-4 w-4" />} />
       </div>
