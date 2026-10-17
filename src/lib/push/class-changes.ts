@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendPush } from "@/lib/push/send";
+import { classStartMoved } from "@/lib/push/class-move";
 import { formatLocalDay, formatLocalTime } from "@/lib/push/policy";
 
 export type ClassScheduleChange = {
@@ -67,7 +68,12 @@ export async function notifyClassScheduleChanges(
   for (const change of relevant) {
     for (const recipient of recipients.get(change.sessionId + change.kind) ?? []) {
       const zone = timezones.get(recipient.userId) ?? "Europe/London";
-      if (change.kind === "moved" && change.oldStartsAt && change.newStartsAt) {
+      if (
+        change.kind === "moved" &&
+        change.oldStartsAt &&
+        change.newStartsAt &&
+        classStartMoved(change.oldStartsAt, change.newStartsAt)
+      ) {
         await sendPush({
           userId: recipient.userId,
           kidProfileId: recipient.kidProfileId,

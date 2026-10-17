@@ -14,6 +14,7 @@ import {
   type CarriedSessionFields,
 } from "@/lib/calendar/plan-calendar-event-write";
 import { notifyClassScheduleChanges } from "@/lib/push/class-changes";
+import { classStartMoved } from "@/lib/push/class-move";
 
 const DB_CHUNK_SIZE = 100;
 
@@ -346,7 +347,7 @@ export async function syncTutorGoogleCalendar(
       ...inPlaceUpdates.flatMap((update) => {
         const existing = existingById.get(update.id);
         const nextStart = String(update.payload.starts_at ?? "");
-        if (!existing || !nextStart || existing.starts_at === nextStart) return [];
+        if (!existing || !nextStart || !classStartMoved(existing.starts_at, nextStart)) return [];
         return [
           {
             sessionId: update.id,
