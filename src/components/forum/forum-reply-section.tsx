@@ -8,6 +8,7 @@ import {
 import { ForumItemMenu } from "@/components/forum/forum-item-menu";
 import { ForumLikeButton } from "@/components/forum/forum-like-button";
 import { ForumRulesSheet } from "@/components/forum/forum-rules-sheet";
+import { InlineSpinner } from "@/components/ui/page-spinner";
 import { StaffRoleBadge } from "@/components/forum/staff-role-badge";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import type { ForumReply } from "@/lib/forum/types";
@@ -214,9 +215,11 @@ export function ForumReplyForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        aria-busy={pending || undefined}
+        className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
       >
-        {pending ? "Posting…" : "Post reply"}
+        {pending ? <InlineSpinner /> : null}
+        Post reply
       </button>
       <ForumRulesSheet
         open={rulesOpen}

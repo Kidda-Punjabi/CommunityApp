@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { KidLucideIcon } from "@/components/kids/kid-lucide-icon";
 import { PinPad } from "@/components/kids/pin-pad";
-import { TabPageSkeleton } from "@/components/ui/tab-page-skeleton";
+import { PageSpinner } from "@/components/ui/page-spinner";
 import {
   KID_AGE_TIERS,
   KID_AVATAR_ICONS,
@@ -134,7 +134,7 @@ export function ProfileSwitcher({
   }
 
   if (switchingKidId) {
-    return <TabPageSkeleton rows={5} />;
+    return <PageSpinner />;
   }
 
   const compact = collapsedByDefault;

@@ -1,5 +1,6 @@
 "use client";
 
+import { InlineSpinner } from "@/components/ui/page-spinner";
 import dynamic from "next/dynamic";
 import type { FeedbackContext } from "@/lib/feedback/types";
 import type { PublicFeedbackTarget } from "@/lib/public-forms/feedback-target";
@@ -8,13 +9,13 @@ import type { PublicCohortAudience } from "@/lib/public-forms/options";
 
 const PublicQuizForm = dynamic(
   () => import("@/components/public-forms/public-quiz-form").then((mod) => mod.PublicQuizForm),
-  { loading: () => <p className="text-sm text-zinc-500">Loading…</p> }
+  { loading: () => <div className="flex justify-center py-6"><InlineSpinner /></div> }
 );
 
 const PublicFeedbackForm = dynamic(
   () =>
     import("@/components/public-forms/public-feedback-form").then((mod) => mod.PublicFeedbackForm),
-  { loading: () => <p className="text-sm text-zinc-500">Loading…</p> }
+  { loading: () => <div className="flex justify-center py-6"><InlineSpinner /></div> }
 );
 
 type PublicFormLoaderProps =

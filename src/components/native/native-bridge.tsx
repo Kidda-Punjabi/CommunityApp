@@ -139,7 +139,7 @@ export function NativeBridge() {
           void SplashScreen.hide({ fadeOutDuration: 200 });
         };
         requestAnimationFrame(() => requestAnimationFrame(hideSplash));
-        const splashTimer = window.setTimeout(hideSplash, 3000);
+        const splashTimer = window.setTimeout(hideSplash, 5000);
         cleanups.push(() => window.clearTimeout(splashTimer));
 
         const showHandle = await Keyboard.addListener("keyboardWillShow", () => {

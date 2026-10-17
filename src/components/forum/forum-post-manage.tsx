@@ -7,6 +7,7 @@ import {
   type ForumActionResult,
 } from "@/app/dashboard/community/forum/actions";
 import type { ForumPostDetail } from "@/lib/forum/types";
+import { InlineSpinner } from "@/components/ui/page-spinner";
 import { ui } from "@/lib/ui/styles";
 
 const initial: ForumActionResult = {};
@@ -76,8 +77,9 @@ export function ForumPostManage({ post, viewerUserId, isMasterAdmin }: ForumPost
           </p>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <button type="submit" disabled={pending} className={ui.btnPrimary}>
-            {pending ? "Saving…" : "Save changes"}
+          <button type="submit" disabled={pending} aria-busy={pending || undefined} className={`${ui.btnPrimary} gap-2`}>
+            {pending ? <InlineSpinner /> : null}
+            Save changes
           </button>
           <button
             type="button"

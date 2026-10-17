@@ -1,5 +1,5 @@
-import { TabPageSkeleton } from "@/components/ui/tab-page-skeleton";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
-export default function AdminRescheduleRequestsLoading() {
-  return <TabPageSkeleton rows={6} />;
+export default function Loading() {
+  return <PageSpinner />;
 }

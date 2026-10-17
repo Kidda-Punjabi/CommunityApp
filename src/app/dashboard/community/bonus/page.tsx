@@ -1,6 +1,7 @@
 import { requestSessionSwitch } from "@/app/dashboard/community/actions";
 import { CommunityPageHeader } from "@/components/community/community-page-header";
 import { canJoinSession, formatClockShort, formatWeekdayDate } from "@/lib/community/format";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { loadCommunityHome, memberHasCommunity } from "@/lib/community/load-home";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -72,7 +73,7 @@ function SwitchForm({ sessions }: { sessions: { id: string; title: string }[] })
         {sessions.map((session) => <option key={session.id} value={session.id}>{session.title}</option>)}
       </select>
       <input name="reason" placeholder="Reason, if you want to add one" className="mt-2 h-14 w-full rounded-[18px] border border-[#E7E0F4] px-3 text-[16px]" />
-      <button type="submit" className="mt-3 h-14 w-full rounded-[18px] bg-[#5B21B6] text-sm font-bold text-white">Send request</button>
+      <SubmitButton className="mt-3 h-14 w-full rounded-[18px] bg-[#5B21B6] text-sm font-bold text-white">Send request</SubmitButton>
     </form>
   );
 }

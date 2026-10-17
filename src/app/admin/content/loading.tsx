@@ -1,5 +1,5 @@
-import { TabPageSkeleton } from "@/components/ui/tab-page-skeleton";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
-export default function AdminHomeLoading() {
-  return <TabPageSkeleton showHero rows={4} />;
+export default function Loading() {
+  return <PageSpinner />;
 }

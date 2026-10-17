@@ -1,4 +1,5 @@
 import { CatchupPlayer } from "@/components/catchup/catchup-player";
+import { InlineSpinner } from "@/components/ui/page-spinner";
 import { canAccessCatchupLesson } from "@/lib/catchup/access";
 import { getCourseRequiredTier } from "@/lib/membership/access";
 import {
@@ -127,7 +128,7 @@ export default async function CatchupLessonPage({ params, searchParams }: PagePr
           Admin preview — students only see this when their tutor unlocks the lesson.
         </div>
       ) : null}
-      <Suspense fallback={<p className="text-sm text-zinc-500">Loading player…</p>}>
+      <Suspense fallback={<div className="flex justify-center py-8"><InlineSpinner /></div>}>
         <CatchupPlayer
           lesson={lesson}
           initialSegmentNumber={initialSegment}

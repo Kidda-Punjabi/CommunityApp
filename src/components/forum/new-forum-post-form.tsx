@@ -6,6 +6,7 @@ import {
   type ForumActionResult,
 } from "@/app/dashboard/community/forum/actions";
 import { ForumRulesSheet } from "@/components/forum/forum-rules-sheet";
+import { InlineSpinner } from "@/components/ui/page-spinner";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
@@ -120,8 +121,9 @@ export function NewForumPostForm() {
       )}
 
       <div className="flex flex-wrap gap-3">
-        <button type="submit" disabled={pending} className={ui.btnPrimary}>
-          {pending ? "Publishing…" : "Publish post"}
+        <button type="submit" disabled={pending} aria-busy={pending || undefined} className={`${ui.btnPrimary} gap-2`}>
+          {pending ? <InlineSpinner /> : null}
+          Publish post
         </button>
         <Link href="/dashboard/community/forum" className={ui.btnGhost}>
           Cancel

@@ -6,6 +6,7 @@ import {
   type ForumActionResult,
 } from "@/app/dashboard/community/forum/actions";
 import { ForumRulesSheet } from "@/components/forum/forum-rules-sheet";
+import { InlineSpinner } from "@/components/ui/page-spinner";
 import { ui } from "@/lib/ui/styles";
 
 const initial: ForumActionResult = {};
@@ -48,8 +49,9 @@ export function ForumIntroPostForm() {
         </p>
       ) : null}
 
-      <button type="submit" disabled={pending} className={ui.btnPrimary}>
-        {pending ? "Posting…" : "Post introduction"}
+      <button type="submit" disabled={pending} aria-busy={pending || undefined} className={`${ui.btnPrimary} gap-2`}>
+        {pending ? <InlineSpinner /> : null}
+        Post introduction
       </button>
       <ForumRulesSheet
         open={rulesOpen}

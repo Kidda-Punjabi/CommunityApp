@@ -6,6 +6,7 @@ import {
   type ForumActionResult,
 } from "@/app/dashboard/community/forum/actions";
 import { ForumGuidelinesContent } from "@/components/forum/forum-guidelines-content";
+import { InlineSpinner } from "@/components/ui/page-spinner";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
@@ -41,8 +42,9 @@ export function ForumGuidelinesAgreementForm() {
         )}
 
         <div className="mt-4 flex flex-wrap gap-3">
-          <button type="submit" disabled={pending} className={ui.btnPrimary}>
-            {pending ? "Saving…" : "I agree — continue"}
+          <button type="submit" disabled={pending} aria-busy={pending || undefined} className={`${ui.btnPrimary} gap-2`}>
+            {pending ? <InlineSpinner /> : null}
+            I agree — continue
           </button>
           <Link href="/dashboard/community/forum" className={ui.btnGhost}>
             Back to forum

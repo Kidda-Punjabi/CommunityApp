@@ -1,5 +1,5 @@
-import { TabPageSkeleton } from "@/components/ui/tab-page-skeleton";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
-export default function AdminCurriculumLoading() {
-  return <TabPageSkeleton rows={5} />;
+export default function Loading() {
+  return <PageSpinner />;
 }

@@ -1,4 +1,5 @@
 import { AuthCard } from "@/components/auth-card";
+import { InlineSpinner } from "@/components/ui/page-spinner";
 import { Suspense } from "react";
 import { ResetPasswordForm } from "./reset-password-form";
 
@@ -13,7 +14,7 @@ export default function ResetPasswordPage() {
         href: "/login",
       }}
     >
-      <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
+      <Suspense fallback={<div className="flex justify-center py-4"><InlineSpinner /></div>}>
         <ResetPasswordForm />
       </Suspense>
     </AuthCard>

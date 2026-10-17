@@ -1,6 +1,7 @@
 "use client";
 
 import { submitCheckIn } from "@/app/dashboard/community/actions";
+import { InlineSpinner } from "@/components/ui/page-spinner";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -11,13 +12,16 @@ export function CheckInForm({ occurrenceId }: { occurrenceId: string }) {
   const [pending, setPending] = useState(false);
   const router = useRouter();
   const refs = useRef<Array<HTMLInputElement | null>>([]);
+  const busy = useRef(false);
 
   async function submit(next = digits) {
     const code = next.join("");
-    if (code.length < 4) return;
+    if (code.length < 4 || busy.current) return;
+    busy.current = true;
     setPending(true);
     setError(null);
     const result = await submitCheckIn(occurrenceId, code);
+    busy.current = false;
     setPending(false);
     if ("error" in result && result.error) {
       setError(result.error);
@@ -47,7 +51,8 @@ export function CheckInForm({ occurrenceId }: { occurrenceId: string }) {
             autoCorrect="off"
             maxLength={1}
             aria-label={`Code character ${index + 1}`}
-            className="h-14 w-14 rounded-2xl border border-zinc-200 text-center text-[16px] font-semibold uppercase"
+            disabled={pending}
+            className="h-14 w-14 rounded-2xl border border-zinc-200 text-center text-[16px] font-semibold uppercase disabled:opacity-60"
             onChange={(event) => {
               const value = event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(-1);
               const next = [...digits];
@@ -59,7 +64,7 @@ export function CheckInForm({ occurrenceId }: { occurrenceId: string }) {
           />
         ))}
       </div>
-      {pending ? <p className="mt-4 text-sm text-zinc-500">Checking you in</p> : null}
+      {pending ? <p className="mt-4"><InlineSpinner /></p> : null}
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
       {message ? (
         <div className="mt-6 rounded-3xl bg-white p-4 shadow-[0_4px_24px_-6px_rgba(24,24,27,0.08)]">

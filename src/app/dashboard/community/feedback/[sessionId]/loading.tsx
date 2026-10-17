@@ -1,5 +1,5 @@
-import { TabPageSkeleton } from "@/components/ui/tab-page-skeleton";
+import { PageSpinner } from "@/components/ui/page-spinner";
 
-export default function CommunityClassFeedbackLoading() {
-  return <TabPageSkeleton rows={3} />;
+export default function Loading() {
+  return <PageSpinner />;
 }

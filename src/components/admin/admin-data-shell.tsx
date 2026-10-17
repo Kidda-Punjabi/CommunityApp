@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminDataProvider } from "@/app/admin/content/admin-data-provider";
+import { PendingOverlay } from "@/components/navigation/navigation-pending";
 import { AdminWidthContainer } from "@/components/admin/admin-width-container";
 import type { AdminDataSlice } from "@/lib/admin/merge-admin-data-slice";
 import type { AdminData } from "@/app/admin/content/types";
@@ -28,7 +29,10 @@ export function AdminDataShell({
           ui.navClearance
         )}
       >
-        {children}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {children}
+          <PendingOverlay />
+        </div>
       </AdminWidthContainer>
     </AdminDataProvider>
   );

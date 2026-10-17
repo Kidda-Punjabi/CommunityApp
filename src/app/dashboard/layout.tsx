@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { BottomNav } from "@/components/bottom-nav";
+import { PendingOverlay } from "@/components/navigation/navigation-pending";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { KidSessionProvider } from "@/components/kids/kid-session-provider";
 import { KidsShellNav } from "@/components/kids/kids-shell-nav";
@@ -156,6 +157,7 @@ export default async function DashboardLayout({
                     }
                   >
                     {children}
+                    <PendingOverlay />
                   </div>
                   {kidsShellActive && kid ? (
                     <KidsShellNav ageTier={kid.age_tier} />
