@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { syncCommunityCalendarGuest } from "@/lib/community/calendar-invite";
 import { requireCommunityMember } from "@/lib/community/member-guard";
 import { assignMemberPod, checkInMember, chooseMainSession } from "@/lib/community/mutations";
 
@@ -8,10 +10,19 @@ export async function pickMainSession(sessionId: string) {
   const started = Date.now();
   const member = await requireCommunityMember();
   if ("error" in member) return { error: member.error };
-  const result = await chooseMainSession(member.admin, member.userId, sessionId);
+  const result = await chooseMainSession(member.admin, member.userId, sessionId, { invite: "later" });
+  if ("error" in result && result.error) return result;
+  if (result.changed) {
+    const admin = member.admin;
+    const userId = member.userId;
+    const previous = result.previous;
+    after(async () => {
+      await syncCommunityCalendarGuest(admin, userId, previous, sessionId);
+    });
+  }
   revalidatePath("/dashboard/community");
   console.info(`[community] pickMainSession action ${Date.now() - started}ms`);
-  return result;
+  return { ok: true as const, calendarInvite: !result.changed };
 }
 
 export async function requestSessionSwitch(sessionId: string, reason: string) {

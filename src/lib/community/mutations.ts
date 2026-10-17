@@ -9,7 +9,12 @@ import { insertRoutedNotifications } from "@/lib/notifications/insert-notificati
 import type { CommunityBand } from "@/lib/community/constants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function chooseMainSession(admin: SupabaseClient, userId: string, sessionId: string) {
+export async function chooseMainSession(
+  admin: SupabaseClient,
+  userId: string,
+  sessionId: string,
+  options?: { invite?: "now" | "later" }
+) {
   const started = Date.now();
   const [{ data: session, error }, { data: existing, error: existingError }] = await Promise.all([
     admin.from("community_sessions").select("id").eq("id", sessionId).eq("is_active", true).maybeSingle(),
@@ -19,6 +24,7 @@ export async function chooseMainSession(admin: SupabaseClient, userId: string, s
   if (existingError) throw existingError;
   if (!session) return { error: "That session is not available." };
   const previous = (existing?.main_session_id as string | null) ?? null;
+  console.info(`[community] saveMainSession ${Date.now() - started}ms`);
   if (existing) {
     const { error: updateError } = await admin
       .from("community_memberships_meta")
@@ -32,11 +38,13 @@ export async function chooseMainSession(admin: SupabaseClient, userId: string, s
     });
     if (insertError) throw insertError;
   }
-  const invite = previous === sessionId
-    ? { ok: true }
-    : await syncCommunityCalendarGuest(admin, userId, previous, sessionId);
+  const changed = previous !== sessionId;
+  if (!changed || options?.invite === "later") {
+    return { ok: true as const, calendarInvite: !changed, changed, previous };
+  }
+  const invite = await syncCommunityCalendarGuest(admin, userId, previous, sessionId);
   console.info(`[community] pickMainSession ${Date.now() - started}ms invite=${invite.ok}`);
-  return { ok: true as const, calendarInvite: invite.ok };
+  return { ok: true as const, calendarInvite: invite.ok, changed, previous };
 }
 
 export async function assignMemberPod(admin: SupabaseClient, userId: string) {
