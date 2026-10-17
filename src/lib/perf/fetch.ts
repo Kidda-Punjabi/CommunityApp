@@ -1,6 +1,6 @@
 import "server-only";
 
-import { resolveTrace } from "@/lib/perf/context";
+import { resolveTraceSync } from "@/lib/perf/context";
 import { contentRangeRows, describeCall } from "@/lib/perf/summarize";
 import type { PerfSpan, PerfTrace } from "@/lib/perf/types";
 
@@ -28,8 +28,8 @@ function rememberRows(trace: PerfTrace, span: PerfSpan, response: Response) {
   trace.pending.push(pending);
 }
 
-export async function tracedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const trace = await resolveTrace();
+export function tracedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const trace = resolveTraceSync();
   const requestUrl = input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input);
   const method = init?.method || (input instanceof Request ? input.method : "GET");
   let target: ReturnType<typeof describeCall> = null;

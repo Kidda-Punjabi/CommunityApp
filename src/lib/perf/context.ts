@@ -7,6 +7,33 @@ import { createTrace, perfEnabled, type PerfTrace } from "@/lib/perf/types";
 export const perfAls = new AsyncLocalStorage<PerfTrace>();
 
 const tracesById = new Map<string, PerfTrace>();
+const boundHeaders = new WeakMap<PerfTrace, { get(name: string): string }>();
+
+export function bindTraceRequest(trace: PerfTrace, read: { get(name: string): string }) {
+  boundHeaders.set(trace, read);
+}
+
+function adoptBoundHeaders(trace: PerfTrace) {
+  const read = boundHeaders.get(trace);
+  if (!read) return;
+  const rawMiddleware = read.get("x-perf-mw-ms");
+  if (rawMiddleware) {
+    const middlewareMs = Number(rawMiddleware);
+    if (Number.isFinite(middlewareMs) && middlewareMs >= 0) {
+      trace.sawMiddleware = true;
+      trace.middlewareMs = Math.round(middlewareMs);
+    }
+  }
+  const id = read.get("x-perf-id");
+  if (id) {
+    trace.id = id;
+    rememberTrace(id, trace);
+  }
+  const path = read.get("x-pathname");
+  if (path) trace.route = path;
+  const persona = read.get("x-perf-persona");
+  if (persona) trace.persona = persona.slice(0, 40);
+}
 
 const requestFallback = cache(() => createTrace());
 const pinned = cache(() => ({ trace: null as PerfTrace | null }));
@@ -61,55 +88,38 @@ export function activeTrace(): PerfTrace | null {
   }
 }
 
-let lookingUpHeaders = 0;
-
-export async function resolveTrace(): Promise<PerfTrace | null> {
+export function resolveTraceSync(): PerfTrace | null {
   if (!perfEnabled()) return null;
-  const als = perfAls.getStore() ?? null;
-  if (lookingUpHeaders > 0) return als;
+  const als = perfAls.getStore();
+  if (als) {
+    adoptBoundHeaders(als);
+    if (als.id) {
+      const existing = tracesById.get(als.id);
+      if (existing && existing !== als) return existing;
+    }
+    return als;
+  }
   try {
     const slot = pinned();
     if (slot.trace) return slot.trace;
-    lookingUpHeaders += 1;
-    let headerList: Headers;
-    try {
-      const { headers } = await import("next/headers");
-      headerList = await headers();
-    } finally {
-      lookingUpHeaders -= 1;
-    }
-    const id = headerList.get("x-perf-id") || "";
-    let trace = (id ? tracesById.get(id) : undefined) ?? als ?? undefined;
-    if (!trace) trace = requestFallback();
-    if (id) {
-      trace.id = id;
-      rememberTrace(id, trace);
-    }
-    applyRequestHeaders(trace, headerList);
+    const trace = requestFallback();
     slot.trace = trace;
     return trace;
   } catch {
-    if (als) return als;
-    try {
-      return requestFallback();
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 
 export function noteRequest(headerList: Headers): PerfTrace | null {
   if (!perfEnabled()) return null;
   const id = headerList.get("x-perf-id") || "";
-  let trace: PerfTrace | undefined = id ? tracesById.get(id) : undefined;
-  if (!trace) {
-    trace = activeTrace() ?? undefined;
-    if (trace && id) {
-      trace.id = id;
-      rememberTrace(id, trace);
-    }
-  }
+  const shared = id ? tracesById.get(id) : undefined;
+  const trace = shared ?? resolveTraceSync();
   if (!trace) return null;
+  if (id) {
+    trace.id = id;
+    rememberTrace(id, trace);
+  }
   try {
     pinned().trace = trace;
   } catch {

@@ -1,4 +1,4 @@
-import { perfAls, rememberTrace, traceForId } from "@/lib/perf/context";
+import { bindTraceRequest, perfAls, rememberTrace, traceForId } from "@/lib/perf/context";
 import { installGlobalFetch } from "@/lib/perf/fetch";
 import { persistTrace, serverTimingHeader, summarizeTrace } from "@/lib/perf/persist";
 import { createTrace, type PerfTrace } from "@/lib/perf/types";
@@ -53,6 +53,7 @@ export function installPerfTracing() {
     const res = args[1] as ServerResponse | undefined;
     if (!req || !res) return originalEmit.apply(this, [event, ...args] as never);
     const trace = createTrace();
+    bindTraceRequest(trace, { get: (name) => headerValue(req, name) });
     trace.id = headerValue(req, "x-perf-id");
     if (trace.id) rememberTrace(trace.id, trace);
     attach(req, res, trace);
