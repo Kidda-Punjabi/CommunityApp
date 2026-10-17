@@ -26,10 +26,12 @@ export default async function WelcomeDonePage() {
     { userId: user.id, name: "You", level: home.level },
     ...home.podmates.filter((mate) => mate.userId !== user.id),
   ];
-  if (self) mates[0] = { userId: user.id, name: "You", level: home.level };
+  const level = home.level;
+  if (level == null) redirect("/dashboard/community/welcome/levels");
+  if (self) mates[0] = { userId: user.id, name: "You", level };
   return (
     <Celebration
-      level={home.level}
+      level={level}
       podName={home.pod?.name ?? "Your pod"}
       mates={mates}
       when={home.next ? `${formatWeekdayDate(home.next.startsAt, home.timezone)} · Week ${home.next.weekNumber}${home.next.topic ? ` · ${home.next.topic}` : ""}` : "Your first session is on the way"}
