@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Geist, Geist_Mono, Poppins } from "next/font/google";
 import { headers } from "next/headers";
+import { after } from "next/server";
+import { noteRequest } from "@/lib/perf/context";
+import { persistTrace } from "@/lib/perf/persist";
 import { Suspense } from "react";
 import { AuthRedirectHandler } from "@/components/auth-redirect-handler";
 import { NavigationPendingProvider } from "@/components/navigation/navigation-pending";
@@ -58,7 +61,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const nativeApp = isNativeAppRequest(await headers());
+  const headerList = await headers();
+  const nativeApp = isNativeAppRequest(headerList);
+  if (process.env.PERF_TRACE === "1") {
+    const trace = noteRequest(headerList);
+    if (trace) after(() => persistTrace(trace));
+  }
 
   return (
     <html

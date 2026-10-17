@@ -43,10 +43,25 @@ function redirectTo(request: NextRequest, pathname: string, issued: { count: num
 export async function updateSession(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", request.nextUrl.pathname);
+  const tracePerf = process.env.PERF_TRACE === "1";
 
   let supabaseResponse = NextResponse.next({
     request: { headers: requestHeaders },
   });
+  const pendingCookies: {
+    name: string;
+    value: string;
+    options?: {
+      domain?: string;
+      expires?: Date;
+      httpOnly?: boolean;
+      maxAge?: number;
+      path?: string;
+      sameSite?: boolean | "lax" | "strict" | "none";
+      secure?: boolean;
+      partitioned?: boolean;
+    };
+  }[] = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,6 +75,10 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
+          if (tracePerf) {
+            pendingCookies.splice(0, pendingCookies.length, ...cookiesToSet);
+            return;
+          }
           supabaseResponse = NextResponse.next({
             request: { headers: requestHeaders },
           });
@@ -71,9 +90,25 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  const authStarted = tracePerf ? performance.now() : 0;
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (tracePerf) {
+    const authMs = Math.max(0, Math.round(performance.now() - authStarted));
+    requestHeaders.set("x-perf-mw-ms", String(authMs));
+    requestHeaders.set("x-perf-method", request.method);
+    if (!requestHeaders.get("x-perf-id")) requestHeaders.set("x-perf-id", crypto.randomUUID());
+    // One next() after getUser(), so the timing headers are forwarded with
+    // x-pathname. Cookie options from getUser() are applied onto that response.
+    supabaseResponse = NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+    for (const cookie of pendingCookies) {
+      supabaseResponse.cookies.set(cookie.name, cookie.value, cookie.options);
+    }
+    supabaseResponse.headers.set("Server-Timing", `mw;dur=${authMs}`);
+  }
 
   const nativeApp = isNativeAppRequest(request.headers);
   const referralCode = nativeApp

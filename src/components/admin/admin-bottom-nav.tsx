@@ -64,7 +64,8 @@ const navItems: NavItem[] = [
       pathname === "/admin" ||
       pathname === "/admin/content" ||
       pathname.startsWith("/admin/issue-reports") ||
-      pathname.startsWith("/admin/recordings"),
+      pathname.startsWith("/admin/recordings") ||
+      pathname.startsWith("/admin/performance"),
   },
   {
     href: "/admin/cohorts-hub",
