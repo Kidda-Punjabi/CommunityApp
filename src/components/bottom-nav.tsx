@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { useTabNav } from "@/components/navigation/tab-nav-provider";
 import { usesKidsShell } from "@/lib/kids/constants";
 import { tabIdFromHref } from "@/lib/navigation/tab-nav";
+import { loadNavForumUnread } from "@/app/dashboard/shell-actions";
+import { useEffect, useState } from "react";
 
 type NavItem = {
   href: string;
@@ -146,6 +148,19 @@ export function BottomNav({ forumUnread = 0 }: { forumUnread?: number }) {
   const pathname = usePathname();
   const { activeTab, setActiveTab } = useTabNav();
   const { activeKidProfile } = useKidSession();
+  const [unread, setUnread] = useState(forumUnread);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadNavForumUnread()
+      .then((count) => {
+        if (!cancelled) setUnread(count);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (pathname.startsWith("/dashboard/tutor")) {
     return null;
@@ -190,8 +205,8 @@ export function BottomNav({ forumUnread = 0 }: { forumUnread?: number }) {
             >
               <span className="relative flex h-8 w-8 items-center justify-center">
                 <NavIcon href={item.href} active={active} />
-                {item.href === "/dashboard/community" && forumUnread > 0 ? (
-                  <span className="absolute right-0 top-0 h-2 w-2 rounded-full bg-[#7C3AED]" aria-label={`${forumUnread} new in the forum`} />
+                {item.href === "/dashboard/community" && unread > 0 ? (
+                  <span className="absolute right-0 top-0 h-2 w-2 rounded-full bg-[#7C3AED]" aria-label={`${unread} new in the forum`} />
                 ) : null}
               </span>
               <span

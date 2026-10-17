@@ -86,6 +86,25 @@ export function AudioManagerProvider({
   );
 
   useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/profile/sound-settings")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { soundEnabled?: boolean; soundVolume?: number } | null) => {
+        if (cancelled || !body || typeof body.soundEnabled !== "boolean") return;
+        const next = {
+          soundEnabled: body.soundEnabled,
+          soundVolume: typeof body.soundVolume === "number" ? body.soundVolume : settingsRef.current.soundVolume,
+        };
+        setSettings(next);
+        dispatchSoundSettingsChanged(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     function handleSettingsChanged(event: Event) {
       const detail = (event as CustomEvent<SoundSettings>).detail;
       if (!detail) return;

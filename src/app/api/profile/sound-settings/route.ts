@@ -1,6 +1,25 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+export async function GET() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+  const { data } = await supabase
+    .from("profiles")
+    .select("sound_enabled, sound_volume")
+    .eq("id", user.id)
+    .maybeSingle();
+  return NextResponse.json({
+    soundEnabled: data?.sound_enabled ?? true,
+    soundVolume: typeof data?.sound_volume === "number" ? data.sound_volume : 0.7,
+  });
+}
+
 export async function PATCH(request: Request) {
   const supabase = await createClient();
   const {

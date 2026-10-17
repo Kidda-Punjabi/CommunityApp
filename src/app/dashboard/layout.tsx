@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { Suspense } from "react";
 import { BottomNav } from "@/components/bottom-nav";
 import { PendingOverlay } from "@/components/navigation/navigation-pending";
-import { loadForumUnread } from "@/lib/forum/unread";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { KidSessionProvider } from "@/components/kids/kid-session-provider";
 import { KidsShellNav } from "@/components/kids/kids-shell-nav";
@@ -20,15 +20,21 @@ import {
   getCachedCourseAccess,
   getCachedOnboardingProfile,
 } from "@/lib/supabase/cached-session";
-import { loadPendingCourseResourceTours } from "@/app/dashboard/tours/actions";
 import { AudioManagerProvider } from "@/lib/audio/audio-manager";
-import { loadSoundSettings } from "@/lib/audio/load-sound-settings";
 import { loadParentEntryFacts } from "@/lib/kids/load-parent-entry";
 import { decideParentEntry } from "@/lib/kids/parent-entry";
 import { loadKidSession } from "@/lib/kids/session";
 import { isKidProfilePickerPath, KID_PROFILE_PICKER_PATH, usesKidsShell } from "@/lib/kids/constants";
 import { planRedirect } from "@/lib/navigation/redirect-guard";
 import { ui } from "@/lib/ui/styles";
+
+async function ViewAsSlot() {
+  const session = await getCachedAuthSession();
+  if (!session) return null;
+  const access = await getCachedCourseAccess(session.supabase, session.user);
+  if (!access.viewAs?.active) return null;
+  return <ViewAsBanner label={access.viewAs.label} />;
+}
 
 function redirectIfMoved(currentPath: string, destination: string, issued: { count: number }) {
   const next = planRedirect({
@@ -53,60 +59,46 @@ export default async function DashboardLayout({
   }
 
   const { supabase, user } = session;
-  const kidSession = await loadKidSession(user.id);
-  const [access, onboarding, soundSettings, pendingCourseTours] =
-    await Promise.all([
-      getCachedCourseAccess(supabase, user),
-      getCachedOnboardingProfile(supabase, user.id),
-      loadSoundSettings(supabase, user.id),
-      loadPendingCourseResourceTours(user.id),
-    ]);
-
-  let forumUnread = 0;
-  try {
-    forumUnread = (await loadForumUnread(supabase, user.id)).fresh;
-  } catch (error) {
-    console.error("Forum unread count failed:", error instanceof Error ? error.message : error);
-  }
+  const [kidSession, onboarding, headerList] = await Promise.all([
+    loadKidSession(user.id),
+    getCachedOnboardingProfile(supabase, user.id),
+    headers(),
+  ]);
 
   const kid = kidSession.activeKidProfile;
   const kidsShellActive = Boolean(kid && usesKidsShell(kid.age_tier));
-  const headerList = await headers();
   const pathname = headerList.get("x-pathname") ?? "";
   const isPickerScreen = isKidProfilePickerPath(pathname);
   const isWhoIsLearningFlow =
     isPickerScreen || pathname.startsWith("/dashboard/profile/kids/");
   const tutorShell = pathname.startsWith("/dashboard/tutor");
   const redirects = { count: 0 };
-  if (
+  const mayAskWhoIsLearning =
     !tutorShell &&
-    !kid &&
     onboarding.hasSeenOnboarding &&
     kidSession.hasKidProfiles &&
     !kidSession.pickedWhoThisSession &&
-    !access.viewAs?.active &&
-    !isWhoIsLearningFlow
-  ) {
-    const facts = await loadParentEntryFacts(supabase, user.id);
-    const entry = decideParentEntry({
-      kidCount: facts.kidCount,
-      hasOwnAdultCourse: facts.hasOwnAdultCourse,
-      pickedWhoThisSession: false,
-      activeKidProfileId: null,
-      viewAsActive: false,
-    });
-    if (entry === "enter-kid") redirectIfMoved(pathname, "/api/kids/enter-default", redirects);
-    if (entry === "picker") redirectIfMoved(pathname, KID_PROFILE_PICKER_PATH, redirects);
+    !isWhoIsLearningFlow;
+  let viewAsActive = false;
+
+  if (mayAskWhoIsLearning) {
+    const access = await getCachedCourseAccess(supabase, user);
+    viewAsActive = Boolean(access.viewAs?.active);
+    if (!viewAsActive && !kid) {
+      const facts = await loadParentEntryFacts(supabase, user.id);
+      const entry = decideParentEntry({
+        kidCount: facts.kidCount,
+        hasOwnAdultCourse: facts.hasOwnAdultCourse,
+        pickedWhoThisSession: false,
+        activeKidProfileId: null,
+        viewAsActive: false,
+      });
+      if (entry === "enter-kid") redirectIfMoved(pathname, "/api/kids/enter-default", redirects);
+      if (entry === "picker") redirectIfMoved(pathname, KID_PROFILE_PICKER_PATH, redirects);
+    }
   }
 
-  const shouldPickWhoIsLearning =
-    !tutorShell &&
-    onboarding.hasSeenOnboarding &&
-    kidSession.hasKidProfiles &&
-    kidSession.hasPin &&
-    !kidSession.pickedWhoThisSession &&
-    !isWhoIsLearningFlow &&
-    !access.viewAs?.active;
+  const shouldPickWhoIsLearning = mayAskWhoIsLearning && kidSession.hasPin && !viewAsActive;
 
   if (shouldPickWhoIsLearning) {
     redirectIfMoved(pathname, KID_PROFILE_PICKER_PATH, redirects);
@@ -127,7 +119,7 @@ export default async function DashboardLayout({
       <TourProvider
         hasSeenOnboarding={onboarding.hasSeenOnboarding}
         hasSeenAppTour={onboarding.hasSeenAppTour}
-        pendingCourseTours={pendingCourseTours}
+        pendingCourseTours={[]}
         kidSessionActive={Boolean(kid)}
       >
         <KidSessionProvider
@@ -137,7 +129,7 @@ export default async function DashboardLayout({
           hasKidProfiles={kidSession.hasKidProfiles}
           parentInitial={parentInitial}
         >
-          <AudioManagerProvider initialSettings={soundSettings}>
+          <AudioManagerProvider>
             <PointsToastProvider />
             <TabNavProvider>
               <KidsShellRouteGuard />
@@ -154,7 +146,9 @@ export default async function DashboardLayout({
                   <ActivityDateSync />
                   <PushPermissionPrompt />
                   <LastPlayedGameTracker />
-                  {access.viewAs?.active && <ViewAsBanner label={access.viewAs.label} />}
+                  <Suspense fallback={null}>
+                    <ViewAsSlot />
+                  </Suspense>
                   <div
                     className={
                       kidsShellActive
@@ -170,7 +164,7 @@ export default async function DashboardLayout({
                   {kidsShellActive && kid ? (
                     <KidsShellNav ageTier={kid.age_tier} />
                   ) : (
-                    <BottomNav forumUnread={forumUnread} />
+                    <BottomNav />
                   )}
                 </div>
               </PullToRefresh>

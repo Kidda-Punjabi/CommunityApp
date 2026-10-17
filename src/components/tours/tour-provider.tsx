@@ -13,6 +13,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   markAppTourSeen,
   markCourseResourceTourSeen,
+  loadPendingCourseResourceTours,
   loadPreviewCourseResourceTours,
 } from "@/app/dashboard/tours/actions";
 import {
@@ -139,6 +140,23 @@ export function TourProvider({
   const forcedNavCount = useRef(0);
   const pendingCoursesRef = useRef(pendingCourseTours);
   pendingCoursesRef.current = pendingCourseTours;
+  const [toursReady, setToursReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadPendingCourseResourceTours("")
+      .then((targets) => {
+        if (cancelled) return;
+        pendingCoursesRef.current = targets;
+        setToursReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setToursReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [previewNotice, setPreviewNotice] = useState<string | null>(null);
 
   const ensureLearnHub = useCallback(async (): Promise<boolean> => {
@@ -330,7 +348,7 @@ export function TourProvider({
 
   // Real triggers on load: Part 1 (if due) then Part 2.
   useEffect(() => {
-    if (bootstrappedRef.current || kidSessionActive) return;
+    if (bootstrappedRef.current || kidSessionActive || !toursReady) return;
     if (!hasSeenOnboarding) return;
     if (pathname.startsWith("/dashboard/placement")) return;
     // Let the resume effect own Learn when a stored queue exists.
@@ -361,6 +379,7 @@ export function TourProvider({
   }, [
     hasSeenOnboarding,
     hasSeenAppTour,
+    toursReady,
     kidSessionActive,
     pathname,
     runSequencedTours,

@@ -30,6 +30,13 @@ export async function loadPendingCourseResourceTours(
   userId: string
 ): Promise<CourseTourTarget[]> {
   const supabase = await createClient();
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id ?? "";
+  }
+  if (!userId) return [];
 
   const [{ data: accessRows }, { data: seenRows }, { data: courses }] =
     await Promise.all([
