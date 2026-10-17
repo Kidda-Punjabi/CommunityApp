@@ -6,6 +6,7 @@ import { NotificationBell } from "@/components/notifications/notification-bell";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import type { KidAvatarIcon } from "@/lib/kids/constants";
 import type { ProfileNameFields } from "@/lib/profile/display-name";
+import { levelFillVar } from "@/lib/community/levels";
 import { cn, ui } from "@/lib/ui/styles";
 
 type HomeGreetingHeaderProps = {
@@ -17,6 +18,7 @@ type HomeGreetingHeaderProps = {
   unreadNotificationCount: number;
   weeklyPoints: number;
   profileHref?: string;
+  className?: string;
 };
 
 export function HomeGreetingHeader({
@@ -28,9 +30,10 @@ export function HomeGreetingHeader({
   unreadNotificationCount,
   weeklyPoints,
   profileHref = "/dashboard/profile",
+  className,
 }: HomeGreetingHeaderProps) {
   return (
-    <header className="mb-4">
+    <header className={className ?? "mb-4"}>
       <div className="flex items-start gap-4">
         <Link href={profileHref} className="shrink-0" aria-label="Profile">
           {avatarInitial ? (
@@ -52,7 +55,7 @@ export function HomeGreetingHeader({
               <KidLucideIcon name={kidAvatarIcon} className="h-8 w-8" />
             </span>
           ) : (
-            <UserAvatar profile={profile} level={learnerLevel} size="md" />
+            <UserAvatar profile={profile} level={learnerLevel} levelColor={learnerLevel == null ? null : levelFillVar(learnerLevel)} size="md" />
           )}
         </Link>
         <div className="min-w-0 flex-1">

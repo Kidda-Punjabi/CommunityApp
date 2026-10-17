@@ -1,11 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  LEVEL_TEST_PASS_PCT,
-  type LevelTestQuestion,
-} from "@/lib/progression/level-tests";
+import { type LevelTestQuestion } from "@/lib/progression/level-tests";
 import { parseLevelTestQuestion } from "@/lib/progression/parse-level-test-question";
 import { xpRemainingForTest } from "@/lib/progression/xp-thresholds";
-import { getTierByNumber } from "@/lib/progression/tiers";
 
 export type LevelTestAttemptSummary = {
   fromLevel: number;
@@ -103,7 +99,7 @@ export async function recordLevelTestAttempt(
     passed: boolean;
     correct_count?: number;
     total_count?: number;
-    learner_level: number | null;
+    kidda_level: number | null;
   };
 
   return {
@@ -112,7 +108,7 @@ export async function recordLevelTestAttempt(
     passed: result.passed,
     correctCount: result.correct_count ?? 0,
     totalCount: result.total_count ?? options.answers.length,
-    learnerLevel: result.learner_level,
+    learnerLevel: result.kidda_level,
   };
 }
 
@@ -160,31 +156,13 @@ export function whatsNextGuidance(options: {
     };
   }
 
-  if (options.testUnlocked) {
-    if (options.latestAttempt && !options.latestAttempt.passed) {
-      return {
-        headline: `${getTierByNumber(options.learnerLevel + 1).name} test available`,
-        detail: `Last attempt: ${options.latestAttempt.scorePct}% — need ${LEVEL_TEST_PASS_PCT}%+ to pass.`,
-        actionHref: `/dashboard/level-test/${options.learnerLevel}`,
-        actionLabel: "Try again",
-      };
-    }
-
-    return {
-      headline: `Level ${options.learnerLevel + 1} test available`,
-      detail: "You've earned enough XP at this level — take the test when you're ready.",
-      actionHref: `/dashboard/level-test/${options.learnerLevel}`,
-      actionLabel: "Take level-up test",
-    };
-  }
-
   const remaining = xpRemainingForTest(
     options.learnerLevel,
     options.totalXp,
     options.xpAtLevelStart
   );
   return {
-    headline: `Earn XP to unlock the Level ${options.learnerLevel + 1} test`,
+    headline: `Earn XP toward your next Kidda Level check`,
     detail: `Earn ${remaining} more XP at Level ${options.learnerLevel} (${options.totalXp} XP lifetime so far).`,
   };
 }

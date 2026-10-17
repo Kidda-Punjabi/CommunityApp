@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { BottomNav } from "@/components/bottom-nav";
 import { PendingOverlay } from "@/components/navigation/navigation-pending";
+import { loadForumUnread } from "@/lib/forum/unread";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { KidSessionProvider } from "@/components/kids/kid-session-provider";
 import { KidsShellNav } from "@/components/kids/kids-shell-nav";
@@ -60,6 +61,13 @@ export default async function DashboardLayout({
       loadSoundSettings(supabase, user.id),
       loadPendingCourseResourceTours(user.id),
     ]);
+
+  let forumUnread = 0;
+  try {
+    forumUnread = (await loadForumUnread(supabase, user.id)).fresh;
+  } catch (error) {
+    console.error("Forum unread count failed:", error instanceof Error ? error.message : error);
+  }
 
   const kid = kidSession.activeKidProfile;
   const kidsShellActive = Boolean(kid && usesKidsShell(kid.age_tier));
@@ -162,7 +170,7 @@ export default async function DashboardLayout({
                   {kidsShellActive && kid ? (
                     <KidsShellNav ageTier={kid.age_tier} />
                   ) : (
-                    <BottomNav />
+                    <BottomNav forumUnread={forumUnread} />
                   )}
                 </div>
               </PullToRefresh>

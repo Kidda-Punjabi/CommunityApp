@@ -1,29 +1,33 @@
 import { canJoinSession, daysUntilLabel, formatSessionClock } from "@/lib/community/format";
 import type { CommunityHome } from "@/lib/community/load-home";
 import { bandFillVar, bandForLevel, bandInkVar, bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
+import { freshLabel } from "@/lib/forum/unread";
 import Link from "next/link";
 
 const TILES = [
-  { href: "/dashboard/community/pod", label: "Your pod", icon: "👥" },
-  { href: "/dashboard/community/practice", label: "Practice", icon: "▶" },
-  { href: "/dashboard/community/topics", label: "Topics", icon: "🗂" },
-  { href: "/dashboard/community/wins", label: "Wins", icon: "★" },
-  { href: "/dashboard/community/bonus", label: "Bonus sessions", icon: "+" },
-  { href: "/dashboard/community/trophies", label: "Trophies", icon: "🏆" },
+  { href: "/dashboard/community/forum", label: "Forum", icon: "💬", forum: true },
+  { href: "/dashboard/community/pod", label: "Your pod", icon: "👥", forum: false },
+  { href: "/dashboard/community/practice", label: "Practice", icon: "▶", forum: false },
+  { href: "/dashboard/community/topics", label: "Topics", icon: "🗂", forum: false },
+  { href: "/dashboard/community/bonus", label: "Bonus sessions", icon: "+", forum: false },
+  { href: "/dashboard/community/trophies", label: "Trophies & wins", icon: "🏆", forum: false },
 ] as const;
 
-function LevelFace({ name, level }: { name: string; level: number | null }) {
-  return (
-    <span
-      className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-sm font-semibold text-[#1F1640]"
-      style={level == null ? undefined : { boxShadow: `0 0 0 3px ${levelFillVar(level)}` }}
-    >
-      {name.slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
-
-export function CommunityTab({ home }: { home: CommunityHome }) {
+export function CommunityTab({
+  home,
+  earned,
+  target,
+  percent,
+  fresh = 0,
+  replies = 0,
+}: {
+  home: CommunityHome;
+  earned: number;
+  target: number | null;
+  percent: number;
+  fresh?: number;
+  replies?: number;
+}) {
   const next = home.next;
   const live = next?.status === "live";
   const joinReady = next ? canJoinSession(next.startsAt, next.endsAt) : false;
@@ -73,7 +77,10 @@ export function CommunityTab({ home }: { home: CommunityHome }) {
                 {bandLabel(bandForLevel(home.level))}
               </span>
               <span className="mt-2 block h-1.5 rounded-full bg-[#F7F5FC]">
-                <span className="block h-1.5 rounded-full" style={{ width: `${(home.level / 9) * 100}%`, background: levelFillVar(home.level) }} />
+                <span className="block h-1.5 rounded-full" style={{ width: `${percent}%`, background: levelFillVar(home.level) }} />
+              </span>
+              <span className="mt-1 block text-[11px] font-semibold text-[#6B5F8A]">
+                {target == null ? "Top level" : `${earned} of ${target} XP to your Level ${home.level + 1} check`}
               </span>
             </>
           ) : null}
@@ -92,25 +99,22 @@ export function CommunityTab({ home }: { home: CommunityHome }) {
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        {TILES.map((tile) => (
-          <Link key={tile.href} href={tile.href} className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-[20px] bg-white px-2 py-3 text-center">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#F1ECFF] text-sm">{tile.icon}</span>
-            <span className="text-xs font-bold">{tile.label}</span>
-          </Link>
-        ))}
+        {TILES.map((tile) => {
+          const badge = tile.forum ? freshLabel(fresh) : null;
+          return (
+            <Link
+              key={tile.href}
+              href={tile.href}
+              className={`relative flex min-h-16 flex-col items-center justify-center gap-1 rounded-[20px] px-2 py-3 text-center ${tile.forum ? "bg-[#5B21B6] text-white" : "bg-white"}`}
+            >
+              {badge ? <span className="absolute right-2 top-2 rounded-full bg-[#FDE68A] px-1.5 py-0.5 text-[10px] font-extrabold text-[#3B1A8C]">{badge}</span> : null}
+              <span className={`flex h-8 w-8 items-center justify-center rounded-xl text-sm ${tile.forum ? "bg-white/15" : "bg-[#F1ECFF]"}`}>{tile.icon}</span>
+              <span className="text-xs font-bold">{tile.label}</span>
+              {tile.forum && replies > 0 ? <span className="text-[10px] font-semibold text-violet-100">{replies} {replies === 1 ? "reply" : "replies"} to you</span> : null}
+            </Link>
+          );
+        })}
       </div>
-
-      {home.podmates.length > 0 ? (
-        <div className="flex gap-2 px-1">
-          {home.podmates.slice(0, 8).map((mate) => (
-            <LevelFace key={mate.userId} name={mate.name} level={mate.level} />
-          ))}
-        </div>
-      ) : null}
-
-      <Link href="/dashboard/community/forum" className="block px-1 text-sm font-bold text-[#7C3AED]">
-        Community forum
-      </Link>
     </div>
   );
 }

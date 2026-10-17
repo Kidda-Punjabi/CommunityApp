@@ -2,6 +2,7 @@
 
 import { submitCheckIn } from "@/app/dashboard/community/actions";
 import { InlineSpinner } from "@/components/ui/page-spinner";
+import { notifyXpEarned } from "@/lib/points/notify-points-earned";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -28,6 +29,7 @@ export function CheckInForm({ occurrenceId }: { occurrenceId: string }) {
       return;
     }
     if ("ok" in result && result.ok) {
+      if (result.xpAwarded > 0) notifyXpEarned(result.xpAwarded);
       const timing = result.isLate ? "Late" : "On time";
       const streak = result.countsForStreak && result.streak > 0 ? ` · ${result.streak}-week streak` : "";
       setMessage(`You're checked in · ${timing}${streak}`);

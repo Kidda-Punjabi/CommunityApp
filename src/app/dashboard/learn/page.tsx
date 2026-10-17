@@ -1,13 +1,9 @@
-import { AdultClassCard } from "@/components/learn/adult-class-card";
 import { HomeGreetingHeader } from "@/components/home-greeting-header";
 import {
   HomeStreakBanner,
   HomeStreakProvider,
 } from "@/components/home-streak-stats";
-import { LearnCertificatesRow } from "@/components/learn/learn-certificates-row";
-import { LearnCourseRow } from "@/components/learn/learn-course-row";
-import { LearnKidsProgressLink } from "@/components/learn/learn-kids-progress-link";
-import { LearnSecondaryTiles } from "@/components/learn/learn-secondary-tiles";
+import { courseWhen, HomeOneScreen } from "@/components/learn/home-one-screen";
 import {
   OlderKidBeginnerCard,
   OlderKidComingSoonRow,
@@ -38,7 +34,10 @@ import {
   getCachedAuthSession,
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
+import { xpRoad, xpTargetForLevel } from "@/lib/community/level-progress";
+import { bandForLevel, bandLabel, levelFillVar } from "@/lib/community/levels";
 import { ui } from "@/lib/ui/styles";
+import Link from "next/link";
 import {
   fetchLessonCompletionMap,
   summarizeCourseProgress,
@@ -118,6 +117,7 @@ export default async function LearnPage() {
         avatarInitial={
           actor.kind === "kid" ? (dashboard.displayName?.charAt(0) ?? "K").toUpperCase() : null
         }
+        className="mb-2"
         learnerLevel={actor.kind === "kid" ? null : onboarding.learnerLevel}
         unreadNotificationCount={unreadNotificationCount}
         weeklyPoints={dashboard.headerPoints}
@@ -243,8 +243,20 @@ export default async function LearnPage() {
     );
   }
 
+  const [{ data: me }, { data: levelSettings }] = await Promise.all([
+    supabase.from("profiles").select("kidda_level, total_xp, xp_at_level_start, timezone").eq("id", user.id).maybeSingle(),
+    supabase.from("community_level_settings").select("xp_to_unlock").eq("id", 1).maybeSingle(),
+  ]);
+  const kiddaLevel = me?.kidda_level as number | null;
+  const timeZone = (me?.timezone as string) || "Europe/London";
+  const earned = Math.max(0, Number(me?.total_xp ?? 0) - Number(me?.xp_at_level_start ?? 0));
+  const target = kiddaLevel == null ? null : xpTargetForLevel(kiddaLevel, (levelSettings?.xp_to_unlock as Record<string, number> | null) ?? null);
+  const road = target == null ? null : xpRoad(earned, target);
+  const foundationalClass = courseWhen(classCards, "foundational", timeZone);
+  const beginnersClass = courseWhen(classCards, "beginners", timeZone);
+
   return (
-    <div className={ui.page}>
+    <div className={`${ui.page} !flex !h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] !flex-col !overflow-hidden !py-3`}>
       <HomeStreakProvider
         initial={{
           streak: dashboard.stats.streak,
@@ -256,69 +268,69 @@ export default async function LearnPage() {
         }}
       >
         {greeting}
-
-        <div className="space-y-3">
-          {classCards.map((card) => (
-            <AdultClassCard key={card.courseId} card={card} />
-          ))}
-          {classTiers.has("foundational") || (kidProfileCount > 0 && foundationalLocked) ? null : (
-            <LearnCourseRow
-              level="foundational"
-              tourId="learn-tile-foundational"
-              href={
-                foundationalLocked
-                  ? nativeApp
-                    ? undefined
-                    : foundational.unlockUrl ?? "/courses/foundational"
-                  : learnTrackPath("foundational")
-              }
-              status={foundationalStatus}
-              percent={foundationalLocked ? null : foundationalPercent}
-              locked={nativeApp && foundationalLocked}
-            />
-          )}
-          {classTiers.has("beginners") || (kidProfileCount > 0 && beginnersLocked) ? null : (
-            <LearnCourseRow
-              level="beginners"
-              tourId="learn-tile-beginners"
-              href={
-                beginnersLocked
-                  ? nativeApp
-                    ? undefined
-                    : beginners.unlockUrl ?? "/courses/beginners"
-                  : learnTrackPath("beginners")
-              }
-              status={beginnersStatus}
-              locked={nativeApp && beginnersLocked}
-            />
-          )}
-          <LearnCourseRow
-            level="intermediate"
-            href={courseDetailPath("intermediate")}
-            status="Next after Beginner"
-            comingSoon
-            interestRegistered={registeredInterest.has("intermediate")}
-          />
-          <LearnCourseRow
-            level="advanced"
-            href={courseDetailPath("advanced")}
-            status="Next after Intermediate"
-            comingSoon
-            interestRegistered={registeredInterest.has("advanced")}
-          />
-          <LearnCertificatesRow />
-        </div>
-
-        <div className="mt-6 space-y-3">
-          {kidProfileCount > 0 ? (
-            <LearnKidsProgressLink summaries={kidProgressSummaries} />
-          ) : null}
-          <LearnSecondaryTiles
-            communityHref={communityHref}
-            communityStatus={communityStatus}
-            communityLocked={communityLocked}
-          />
-        </div>
+        {kiddaLevel == null ? null : (
+          <Link href="/dashboard/community/level" className="mb-2 flex items-center gap-3 rounded-[20px] bg-white px-3 py-2">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full text-lg font-extrabold text-white" style={{ background: "#5B21B6", boxShadow: `0 0 0 3px ${levelFillVar(kiddaLevel)}` }}>{kiddaLevel}</span>
+            <span>
+              <span className="block text-sm font-extrabold text-[#1F1640]">Level {kiddaLevel} · {bandLabel(bandForLevel(kiddaLevel))}</span>
+              <span className="block text-[11px] font-semibold text-[#6B5F8A]">{road ? `${road.earned} of ${road.target} XP to your Level ${kiddaLevel + 1} check` : "Top level"}</span>
+              <span className="block text-[11px] text-[#6B5F8A]">Live sessions earn the most XP</span>
+            </span>
+          </Link>
+        )}
+        <HomeOneScreen
+          timeZone={timeZone}
+          communityHref={communityHref}
+          communityStatus={communityStatus}
+          communityLocked={communityLocked}
+          kids={kidProgressSummaries}
+          courses={[
+            {
+              key: "foundational",
+              title: "Foundational",
+              href: foundationalLocked ? undefined : learnTrackPath("foundational"),
+              enrolled: !foundationalLocked,
+              comingSoon: false,
+              weekLesson: foundationalClass.weekLesson,
+              when: foundationalClass.when,
+              fill: "#E4DFEE",
+              ink: "#4B4366",
+            },
+            {
+              key: "beginners",
+              title: "Beginners",
+              href: beginnersLocked ? undefined : learnTrackPath("beginners"),
+              enrolled: !beginnersLocked,
+              comingSoon: false,
+              weekLesson: beginnersClass.weekLesson,
+              when: beginnersClass.when,
+              fill: "#FDE68A",
+              ink: "#5A3B00",
+            },
+            {
+              key: "intermediate",
+              title: "Intermediate",
+              enrolled: false,
+              comingSoon: true,
+              interestRegistered: registeredInterest.has("intermediate"),
+              weekLesson: null,
+              when: null,
+              fill: "#DFF8EF",
+              ink: "#075E47",
+            },
+            {
+              key: "advanced",
+              title: "Advanced",
+              enrolled: false,
+              comingSoon: true,
+              interestRegistered: registeredInterest.has("advanced"),
+              weekLesson: null,
+              when: null,
+              fill: "#F1ECFF",
+              ink: "#3B1A8C",
+            },
+          ]}
+        />
       </HomeStreakProvider>
     </div>
   );

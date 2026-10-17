@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { POINTS_EARNED_EVENT, XP_EARNED_EVENT } from "@/lib/points/notify-points-earned";
+import { DAILY_GAME_XP_MESSAGE, POINTS_EARNED_EVENT, XP_CAP_EVENT, XP_EARNED_EVENT } from "@/lib/points/notify-points-earned";
 
 type Toast = {
   id: number;
   amount: number;
   label: string;
+  message?: string;
 };
 
 export function PointsToastProvider() {
@@ -33,11 +34,21 @@ export function PointsToastProvider() {
       pushToast(xp, "XP");
     }
 
+    function handleCap() {
+      const id = Date.now() + Math.random();
+      setToasts((current) => [...current, { id, amount: 0, label: "cap", message: DAILY_GAME_XP_MESSAGE }]);
+      window.setTimeout(() => {
+        setToasts((current) => current.filter((toast) => toast.id !== id));
+      }, 3200);
+    }
+
     window.addEventListener(POINTS_EARNED_EVENT, handlePointsEarned);
     window.addEventListener(XP_EARNED_EVENT, handleXpEarned);
+    window.addEventListener(XP_CAP_EVENT, handleCap);
     return () => {
       window.removeEventListener(POINTS_EARNED_EVENT, handlePointsEarned);
       window.removeEventListener(XP_EARNED_EVENT, handleXpEarned);
+      window.removeEventListener(XP_CAP_EVENT, handleCap);
     };
   }, []);
 
@@ -52,11 +63,10 @@ export function PointsToastProvider() {
         <div
           key={toast.id}
           className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold text-white shadow-lg ${
-            toast.label === "XP" ? "bg-emerald-600" : "bg-violet-600"
+            toast.label === "XP" ? "bg-emerald-600" : toast.label === "cap" ? "bg-[#3B1A8C]" : "bg-violet-600"
           }`}
         >
-          <span aria-hidden="true">+</span>
-          {toast.amount} {toast.label}
+          {toast.message ? toast.message : <><span aria-hidden="true">+</span>{toast.amount} {toast.label}</>}
         </div>
       ))}
     </div>

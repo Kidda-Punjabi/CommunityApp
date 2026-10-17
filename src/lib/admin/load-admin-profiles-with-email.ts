@@ -14,7 +14,7 @@ export type AdminProfileWithEmail = {
   updated_at: string | null;
   preferred_name: string | null;
   app_role: string | null;
-  learner_level: number | null;
+  kidda_level: number | null;
   placement_completed_at: string | null;
 };
 

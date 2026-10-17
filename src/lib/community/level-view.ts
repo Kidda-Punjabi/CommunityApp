@@ -5,7 +5,8 @@ import {
   cooldownUntil,
   failedRetakeAt,
   levelEstablishedAt,
-  roadProgress,
+  xpRoad,
+  xpTargetForLevel,
   type LevelHistoryRow,
 } from "@/lib/community/level-progress";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -30,6 +31,7 @@ export type LevelView = {
   goal: number;
   percent: number;
   unlocked: boolean;
+  breakdown: string;
   cooldownUntil: string | null;
   cooldownDays: number;
 };
@@ -47,9 +49,9 @@ async function signedClip(admin: SupabaseClient, path: string | undefined): Prom
 
 export async function loadLevelView(admin: SupabaseClient, userId: string): Promise<LevelView | null> {
   const [{ data: profile }, { data: meta }, { data: settings }, { data: history }, { data: attempt }] = await Promise.all([
-    admin.from("profiles").select("kidda_level, timezone").eq("id", userId).maybeSingle(),
+    admin.from("profiles").select("kidda_level, timezone, total_xp, xp_at_level_start").eq("id", userId).maybeSingle(),
     admin.from("community_memberships_meta").select("main_session_id, pod_id").eq("user_id", userId).maybeSingle(),
-    admin.from("community_level_settings").select("sessions_to_unlock_retake, retake_cooldown_days").eq("id", 1).maybeSingle(),
+    admin.from("community_level_settings").select("xp_to_unlock, retake_cooldown_days").eq("id", 1).maybeSingle(),
     admin.from("kidda_level_history").select("from_level, to_level, source, created_at").eq("user_id", userId).order("created_at"),
     admin
       .from("placement_test_attempts")
@@ -70,20 +72,24 @@ export async function loadLevelView(admin: SupabaseClient, userId: string): Prom
   }));
   const established = levelEstablishedAt(rows, level);
   const rise = [...rows].reverse().find((row) => row.toLevel === level && (row.fromLevel == null || row.fromLevel < row.toLevel));
-  let done = 0;
-  if (established && meta?.main_session_id) {
-    const { data: checkins } = await admin
-      .from("community_checkins")
-      .select("checked_in_at, community_session_occurrences(session_id)")
-      .eq("user_id", userId)
-      .gte("checked_in_at", established);
-    done = (checkins ?? []).filter((row) => {
-      const occurrence = one(row.community_session_occurrences as { session_id: string } | { session_id: string }[] | null);
-      return occurrence?.session_id === meta.main_session_id;
-    }).length;
+  const earned = Math.max(0, Number(profile.total_xp ?? 0) - Number(profile.xp_at_level_start ?? 0));
+  const target = xpTargetForLevel(level, (settings?.xp_to_unlock as Record<string, number> | null) ?? null);
+  const progress = level >= 9 || target == null
+    ? { earned: 0, done: 0, percent: 100, target: 0, unlocked: false }
+    : { ...xpRoad(earned, target), done: Math.min(earned, target) };
+  const { data: awards } = await admin
+    .from("xp_awards")
+    .select("source, xp")
+    .eq("user_id", userId)
+    .gte("created_at", established ?? "1970-01-01T00:00:00Z");
+  const buckets = { sessions: 0, games: 0, lessons: 0 };
+  for (const award of awards ?? []) {
+    const amount = Number(award.xp ?? 0);
+    if (award.source === "session_main" || award.source === "session_bonus") buckets.sessions += amount;
+    else if (award.source === "game" || award.source === "quiz" || award.source === "flashcard") buckets.games += amount;
+    else buckets.lessons += amount;
   }
-  const goal = (settings?.sessions_to_unlock_retake as number) ?? 10;
-  const progress = level >= 9 ? { done: goal, percent: 100, unlocked: false } : roadProgress(done, goal);
+  const breakdown = `sessions ${buckets.sessions} · games ${buckets.games} · lessons ${buckets.lessons}`;
   const cooling = cooldownUntil(failedRetakeAt(rows), (settings?.retake_cooldown_days as number) ?? 28);
   let pod: LevelView["pod"] = null;
   let mates: LevelView["mates"] = [];
@@ -114,9 +120,10 @@ export async function loadLevelView(admin: SupabaseClient, userId: string): Prom
     placedAt: rise?.createdAt ?? null,
     upFrom: rise?.fromLevel ?? null,
     done: progress.done,
-    goal,
+    goal: progress.target,
     percent: progress.percent,
     unlocked: progress.unlocked && !cooling,
+    breakdown,
     cooldownUntil: cooling?.toISOString() ?? null,
     cooldownDays: (settings?.retake_cooldown_days as number) ?? 28,
   };

@@ -29,14 +29,14 @@ type WeeklyPointsRow = {
   user_id: string;
   points: number;
   profiles:
-    | (ProfileNameFields & { avatar_url?: string | null; learner_level?: number | null })
-    | (ProfileNameFields & { avatar_url?: string | null; learner_level?: number | null })[]
+    | (ProfileNameFields & { avatar_url?: string | null; kidda_level?: number | null })
+    | (ProfileNameFields & { avatar_url?: string | null; kidda_level?: number | null })[]
     | null;
 };
 
 function unwrapProfile(
   profile: WeeklyPointsRow["profiles"]
-): (ProfileNameFields & { avatar_url?: string | null; learner_level?: number | null }) | null {
+): (ProfileNameFields & { avatar_url?: string | null; kidda_level?: number | null }) | null {
   if (!profile) return null;
   return Array.isArray(profile) ? (profile[0] ?? null) : profile;
 }
@@ -45,7 +45,7 @@ function buildEntry(
   userId: string,
   points: number,
   rank: number | null,
-  profile: (ProfileNameFields & { avatar_url?: string | null; learner_level?: number | null }) | null,
+  profile: (ProfileNameFields & { avatar_url?: string | null; kidda_level?: number | null }) | null,
   isViewer = false
 ): LeaderboardEntry {
   return {
@@ -55,7 +55,7 @@ function buildEntry(
     avatarUrl: profile?.avatar_url ?? null,
     preferredName: profile?.preferred_name ?? null,
     fullName: profile?.full_name ?? null,
-    learnerLevel: profile?.learner_level ?? null,
+    learnerLevel: profile?.kidda_level ?? null,
     points,
     isViewer,
   };
@@ -76,7 +76,7 @@ export async function loadLeaderboard(
     await Promise.all([
       supabase
         .from("weekly_points")
-        .select("user_id, points, profiles(full_name, preferred_name, avatar_url, learner_level)")
+        .select("user_id, points, profiles(full_name, preferred_name, avatar_url, kidda_level)")
         .eq("week_start", weekStart)
         .gt("points", 0)
         .order("points", { ascending: false })

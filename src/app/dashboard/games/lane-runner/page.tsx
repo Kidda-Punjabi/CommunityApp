@@ -15,7 +15,7 @@ export default async function LaneRunnerPage() {
     user
       ? supabase
           .from("profiles")
-          .select("learner_level")
+          .select("kidda_level")
           .eq("id", user.id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -27,7 +27,7 @@ export default async function LaneRunnerPage() {
         cards={cards}
         loadError={loadError}
         initialCoinBalance={coinBalance}
-        learnerLevel={profile.data?.learner_level ?? null}
+        learnerLevel={profile.data?.kidda_level ?? null}
       />
     </div>
   );

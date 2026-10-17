@@ -264,5 +264,33 @@ export async function checkInMember(
     streak = currentStreak(rows, session?.first_starts_on ?? null, checkedInAt);
   }
 
-  return { ok: true, isLate, streak, countsForStreak: isMain };
+  const { data: settings } = await admin
+    .from("community_level_settings")
+    .select("session_xp_main, session_xp_bonus")
+    .eq("id", 1)
+    .maybeSingle();
+  const xp = isMain ? Number(settings?.session_xp_main ?? 0) : Number(settings?.session_xp_bonus ?? 0);
+  let xpAwarded = 0;
+  if (xp > 0) {
+    const { data: award, error: awardError } = await admin
+      .from("xp_awards")
+      .insert({
+        user_id: userId,
+        source: isMain ? "session_main" : "session_bonus",
+        source_id: occurrenceId,
+        xp,
+      })
+      .select("id")
+      .maybeSingle();
+    if (awardError && awardError.code !== "23505") throw awardError;
+    if (award) {
+      const { data: profile, error: profileError } = await admin.from("profiles").select("total_xp").eq("id", userId).maybeSingle();
+      if (profileError) throw profileError;
+      const { error: xpError } = await admin.from("profiles").update({ total_xp: Number(profile?.total_xp ?? 0) + xp }).eq("id", userId);
+      if (xpError) throw xpError;
+      xpAwarded = xp;
+    }
+  }
+
+  return { ok: true, isLate, streak, countsForStreak: isMain, xpAwarded };
 }

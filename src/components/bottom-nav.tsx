@@ -142,7 +142,7 @@ function NavIcon({ href, active }: { href: string; active: boolean }) {
   }
 }
 
-export function BottomNav() {
+export function BottomNav({ forumUnread = 0 }: { forumUnread?: number }) {
   const pathname = usePathname();
   const { activeTab, setActiveTab } = useTabNav();
   const { activeKidProfile } = useKidSession();
@@ -188,8 +188,11 @@ export function BottomNav() {
                 active ? "text-violet-600" : "text-zinc-500"
               }`}
             >
-              <span className="flex h-8 w-8 items-center justify-center">
+              <span className="relative flex h-8 w-8 items-center justify-center">
                 <NavIcon href={item.href} active={active} />
+                {item.href === "/dashboard/community" && forumUnread > 0 ? (
+                  <span className="absolute right-0 top-0 h-2 w-2 rounded-full bg-[#7C3AED]" aria-label={`${forumUnread} new in the forum`} />
+                ) : null}
               </span>
               <span
                 className={`text-[10px] font-semibold tracking-wide ${

@@ -8,6 +8,7 @@ import {
   loadForumOnboardingState,
 } from "@/lib/forum/access";
 import { loadForumPosts, viewerForumSuspended } from "@/lib/forum/load-forum";
+import { markForumSeen } from "@/lib/forum/unread";
 import { FORUM_SUSPENDED_MESSAGE } from "@/lib/forum/safety";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -32,6 +33,7 @@ export default async function ForumPage() {
     );
   }
 
+  await markForumSeen(supabase, user.id);
   const [posts, onboarding, isModerator, viewerIsMasterAdmin, suspended] = await Promise.all([
     loadForumPosts(supabase, user.id),
     loadForumOnboardingState(supabase, user.id),

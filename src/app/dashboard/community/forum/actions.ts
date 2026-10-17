@@ -129,7 +129,7 @@ export async function agreeToForumGuidelines(
 
   const { error } = await supabase
     .from("profiles")
-    .update({ has_agreed_forum_guidelines: true })
+    .update({ has_agreed_forum_guidelines: true, forum_guidelines_accepted_at: new Date().toISOString() })
     .eq("id", userId);
 
   if (error) return { error: error.message };
@@ -588,7 +588,7 @@ export async function acceptForumRules(): Promise<ForumActionResult> {
     { onConflict: "user_id,rules_version" }
   );
   if (error) return { error: error.message };
-  await supabase.from("profiles").update({ has_agreed_forum_guidelines: true }).eq("id", userId);
+  await supabase.from("profiles").update({ has_agreed_forum_guidelines: true, forum_guidelines_accepted_at: new Date().toISOString() }).eq("id", userId);
   return { success: "Agreed." };
 }
 

@@ -39,7 +39,7 @@ type ProfileSnippet = {
   full_name: string | null;
   preferred_name: string | null;
   avatar_url: string | null;
-  learner_level?: number | null;
+  kidda_level?: number | null;
 };
 
 function unwrapProfile(
@@ -73,7 +73,7 @@ export async function loadFriends(
         full_name,
         preferred_name,
         avatar_url,
-        learner_level
+        kidda_level
       )
     `
     )
@@ -93,7 +93,7 @@ export async function loadFriends(
       avatarUrl: friend?.avatar_url ?? null,
       source: row.source as FriendshipSource,
       since: row.created_at as string,
-      learnerLevel: friend?.learner_level ?? null,
+      learnerLevel: friend?.kidda_level ?? null,
     };
   });
 }

@@ -49,10 +49,28 @@ export default async function CommunityTrophiesPage() {
     full_deck: 0,
   };
   const unlocked = TROPHIES.filter((trophy) => (progress[trophy.key] ?? 0) >= trophy.goal);
+  const { data: moves } = await admin
+    .from("kidda_level_history")
+    .select("from_level, to_level, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(8);
 
   return (
     <div className={`${ui.page} font-[family-name:var(--font-community)]`}>
       <CommunityPageHeader title="Trophies" />
+      <section id="wins" className="mt-3 rounded-[20px] bg-white p-3">
+        <h2 className="font-heading text-sm font-extrabold text-[#1F1640]">Wins</h2>
+        <p className="mt-1 text-xs text-[#4A3F66]">Level moves and streak milestones from the Community will show up here.</p>
+        <ul className="mt-2 space-y-1">
+          {(moves ?? []).filter((move) => move.from_level == null || move.to_level !== move.from_level).map((move) => (
+            <li key={move.created_at as string} className="text-xs font-semibold text-[#1F1640]">
+              {move.from_level == null ? `Placed at Level ${move.to_level}` : `Level ${move.from_level} to Level ${move.to_level}`}
+            </li>
+          ))}
+          {streak >= 4 ? <li className="text-xs font-semibold text-[#1F1640]">{streak}-week streak</li> : null}
+        </ul>
+      </section>
       <p className="mt-2 text-sm font-semibold text-[#4A3F66]">{unlocked.length} of {TROPHIES.length} unlocked</p>
       <ul className="mt-4 grid grid-cols-2 gap-2">
         {TROPHIES.map((trophy) => {

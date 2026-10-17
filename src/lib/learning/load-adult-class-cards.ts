@@ -13,6 +13,7 @@ export type AdultClassCard = {
   href: string;
   weekLesson: string | null;
   nextClass: string | null;
+  nextStartsAt: string | null;
 };
 
 type CourseJoin = {
@@ -194,6 +195,7 @@ export async function loadAdultClassCards(
         href: trackHref(draft.tier),
         weekLesson,
         nextClass: next ? formatNextClass(next.startsAt, next.endsAt) : null,
+        nextStartsAt: next?.startsAt ?? null,
       };
     });
 }

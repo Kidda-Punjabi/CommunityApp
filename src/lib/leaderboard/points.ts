@@ -5,7 +5,8 @@ import {
 } from "@/lib/learning/learning-product";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
 import { fetchLessonCompletionMap } from "@/lib/progress/lesson-completion";
-import { notifyActivityRewards, notifyXpEarned } from "@/lib/points/notify-points-earned";
+import { notifyActivityRewards, notifyDailyGameCap, notifyXpEarned } from "@/lib/points/notify-points-earned";
+import { randomUUID } from "node:crypto";
 import { getCurrentWeekStart } from "./week";
 
 async function activeKidProfileId(
@@ -124,17 +125,39 @@ export async function awardEnglishXp(
   return xp;
 }
 
+async function grantProfileXp(
+  supabase: SupabaseClient,
+  xp: number,
+  source: string,
+  sourceId: string
+): Promise<{ granted: number; capped: boolean }> {
+  const { data, error } = await supabase.rpc("grant_profile_xp", {
+    p_xp: xp,
+    p_source: source,
+    p_source_id: sourceId,
+  });
+  if (error) {
+    console.error("Failed to grant profile XP:", error.message);
+    return { granted: 0, capped: false };
+  }
+  if (data === -1) return { granted: 0, capped: true };
+  return { granted: Number(data ?? 0), capped: false };
+}
+
 async function awardBoth(
   supabase: SupabaseClient,
   points: number,
+  source: "game" | "quiz" | "flashcard",
+  sourceId: string,
   activityDate?: string
 ): Promise<{ weekly: number; xp: number }> {
-  const [weekly, xp] = await Promise.all([
+  const [weekly, grant] = await Promise.all([
     awardWeeklyPoints(supabase, points, activityDate),
-    awardXp(supabase, points),
+    grantProfileXp(supabase, points, source, sourceId),
   ]);
-  notifyActivityRewards(weekly, xp);
-  return { weekly, xp };
+  if (grant.capped) notifyDailyGameCap();
+  else notifyActivityRewards(weekly, grant.granted);
+  return { weekly, xp: grant.granted };
 }
 
 /** English activity: English XP only — no Punjabi weekly points / total_xp. */
@@ -238,8 +261,8 @@ export async function tryAwardLessonCompletionPoints(
 
   if (data) {
     const pts = lessonCompletedPoints();
-    const xp = await awardXp(supabase, pts);
-    notifyActivityRewards(pts, xp);
+    const grant = await grantProfileXp(supabase, pts, "lesson", lessonId);
+    notifyActivityRewards(pts, grant.granted);
     return pts;
   }
 
@@ -256,7 +279,7 @@ export async function awardQuizAttemptPoints(
   if (product === "english") {
     return awardEnglishActivityXp(supabase, points);
   }
-  const { weekly } = await awardBoth(supabase, points, activityDate);
+  const { weekly } = await awardBoth(supabase, points, "quiz", randomUUID(), activityDate);
   return weekly;
 }
 
@@ -272,7 +295,7 @@ export async function awardGameSessionPoints(
   if (product === "english") {
     return awardEnglishActivityXp(supabase, points);
   }
-  const { weekly } = await awardBoth(supabase, points, activityDate);
+  const { weekly } = await awardBoth(supabase, points, "game", randomUUID(), activityDate);
   return weekly;
 }
 
@@ -285,7 +308,7 @@ export async function awardFlashcardConfidentPoints(
   if (product === "english") {
     return awardEnglishActivityXp(supabase, points);
   }
-  const { weekly } = await awardBoth(supabase, points, activityDate);
+  const { weekly } = await awardBoth(supabase, points, "flashcard", randomUUID(), activityDate);
   return weekly;
 }
 

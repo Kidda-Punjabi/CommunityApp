@@ -9,8 +9,9 @@ type UserAvatarProps = {
   profile: ProfileNameFields & { avatar_url?: string | null };
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
-  /** Learner level (1–8). Shows a purple badge on the bottom-right when set. */
+  /** Kidda Level 0–9. Shows a badge on the bottom-right when set. */
   level?: number | null;
+  levelColor?: string | null;
 };
 
 const SIZE_CLASSES = {
@@ -47,10 +48,11 @@ function PersonIcon({ className }: { className?: string }) {
   );
 }
 
-function LevelBadge({ level, size }: { level: number; size: keyof typeof SIZE_CLASSES }) {
+function LevelBadge({ level, size, color }: { level: number; size: keyof typeof SIZE_CLASSES; color?: string | null }) {
   return (
     <span
       className={`absolute flex items-center justify-center rounded-full bg-violet-600 font-bold leading-none text-white ring-white ${BADGE_CLASSES[size]}`}
+      style={color ? { background: color } : undefined}
       aria-hidden="true"
     >
       {level}
@@ -63,10 +65,11 @@ export function UserAvatar({
   size = "lg",
   className = "",
   level,
+  levelColor,
 }: UserAvatarProps) {
   const sizeClass = SIZE_CLASSES[size];
   const initial = getAvatarInitial(profile);
-  const showLevel = level != null && level > 0;
+  const showLevel = level != null;
 
   const avatarSrc = mediaSrc(profile.avatar_url);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
@@ -91,9 +94,12 @@ export function UserAvatar({
   );
 
   return (
-    <div className={`relative inline-flex shrink-0 rounded-full ${sizeClass} ${className}`}>
+    <div
+      className={`relative inline-flex shrink-0 rounded-full ${sizeClass} ${className}`}
+      style={showLevel && levelColor ? { boxShadow: `0 0 0 2px ${levelColor}` } : undefined}
+    >
       <div className="h-full w-full overflow-hidden rounded-full">{content}</div>
-      {showLevel && <LevelBadge level={level} size={size} />}
+      {showLevel && <LevelBadge level={level} size={size} color={levelColor} />}
     </div>
   );
 }

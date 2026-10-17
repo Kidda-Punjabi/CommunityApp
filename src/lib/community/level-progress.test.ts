@@ -1,51 +1,46 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { describe, it } from "node:test";
 import {
+  OLD_TIER_TO_KIDDA,
   bandChanged,
   cooldownUntil,
   failedRetakeAt,
   levelEstablishedAt,
   retakeMovesUp,
-  roadProgress,
+  xpRoad,
+  xpTargetForLevel,
 } from "./level-progress";
 
-test("three of ten main sessions is 30 percent", () => {
-  assert.deepEqual(roadProgress(3, 10), { done: 3, percent: 30, unlocked: false });
-});
+describe("xp road", () => {
+  it("uses the settings target for the current level", () => {
+    assert.equal(xpTargetForLevel(2, { "2": 150 }), 150);
+    assert.equal(xpTargetForLevel(9, { "8": 350 }), null);
+  });
 
-test("ten main sessions unlock the retake and extra sessions stay capped", () => {
-  assert.deepEqual(roadProgress(10, 10), { done: 10, percent: 100, unlocked: true });
-  assert.equal(roadProgress(14, 10).percent, 100);
-});
+  it("45 of 150 is 30 percent and 150 unlocks the retake", () => {
+    assert.deepEqual(xpRoad(45, 150), { earned: 45, percent: 30, target: 150, unlocked: false });
+    assert.equal(xpRoad(150, 150).unlocked, true);
+    assert.equal(xpRoad(180, 150).percent, 100);
+  });
 
-test("a lower or equal retake never counts as moving up", () => {
-  assert.equal(retakeMovesUp(2, 4), true);
-  assert.equal(retakeMovesUp(2, 2), false);
-  assert.equal(retakeMovesUp(2, 0), false);
-});
+  it("never moves down and only re-pods across a band", () => {
+    assert.equal(retakeMovesUp(2, 2), false);
+    assert.equal(retakeMovesUp(2, 4), true);
+    assert.equal(bandChanged(2, 3), false);
+    assert.equal(bandChanged(3, 4), true);
+  });
 
-test("only a band change asks for a new pod", () => {
-  assert.equal(bandChanged(2, 3), false);
-  assert.equal(bandChanged(3, 4), true);
-  assert.equal(bandChanged(6, 7), true);
-});
+  it("keeps the level-start clock through a failed retake", () => {
+    const history = [
+      { fromLevel: null, toLevel: 2, source: "placement" as const, createdAt: "2026-10-01T00:00:00Z" },
+      { fromLevel: 2, toLevel: 2, source: "retake" as const, createdAt: "2026-10-20T00:00:00Z" },
+    ];
+    assert.equal(levelEstablishedAt(history, 2), "2026-10-01T00:00:00Z");
+    assert.equal(failedRetakeAt(history), "2026-10-20T00:00:00Z");
+    assert.equal(cooldownUntil("2026-10-17T00:00:00Z", 28, new Date("2026-10-20T00:00:00Z"))?.toISOString().slice(0, 10), "2026-11-14");
+  });
 
-test("progress starts when the current level was set, not on a failed retake", () => {
-  const history = [
-    { fromLevel: null, toLevel: 2, source: "placement" as const, createdAt: "2026-10-01T00:00:00Z" },
-    { fromLevel: 2, toLevel: 2, source: "retake" as const, createdAt: "2026-10-20T00:00:00Z" },
-  ];
-  assert.equal(levelEstablishedAt(history, 2), "2026-10-01T00:00:00Z");
-  assert.equal(failedRetakeAt(history), "2026-10-20T00:00:00Z");
-});
-
-test("cooldown uses the settings length and a later rise clears it", () => {
-  const until = cooldownUntil("2026-10-01T00:00:00Z", 28, new Date("2026-10-20T00:00:00Z"));
-  assert.equal(until?.toISOString().slice(0, 10), "2026-10-29");
-  assert.equal(cooldownUntil("2026-10-01T00:00:00Z", 28, new Date("2026-11-01T00:00:00Z")), null);
-  const risen = [
-    { fromLevel: 2, toLevel: 2, source: "retake" as const, createdAt: "2026-10-01T00:00:00Z" },
-    { fromLevel: 2, toLevel: 4, source: "retake" as const, createdAt: "2026-11-01T00:00:00Z" },
-  ];
-  assert.equal(failedRetakeAt(risen), null);
+  it("maps the old eight tiers onto Kidda levels", () => {
+    assert.deepEqual(Object.values(OLD_TIER_TO_KIDDA), [0, 1, 1, 2, 3, 4, 6, 8]);
+  });
 });

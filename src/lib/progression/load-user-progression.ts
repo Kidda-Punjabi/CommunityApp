@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  isTestUnlocked,
   xpProgressToNextTest,
   xpRequiredForTest,
 } from "@/lib/progression/xp-thresholds";
@@ -61,7 +60,7 @@ export async function loadOnboardingProfile(
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "has_seen_intro_pitch, has_seen_onboarding, has_seen_app_tour, self_assessed_starting_tier, stated_goal_motivation, target_tier, placement_completed_at, learner_level"
+      "has_seen_intro_pitch, has_seen_onboarding, has_seen_app_tour, self_assessed_starting_tier, stated_goal_motivation, target_tier, placement_completed_at, kidda_level"
     )
     .eq("id", userId)
     .single();
@@ -72,7 +71,7 @@ export async function loadOnboardingProfile(
       const fallback = await supabase
         .from("profiles")
         .select(
-          "has_seen_onboarding, self_assessed_starting_tier, stated_goal_motivation, target_tier, placement_completed_at, learner_level"
+          "has_seen_onboarding, self_assessed_starting_tier, stated_goal_motivation, target_tier, placement_completed_at, kidda_level"
         )
         .eq("id", userId)
         .single();
@@ -85,7 +84,7 @@ export async function loadOnboardingProfile(
         statedGoalMotivation: fallback.data?.stated_goal_motivation ?? null,
         targetTier: fallback.data?.target_tier ?? null,
         placementCompleted: Boolean(fallback.data?.placement_completed_at),
-        learnerLevel: fallback.data?.learner_level ?? null,
+        learnerLevel: fallback.data?.kidda_level ?? null,
       };
     }
   }
@@ -98,7 +97,7 @@ export async function loadOnboardingProfile(
     statedGoalMotivation: data?.stated_goal_motivation ?? null,
     targetTier: data?.target_tier ?? null,
     placementCompleted: Boolean(data?.placement_completed_at),
-    learnerLevel: data?.learner_level ?? null,
+    learnerLevel: data?.kidda_level ?? null,
   };
 }
 
@@ -109,12 +108,12 @@ export async function loadUserProgression(
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "self_assessed_starting_tier, stated_goal_motivation, target_tier, learner_level, total_xp, xp_at_level_start, placement_completed_at"
+      "self_assessed_starting_tier, stated_goal_motivation, target_tier, kidda_level, total_xp, xp_at_level_start, placement_completed_at"
     )
     .eq("id", userId)
     .single();
 
-  const learnerLevel = profile?.learner_level ?? null;
+  const learnerLevel = profile?.kidda_level ?? null;
   const totalXp = profile?.total_xp ?? 0;
   const xpAtLevelStart = profile?.xp_at_level_start ?? 0;
   const placementCompleted = Boolean(profile?.placement_completed_at);
@@ -126,10 +125,7 @@ export async function loadUserProgression(
       ? await loadLatestTestAttempt(supabase, userId, learnerLevel)
       : null;
 
-  const testUnlocked =
-    learnerLevel != null
-      ? isTestUnlocked(learnerLevel, totalXp, xpAtLevelStart)
-      : false;
+  const testUnlocked = false;
 
   const xpProgress =
     learnerLevel != null

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { AdminData } from "@/app/admin/content/types";
+import { setMemberLevel } from "@/app/admin/community/actions";
 import {
   loadAdminMemberDetail,
   saveMemberBeginnersSetup,
@@ -42,6 +43,8 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
   const [beginnersCohortId, setBeginnersCohortId] = useState("");
   const [communityAccess, setCommunityAccess] = useState(false);
   const [extraRescheduleAllowance, setExtraRescheduleAllowance] = useState(0);
+  const [kiddaLevel, setKiddaLevel] = useState("0");
+  const [levelReason, setLevelReason] = useState("");
 
   const assignableStaff = useMemo(
     () => data.staffMembers.filter((member) => member.appRoles.length > 0),
@@ -184,6 +187,55 @@ export function MemberDetailView({ userId, data, onUpdated }: MemberDetailViewPr
           </div>
         </div>
         <FormMessage state={message} />
+      </SectionCard>
+
+      <SectionCard title="Kidda Level">
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            startSaveTransition(async () => {
+              const result = await setMemberLevel(userId, Number(kiddaLevel), levelReason);
+              if ("error" in result && result.error) {
+                setMessage({ error: result.error });
+                return;
+              }
+              setLevelReason("");
+              setMessage({ success: `Level set to ${kiddaLevel}.` });
+              onUpdated?.();
+            });
+          }}
+        >
+          <label className={labelClass} htmlFor="kidda_level">
+            Level
+          </label>
+          <select
+            id="kidda_level"
+            value={kiddaLevel}
+            onChange={(event) => setKiddaLevel(event.target.value)}
+            className={inputClass}
+          >
+            {Array.from({ length: 10 }, (_, level) => (
+              <option key={level} value={level}>
+                Level {level}
+              </option>
+            ))}
+          </select>
+          <label className={labelClass} htmlFor="kidda_reason">
+            Reason
+          </label>
+          <input
+            id="kidda_reason"
+            value={levelReason}
+            onChange={(event) => setLevelReason(event.target.value)}
+            className={inputClass}
+            required
+            placeholder="Why this level"
+          />
+          <button type="submit" className={buttonClass} disabled={savePending}>
+            Set level
+          </button>
+        </form>
       </SectionCard>
 
       <SectionCard title="Foundational course">

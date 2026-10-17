@@ -1,5 +1,7 @@
 export const POINTS_EARNED_EVENT = "kidda:points-earned";
 export const XP_EARNED_EVENT = "kidda:xp-earned";
+export const XP_CAP_EVENT = "kidda:xp-cap";
+export const DAILY_GAME_XP_MESSAGE = "Daily game XP reached, come back tomorrow";
 
 /** Fire a floating +points toast (client-only). */
 export function notifyPointsEarned(amount: number) {
@@ -11,6 +13,11 @@ export function notifyPointsEarned(amount: number) {
 export function notifyXpEarned(amount: number) {
   if (typeof window === "undefined" || amount <= 0) return;
   window.dispatchEvent(new CustomEvent(XP_EARNED_EVENT, { detail: amount }));
+}
+
+export function notifyDailyGameCap() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(XP_CAP_EVENT));
 }
 
 /** Notify weekly leaderboard points and lifetime XP separately. */

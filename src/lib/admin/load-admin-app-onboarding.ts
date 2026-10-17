@@ -18,7 +18,7 @@ type ProfileRow = {
   preferred_name: string | null;
   avatar_url: string | null;
   placement_completed_at: string | null;
-  learner_level: number | null;
+  kidda_level: number | null;
   created_at: string;
 };
 
@@ -93,7 +93,7 @@ function buildRow(
     email: authUser.email ?? null,
     displayName: getDisplayName(profile ?? null) ?? authUser.email ?? authUser.id.slice(0, 8),
     signedUpAt: authUser.auth_created_at ?? profile?.created_at ?? new Date(0).toISOString(),
-    learnerLevel: profile?.learner_level ?? null,
+    learnerLevel: profile?.kidda_level ?? null,
     milestones,
     progressDone: done,
     progressTotal: total,
@@ -147,7 +147,7 @@ export async function loadAdminAppOnboarding(
       supabase
         .from("profiles")
         .select(
-          "id, full_name, preferred_name, avatar_url, placement_completed_at, learner_level, created_at"
+          "id, full_name, preferred_name, avatar_url, placement_completed_at, kidda_level, created_at"
         )
         .in("id", userIds),
       loadPracticedUserIds(supabase, userIds),

@@ -112,9 +112,12 @@ export function YourLevel({ view }: { view: LevelView }) {
           <h2 className="text-sm font-extrabold">Your road to Level {view.level + 1}</h2>
           <ol className="mt-1 space-y-1">
             <li className="flex items-center gap-2 rounded-[16px] bg-white px-3 py-1.5 text-xs font-semibold"><span className="text-[#0E9F78]">✓</span>Placed at Level {view.level}</li>
-            <li className="flex items-center justify-between rounded-[16px] bg-white px-3 py-1.5 text-xs font-semibold">
-              <span>Attend {view.goal} main sessions</span>
-              <span className="text-[#6B5F8A]">{view.done} of {view.goal}</span>
+            <li className="rounded-[16px] bg-white px-3 py-1.5 text-xs font-semibold">
+              <div className="flex items-center justify-between gap-2">
+                <span>Earn {view.goal} XP at Level {view.level}</span>
+                <span className="text-[#6B5F8A]">{view.done} of {view.goal}</span>
+              </div>
+              <p className="mt-0.5 text-[11px] font-medium text-[#6B5F8A]">{view.breakdown}</p>
             </li>
             <li className="rounded-[16px] bg-white px-3 py-1.5 text-xs font-semibold">
               {view.cooldownUntil ? (
@@ -122,7 +125,7 @@ export function YourLevel({ view }: { view: LevelView }) {
               ) : view.unlocked ? (
                 <Link href="/dashboard/community/level/retake" className="flex h-11 items-center justify-center rounded-[14px] bg-[#7C3AED] text-sm font-bold text-white">Retake the level check</Link>
               ) : (
-                <p className="text-[#6B5F8A]">Retake the level check · Unlocks at {view.goal}</p>
+                <p className="text-[#6B5F8A]">Retake the level check · Unlocks at {view.goal} XP</p>
               )}
             </li>
           </ol>
@@ -185,7 +188,7 @@ export function LevelDetail({
             {view.level < 9 ? (
               <>
                 <div className="mt-2 h-1.5 rounded-full bg-[#EDE7FE]"><div className="h-1.5 rounded-full bg-[#7C3AED]" style={{ width: `${view.percent}%` }} /></div>
-                <p className="mt-1 text-[11px] font-semibold text-[#6B5F8A]">{view.percent}% there · {view.done} of {view.goal} main sessions</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#6B5F8A]">{view.percent}% there · {view.done} of {view.goal} XP</p>
               </>
             ) : null}
           </section>

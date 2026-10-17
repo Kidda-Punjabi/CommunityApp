@@ -16,7 +16,7 @@ export type EnglishProgression = {
 };
 
 /**
- * English-only stats. Never reads Punjabi total_xp / learner_level.
+ * English-only stats. Never reads Punjabi lifetime XP.
  */
 export async function loadEnglishProgression(
   supabase: SupabaseClient,
