@@ -263,13 +263,11 @@ export async function fetchLessonRecordingsForUser(
   const allCohortIds = [...new Set([...homeCohortIds, ...alternateCohortIds])];
 
   const [{ data: studentRecordings }, { data: cohortRecordings }] = await Promise.all([
-    actor.kind === "kid"
-      ? Promise.resolve({ data: [] as RecordingRow[] })
-      : db
-          .from("lesson_recordings")
-          .select("id, lesson_id, storage_path, title, cohort_id")
-          .eq("student_id", userId)
-          .in("lesson_id", lessonIds),
+    db
+      .from("lesson_recordings")
+      .select("id, lesson_id, storage_path, title, cohort_id")
+      .eq("student_id", userId)
+      .in("lesson_id", lessonIds),
     allCohortIds.length > 0
       ? db
           .from("lesson_recordings")
