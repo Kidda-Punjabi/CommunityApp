@@ -5,7 +5,6 @@ export const KID_BLOCKED_COMMUNITY_PATHS = [
   "/dashboard/leaderboard",
   "/dashboard/friends",
   "/dashboard/profile/friends",
-  "/dashboard/group-games",
   "/dashboard/learn/community",
   "/api/battle",
 ] as const;
