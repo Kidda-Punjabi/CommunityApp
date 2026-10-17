@@ -19,8 +19,8 @@ export type SessionChoice = {
 
 export function SessionPicker({ sessions, error }: { sessions: SessionChoice[]; error?: string }) {
   const router = useRouter();
-  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const city = zoneCity(zone);
+  const [zone, setZone] = useState<string | null>(null);
+  const city = zone ? zoneCity(zone) : "";
   const [selected, setSelected] = useState<string | null>(null);
   const [message, setMessage] = useState(error ?? "");
   const running = sessions.filter((session) => session.running);
@@ -28,6 +28,7 @@ export function SessionPicker({ sessions, error }: { sessions: SessionChoice[]; 
   const choice = sessions.find((session) => session.id === selected);
 
   useEffect(() => {
+    setZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
     router.prefetch("/dashboard/community/welcome/why");
   }, [router, selected]);
 
@@ -43,9 +44,11 @@ export function SessionPicker({ sessions, error }: { sessions: SessionChoice[]; 
     }
   }
 
-  const buttonLabel = choice
+  const buttonLabel = choice && zone
     ? `Yes, ${choice.weekdayLabel}s at ${formatClockShort(choice.startsAt, zone)}`
-    : "Choose a session";
+    : choice
+      ? `Yes, ${choice.weekdayLabel}`
+      : "Choose a session";
 
   return (
     <OnboardingFrame
@@ -55,7 +58,7 @@ export function SessionPicker({ sessions, error }: { sessions: SessionChoice[]; 
     >
       <div>
         <h1 className="font-heading text-[1.65rem] font-extrabold leading-tight">When&apos;s your main session?</h1>
-        <p className="mt-1 text-sm text-[#6B5F8A]">Times shown in your time ({city})</p>
+        <p className="mt-1 text-sm text-[#6B5F8A]">{city ? `Times shown in your time (${city})` : "Times shown in your time"}</p>
         <p className="mt-3 text-xs font-bold uppercase tracking-wide text-[#6B5F8A]">Sessions running now</p>
         <div className="mt-2 space-y-2">
           {running.map((session) => (
@@ -83,13 +86,13 @@ function SessionCard({
   large,
 }: {
   session: SessionChoice;
-  zone: string;
+  zone: string | null;
   selected: boolean;
   onSelect: (id: string) => void;
   large?: boolean;
 }) {
-  const yours = formatClockShort(session.startsAt, zone);
-  const host = formatClockShort(session.startsAt, session.hostTimeZone);
+  const yours = zone ? formatClockShort(session.startsAt, zone) : session.weekdayLabel;
+  const host = zone ? formatClockShort(session.startsAt, session.hostTimeZone) : session.hostCity;
   return (
     <button
       type="button"
