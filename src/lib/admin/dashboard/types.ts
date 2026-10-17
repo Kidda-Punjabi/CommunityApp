@@ -14,7 +14,9 @@ export type DashboardCardId =
   | "package_onboarding"
   | "missing_recordings"
   | "hidden_homework"
-  | "session_integrity";
+  | "session_integrity"
+  | "community_today"
+  | "community_not_placed";
 
 export type AdminDashboardCard = {
   id: DashboardCardId;

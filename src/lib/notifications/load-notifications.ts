@@ -361,6 +361,8 @@ export function notificationSummary(item: NotificationItem): string {
       const level = String(item.payload.level ?? "course");
       return `Your ${level} certificate is ready`;
     }
+    case "community_session_live":
+      return String(item.payload.title ?? "Your Community session is live");
     default: {
       const title = item.payload.title;
       if (typeof title === "string" && title.trim()) return title.trim();

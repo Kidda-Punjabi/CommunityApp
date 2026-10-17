@@ -79,6 +79,11 @@ function notificationHref(item: NotificationItem): string | null {
     return "/dashboard/learn/certificates";
   }
 
+  if (item.type === "community_session_live") {
+    const url = item.payload.url;
+    return typeof url === "string" && url.startsWith("/") ? url : "/dashboard/community";
+  }
+
   return null;
 }
 

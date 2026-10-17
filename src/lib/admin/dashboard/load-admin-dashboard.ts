@@ -254,6 +254,14 @@ export async function loadAdminDashboard(
 
   const { setup, integrity } = cohortOpsCards(cohortOps.issues, cohortOps.error, nowMs);
 
+  let unplacedCount = 0;
+  try {
+    const { loadUnplacedMembers } = await import("@/lib/community/not-placed");
+    unplacedCount = (await loadUnplacedMembers(supabase)).length;
+  } catch (unplacedError) {
+    console.error("[admin dashboard] community not placed", unplacedError);
+  }
+
   const paymentSetupCount = onboarding.rows.filter((row) => {
     if (!row.isOverdue) return false;
     return !row.packageRunId || row.progressDone < row.progressTotal;
@@ -344,6 +352,24 @@ export async function loadAdminDashboard(
       group: "enrollment",
     },
     recordings.card,
+    {
+      id: "community_today",
+      label: "Community today",
+      hint: "Start the next Community session",
+      href: "/admin/community/today",
+      count: 1,
+      tone: "ok",
+      group: "ops",
+    },
+    {
+      id: "community_not_placed",
+      label: "Community members not placed",
+      hint: "Missing a main session, level, or pod",
+      href: "/admin/community/not-placed",
+      count: unplacedCount,
+      tone: unplacedCount > 0 ? "warning" : "ok",
+      group: "ops",
+    },
     {
       id: "hidden_homework",
       label: "Homework missing from tutor review",

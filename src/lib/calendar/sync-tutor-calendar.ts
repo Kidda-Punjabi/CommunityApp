@@ -423,6 +423,16 @@ export async function syncTutorGoogleCalendar(
     }
   }
 
+  try {
+    const { syncCommunityOccurrences } = await import("@/lib/community/sync-occurrences");
+    await syncCommunityOccurrences(adminClient, tutorId);
+  } catch (communityError) {
+    console.error(
+      `[calendar sync] community occurrences failed tutor=${tutorId}:`,
+      communityError instanceof Error ? communityError.message : communityError
+    );
+  }
+
   console.info(
     `[calendar sync] complete tutor=${tutorId} synced=${synced} last_synced_at=${syncedAt}`
   );

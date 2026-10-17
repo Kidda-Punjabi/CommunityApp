@@ -6,6 +6,34 @@
   --kidda-shadow-soft: 0 4px 24px -6px rgba(24, 24, 27, 0.08);
   --kidda-shadow-soft-sm: 0 2px 16px -4px rgba(24, 24, 27, 0.07);
   --kidda-radius-card: 1.5rem;
+  --kidda-level-0-fill: #e4dfee;
+  --kidda-level-0-ink: #4b4366;
+  --kidda-level-1-fill: #fde68a;
+  --kidda-level-1-ink: #5a3b00;
+  --kidda-level-2-fill: #fcd34d;
+  --kidda-level-2-ink: #5a3b00;
+  --kidda-level-3-fill: #f5b301;
+  --kidda-level-3-ink: #4a2f00;
+  --kidda-level-4-fill: #7ee8c8;
+  --kidda-level-4-ink: #06402f;
+  --kidda-level-5-fill: #2ccb9e;
+  --kidda-level-5-ink: #06402f;
+  --kidda-level-6-fill: #0e9f78;
+  --kidda-level-6-ink: #ffffff;
+  --kidda-level-7-fill: #b9a2fb;
+  --kidda-level-7-ink: #2e1065;
+  --kidda-level-8-fill: #8b5cf6;
+  --kidda-level-8-ink: #ffffff;
+  --kidda-level-9-fill: #5b21b6;
+  --kidda-level-9-ink: #ffffff;
+  --kidda-band-sounds-fill: #e4dfee;
+  --kidda-band-sounds-ink: #4b4366;
+  --kidda-band-beginner-fill: #fff6d6;
+  --kidda-band-beginner-ink: #7a4d00;
+  --kidda-band-intermediate-fill: #dff8ef;
+  --kidda-band-intermediate-ink: #075e47;
+  --kidda-band-advanced-fill: #f1ecff;
+  --kidda-band-advanced-ink: #3b1a8c;
   color-scheme: light;
 }
 
