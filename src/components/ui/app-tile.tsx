@@ -43,7 +43,7 @@ export function AppTile({
   const classNames = cn(
     "relative flex h-24 w-full shrink-0 rounded-[20px] bg-white px-3 text-left",
     stacked ? "flex-col items-start justify-center gap-1" : "items-center gap-2.5",
-    corner ? "pr-14" : "",
+    corner && !stacked ? "pr-14" : "",
     className
   );
   if (!href) {

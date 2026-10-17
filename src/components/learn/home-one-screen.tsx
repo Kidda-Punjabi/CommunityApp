@@ -40,7 +40,10 @@ function formatWhen(iso: string, timeZone: string): string {
 function courseSubtitle(course: CourseTile): string {
   if (course.comingSoon) return "Coming soon";
   if (!course.enrolled) return "This course isn't on your account";
-  if (course.weekLesson && course.when) return `${course.weekLesson} · ${course.when}`;
+  if (course.weekLesson && course.when) {
+    const lesson = course.weekLesson.replace(/\s*[-–]\s*Week \d+\s*$/i, "");
+    return `${lesson} · ${course.when}`;
+  }
   return "Your course";
 }
 
@@ -125,6 +128,7 @@ export function HomeOneScreen({
             title="Your kids"
             subtitle={`${kids.length} ${kids.length === 1 ? "kid" : "kids"} · ${enrolledKids.length} enrolled`}
             icon={<Smile className="h-4 w-4" />}
+            stacked
             corner={
               <span className="flex items-center">
                 {shownAvatars.map((kid, index) => (

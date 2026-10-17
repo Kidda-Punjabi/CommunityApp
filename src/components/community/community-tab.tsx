@@ -50,7 +50,7 @@ export function CommunityTab({
 
   return (
     <div className="flex flex-col gap-2 font-[family-name:var(--font-community)] text-[#1F1640]">
-      <section className="rounded-[24px] bg-[#5B21B6] p-4 text-white">
+      <section className="rounded-[24px] bg-[#5B21B6] p-3 text-white">
         <p className="text-sm text-violet-100">{live ? "Live now" : "Next session"}</p>
         <h2 className="mt-1 font-heading text-2xl font-extrabold">
           {next ? formatSessionClock(next.startsAt, home.timezone) : "Your session"}
@@ -60,7 +60,7 @@ export function CommunityTab({
             ? `Week ${next.weekNumber}${next.topic ? ` · ${next.topic}` : ""} · ${daysUntilLabel(next.startsAt, home.timezone)}`
             : "We'll show the time here as soon as it's on the calendar."}
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <SessionCheckInButtons
             meetUrl={next?.meetUrl ?? null}
             canJoin={Boolean(next?.meetUrl && (live || joinReady))}
@@ -135,6 +135,7 @@ export function CommunityTab({
               subtitle={tile.forum && replies > 0 ? `${replies} ${replies === 1 ? "reply" : "replies"} to you` : undefined}
               icon={<Icon className="h-4 w-4" />}
               badge={badge}
+              stacked
             />
           );
         })}

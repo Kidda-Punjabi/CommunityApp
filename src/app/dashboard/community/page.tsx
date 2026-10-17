@@ -18,7 +18,7 @@ export default async function CommunityPage() {
   const native = isNativeAppRequest(await headers());
 
   return (
-    <div className={`${ui.page} !flex !h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] !flex-col !overflow-hidden !py-3`}>
+    <div className={`${ui.page} !flex !h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] !flex-col !overflow-hidden !py-2`}>
       <h1 className="mb-3 font-heading text-2xl font-bold tracking-tight text-zinc-900">Community</h1>
       {allowed ? (
         <CommunityHome userId={user.id} />
