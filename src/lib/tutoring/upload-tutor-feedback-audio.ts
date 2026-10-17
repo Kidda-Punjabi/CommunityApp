@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/client";
-import { HOMEWORK_RECORDINGS_BUCKET } from "@/lib/tutoring/homework-submissions";
 import {
   buildTutorFeedbackAudioPath,
   TUTOR_FEEDBACK_MAX_BYTES,
 } from "@/lib/tutoring/tutor-feedback-audio";
+
+const HOMEWORK_RECORDINGS_BUCKET = "homework-recordings";
 
 export async function uploadTutorFeedbackAudio(input: {
   submissionId: string;
