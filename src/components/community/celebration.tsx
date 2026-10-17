@@ -39,7 +39,7 @@ export function Celebration({
   const copy = LEVEL_COPY[level];
   return (
     <OnboardingFrame action={<OnboardingButton href="/dashboard/community">Go to my Community</OnboardingButton>}>
-      <div className="flex flex-1 flex-col justify-center rounded-[24px] bg-[#5B21B6] p-5 text-white">
+      <div className="flex flex-col justify-start rounded-[24px] bg-[#5B21B6] p-5 text-white">
         <p className="font-heading text-3xl font-extrabold">Shabash!</p>
         <h1 className="font-heading text-4xl font-extrabold">You&apos;re in</h1>
         <p className="mt-3 inline-flex w-fit rounded-full px-3 py-1 text-sm font-bold" style={{ background: levelFillVar(level), color: levelInkVar(level) }}>

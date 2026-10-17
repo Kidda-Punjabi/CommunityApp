@@ -15,15 +15,15 @@ export function OnboardingFrame({
   action: React.ReactNode;
 }) {
   return (
-    <div className="-mx-5 -mt-4 flex min-h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] flex-col bg-[#F7F5FC] px-5 pt-[max(0.75rem,env(safe-area-inset-top))] font-[family-name:var(--font-community)] text-[#1F1640]">
-      <div className="flex h-11 items-center gap-3">
+    <div data-testid="onboarding-frame" className="absolute inset-0 box-border flex w-full min-w-0 flex-col overflow-hidden bg-[#F7F5FC] px-5 pt-2 pb-[calc(var(--kidda-nav-clearance)+1rem)] font-[family-name:var(--font-community)] text-[#1F1640]">
+      <div className="flex h-11 shrink-0 items-center gap-3">
         {backHref ? (
           <Link href={backHref} className="inline-flex min-h-11 min-w-11 items-center text-sm font-semibold text-[#4A3F66]">
             Back
           </Link>
         ) : <span className="min-w-11" />}
         {step ? (
-          <div className="flex flex-1 flex-col gap-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="h-1.5 overflow-hidden rounded-full bg-[#E7E0F4]">
               <div className="h-full rounded-full bg-[#7C3AED]" style={{ width: step === "1 of 3" ? "33%" : step === "2 of 3" ? "66%" : "100%" }} />
             </div>
@@ -32,8 +32,8 @@ export function OnboardingFrame({
         ) : <span className="flex-1" />}
         <span className="min-w-11" />
       </div>
-      <div className="flex min-h-0 flex-1 flex-col justify-between py-3">{children}</div>
-      <div className="pb-[max(0.75rem,env(safe-area-inset-bottom))]">{action}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-start gap-3 overflow-x-hidden overflow-y-auto pt-2">{children}</div>
+      <div data-testid="onboarding-action" className="shrink-0">{action}</div>
     </div>
   );
 }
@@ -52,7 +52,7 @@ export function OnboardingButton({
   href?: string;
 }) {
   const [pending, setPending] = useState(false);
-  const className = `flex h-14 w-full items-center justify-center rounded-[18px] text-base font-bold active:scale-[0.98] disabled:opacity-70 ${
+  const className = `flex h-14 w-full max-w-full items-center justify-center rounded-[18px] text-base font-bold active:scale-[0.98] disabled:opacity-70 ${
     tone === "gold" ? "bg-[#FDE68A] text-[#3B1A8C]" : "bg-[#7C3AED] text-white"
   }`;
   if (href) {

@@ -1,0 +1,25 @@
+name: Onboarding layout
+
+on:
+  push:
+    paths:
+      - "src/components/community/**"
+      - "src/app/dashboard/community/welcome/**"
+      - "src/app/onboarding-frame-preview/**"
+      - "e2e/onboarding-frame.spec.ts"
+      - "playwright.config.ts"
+      - ".github/workflows/onboarding-layout.yml"
+  pull_request:
+
+jobs:
+  layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test

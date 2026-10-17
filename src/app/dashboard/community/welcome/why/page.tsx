@@ -27,7 +27,7 @@ export default async function WelcomeWhyPage() {
       backHref="/dashboard/community/welcome/session"
       action={<OnboardingButton href="/dashboard/community/welcome/levels" tone="gold">See the levels</OnboardingButton>}
     >
-      <div className="flex flex-1 flex-col justify-center rounded-[24px] bg-[#5B21B6] p-5 text-white">
+      <div className="flex flex-col justify-start rounded-[24px] bg-[#5B21B6] p-5 text-white">
         <div className="grid grid-cols-5 gap-1">
           {Array.from({ length: 10 }, (_, level) => (
             <span key={level} className="flex h-8 items-center justify-center rounded-full text-xs font-bold" style={{ background: levelFillVar(level), color: levelInkVar(level) }}>{level}</span>

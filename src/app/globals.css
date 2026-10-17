@@ -34,6 +34,8 @@
   --kidda-band-intermediate-ink: #075e47;
   --kidda-band-advanced-fill: #f1ecff;
   --kidda-band-advanced-ink: #3b1a8c;
+  /* Same space the bottom nav reserves. 5.5rem matches the nav chrome; safe area is the home indicator. */
+  --kidda-nav-clearance: calc(5.5rem + env(safe-area-inset-bottom, 0px));
   color-scheme: light;
 }
 

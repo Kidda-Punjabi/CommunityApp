@@ -6,7 +6,7 @@ export { pressableClass };
 export const ui = {
   pageBg: "bg-zinc-50",
   /** Space for fixed bottom nav + home-indicator safe area */
-  navClearance: "pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]",
+  navClearance: "pb-[var(--kidda-nav-clearance)]",
   page: "flex min-h-0 flex-1 flex-col px-5 py-7",
   section: "mb-8",
   sectionTitle: "mb-4 font-heading text-lg font-semibold text-zinc-900",
