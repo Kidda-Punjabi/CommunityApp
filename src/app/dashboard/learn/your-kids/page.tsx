@@ -25,12 +25,12 @@ export default async function YourKidsPage() {
             ? levelFillVar(Math.min(9, Math.max(0, row.currentLevelNumber ?? 0)))
             : undefined;
           const level = row.currentLevelLabel;
-          const name = row.courseName ?? "";
+          const course = (row.courseName ?? "").replace(/\s*\(Level \d+\)\s*$/i, "");
           const status = !enrolled
             ? "Not enrolled yet"
-            : level && name && !name.includes(level)
-              ? `${name} · ${level}`
-              : name || level || "Enrolled";
+            : course && level
+              ? `${course} · ${level}`
+              : course || level || "Enrolled";
           return (
             <li key={row.kidProfileId}>
               <NavLink

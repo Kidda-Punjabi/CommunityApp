@@ -123,7 +123,6 @@ export default async function LearnPage() {
         weeklyPoints={dashboard.headerPoints}
         profileHref={dashboard.profileHref}
       />
-      <HomeStreakBanner />
     </>
   );
 
@@ -224,6 +223,7 @@ export default async function LearnPage() {
             }}
           >
             {greeting}
+            <HomeStreakBanner />
             <Link
               href={learnTrackPath(trackId)}
               className="block rounded-3xl bg-white p-4 shadow-sm"
@@ -263,6 +263,7 @@ export default async function LearnPage() {
           }}
         >
           {greeting}
+          <HomeStreakBanner />
           <div className="space-y-3">
             <OlderKidBeginnerCard
               level1Href={beginnerCourse ? kidsCourseLearnPath(beginnerCourse.id) : null}
