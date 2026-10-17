@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { verifiedUserFromCookies } from "@/lib/supabase/local-session";
+import { tracedFetch } from "@/lib/perf/fetch";
 
 async function createRawClient() {
   const cookieStore = await cookies();
@@ -10,6 +11,7 @@ async function createRawClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      global: { fetch: tracedFetch },
       cookies: {
         getAll() {
           return cookieStore.getAll();

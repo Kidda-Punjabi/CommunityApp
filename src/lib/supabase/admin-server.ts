@@ -1,3 +1,4 @@
+import { tracedFetch } from "@/lib/perf/fetch";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export function createServiceRoleClient() {
@@ -15,6 +16,7 @@ export function createServiceRoleClient() {
       persistSession: false,
       autoRefreshToken: false,
     },
+    global: { fetch: tracedFetch },
   });
 }
 
