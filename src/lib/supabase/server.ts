@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
+import { verifiedUserFromCookies } from "@/lib/supabase/local-session";
 
-export async function createClient() {
+async function createRawClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -25,4 +27,24 @@ export async function createClient() {
       },
     }
   );
+}
+
+const cachedAuthUser = cache(async () => {
+  const cookieStore = await cookies();
+  const local = await verifiedUserFromCookies(cookieStore);
+  if (local.user && !local.refresh) {
+    return { data: { user: local.user }, error: null };
+  }
+  const supabase = await createRawClient();
+  return supabase.auth.getUser();
+});
+
+export async function createClient() {
+  const supabase = await createRawClient();
+  const originalGetUser = supabase.auth.getUser.bind(supabase.auth);
+  supabase.auth.getUser = ((jwt?: string) => {
+    if (jwt) return originalGetUser(jwt);
+    return cachedAuthUser();
+  }) as typeof supabase.auth.getUser;
+  return supabase;
 }

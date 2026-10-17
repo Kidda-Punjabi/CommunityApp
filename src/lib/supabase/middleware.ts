@@ -21,6 +21,7 @@ import {
 import { isKidBlockedCommunityPath } from "@/lib/kids/community-block";
 import { KID_PROFILE_COOKIE } from "@/lib/kids/constants";
 import { planRedirect } from "@/lib/navigation/redirect-guard";
+import { isPrefetchRequest, verifiedUserFromCookies } from "@/lib/supabase/local-session";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -91,9 +92,13 @@ export async function updateSession(request: NextRequest) {
   );
 
   const authStarted = tracePerf ? performance.now() : 0;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const prefetch = isPrefetchRequest(request.headers);
+  const local = await verifiedUserFromCookies(request.cookies);
+  let user = local.user;
+  if (local.refresh && !prefetch) {
+    const refreshed = await supabase.auth.getUser();
+    user = refreshed.data.user;
+  }
   if (tracePerf) {
     const authMs = Math.max(0, Math.round(performance.now() - authStarted));
     requestHeaders.set("x-perf-mw-ms", String(authMs));
@@ -194,6 +199,10 @@ export async function updateSession(request: NextRequest) {
       const response = redirectTo(request, "/login", { count: 0 });
       if (response) return response;
     }
+  }
+
+  if (!user && prefetch && local.refresh) {
+    return supabaseResponse;
   }
 
   if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
