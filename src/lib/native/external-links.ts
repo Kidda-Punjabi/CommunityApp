@@ -14,7 +14,7 @@ export function isVideoCallUrl(url: URL): boolean {
 
 export function isLauncherUrl(raw: string): boolean {
   const value = raw.trim();
-  if (/^(mailto:|tel:|sms:|whatsapp:)/i.test(value)) return true;
+  if (/^(mailto:|tel:|sms:|whatsapp:|intent:)/i.test(value)) return true;
   try {
     const url = new URL(value);
     const host = hostnameOf(url);

@@ -456,6 +456,37 @@ html.kidda-native .sticky.top-0 {
   top: env(safe-area-inset-top, 0px);
 }
 
+/* Android only, and only when the WebView reports a 0 inset. iOS keeps env(). */
+html.kidda-native.kidda-android-insets {
+  --kidda-nav-clearance: calc(5.5rem + var(--kidda-sab, env(safe-area-inset-bottom, 0px)));
+}
+
+html.kidda-native.kidda-android-insets body {
+  padding-top: var(--kidda-sat, env(safe-area-inset-top, 0px));
+  padding-left: var(--kidda-sal, 0px);
+  padding-right: var(--kidda-sar, 0px);
+}
+
+html.kidda-native.kidda-android-insets .fixed.inset-0 {
+  top: var(--kidda-sat, env(safe-area-inset-top, 0px));
+  right: var(--kidda-sar, 0px);
+  bottom: var(--kidda-sab, env(safe-area-inset-bottom, 0px));
+  left: var(--kidda-sal, 0px);
+}
+
+html.kidda-native.kidda-android-insets .fixed.top-0:not(.inset-0),
+html.kidda-native.kidda-android-insets .sticky.top-0 {
+  top: var(--kidda-sat, env(safe-area-inset-top, 0px));
+}
+
+html.kidda-native.kidda-android-insets nav.kidda-bottom-chrome {
+  padding-bottom: max(0.75rem, var(--kidda-sab, env(safe-area-inset-bottom, 0px)));
+}
+
+html.kidda-native.kidda-android-insets nav.kidda-bottom-chrome > div {
+  padding-bottom: 0;
+}
+
 html.kidda-native input,
 html.kidda-native textarea,
 html.kidda-native select {

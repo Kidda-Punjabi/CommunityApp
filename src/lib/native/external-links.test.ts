@@ -17,6 +17,7 @@ describe("decideLink", () => {
     assert.equal(decideLink("https://teams.microsoft.com/l/meetup-join/abc", ORIGIN), "launcher");
     assert.equal(decideLink("mailto:hello@kidda.app", ORIGIN), "launcher");
     assert.equal(decideLink("tel:+441234567890", ORIGIN), "launcher");
+    assert.equal(decideLink("intent:#Intent;action=android.intent.action.VIEW;end", ORIGIN), "launcher");
     assert.equal(decideLink("https://wa.me/441234567890", ORIGIN), "launcher");
   });
 

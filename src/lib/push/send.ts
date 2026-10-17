@@ -3,6 +3,7 @@ import "server-only";
 import http2, { type ClientHttp2Session } from "node:http2";
 import { importPKCS8, SignJWT } from "jose";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
+import { fcmConfigured, postFcm } from "@/lib/push/fcm";
 import {
   CAP_EXEMPT,
   TYPE_CATEGORY,
@@ -41,6 +42,7 @@ export type SendPushResult =
 type TokenRow = {
   id: string;
   token: string;
+  platform: string | null;
   disabled_at: string | null;
 };
 
@@ -181,6 +183,7 @@ async function writeLog(row: {
   body?: string;
   url?: string;
   expiresAt?: Date | null;
+  platform?: string | null;
 }): Promise<void> {
   const admin = createServiceRoleClient();
   const { error } = await admin.from("push_send_log").upsert(
@@ -197,6 +200,7 @@ async function writeLog(row: {
       body: row.body ?? null,
       url: row.url ?? null,
       expires_at: row.expiresAt?.toISOString() ?? null,
+      platform: row.platform ?? null,
     },
     { onConflict: "user_id,type,ref_key" }
   );
@@ -299,49 +303,91 @@ export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
     return "deferred";
   }
 
-  if (!apnsConfigured()) return "unconfigured";
-
   const { data: tokens } = await admin
     .from("device_push_tokens")
-    .select("id, token, disabled_at")
+    .select("id, token, platform, disabled_at")
     .eq("user_id", userId)
     .is("disabled_at", null);
 
   const active = (tokens ?? []) as TokenRow[];
   if (active.length === 0) return "skipped";
 
-  await apnsJwt();
+  const iosTokens = active.filter((device) => (device.platform ?? "ios") !== "android");
+  const androidTokens = active.filter((device) => device.platform === "android");
+  const iosReady = iosTokens.length > 0 && apnsConfigured();
+  const androidReady = androidTokens.length > 0 && fcmConfigured();
+  if (!iosReady && !androidReady) return "unconfigured";
+
   let sent = 0;
   let lastError = "";
-  for (const device of active) {
-    try {
-      const response = await postApns(device.token, {
-        aps: {
-          alert: { title, body: input.body },
-          sound: "default",
-        },
-        url: input.url,
-        type: input.type,
-      });
-      const reason = response.body ? (JSON.parse(response.body).reason as string | undefined) : undefined;
-      if (response.status === 200) {
-        sent += 1;
-        continue;
+  const sentPlatforms = new Set<string>();
+
+  if (iosReady) {
+    await apnsJwt();
+    for (const device of iosTokens) {
+      try {
+        const response = await postApns(device.token, {
+          aps: {
+            alert: { title, body: input.body },
+            sound: "default",
+          },
+          url: input.url,
+          type: input.type,
+        });
+        const reason = response.body ? (JSON.parse(response.body).reason as string | undefined) : undefined;
+        if (response.status === 200) {
+          sent += 1;
+          sentPlatforms.add("ios");
+          continue;
+        }
+        lastError = reason || `HTTP ${response.status}`;
+        if (response.status === 410 || reason === "BadDeviceToken" || reason === "Unregistered") {
+          await admin
+            .from("device_push_tokens")
+            .update({ disabled_at: new Date().toISOString() })
+            .eq("id", device.id);
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "APNs request failed";
       }
-      lastError = reason || `HTTP ${response.status}`;
-      if (response.status === 410 || reason === "BadDeviceToken" || reason === "Unregistered") {
-        await admin
-          .from("device_push_tokens")
-          .update({ disabled_at: new Date().toISOString() })
-          .eq("id", device.id);
+    }
+  }
+
+  if (androidReady) {
+    for (const device of androidTokens) {
+      try {
+        const response = await postFcm({
+          deviceToken: device.token,
+          title,
+          body: input.body,
+          url: input.url,
+          type: input.type,
+        });
+        if (response.ok) {
+          sent += 1;
+          sentPlatforms.add("android");
+          continue;
+        }
+        lastError = response.error;
+        if (response.unregistered) {
+          await admin
+            .from("device_push_tokens")
+            .update({ disabled_at: new Date().toISOString() })
+            .eq("id", device.id);
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "FCM request failed";
       }
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : "APNs request failed";
     }
   }
 
   await recordOutcome(
-    { ...outcomeBase, status: sent > 0 ? "sent" : "failed", error: sent > 0 ? null : lastError },
+    {
+      ...outcomeBase,
+      status: sent > 0 ? "sent" : "failed",
+      error: sent > 0 ? null : lastError,
+      platform: [...sentPlatforms].join(",") || null,
+    },
     input.alsoLog,
     kidProfileId
   );

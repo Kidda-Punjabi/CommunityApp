@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { isNativeApp } from "@/lib/native/platform";
+import { isNativeApp, nativePlatform } from "@/lib/native/platform";
 import {
   registerDevicePushToken,
   touchDevicePushToken,
@@ -40,6 +40,15 @@ export function PushManager() {
 
     void (async () => {
       const { PushNotifications } = await import("@capacitor/push-notifications");
+      const platform = nativePlatform() === "android" ? "android" : "ios";
+      if (platform === "android") {
+        await PushNotifications.createChannel({
+          id: "kidda",
+          name: "Kidda",
+          description: "Class reminders and homework",
+          importance: 3,
+        }).catch(() => undefined);
+      }
       const registration = await PushNotifications.addListener("registration", (event) => {
         localStorage.setItem(TOKEN_KEY, event.value);
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -49,6 +58,7 @@ export function PushManager() {
             token: event.value,
             timezone,
             appVersion: info?.version ?? "",
+            platform,
           });
         });
       });

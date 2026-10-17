@@ -6,6 +6,7 @@ export async function registerDevicePushToken(input: {
   token: string;
   timezone: string;
   appVersion: string;
+  platform?: "ios" | "android";
 }): Promise<void> {
   const token = input.token.trim();
   if (!token) return;
@@ -14,6 +15,7 @@ export async function registerDevicePushToken(input: {
     p_token: token,
     p_timezone: input.timezone,
     p_app_version: input.appVersion,
+    p_platform: input.platform === "android" ? "android" : "ios",
   });
   if (error) console.error("[push] register", error.message);
 }

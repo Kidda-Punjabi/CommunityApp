@@ -14,10 +14,21 @@ export function isNativeAppRequest(headerList: Headers): boolean {
 
 type CapacitorGlobal = {
   isNativePlatform?: () => boolean;
+  getPlatform?: () => string;
 };
 
+function capacitorGlobal(): CapacitorGlobal | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as Window & { Capacitor?: CapacitorGlobal }).Capacitor;
+}
+
 export function isNativeApp(): boolean {
-  if (typeof window === "undefined") return false;
-  const capacitor = (window as Window & { Capacitor?: CapacitorGlobal }).Capacitor;
-  return capacitor?.isNativePlatform?.() === true;
+  return capacitorGlobal()?.isNativePlatform?.() === true;
+}
+
+/** Web and iOS stay on their existing paths. Android-only branches check this. */
+export function nativePlatform(): "ios" | "android" | "web" {
+  const platform = capacitorGlobal()?.getPlatform?.();
+  if (platform === "ios" || platform === "android") return platform;
+  return "web";
 }

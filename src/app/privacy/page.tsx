@@ -154,6 +154,19 @@ export default async function PrivacyPage() {
           </section>
 
           <section className="space-y-3">
+            <h2 className="font-heading text-lg font-semibold text-zinc-900">Delete your account</h2>
+            <p>
+              You can delete your account in the app (Profile, then Delete account), on the web
+              after signing in, or by emailing hello@kidda.app. The steps and what we delete or
+              keep are on the{" "}
+              <Link href="/account-deletion" className="font-medium text-violet-600 hover:text-violet-500">
+                account deletion
+              </Link>{" "}
+              page.
+            </p>
+          </section>
+
+          <section className="space-y-3">
             <h2 className="font-heading text-lg font-semibold text-zinc-900">Changes</h2>
             <p>
               We may update this policy from time to time. The “Last updated” date at the top will

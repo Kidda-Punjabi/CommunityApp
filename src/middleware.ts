@@ -2,7 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname === "/.well-known/apple-app-site-association") {
+  if (
+    request.nextUrl.pathname === "/.well-known/apple-app-site-association" ||
+    request.nextUrl.pathname === "/.well-known/assetlinks.json"
+  ) {
     return NextResponse.next();
   }
   return await updateSession(request);

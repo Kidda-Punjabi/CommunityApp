@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { isNativeApp } from "@/lib/native/platform";
-import { decideLink, downloadFileName } from "@/lib/native/external-links";
+import { isNativeApp, nativePlatform } from "@/lib/native/platform";
+import { decideLink, downloadFileName, isVideoCallUrl } from "@/lib/native/external-links";
 
 function safeFileName(name: string): string {
   const cleaned = name.replace(/[^\w.\- ]+/g, "").trim();
@@ -40,6 +40,25 @@ async function shareDownload(href: string, fileName: string): Promise<void> {
 }
 
 async function openExternal(decision: "browser" | "launcher", href: string): Promise<void> {
+  if (decision === "launcher" && nativePlatform() === "android") {
+    let video = false;
+    try {
+      video = isVideoCallUrl(new URL(href));
+    } catch {
+      video = false;
+    }
+    if (video) {
+      const { AppLauncher } = await import("@capacitor/app-launcher");
+      const canOpen = await AppLauncher.canOpenUrl({ url: href }).catch(() => ({ value: false }));
+      if (canOpen.value) {
+        await AppLauncher.openUrl({ url: href });
+        return;
+      }
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url: href });
+      return;
+    }
+  }
   if (decision === "launcher") {
     const { AppLauncher } = await import("@capacitor/app-launcher");
     await AppLauncher.openUrl({ url: href });
@@ -47,6 +66,42 @@ async function openExternal(decision: "browser" | "launcher", href: string): Pro
   }
   const { Browser } = await import("@capacitor/browser");
   await Browser.open({ url: href });
+}
+
+const TOP_LEVEL = new Set([
+  "/dashboard/learn",
+  "/dashboard/home",
+  "/dashboard/community",
+  "/dashboard/games",
+  "/dashboard/profile",
+  "/dashboard/kids",
+  "/dashboard/kids/stickers",
+  "/dashboard/kids/match",
+  "/dashboard/profile/kids",
+]);
+
+function homeFor(path: string): string {
+  if (path.startsWith("/dashboard/kids") || path.startsWith("/dashboard/profile/kids")) {
+    return "/dashboard/kids";
+  }
+  return "/dashboard/learn";
+}
+
+function closeOpenSheet(): boolean {
+  const dialog = document.querySelector("[aria-modal='true']");
+  if (!dialog) return false;
+  const buttons = [...dialog.querySelectorAll("button")];
+  const close = buttons.find((button) => {
+    const label = button.getAttribute("aria-label")?.trim() ?? "";
+    const text = button.textContent?.trim() ?? "";
+    return /^(close|cancel|dismiss)$/i.test(label) || /^(close|cancel|dismiss)$/i.test(text);
+  });
+  if (close) {
+    close.click();
+    return true;
+  }
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  return true;
 }
 
 export function NativeBridge() {
@@ -129,7 +184,9 @@ export function NativeBridge() {
         await StatusBar.setOverlaysWebView({ overlay: true });
         await StatusBar.setStyle({ style: Style.Light });
         await StatusBar.setBackgroundColor({ color: "#fafafa" });
-        await Keyboard.setAccessoryBarVisible({ isVisible: true });
+        if (nativePlatform() === "ios") {
+          await Keyboard.setAccessoryBarVisible({ isVisible: true });
+        }
         await Keyboard.setResizeMode({ mode: KeyboardResize.Native });
 
         let splashHidden = false;
@@ -148,6 +205,30 @@ export function NativeBridge() {
         const hideHandle = await Keyboard.addListener("keyboardWillHide", () => {
           document.documentElement.classList.remove("kidda-keyboard-open");
         });
+        let lastHomeBack = 0;
+        const backHandle =
+          nativePlatform() === "android"
+            ? await App.addListener("backButton", ({ canGoBack }) => {
+                if (closeOpenSheet()) return;
+                const path = window.location.pathname;
+                if (canGoBack) {
+                  window.history.back();
+                  return;
+                }
+                if (!TOP_LEVEL.has(path)) return;
+                const home = homeFor(path);
+                if (path !== home) {
+                  window.location.assign(home);
+                  return;
+                }
+                const now = Date.now();
+                if (now - lastHomeBack < 2000) {
+                  void App.exitApp();
+                  return;
+                }
+                lastHomeBack = now;
+              })
+            : null;
         const urlHandle = await App.addListener("appUrlOpen", (event) => {
           try {
             const url = new URL(event.url);
@@ -165,16 +246,18 @@ export function NativeBridge() {
           await showHandle.remove();
           await hideHandle.remove();
           await urlHandle.remove();
+          await backHandle?.remove();
           return;
         }
         cleanups.push(() => {
           void showHandle.remove();
           void hideHandle.remove();
           void urlHandle.remove();
+          void backHandle?.remove();
           document.documentElement.classList.remove("kidda-keyboard-open");
         });
       } catch {
-        // Plugin setup only runs inside the iOS shell.
+        // Plugin setup only runs inside the native shell.
       }
     })();
 

@@ -17,6 +17,11 @@ const config: CapacitorConfig = {
     allowsLinkPreview: false,
     backgroundColor: "#ffffff",
   },
+  android: {
+    appendUserAgent: "KiddaApp/1.0",
+    backgroundColor: "#ffffff",
+    allowMixedContent: false,
+  },
   plugins: {
     SplashScreen: {
       launchAutoHide: false,

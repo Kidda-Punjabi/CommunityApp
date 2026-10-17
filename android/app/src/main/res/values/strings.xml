@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kidda</string>
+    <string name="title_activity_main">Kidda</string>
+    <string name="package_name">app.kidda</string>
+    <string name="custom_url_scheme">app.kidda</string>
+</resources>
