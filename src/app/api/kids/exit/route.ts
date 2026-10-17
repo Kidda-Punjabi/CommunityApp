@@ -40,5 +40,5 @@ export async function POST(request: Request) {
   markWhoIsLearningPicked(cookieStore);
   await syncKidSessionContext(user.id, null);
 
-  return NextResponse.json({ ok: true, redirectTo: "/dashboard/learn" });
+  return NextResponse.json({ ok: true, redirectTo: "/dashboard/profile" });
 }

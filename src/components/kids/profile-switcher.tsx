@@ -115,7 +115,7 @@ export function ProfileSwitcher({
           return;
         }
         setParentPinOpen(false);
-        router.push(data.redirectTo ?? "/dashboard/learn");
+        router.push(data.redirectTo ?? "/dashboard/profile");
         router.refresh();
         return;
       }
@@ -126,7 +126,7 @@ export function ProfileSwitcher({
         setError(data.error ?? "Could not continue as parent.");
         return;
       }
-      router.push(data.redirectTo ?? "/dashboard/learn");
+      router.push(data.redirectTo ?? "/dashboard/profile");
       router.refresh();
     } finally {
       setPinLoading(false);

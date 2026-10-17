@@ -73,5 +73,5 @@ export async function DELETE() {
   markWhoIsLearningPicked(cookieStore);
   await syncKidSessionContext(user.id, null);
 
-  return NextResponse.json({ ok: true, redirectTo: "/dashboard/learn" });
+  return NextResponse.json({ ok: true, redirectTo: "/dashboard/profile" });
 }

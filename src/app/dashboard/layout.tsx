@@ -70,7 +70,7 @@ export default async function DashboardLayout({
   const pathname = headerList.get("x-pathname") ?? "";
   const isPickerScreen = isKidProfilePickerPath(pathname);
   const isWhoIsLearningFlow =
-    isPickerScreen || pathname.startsWith("/dashboard/profile/kids/");
+    isPickerScreen || pathname.startsWith("/dashboard/profile");
   const tutorShell = pathname.startsWith("/dashboard/tutor");
   const redirects = { count: 0 };
   const mayAskWhoIsLearning =

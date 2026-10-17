@@ -249,20 +249,6 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  const profilePath = request.nextUrl.pathname;
-  const isKidsSwitcher = profilePath === "/dashboard/profile/kids";
-  if (
-    user &&
-    !isKidsSwitcher &&
-    (profilePath === "/dashboard/profile" || profilePath.startsWith("/dashboard/profile/"))
-  ) {
-    const kidCookie = request.cookies.get(KID_PROFILE_COOKIE)?.value?.trim();
-    if (kidCookie) {
-      const response = redirectTo(request, POST_AUTH_PATH, redirects);
-      if (response) return response;
-    }
-  }
-
   if (user?.email) {
     const remembered = lastUserFromAuthMetadata(user);
     if (remembered) {
