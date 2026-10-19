@@ -186,8 +186,11 @@ export function NativeBridge() {
         await StatusBar.setBackgroundColor({ color: "#fafafa" });
         if (nativePlatform() === "ios") {
           await Keyboard.setAccessoryBarVisible({ isVisible: true });
+          // Android's Keyboard plugin rejects setResizeMode as unimplemented, and a
+          // rejection here skips splash hide and the back handler. Resize on Android
+          // comes from the manifest (adjustResize) and capacitor.config.
+          await Keyboard.setResizeMode({ mode: KeyboardResize.Native });
         }
-        await Keyboard.setResizeMode({ mode: KeyboardResize.Native });
 
         let splashHidden = false;
         const hideSplash = () => {
@@ -211,22 +214,24 @@ export function NativeBridge() {
             ? await App.addListener("backButton", ({ canGoBack }) => {
                 if (closeOpenSheet()) return;
                 const path = window.location.pathname;
+                if (TOP_LEVEL.has(path)) {
+                  const home = homeFor(path);
+                  if (path !== home) {
+                    window.location.assign(home);
+                    return;
+                  }
+                  const now = Date.now();
+                  if (now - lastHomeBack < 2000) {
+                    void App.exitApp();
+                    return;
+                  }
+                  lastHomeBack = now;
+                  return;
+                }
                 if (canGoBack) {
                   window.history.back();
                   return;
                 }
-                if (!TOP_LEVEL.has(path)) return;
-                const home = homeFor(path);
-                if (path !== home) {
-                  window.location.assign(home);
-                  return;
-                }
-                const now = Date.now();
-                if (now - lastHomeBack < 2000) {
-                  void App.exitApp();
-                  return;
-                }
-                lastHomeBack = now;
               })
             : null;
         const urlHandle = await App.addListener("appUrlOpen", (event) => {
