@@ -3,6 +3,7 @@
 import { fetchCeoSnapshot, refreshCeoSnapshot } from "@/app/admin/ceo/actions";
 import { fetchAdminDashboard } from "@/app/admin/content/home-actions";
 import { useAdminData } from "@/app/admin/content/admin-data-provider";
+import { AdminCleanupSweepPanel } from "@/components/admin/admin-cleanup-sweep-panel";
 import { AdminAcquisitionDashboard } from "@/components/admin/acquisition/admin-acquisition-dashboard";
 import { AdminSalesReportPanel } from "@/components/admin/acquisition/admin-sales-report-panel";
 import { AdminDashboardGrid } from "@/components/admin/admin-dashboard-cards";
@@ -179,6 +180,7 @@ export function AdminHomeContent() {
             ) : overviewError ? null : (
               <p className="text-sm text-zinc-500">No snapshot yet.</p>
             )}
+            <AdminCleanupSweepPanel />
           </div>
         ) : activeTab === "operations" ? (
           <div className="space-y-8">
