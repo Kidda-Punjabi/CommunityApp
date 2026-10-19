@@ -116,7 +116,7 @@ export function HomeOneScreen({
           );
         })}
       </div>
-      <div className="grid grid-cols-2 content-start gap-2">
+      <div className="grid grid-cols-2 content-start gap-2 tab:grid-cols-4">
         <CommunityHomeTile
           href={communityLocked ? communityHref || undefined : communityHref}
           status={communityStatus}

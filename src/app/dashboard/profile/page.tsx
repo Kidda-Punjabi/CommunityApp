@@ -93,7 +93,7 @@ export default async function ProfilePage({
             className="shrink-0 shadow-[0_4px_20px_-4px_rgba(24,24,27,0.12)] ring-4 ring-white"
           />
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-medium text-zinc-900">
+            <h1 className="truncate text-xl font-medium text-zinc-900 tab:text-2xl">
               {displayName || "Your profile"}
             </h1>
             <p className="mt-0.5 truncate text-sm text-zinc-500">{user?.email}</p>

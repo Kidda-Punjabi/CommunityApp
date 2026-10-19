@@ -126,11 +126,11 @@ export function TopicSpeedQuizActivity({
   }
 
   return (
-    <div className="mx-auto max-w-md text-center">
+    <div className="mx-auto max-w-md text-center tab:max-w-[720px]">
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
         Speed quiz
       </p>
-      <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900">{title}</h1>
+      <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900 tab:text-2xl">{title}</h1>
       <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-100">
         <div
@@ -151,11 +151,11 @@ export function TopicSpeedQuizActivity({
               <PunjabiWithRomanisation
                 gurmukhi={promptGurmukhi}
                 romanised={promptRomanised}
-                textClassName="block text-lg font-semibold text-zinc-900"
+                textClassName="block text-lg font-semibold text-zinc-900 tab:text-[30px]"
                 romanisedClassName="mt-1 block text-sm font-normal text-violet-600"
               />
             ) : (
-              <p className="text-lg font-semibold text-zinc-900">{promptGurmukhi}</p>
+              <p className="text-lg font-semibold text-zinc-900 tab:text-[30px]">{promptGurmukhi}</p>
             )}
           </div>
           {card?.audioUrl ? (
@@ -163,7 +163,7 @@ export function TopicSpeedQuizActivity({
           ) : null}
         </div>
 
-        <ul className="mt-5 space-y-2.5">
+        <ul className="mt-5 space-y-2.5 tab:grid tab:grid-cols-2 tab:gap-3 tab:space-y-0">
           {options.map((option, optionIndex) => {
             const isSelected = selected === optionIndex;
             const isCorrect = option.text === answerText;
@@ -180,7 +180,7 @@ export function TopicSpeedQuizActivity({
                   type="button"
                   disabled={revealed}
                   onClick={() => select(optionIndex)}
-                  className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium transition disabled:cursor-default ${style}`}
+                  className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium transition disabled:cursor-default tab:min-h-24 tab:text-[30px] tab:leading-snug ${style}`}
                 >
                   {containsGurmukhi(option.text) ? (
                     <PunjabiWithRomanisation

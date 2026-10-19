@@ -24,7 +24,7 @@ export default async function HomePage() {
     <div className={ui.page}>
       <section className={ui.section}>
         <div className="mb-5 text-center">
-          <h1 className="font-heading text-2xl font-semibold text-zinc-900">
+          <h1 className="font-heading text-2xl font-semibold text-zinc-900 tab:text-3xl">
             Everyday Punjabi
           </h1>
           <p className="mt-1 text-sm text-zinc-500">

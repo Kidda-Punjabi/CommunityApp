@@ -264,14 +264,14 @@ export function ComprehensionPracticeMode({
             </p>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid gap-2 tab:grid-cols-2 tab:gap-3">
             {options.map((option) => {
               const isSelected = selectedOption === option.id;
               const isCorrect = option.id === currentQuestion.correct_option;
               const showResult = selectedOption !== null;
 
               let className =
-                "rounded-xl border px-4 py-3 text-left text-sm transition-colors ";
+                "rounded-xl border px-4 py-3 text-left text-sm transition-colors tab:min-h-24 tab:text-[30px] tab:leading-snug ";
 
               if (showResult) {
                 if (isCorrect) {

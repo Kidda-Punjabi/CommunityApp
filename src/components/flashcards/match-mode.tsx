@@ -12,10 +12,12 @@ import type { FlashcardDeckContext } from "@/lib/flashcards/types";
 import { gameDeckHubHref } from "@/lib/flashcards/utils";
 import {
   MATCH_PAIRS_PER_SCREEN,
+  MATCH_TABLET_PAIRS_PER_SCREEN,
   buildMatchTileChunks,
   matchGameSeconds,
   type MatchTile,
 } from "@/lib/flashcards/match-rounds";
+import { nativeTabletNow, useNativeTablet } from "@/lib/native/use-native-tablet";
 import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
@@ -39,7 +41,10 @@ export function FlashcardMatchMode({
   onKidsComplete,
 }: FlashcardMatchModeProps) {
   const deckHubHref = gameDeckHubHref("match");
+  const tablet = useNativeTablet();
+  const pairsPerScreen = tablet ? MATCH_TABLET_PAIRS_PER_SCREEN : MATCH_PAIRS_PER_SCREEN;
   const gameSeconds = matchGameSeconds(deck.cards.length);
+  const setSeconds = matchGameSeconds(Math.min(pairsPerScreen, deck.cards.length));
 
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
   const [secondsLeft, setSecondsLeft] = useState(gameSeconds);
@@ -181,6 +186,11 @@ export function FlashcardMatchMode({
     if (!chunkComplete) return;
 
     const timeout = window.setTimeout(() => {
+      const nextChunk = tileChunks[chunkIndex + 1];
+      if (nativeTabletNow() && nextChunk) {
+        const pairs = new Set(nextChunk.map((tile) => tile.cardId)).size;
+        setSecondsLeft(matchGameSeconds(pairs));
+      }
       setChunkIndex((current) => current + 1);
       setSelectedTileId(null);
       setWrongTileId(null);
@@ -192,10 +202,14 @@ export function FlashcardMatchMode({
   function startGame() {
     savedRef.current = false;
     kidsCompleteRef.current = false;
-    setTileChunks(buildMatchTileChunks(deck.cards, challenge?.config.seed));
+    const tabletNow = nativeTabletNow();
+    const perScreen = tabletNow ? MATCH_TABLET_PAIRS_PER_SCREEN : MATCH_PAIRS_PER_SCREEN;
+    const chunks = buildMatchTileChunks(deck.cards, challenge?.config.seed, perScreen);
+    const openingPairs = new Set((chunks[0] ?? []).map((tile) => tile.cardId)).size;
+    setTileChunks(chunks);
     setChunkIndex(0);
     setPhase("playing");
-    setSecondsLeft(gameSeconds);
+    setSecondsLeft(tabletNow ? matchGameSeconds(openingPairs) : gameSeconds);
     setSelectedTileId(null);
     setMatchedCardIds(new Set());
     setWrongTileId(null);
@@ -255,11 +269,12 @@ export function FlashcardMatchMode({
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
             Match · {deck.deckName}
           </p>
-          <h1 className="mt-1 text-2xl font-bold text-zinc-900">{deck.lessonTitle}</h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            Match front and back pairs as fast as you can in {gameSeconds} seconds
-            {deck.cards.length > MATCH_PAIRS_PER_SCREEN
-              ? ` · words appear in sets of ${MATCH_PAIRS_PER_SCREEN} pairs.`
+          <h1 className="mt-1 text-2xl font-bold text-zinc-900 tab:text-3xl">{deck.lessonTitle}</h1>
+          <p className="mt-2 text-sm text-zinc-500 tab:text-base">
+            Match front and back pairs as fast as you can in {tablet ? setSeconds : gameSeconds} seconds
+            {tablet ? " per set" : ""}
+            {deck.cards.length > pairsPerScreen
+              ? ` · words appear in sets of ${pairsPerScreen} pairs.`
               : "."}
           </p>
         </div>
@@ -319,7 +334,7 @@ export function FlashcardMatchMode({
         </p>
       ) : null}
 
-      <div key={chunkIndex} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div key={chunkIndex} className="grid grid-cols-2 gap-2 sm:grid-cols-4 tab:grid-cols-4 tab:gap-3">
         {tiles.map((tile) => {
           const isMatched = matchedCardIds.has(tile.cardId);
           const isSelected = selectedTileId === tile.id;
@@ -332,7 +347,7 @@ export function FlashcardMatchMode({
               data-card-id={tile.cardId}
               disabled={isMatched}
               onClick={() => handleTileClick(tile)}
-              className={`min-h-24 rounded-xl border px-3 py-3 text-left text-sm font-medium transition-colors ${
+              className={`min-h-24 rounded-xl border px-3 py-3 text-left text-sm font-medium transition-colors tab:min-h-[150px] tab:text-[30px] tab:leading-snug ${
                 isMatched
                   ? "border-green-200 bg-green-50 text-green-800 opacity-60"
                   : isWrong

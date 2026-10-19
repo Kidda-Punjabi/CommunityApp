@@ -180,7 +180,7 @@ export function BottomNav({ forumUnread = 0 }: { forumUnread?: number }) {
 
   return (
       <nav className="kidda-bottom-chrome pointer-events-none fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200/60 bg-white/90 shadow-[0_-4px_24px_-8px_rgba(24,24,27,0.08)] backdrop-blur-md">
-      <div className="pointer-events-auto mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5">
+      <div className="pointer-events-auto mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5 tab:w-fit tab:max-w-none tab:justify-center tab:gap-14">
         {navItems
           .filter((item) => !(activeKidProfile && item.href === "/dashboard/community"))
           .map((item) => {
@@ -199,7 +199,7 @@ export function BottomNav({ forumUnread = 0 }: { forumUnread?: number }) {
               href={href}
               data-tour={item.tourId}
               onClick={() => setActiveTab(tabId)}
-              className={`group flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 transition-colors ${
+              className={`group flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 transition-colors tab:w-16 tab:flex-none ${
                 active ? "text-violet-600" : "text-zinc-500"
               }`}
             >

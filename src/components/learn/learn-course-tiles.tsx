@@ -143,7 +143,7 @@ const tileShell =
 
 export function LearnCourseTiles({ tiles }: { tiles: LearnHubTile[] }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-3 tab:grid-cols-4">
       {tiles.map((tile) => {
         const tone = TONE_CLASS[tile.tone];
 

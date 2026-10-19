@@ -19,7 +19,7 @@ export default async function CommunityPage() {
 
   return (
     <div className={`${ui.page} !flex !h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] !flex-col !overflow-hidden !py-2`}>
-      <h1 className="mb-3 font-heading text-2xl font-bold tracking-tight text-zinc-900">Community</h1>
+      <h1 className="mb-3 font-heading text-2xl font-bold tracking-tight text-zinc-900 tab:text-3xl">Community</h1>
       {allowed ? (
         <CommunityHome userId={user.id} />
       ) : (

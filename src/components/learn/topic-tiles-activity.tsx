@@ -200,12 +200,12 @@ export function TopicTilesActivity({
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-5 text-center">
+    <div className="mx-auto max-w-md space-y-5 text-center tab:max-w-[720px]">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
           Sentence tiles
         </p>
-        <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900">
+        <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900 tab:text-2xl">
           {title}
         </h1>
         <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
@@ -231,7 +231,7 @@ export function TopicTilesActivity({
       </div>
 
       <div
-        className={`min-h-20 rounded-xl border-2 border-dashed p-3 transition-colors ${
+        className={`min-h-20 rounded-xl border-2 border-dashed p-3 transition-colors tab:min-h-40 ${
           feedback === "correct"
             ? "border-green-300 bg-green-50"
             : feedback === "wrong"
@@ -251,7 +251,7 @@ export function TopicTilesActivity({
                 type="button"
                 onClick={() => moveToBank(tile)}
                 disabled={Boolean(feedback)}
-                className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-80"
+                className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-80 tab:px-4 tab:py-3 tab:text-[30px]"
               >
                 <span>{tile.word}</span>
                 {latinRomanised(tile.romanised) ? (
@@ -295,7 +295,7 @@ export function TopicTilesActivity({
             type="button"
             onClick={() => moveToBuilt(tile)}
             disabled={Boolean(feedback)}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300 disabled:opacity-70"
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-violet-300 disabled:opacity-70 tab:px-4 tab:py-3 tab:text-[30px]"
           >
             <span>{tile.word}</span>
             {latinRomanised(tile.romanised) ? (

@@ -245,7 +245,7 @@ export function QuizPlayer({
           {courseName}
           {lessonNumber ? ` · Lesson ${lessonNumber}` : ""}
         </p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-900">{quizTitle}</h1>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-900 tab:text-3xl">{quizTitle}</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Question {index + 1} of {questions.length}
         </p>
@@ -280,7 +280,7 @@ export function QuizPlayer({
             ) : null}
           </div>
         ) : null}
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 space-y-2 tab:grid tab:grid-cols-2 tab:gap-3 tab:space-y-0">
           {options.map((option) => {
             const isSelected = selected === option.key;
             const isCorrectOption = option.key === question.correct_answer;
@@ -312,7 +312,7 @@ export function QuizPlayer({
                 className={className}
               >
                 <span className="font-semibold uppercase">{option.key}.</span>{" "}
-                <span className="text-lg">{option.label}</span>
+                <span className="text-lg tab:text-[30px] tab:leading-snug">{option.label}</span>
                 {letterName ? (
                   <span className="ml-2 text-sm font-medium text-violet-600">
                     {letterName}

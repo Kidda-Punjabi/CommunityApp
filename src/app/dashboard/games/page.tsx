@@ -51,7 +51,7 @@ export default async function GamesPage() {
   return (
     <div className="flex flex-col px-5 py-7">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Games</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 tab:text-3xl">Games</h1>
         <p className="mt-1 text-sm text-zinc-500">
           {englishMode
             ? "Play vocabulary games with your Learn English flashcards."

@@ -153,7 +153,7 @@ export default async function DashboardLayout({
                     className={
                       kidsShellActive
                         ? `relative isolate flex w-full flex-1 flex-col ${ui.navClearance}`
-                        : `relative isolate mx-auto flex w-full max-w-lg flex-1 flex-col ${
+                        : `relative isolate mx-auto flex w-full max-w-lg flex-1 flex-col tab:max-w-3xl tab:px-12 ${
                           tutorShell ? "" : ui.pageBg
                         } ${ui.navClearance}`
                     }

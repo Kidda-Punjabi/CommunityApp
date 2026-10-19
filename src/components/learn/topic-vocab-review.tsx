@@ -40,8 +40,8 @@ export function TopicVocabReview({
 
   if (done) {
     return (
-      <div className="mx-auto max-w-md text-center">
-        <h1 className="font-heading text-2xl font-semibold text-zinc-900">
+      <div className="mx-auto max-w-md text-center tab:max-w-[680px]">
+        <h1 className="font-heading text-2xl font-semibold text-zinc-900 tab:text-3xl">
           Vocab reviewed
         </h1>
         <p className="mt-2 text-sm text-zinc-500">
@@ -74,11 +74,11 @@ export function TopicVocabReview({
   }
 
   return (
-    <div className="mx-auto max-w-md text-center">
+    <div className="mx-auto max-w-md text-center tab:max-w-[680px]">
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
         Review Vocab
       </p>
-      <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900">
+      <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900 tab:text-2xl">
         {topicTitle}
       </h1>
       <p className="mt-1 text-xs text-zinc-400">
@@ -89,7 +89,7 @@ export function TopicVocabReview({
         <button
           type="button"
           onClick={() => setFlipped((value) => !value)}
-          className="flex min-h-48 w-full flex-col items-center justify-center rounded-3xl border border-zinc-200 bg-white px-6 py-8 shadow-sm"
+          className="flex min-h-48 w-full flex-col items-center justify-center rounded-3xl border border-zinc-200 bg-white px-6 py-8 shadow-sm tab:min-h-[520px]"
         >
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
             {flipped ? "Punjabi" : "English"}
@@ -99,11 +99,11 @@ export function TopicVocabReview({
               gurmukhi={punjabi.gurmukhi}
               romanised={punjabi.romanised}
               className="mt-3"
-              textClassName="block text-2xl font-semibold leading-snug text-zinc-900"
+              textClassName="block text-2xl font-semibold leading-snug text-zinc-900 tab:text-5xl"
               romanisedClassName="mt-2 block text-sm font-normal text-violet-600"
             />
           ) : (
-            <p className="mt-3 text-2xl font-semibold leading-snug text-zinc-900">
+            <p className="mt-3 text-2xl font-semibold leading-snug text-zinc-900 tab:text-5xl">
               {card.front_text}
             </p>
           )}
@@ -124,7 +124,7 @@ export function TopicVocabReview({
           type="button"
           disabled={pending}
           onClick={() => markAndAdvance(false)}
-          className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+          className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 tab:h-[60px] tab:text-base"
         >
           Still learning
         </button>
@@ -132,7 +132,7 @@ export function TopicVocabReview({
           type="button"
           disabled={pending}
           onClick={() => markAndAdvance(true)}
-          className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+          className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60 tab:h-[60px] tab:text-base"
         >
           Know it
         </button>

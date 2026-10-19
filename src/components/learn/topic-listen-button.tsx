@@ -50,16 +50,16 @@ export function TopicListenButton({
           onClick={handlePlay}
           aria-label={label}
           title={label}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-violet-600"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-violet-600 tab:h-14 tab:w-14"
         >
-          <Volume2 className="h-4 w-4" aria-hidden="true" />
+          <Volume2 className="h-4 w-4 tab:h-7 tab:w-7" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={handleSlowPlay}
           aria-label={`${label} slowly`}
           title={`Play slowly (${SLOW_SPEECH_RATE.toFixed(1)}x)`}
-          className="inline-flex h-8 shrink-0 items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide text-zinc-400 transition-colors hover:bg-violet-50 hover:text-violet-600"
+          className="inline-flex h-8 shrink-0 items-center justify-center rounded-full px-2 text-[11px] font-semibold tracking-wide text-zinc-400 transition-colors hover:bg-violet-50 hover:text-violet-600 tab:h-14 tab:px-4 tab:text-base"
         >
           Slow
         </button>

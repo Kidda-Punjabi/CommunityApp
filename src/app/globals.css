@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Native tablets only. Desktop web keeps the phone-width column. */
+@custom-variant tab {
+  &:where(html.kidda-native *) {
+    @media (min-width: 700px) {
+      @slot;
+    }
+  }
+}
+
 :root {
   --background: #fafafa;
   --foreground: #171717;

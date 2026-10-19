@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { FlashcardDeckCard } from "./types";
 import {
   MATCH_PAIRS_PER_SCREEN,
+  MATCH_TABLET_PAIRS_PER_SCREEN,
   buildMatchTileChunks,
   chunkPairs,
   matchGameSeconds,
@@ -73,6 +74,16 @@ describe("buildMatchTileChunks", () => {
     ]);
     assert.equal(allCardIds.length, 8);
     assert.equal(new Set(allCardIds).size, 8);
+  });
+
+  it("puts six pairs on a tablet set and times that set at 60 seconds", () => {
+    const cards = Array.from({ length: 8 }, (_, i) => card(`c${i}`));
+    const chunks = buildMatchTileChunks(cards, 3, MATCH_TABLET_PAIRS_PER_SCREEN);
+    assert.equal(chunks.length, 2);
+    assert.equal(chunks[0].length, 12);
+    assert.equal(new Set(chunks[0].map((tile) => tile.cardId)).size, 6);
+    assert.equal(matchGameSeconds(6), 60);
+    assert.equal(chunks[1].length, 4);
   });
 
   it("is deterministic for the same challenge seed", () => {

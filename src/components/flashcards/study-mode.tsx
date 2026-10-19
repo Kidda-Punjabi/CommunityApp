@@ -270,7 +270,7 @@ export function FlashcardStudyMode({
           Flashcards · {deck.deckName}
           {reviewMode && " · Review"}
         </p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-900">{deck.lessonTitle}</h1>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-900 tab:text-3xl">{deck.lessonTitle}</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Card {index + 1} of {orderedCards.length}
           {reviewMode ? " (not confident)" : ""}
@@ -309,7 +309,7 @@ export function FlashcardStudyMode({
       </div>
       )}
 
-      <div className="space-y-3">
+      <div className="mx-auto w-full max-w-lg space-y-3 tab:max-w-[680px]">
         <div
           className="relative"
           onTouchStart={handleTouchStart}
@@ -343,7 +343,7 @@ export function FlashcardStudyMode({
           <button
             type="button"
             onClick={() => setFlipped((prev) => !prev)}
-            className={`min-h-56 w-full rounded-2xl border px-6 pb-6 pt-10 text-left shadow-sm transition-colors ${
+            className={`min-h-56 w-full rounded-2xl border px-6 pb-6 pt-10 text-left shadow-sm transition-colors tab:min-h-[520px] ${
               kidsMode
                 ? "min-h-64 border-sky-200 bg-white hover:border-violet-300"
                 : "border-zinc-200 bg-white hover:border-violet-300"
@@ -364,7 +364,7 @@ export function FlashcardStudyMode({
                 text={shownLine.text}
                 romanised={shownLine.romanised}
                 className={`text-zinc-900 ${kidsMode ? "mt-4 text-center" : "mt-4"}`}
-                gurmukhiClassName={`font-semibold text-zinc-900 ${kidsMode ? "text-2xl" : "text-xl"}`}
+                gurmukhiClassName={`font-semibold text-zinc-900 ${kidsMode ? "text-2xl" : "text-xl"} tab:text-5xl`}
                 romanisedClassName={`mt-2 block font-normal text-violet-600 ${
                   kidsMode ? "text-center text-base" : "text-sm"
                 }`}
@@ -396,7 +396,7 @@ export function FlashcardStudyMode({
               className={`flex-1 font-semibold ${
                 kidsMode
                   ? "rounded-2xl border-2 border-amber-300 bg-amber-100 px-4 py-5 text-lg text-amber-900"
-                  : "rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 hover:bg-amber-100"
+                  : "rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 hover:bg-amber-100 tab:h-[60px] tab:text-base"
               }`}
             >
               {kidsMode ? "Try again" : "Not confident"}
@@ -407,7 +407,7 @@ export function FlashcardStudyMode({
               className={`flex-1 font-semibold ${
                 kidsMode
                   ? "rounded-2xl border-2 border-green-300 bg-green-100 px-4 py-5 text-lg text-green-900"
-                  : "rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 hover:bg-green-100"
+                  : "rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 hover:bg-green-100 tab:h-[60px] tab:text-base"
               }`}
             >
               {kidsMode ? "Got it!" : "Confident"}

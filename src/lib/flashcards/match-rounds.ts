@@ -4,6 +4,8 @@ import { shuffleArray } from "./utils";
 
 export const MATCH_SECONDS_PER_PAIR = 10;
 export const MATCH_PAIRS_PER_SCREEN = 4;
+/** Tablet sets. 6 pairs × 10 seconds = 60 seconds. */
+export const MATCH_TABLET_PAIRS_PER_SCREEN = 6;
 
 export type MatchTile = {
   id: string;
@@ -50,11 +52,12 @@ export function cardsToMatchTiles(cards: FlashcardDeckCard[]): MatchTile[] {
 
 export function buildMatchTileChunks(
   cards: FlashcardDeckCard[],
-  seed?: number | null
+  seed?: number | null,
+  pairsPerScreen = MATCH_PAIRS_PER_SCREEN
 ): MatchTile[][] {
   const ordered =
     seed != null ? shuffleSeeded(cards, seed) : shuffleArray(cards);
-  return chunkPairs(ordered, MATCH_PAIRS_PER_SCREEN).map((chunk, index) => {
+  return chunkPairs(ordered, pairsPerScreen).map((chunk, index) => {
     const tiles = cardsToMatchTiles(chunk);
     return seed != null
       ? shuffleSeeded(tiles, seed + index + 1)

@@ -134,11 +134,11 @@ function TopicNode({ item }: { item: FreeLessonPathItem }) {
 export function FreeLessonsPath({ items }: FreeLessonsPathProps) {
   return (
     <section>
-      <ul className="mx-auto grid max-w-md grid-cols-2 justify-items-center gap-x-6 gap-y-8 sm:gap-x-10">
+      <ul className="mx-auto grid max-w-md grid-cols-2 justify-items-center gap-x-6 gap-y-8 sm:gap-x-10 tab:max-w-none tab:grid-cols-4 tab:gap-x-6">
         {items.map((item, index) => (
           <li
             key={item.id}
-            className={index === 0 ? "col-span-2 flex justify-center" : undefined}
+            className={index === 0 ? "col-span-2 flex justify-center tab:col-span-1" : undefined}
           >
             <TopicNode item={item} />
           </li>
