@@ -38,6 +38,14 @@
       "schedule": "15 3 * * *"
     },
     {
+      "path": "/api/cron/sweep-orphan-files",
+      "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/sweep-orphan-files",
+      "schedule": "30 3 * * *"
+    },
+    {
       "path": "/api/cron/ceo-metrics",
       "schedule": "30 3 * * *"
     },

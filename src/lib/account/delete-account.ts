@@ -6,6 +6,7 @@ import {
   normalizeDeleteConfirmation,
 } from "@/lib/account/deletion-policy";
 import { sendAccountDeletionNotifyEmail } from "@/lib/email/send-account-deletion-notify";
+import { purgeAccountStorage } from "@/lib/account/purge-account-storage";
 import { getStripe } from "@/lib/stripe/server";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
@@ -43,42 +44,6 @@ function withoutUser(row: object): Record<string, unknown> {
   delete copy.user_id;
   delete copy.kid_profile_id;
   return copy;
-}
-
-async function removeStorageObjects(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  userId: string,
-  extra: Array<{ bucket: string; path: string }>
-) {
-  const grouped = new Map<string, Set<string>>();
-  function add(bucket: string, path: string) {
-    const name = path.trim();
-    if (!bucket || !name) return;
-    const paths = grouped.get(bucket) ?? new Set<string>();
-    paths.add(name);
-    grouped.set(bucket, paths);
-  }
-
-  const listed = await admin.rpc("list_storage_objects_for_user", { target: userId });
-  if (!listed.error) {
-    for (const row of (listed.data ?? []) as Array<{ bucket_id: string; name: string }>) {
-      add(row.bucket_id, row.name);
-    }
-  }
-
-  for (const item of extra) add(item.bucket, item.path);
-
-  const { data: avatars } = await admin.storage.from("avatars").list(userId);
-  for (const file of avatars ?? []) {
-    if (file.name) add("avatars", `${userId}/${file.name}`);
-  }
-
-  for (const [bucket, paths] of grouped) {
-    const names = [...paths];
-    for (let index = 0; index < names.length; index += 100) {
-      await admin.storage.from(bucket).remove(names.slice(index, index + 100));
-    }
-  }
 }
 
 async function cancelStripeSubscriptions(customerIds: string[], subscriptionIds: string[]) {
@@ -212,40 +177,14 @@ export async function deleteCurrentAccount(
     if (unlinkError) return { error: unlinkError.message };
   }
 
-  const extraFiles: Array<{ bucket: string; path: string }> = [];
-  const { data: homework } = await admin
-    .from("homework_submissions")
-    .select("storage_path, tutor_feedback_audio_path")
-    .eq("student_id", user.id);
-  for (const row of homework ?? []) {
-    if (row.storage_path) extraFiles.push({ bucket: "homework-recordings", path: row.storage_path });
-    if (row.tutor_feedback_audio_path) {
-      extraFiles.push({ bucket: "homework-recordings", path: row.tutor_feedback_audio_path });
-    }
+  try {
+    await purgeAccountStorage(admin, user.id);
+  } catch (error) {
+    console.error(
+      "[account-delete] storage cleanup failed",
+      error instanceof Error ? error.message : "unknown"
+    );
   }
-  if (kidIds.length > 0) {
-    const { data: kidHomework } = await admin
-      .from("homework_submissions")
-      .select("storage_path, tutor_feedback_audio_path")
-      .in("kid_profile_id", kidIds);
-    for (const row of kidHomework ?? []) {
-      if (row.storage_path) extraFiles.push({ bucket: "homework-recordings", path: row.storage_path });
-      if (row.tutor_feedback_audio_path) {
-        extraFiles.push({ bucket: "homework-recordings", path: row.tutor_feedback_audio_path });
-      }
-    }
-  }
-  const { data: discounts } = await admin
-    .from("student_discount_requests")
-    .select("storage_path")
-    .eq("user_id", user.id);
-  for (const row of discounts ?? []) {
-    if (row.storage_path) {
-      extraFiles.push({ bucket: "student-discount-evidence", path: row.storage_path });
-    }
-  }
-
-  await removeStorageObjects(admin, user.id, extraFiles);
 
   await admin.from("forum_reports").update({ reporter_id: null }).eq("reporter_id", user.id);
   await admin.from("device_push_tokens").delete().eq("user_id", user.id);
