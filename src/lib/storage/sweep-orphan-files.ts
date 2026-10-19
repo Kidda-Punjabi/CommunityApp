@@ -7,6 +7,7 @@ import {
   shouldNotifyCleanupFailure,
 } from "@/lib/storage/cleanup-schedule";
 import { removeStorageRefs, type StorageRef } from "@/lib/storage/linked-user-files";
+import { markNoticesDeleted, scheduleDeletionNotices } from "@/lib/storage/schedule-deletion-notices";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const PAGE_SIZE = 500;
@@ -57,8 +58,23 @@ export async function runOrphanFileSweep(
     const orphans = await listOrphans(admin);
     const files: StorageRef[] = orphans.map((row) => ({ bucket: row.bucket_id, path: row.name }));
     const samplePaths = files.slice(0, SAMPLE_LIMIT).map((file) => `${file.bucket}/${file.path}`);
-    const removal = dryRun ? { removed: 0, errors: [] } : await removeStorageRefs(admin, files);
-    const failed = !dryRun && files.length > 0 && removal.removed === 0 && removal.errors.length > 0;
+    const scheduled = await scheduleDeletionNotices(admin, files, now);
+    // A file is deleted only after the 14-day and 3-day emails, on its delete date.
+    const ready = scheduled.due;
+    const removal = ready.length === 0 ? { removed: 0, errors: [] } : await removeStorageRefs(admin, ready);
+    if (removal.removed > 0) {
+      const failedKeys = new Set(removal.errors.map((error) => `${error.bucket}/${error.path}`));
+      await markNoticesDeleted(
+        admin,
+        ready.filter((file) => !failedKeys.has(`${file.bucket}/${file.path}`)),
+        now
+      );
+    }
+    const errors = [
+      ...removal.errors,
+      ...(scheduled.emailError ? [{ message: scheduled.emailError }] : []),
+    ];
+    const failed = ready.length > 0 && removal.removed === 0 && removal.errors.length > 0;
     const status = failed ? "failed" : "ok";
 
     const { error: insertError } = await admin.from("data_cleanup_runs").insert({
@@ -67,8 +83,8 @@ export async function runOrphanFileSweep(
       dry_run: dryRun,
       files_found: files.length,
       files_deleted: removal.removed,
-      error_count: removal.errors.length,
-      errors: removal.errors.slice(0, 20),
+      error_count: errors.length,
+      errors: errors.slice(0, 20),
       sample_paths: samplePaths,
       status,
     });
@@ -88,7 +104,7 @@ export async function runOrphanFileSweep(
       dryRun,
       filesFound: files.length,
       filesDeleted: removal.removed,
-      errorCount: removal.errors.length,
+      errorCount: errors.length,
       samplePaths,
       status,
     };
