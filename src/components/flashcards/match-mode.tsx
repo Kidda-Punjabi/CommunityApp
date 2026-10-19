@@ -319,7 +319,7 @@ export function FlashcardMatchMode({
   }
 
   return (
-    <div className="relative space-y-4">
+    <div className="relative space-y-4 tab:-mx-12">
       {!kidsMode && <FloatingSoundToggle />}
       {challenge && <ChallengeModeBanner challenge={challenge} gameType="match" />}
       <div className="flex items-center justify-between gap-3">
@@ -347,7 +347,7 @@ export function FlashcardMatchMode({
               data-card-id={tile.cardId}
               disabled={isMatched}
               onClick={() => handleTileClick(tile)}
-              className={`min-h-24 rounded-xl border px-3 py-3 text-left text-sm font-medium transition-colors tab:min-h-[150px] tab:text-[30px] tab:leading-snug ${
+              className={`min-h-24 rounded-xl border px-3 py-3 text-left text-sm font-medium leading-snug transition-colors tab:min-h-[150px] tab:text-[20px] ${
                 isMatched
                   ? "border-green-200 bg-green-50 text-green-800 opacity-60"
                   : isWrong
@@ -357,7 +357,11 @@ export function FlashcardMatchMode({
                       : "border-zinc-200 bg-white text-zinc-900 hover:border-violet-300"
               }`}
             >
-              <FlashcardBilingualLine text={tile.text} romanised={tile.romanised} />
+              <FlashcardBilingualLine
+                text={tile.text}
+                romanised={tile.romanised}
+                emphasizeGurmukhiClassName="tab:text-[30px]"
+              />
             </button>
           );
         })}

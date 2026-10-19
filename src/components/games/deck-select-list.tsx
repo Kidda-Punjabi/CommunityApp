@@ -10,7 +10,7 @@ import {
   groupDecksByWeek,
   sortedWeekNumbers,
 } from "@/lib/games/game-deck-weeks";
-import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { NATIVE_GAME_LOCKED_MESSAGE } from "@/lib/native/copy";
 import { useNativeApp } from "@/lib/native/native-app-context";
 import { ui } from "@/lib/ui/styles";
 
@@ -48,7 +48,7 @@ export function DeckSelectList({
         </p>
         <p className="mt-2 text-sm text-zinc-500">
           {nativeApp
-            ? NATIVE_LOCKED_MESSAGE
+            ? NATIVE_GAME_LOCKED_MESSAGE
             : `Unlock a course with flashcard sets to play ${gameTitle}.`}
         </p>
         {hideEmptyBackLink ? null : (

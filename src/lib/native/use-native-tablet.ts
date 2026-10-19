@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 /** Learning layouts widen from this width, and only inside the native apps. */
-export const NATIVE_TABLET_MIN_WIDTH_PX = 700;
+export const NATIVE_TABLET_MIN_WIDTH_PX = 600;
 
 export function nativeTabletNow(): boolean {
   if (typeof document === "undefined") return false;

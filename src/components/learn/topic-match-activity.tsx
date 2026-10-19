@@ -151,7 +151,7 @@ export function TopicMatchActivity({
   }
 
   return (
-    <div className="mx-auto max-w-md text-center tab:max-w-none">
+    <div className="mx-auto max-w-md text-center tab:-mx-12 tab:max-w-none">
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Match</p>
       <h1 className="mt-1 font-heading text-xl font-semibold text-zinc-900 tab:text-2xl">{title}</h1>
       <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
@@ -175,7 +175,9 @@ export function TopicMatchActivity({
                 type="button"
                 disabled={isMatched || done}
                 onClick={() => selectTile(tile)}
-                className={`min-h-16 w-full rounded-2xl border px-3 py-3 text-sm font-medium transition disabled:cursor-default tab:min-h-[150px] tab:text-[30px] tab:leading-snug ${style}`}
+                className={`min-h-16 w-full rounded-2xl border px-3 py-3 text-sm font-medium leading-snug transition disabled:cursor-default tab:min-h-[150px] ${
+                  tile.side === "pa" ? "tab:text-[30px]" : "tab:text-[20px]"
+                } ${style}`}
               >
                 {tile.side === "pa" ? (
                   <PunjabiWithRomanisation

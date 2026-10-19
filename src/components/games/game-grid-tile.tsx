@@ -4,7 +4,7 @@ import type { GameCatalogEntry } from "@/lib/games/catalog";
 import { GAMES_TILE_WIDTH_CLASS } from "@/components/games/games-horizontal-row";
 import { GameTileCornerBadge } from "@/components/games/game-tile-corner";
 import { GAMES_PREMIUM_UNLOCK_URL } from "@/lib/games/premium-gating";
-import { NATIVE_LOCKED_MESSAGE } from "@/lib/native/copy";
+import { NATIVE_GAME_LOCKED_MESSAGE } from "@/lib/native/copy";
 import { useNativeApp } from "@/lib/native/native-app-context";
 import { recordLastPlayedGame } from "@/lib/games/last-played";
 import { ui } from "@/lib/ui/styles";
@@ -43,7 +43,7 @@ export function GameGridTile({ game, personalBest, locked = false }: GameGridTil
           {game.title}
         </p>
         <p className="mt-auto pt-2 text-xs font-medium text-zinc-500">
-          {nativeApp ? NATIVE_LOCKED_MESSAGE : "Unlock with Premium"}
+          {nativeApp ? NATIVE_GAME_LOCKED_MESSAGE : "Unlock with Premium"}
         </p>
       </>
     );
