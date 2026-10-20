@@ -1,12 +1,12 @@
 import "server-only";
 
-import { getDisplayName } from "@/lib/profile/display-name";
 import {
   resolveCurriculumLessonForCohortLogEntry,
 } from "@/lib/lessons/lesson-log-lesson-link";
 import { matchStudentsToNotionLeads } from "@/lib/notion/lesson-log-attendance-sync";
 import {
   cohortIsKidsCourse,
+  cohortRosterUserName,
   loadKidProfileNames,
   loadKidsByParentUserId,
 } from "@/lib/tutoring/cohort-attendance";
@@ -113,7 +113,7 @@ export async function loadLessonLogRosterContext(
     await Promise.all([
       supabase
         .from("cohort_members")
-        .select("user_id, kid_profile_id, left_at")
+        .select("id, user_id, kid_profile_id, left_at")
         .eq("cohort_id", entry.cohort_id),
       supabase
         .from("course_enrollments")
@@ -209,6 +209,7 @@ export async function loadLessonLogRosterContext(
   const actors = resolveCohortRosterActors({
     isKidsCourse,
     members: (memberRows ?? []).map((row) => ({
+      memberId: (row.id as string | null) ?? null,
       userId: (row.user_id as string | null) ?? null,
       kidProfileId: (row.kid_profile_id as string | null) ?? null,
       leftAt: (row.left_at as string | null) ?? null,
@@ -265,7 +266,7 @@ export async function loadLessonLogRosterContext(
       const profile = (profiles ?? []).find((row) => row.id === studentId);
       return {
         studentId,
-        studentName: getDisplayName(profile) ?? "Student",
+        studentName: cohortRosterUserName(profile),
         isActiveMember: actors.activeUserIds.has(studentId),
         attended: attendanceByActor.has(studentId)
           ? (attendanceByActor.get(studentId) as boolean)

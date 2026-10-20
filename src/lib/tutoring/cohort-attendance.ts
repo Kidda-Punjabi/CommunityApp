@@ -25,16 +25,28 @@ function isMissingAttendanceSchema(message: string): boolean {
 }
 
 function asRosterRow(row: {
+  id?: string | null;
   user_id?: string | null;
   kid_profile_id?: string | null;
   student_id?: string | null;
   left_at?: string | null;
 }): CohortRosterSourceRow {
   return {
+    memberId: (row.id as string | null | undefined) ?? null,
     userId: (row.user_id as string | null | undefined) ?? (row.student_id as string | null | undefined) ?? null,
     kidProfileId: (row.kid_profile_id as string | null | undefined) ?? null,
     leftAt: (row.left_at as string | null | undefined) ?? null,
   };
+}
+
+/** Tutor roster label: kid rows use kid_profiles.name; user rows use profiles.full_name. */
+export function cohortRosterUserName(profile: {
+  full_name?: string | null;
+  preferred_name?: string | null;
+} | null | undefined): string {
+  const fullName = profile?.full_name?.trim();
+  if (fullName) return fullName;
+  return getDisplayName(profile) ?? "Student";
 }
 
 export async function cohortIsKidsCourse(
@@ -144,7 +156,7 @@ export async function loadCohortAttendanceRoster(
     cohortIsKidsCourse(supabase, cohortId),
     supabase
       .from("cohort_members")
-      .select("user_id, kid_profile_id, left_at")
+      .select("id, user_id, kid_profile_id, left_at")
       .eq("cohort_id", cohortId),
     supabase
       .from("course_enrollments")
@@ -208,10 +220,7 @@ export async function loadCohortAttendanceRoster(
   ]);
 
   const nameById = new Map(
-    (profiles ?? []).map((profile) => [
-      profile.id,
-      getDisplayName(profile) ?? "Student",
-    ] as const)
+    (profiles ?? []).map((profile) => [profile.id, cohortRosterUserName(profile)] as const)
   );
   for (const [kidId, name] of kidNames) {
     nameById.set(kidId, name);
@@ -265,7 +274,7 @@ export async function loadCohortMembershipRoster(
     cohortIsKidsCourse(supabase, cohortId),
     supabase
       .from("cohort_members")
-      .select("user_id, kid_profile_id, left_at")
+      .select("id, user_id, kid_profile_id, left_at")
       .eq("cohort_id", cohortId),
     supabase
       .from("course_enrollments")
@@ -310,10 +319,7 @@ export async function loadCohortMembershipRoster(
   ]);
 
   const nameById = new Map(
-    (profiles ?? []).map((profile) => [
-      profile.id,
-      getDisplayName(profile) ?? "Student",
-    ] as const)
+    (profiles ?? []).map((profile) => [profile.id, cohortRosterUserName(profile)] as const)
   );
   for (const [kidId, name] of kidNames) {
     nameById.set(kidId, name);

@@ -81,6 +81,38 @@ describe("resolveCohortRosterActors", () => {
     assert.equal(result.activeKidIds.has(KID_HARGUN), false);
   });
 
+  it("keeps own-account students on a kids course when the member row has only user_id", () => {
+    const result = resolveCohortRosterActors({
+      isKidsCourse: true,
+      members: [
+        { memberId: "m-dylan", userId: "dylan", kidProfileId: null, leftAt: null },
+        { memberId: "m-gurveen", userId: "gurveen", kidProfileId: null, leftAt: null },
+        { memberId: "m-gurvir", userId: null, kidProfileId: KID_GURVIR, leftAt: null },
+      ],
+      enrollments: [],
+      kidsByParentUserId,
+    });
+
+    assert.deepEqual([...result.rosterUserIds].sort(), ["dylan", "gurveen"]);
+    assert.deepEqual([...result.activeUserIds].sort(), ["dylan", "gurveen"]);
+    assert.deepEqual([...result.rosterKidIds], [KID_GURVIR]);
+  });
+
+  it("dedupes a repeated member row id and ignores a later left_at copy", () => {
+    const result = resolveCohortRosterActors({
+      isKidsCourse: true,
+      members: [
+        { memberId: "m-dylan", userId: "dylan", kidProfileId: null, leftAt: null },
+        { memberId: "m-dylan", userId: "dylan", kidProfileId: null, leftAt: "2026-10-01" },
+      ],
+      enrollments: [],
+      kidsByParentUserId,
+    });
+
+    assert.deepEqual([...result.rosterUserIds], ["dylan"]);
+    assert.equal(result.activeUserIds.has("dylan"), true);
+  });
+
   it("still lists adult students on a non-kids course", () => {
     const result = resolveCohortRosterActors({
       isKidsCourse: false,

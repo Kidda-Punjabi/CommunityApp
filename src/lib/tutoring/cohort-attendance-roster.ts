@@ -1,4 +1,6 @@
 export type CohortRosterSourceRow = {
+  /** cohort_members.id when this row came from a membership. */
+  memberId?: string | null;
   userId: string | null;
   kidProfileId: string | null;
   leftAt?: string | null;
@@ -20,19 +22,34 @@ function addActor(
   if (row.kidProfileId) kidIds.add(row.kidProfileId);
 }
 
+function dedupedMembers(members: CohortRosterSourceRow[]): CohortRosterSourceRow[] {
+  const seen = new Set<string>();
+  const rows: CohortRosterSourceRow[] = [];
+  for (const row of members) {
+    if (row.memberId) {
+      if (seen.has(row.memberId)) continue;
+      seen.add(row.memberId);
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
 function applyMemberOverlay(
   userIds: Set<string>,
   kidIds: Set<string>,
   members: CohortRosterSourceRow[]
 ) {
-  for (const row of members) {
-    if (row.userId) {
-      if (row.leftAt == null) userIds.add(row.userId);
-      else userIds.delete(row.userId);
-    }
+  for (const row of dedupedMembers(members)) {
+    // One membership row is one person. A kid row wins when both ids are set.
     if (row.kidProfileId) {
       if (row.leftAt == null) kidIds.add(row.kidProfileId);
       else kidIds.delete(row.kidProfileId);
+      continue;
+    }
+    if (row.userId) {
+      if (row.leftAt == null) userIds.add(row.userId);
+      else userIds.delete(row.userId);
     }
   }
 }
@@ -40,8 +57,9 @@ function applyMemberOverlay(
 /**
  * Build the attendance/homework roster.
  *
- * Kids courses never list parent accounts. Parent-only membership rows are
- * resolved to the kid profiles linked to that parent.
+ * Kids courses still hide a parent account when that user has kid profiles,
+ * and those profiles are listed instead. An active member row with only
+ * user_id (an own-account student) stays on the roster under that user.
  */
 export function resolveCohortRosterActors(options: {
   isKidsCourse: boolean;
@@ -67,6 +85,12 @@ export function resolveCohortRosterActors(options: {
   for (const row of options.extraActors ?? []) {
     if (options.isKidsCourse) {
       if (row.kidProfileId) rosterKidIds.add(row.kidProfileId);
+      else if (
+        row.userId &&
+        (options.kidsByParentUserId.get(row.userId) ?? []).length === 0
+      ) {
+        rosterUserIds.add(row.userId);
+      }
       continue;
     }
     addActor(rosterUserIds, rosterKidIds, row);
@@ -78,14 +102,15 @@ export function resolveCohortRosterActors(options: {
 
   const parentIds = new Set<string>([...rosterUserIds, ...activeUserIds]);
   for (const parentId of parentIds) {
-    for (const kidId of options.kidsByParentUserId.get(parentId) ?? []) {
+    const kidIds = options.kidsByParentUserId.get(parentId) ?? [];
+    if (kidIds.length === 0) continue;
+    for (const kidId of kidIds) {
       rosterKidIds.add(kidId);
       if (activeUserIds.has(parentId)) activeKidIds.add(kidId);
     }
+    rosterUserIds.delete(parentId);
+    activeUserIds.delete(parentId);
   }
-
-  rosterUserIds.clear();
-  activeUserIds.clear();
 
   return { rosterUserIds, rosterKidIds, activeUserIds, activeKidIds };
 }
