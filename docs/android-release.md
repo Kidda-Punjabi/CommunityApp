@@ -1,6 +1,6 @@
 # Android release
 
-The Android app is a Capacitor shell. It loads `https://webapp.kidda.app` and sends the same `KiddaApp/1.0` user agent as iOS. Package name `app.kidda`. `versionCode` 1, `versionName` 1.0.0. `minSdk` 24, `compileSdk` and `targetSdk` 36.
+The Android app is a Capacitor shell. It loads `https://webapp.kidda.app` and sends the same `KiddaApp/1.0` user agent as iOS. Package name `app.kidda`. `versionCode` 2, `versionName` 1.0.1. `minSdk` 24, `compileSdk` and `targetSdk` 36.
 
 Do not commit the upload keystore, `keystore.properties`, or `google-services.json`.
 

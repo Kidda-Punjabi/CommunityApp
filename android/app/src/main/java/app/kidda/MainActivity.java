@@ -4,15 +4,21 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.webkit.WebView;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
+import com.google.firebase.FirebaseApp;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // FirebaseInitProvider is in the manifest, but on this API 36 image it
+        // does not initialise the default app before push registration. Do it here.
+        FirebaseApp app = FirebaseApp.initializeApp(this);
+        Log.i("Kidda", app == null ? "Firebase init returned null" : "Firebase init ok");
         super.onCreate(savedInstanceState);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView()).setAppearanceLightStatusBars(true);
