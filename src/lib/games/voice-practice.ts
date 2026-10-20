@@ -233,12 +233,15 @@ export function transliterateDevanagariToLatin(text: string): string {
   let out = "";
   for (let i = 0; i < text.length; i += 1) {
     const char = text[i];
-    const withNukta = char + DEVANAGARI_NUKTA;
-    const consonant =
-      DEVANAGARI_CONSONANTS[withNukta] ?? DEVANAGARI_CONSONANTS[char];
+    const nextChar = text[i + 1];
+    const nuktaForm =
+      nextChar === DEVANAGARI_NUKTA
+        ? DEVANAGARI_CONSONANTS[char + DEVANAGARI_NUKTA]
+        : undefined;
+    const consonant = nuktaForm ?? DEVANAGARI_CONSONANTS[char];
 
     if (consonant) {
-      if (DEVANAGARI_CONSONANTS[withNukta]) i += 1;
+      if (nuktaForm) i += 1;
       const next = text[i + 1];
       if (next && DEVANAGARI_MATRAS[next]) {
         out += consonant + DEVANAGARI_MATRAS[next];
@@ -373,29 +376,33 @@ const GURMUKHI_ADDAK = "ੱ";
 export function transliterateGurmukhiToLatin(text: string): string {
   if (!GURMUKHI_RANGE.test(text)) return text;
 
+  const source = text.normalize("NFC");
   let out = "";
   let doubleNext = false;
 
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
 
     if (char === GURMUKHI_ADDAK) {
       doubleNext = true;
       continue;
     }
 
-    const withNukta = char + GURMUKHI_NUKTA;
-    const consonant =
-      GURMUKHI_CONSONANTS[withNukta] ?? GURMUKHI_CONSONANTS[char];
+    const nextChar = source[i + 1];
+    const nuktaForm =
+      nextChar === GURMUKHI_NUKTA
+        ? GURMUKHI_CONSONANTS[char + GURMUKHI_NUKTA]
+        : undefined;
+    const consonant = nuktaForm ?? GURMUKHI_CONSONANTS[char];
 
     if (consonant) {
-      if (GURMUKHI_CONSONANTS[withNukta]) i += 1;
+      if (nuktaForm) i += 1;
       let sound = consonant;
       if (doubleNext) {
         sound = consonant + consonant;
         doubleNext = false;
       }
-      const next = text[i + 1];
+      const next = source[i + 1];
       if (next && GURMUKHI_MATRAS[next]) {
         out += sound + GURMUKHI_MATRAS[next];
         i += 1;
@@ -435,16 +442,29 @@ export function transliterateGurmukhiToLatin(text: string): string {
   return out;
 }
 
+/**
+ * NFC, then fold precomposed nukta letters (U+0A5E and friends decompose to
+ * base + U+0A3C) and strip the nukta so ਫ਼ and ਫ compare equal. Also drop
+ * zero-width joiners that Scribe sometimes inserts.
+ */
+function foldSpeechForCompare(text: string): string {
+  return text
+    .normalize("NFC")
+    .replace(/[\u200C\u200D]/g, "")
+    .replace(/\u0A3C/g, "");
+}
+
 function normalizeSpeechText(text: string): string {
   return collapseVowelLength(
     transliterateHomoglyphsToLatin(
-      transliterateDevanagariToLatin(transliterateGurmukhiToLatin(text))
+      transliterateDevanagariToLatin(transliterateGurmukhiToLatin(foldSpeechForCompare(text)))
     )
       .trim()
       .normalize("NFD")
       .replace(/\p{M}/gu, "")
+      .replace(/[\u200C\u200D]/g, "")
       .replace(/\s+/g, " ")
-      .replace(/[.,!?;:'"()\-–—]/g, "")
+      .replace(/[.,!?;:'"()\-–—।॰]/g, "")
       .toLowerCase()
   );
 }

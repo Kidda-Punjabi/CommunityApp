@@ -1,4 +1,5 @@
 import {
+  normalizeSpeechTranscript,
   passedVoiceAttempt,
   speechSimilarityPercent,
   VOICE_PRACTICE_PASS_THRESHOLD,
@@ -118,12 +119,30 @@ export function matchSpeakingTranscript(
   const romanised = typeof target === "string" ? target : target.romanised;
   const punjabi = typeof target === "string" ? undefined : target.punjabi;
 
-  const scores = [speechSimilarityPercent(transcript, romanised)];
-  if (punjabi?.trim()) {
-    scores.push(speechSimilarityPercent(transcript, punjabi));
+  const romanisedScore = speechSimilarityPercent(transcript, romanised);
+  const punjabiScore = punjabi?.trim()
+    ? speechSimilarityPercent(transcript, punjabi)
+    : null;
+  const score = Math.max(romanisedScore, punjabiScore ?? 0);
+
+  if (process.env.NODE_ENV !== "production") {
+    const normalisedRomanised = normalizeSpeechTranscript(romanised);
+    const normalisedPunjabi = punjabi?.trim()
+      ? normalizeSpeechTranscript(punjabi)
+      : null;
+    const normalisedTarget =
+      punjabiScore != null && punjabiScore > romanisedScore
+        ? normalisedPunjabi
+        : normalisedRomanised;
+    console.info("[speaking-match]", {
+      rawTranscript: transcript,
+      normalisedTranscript: normalizeSpeechTranscript(transcript),
+      normalisedTarget,
+      score,
+    });
   }
 
-  return Math.max(...scores);
+  return score;
 }
 
 export function passedSpeakingAttempt(similarity: number): boolean {
