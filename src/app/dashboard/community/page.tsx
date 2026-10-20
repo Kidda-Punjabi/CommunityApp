@@ -3,6 +3,8 @@ import { liveCheckInFlags } from "@/lib/community/check-in-by-code";
 import { loadCommunityHome, memberHasCommunity } from "@/lib/community/load-home";
 import { loadLevelView } from "@/lib/community/level-view";
 import { loadForumUnread } from "@/lib/forum/unread";
+import { loadLeaderboard } from "@/lib/leaderboard/load-leaderboard";
+import { getCurrentWeekStart } from "@/lib/leaderboard/week";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { isNativeAppRequest } from "@/lib/native/platform";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -38,10 +40,11 @@ export default async function CommunityPage() {
 
 async function CommunityHome({ userId }: { userId: string }) {
   const admin = createServiceRoleClient();
-  const [home, view, unread] = await Promise.all([
+  const [home, view, unread, board] = await Promise.all([
     loadCommunityHome(admin, userId),
     loadLevelView(admin, userId),
     loadForumUnread(admin, userId),
+    loadLeaderboard(admin, getCurrentWeekStart(), userId),
   ]);
   if (!home.mainSessionId || home.level == null) redirect("/dashboard/community/welcome");
   const live = await liveCheckInFlags(admin, userId, home.next?.id ?? null);
@@ -57,6 +60,16 @@ async function CommunityHome({ userId }: { userId: string }) {
       replies={unread.replies}
       anyLive={live.anyLive}
       checkedIntoNext={live.checkedIntoNext}
+      leaderboard={{
+        top: board.entries.slice(0, 3).map((entry) => ({
+          userId: entry.userId,
+          name: entry.displayName,
+          points: entry.points,
+          rank: entry.rank ?? 0,
+        })),
+        youRank: board.viewerRow.rank,
+        youPoints: board.viewerRow.points,
+      }}
     />
   );
 }

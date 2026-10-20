@@ -4,8 +4,26 @@ import { canJoinSession, daysUntilLabel, formatSessionClock } from "@/lib/commun
 import type { CommunityHome } from "@/lib/community/load-home";
 import { bandFillVar, bandForLevel, bandInkVar, bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
 import { freshLabel } from "@/lib/forum/unread";
-import { CalendarPlus, Folder, MessageCircle, Play, Trophy, Users } from "lucide-react";
+import { CalendarPlus, Flame, Folder, MessageCircle, Play, Trophy, Users } from "lucide-react";
 import Link from "next/link";
+
+export type CommunityLeaderboardPreview = {
+  top: { userId: string; name: string; points: number; rank: number }[];
+  youRank: number | null;
+  youPoints: number;
+};
+
+function ordinal(rank: number): string {
+  const mod100 = rank % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${rank}th`;
+  const mod10 = rank % 10;
+  if (mod10 === 1) return `${rank}st`;
+  if (mod10 === 2) return `${rank}nd`;
+  if (mod10 === 3) return `${rank}rd`;
+  return `${rank}th`;
+}
+
+const MEDALS = ["🥇", "🥈", "🥉"];
 
 const TILES = [
   { href: "/dashboard/community/forum", label: "Forum", icon: MessageCircle, forum: true },
@@ -27,6 +45,7 @@ export function CommunityTab({
   checkedIntoNext = false,
   checkReady = false,
   cooldownUntil = null,
+  leaderboard,
 }: {
   home: CommunityHome;
   earned: number;
@@ -38,6 +57,7 @@ export function CommunityTab({
   checkedIntoNext?: boolean;
   checkReady?: boolean;
   cooldownUntil?: string | null;
+  leaderboard: CommunityLeaderboardPreview;
 }) {
   const next = home.next;
   const live = next?.status === "live";
@@ -60,6 +80,26 @@ export function CommunityTab({
             ? `Week ${next.weekNumber}${next.topic ? ` · ${next.topic}` : ""} · ${daysUntilLabel(next.startsAt, home.timezone)}`
             : "We'll show the time here as soon as it's on the calendar."}
         </p>
+        <Link
+          href="/dashboard/community/streak"
+          className="mt-3 inline-flex max-w-full flex-col items-start gap-1.5"
+        >
+          <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#5B21B6]">
+            <Flame className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{streakCopy}</span>
+          </span>
+          {home.sessionsStarted && home.dots.length > 0 ? (
+            <span className="flex gap-1.5 px-1">
+              {home.dots.map((dot, index) => (
+                <span
+                  key={index}
+                  className="inline-block h-2.5 w-2.5 rounded-full border-2 border-white"
+                  style={{ background: dot.filled ? "#ffffff" : "transparent" }}
+                />
+              ))}
+            </span>
+          ) : null}
+        </Link>
         <div className="mt-3 flex flex-wrap gap-2">
           <SessionCheckInButtons
             meetUrl={next?.meetUrl ?? null}
@@ -110,16 +150,28 @@ export function CommunityTab({
             </>
           ) : null}
         </div>
-        <Link href="/dashboard/community/streak" className="rounded-[20px] bg-white p-4">
-          <p className="text-xs text-[#6B5F8A]">Streak</p>
-          <p className="mt-1 font-heading text-lg font-extrabold">{streakCopy}</p>
-          {home.sessionsStarted && home.dots.length > 0 ? (
-            <span className="mt-3 flex gap-2">
-              {home.dots.map((dot, index) => (
-                <span key={index} className="inline-block h-3.5 w-3.5 rounded-full border-2 border-[#7C3AED]" style={{ background: dot.filled ? "#7C3AED" : "transparent" }} />
+        <Link href="/dashboard/leaderboard" className="rounded-[20px] bg-white p-3">
+          <p className="text-xs text-[#6B5F8A]">Leaderboard · This week</p>
+          {leaderboard.top.length > 0 ? (
+            <ol className="mt-2 space-y-1">
+              {leaderboard.top.map((person) => (
+                <li key={person.userId} className="flex items-center gap-1.5 text-xs">
+                  <span className="w-4 shrink-0 text-center" aria-hidden="true">
+                    {MEDALS[person.rank - 1] ?? person.rank}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-semibold">{person.name}</span>
+                  <span className="shrink-0 tabular-nums text-[#6B5F8A]">{person.points}</span>
+                </li>
               ))}
-            </span>
-          ) : null}
+            </ol>
+          ) : (
+            <p className="mt-2 text-xs font-semibold text-[#6B5F8A]">No points yet this week</p>
+          )}
+          <p className="mt-2 text-[11px] font-semibold text-[#1F1640]">
+            {leaderboard.youRank == null
+              ? `You: ${leaderboard.youPoints} pts`
+              : `You: ${ordinal(leaderboard.youRank)} · ${leaderboard.youPoints} pts`}
+          </p>
         </Link>
       </div>
 
