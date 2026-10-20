@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { androidMayRegisterPush } from "@/lib/native/android-push";
 import { isNativeApp, nativePlatform } from "@/lib/native/platform";
 
 type Permission = "granted" | "denied" | "prompt";
@@ -8,21 +9,38 @@ type Permission = "granted" | "denied" | "prompt";
 export function PushSettingsSwitch() {
   const [native, setNative] = useState(false);
   const [android, setAndroid] = useState(false);
+  const [needsUpdate, setNeedsUpdate] = useState(false);
   const [permission, setPermission] = useState<Permission>("prompt");
 
   useEffect(() => {
     if (!isNativeApp()) return;
     setNative(true);
-    setAndroid(nativePlatform() === "android");
-    void import("@capacitor/push-notifications").then(async ({ PushNotifications }) => {
+    const onAndroid = nativePlatform() === "android";
+    setAndroid(onAndroid);
+    void (async () => {
+      if (onAndroid && !(await androidMayRegisterPush())) {
+        setNeedsUpdate(true);
+        return;
+      }
+      const { PushNotifications } = await import("@capacitor/push-notifications");
       const status = await PushNotifications.checkPermissions();
       setPermission(status.receive === "granted" || status.receive === "denied" ? status.receive : "prompt");
-    });
+    })();
   }, []);
 
   if (!native) return null;
 
+  if (needsUpdate) {
+    return (
+      <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
+        <p className="text-sm font-medium text-zinc-900">Push notifications</p>
+        <p className="mt-1 text-sm text-zinc-600">Update the app to turn on notifications</p>
+      </div>
+    );
+  }
+
   async function enable() {
+    if (nativePlatform() === "android" && !(await androidMayRegisterPush())) return;
     const { PushNotifications } = await import("@capacitor/push-notifications");
     const status = await PushNotifications.requestPermissions();
     setPermission(status.receive === "granted" || status.receive === "denied" ? status.receive : "prompt");

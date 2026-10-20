@@ -2,7 +2,9 @@
 
 import { useEffect } from "react";
 import { isNativeApp, nativePlatform } from "@/lib/native/platform";
+import { androidMayRegisterPush } from "@/lib/native/android-push";
 import { decideLink, downloadFileName, isVideoCallUrl } from "@/lib/native/external-links";
+import { followPushNotification } from "@/lib/native/push-url";
 
 function safeFileName(name: string): string {
   const cleaned = name.replace(/[^\w.\- ]+/g, "").trim();
@@ -234,6 +236,14 @@ export function NativeBridge() {
                 }
               })
             : null;
+        const pushHandle =
+          nativePlatform() === "android" && !(await androidMayRegisterPush())
+            ? null
+            : await import("@capacitor/push-notifications").then(({ PushNotifications }) =>
+                PushNotifications.addListener("pushNotificationActionPerformed", (event) => {
+                  followPushNotification(event.notification.data);
+                })
+              );
         const urlHandle = await App.addListener("appUrlOpen", (event) => {
           try {
             const url = new URL(event.url);
@@ -250,6 +260,7 @@ export function NativeBridge() {
         if (cancelled) {
           await showHandle.remove();
           await hideHandle.remove();
+          await pushHandle?.remove();
           await urlHandle.remove();
           await backHandle?.remove();
           return;
@@ -257,6 +268,7 @@ export function NativeBridge() {
         cleanups.push(() => {
           void showHandle.remove();
           void hideHandle.remove();
+          void pushHandle?.remove();
           void urlHandle.remove();
           void backHandle?.remove();
           document.documentElement.classList.remove("kidda-keyboard-open");

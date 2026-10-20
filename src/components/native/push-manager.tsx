@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { androidMayRegisterPush } from "@/lib/native/android-push";
 import { isNativeApp, nativePlatform } from "@/lib/native/platform";
 import {
   registerDevicePushToken,
@@ -35,10 +36,11 @@ export function PushManager() {
   useEffect(() => {
     if (!isNativeApp()) return;
     let removeRegistration: (() => void) | undefined;
-    let removeAction: (() => void) | undefined;
     let cancelled = false;
 
     void (async () => {
+      if (nativePlatform() === "android" && !(await androidMayRegisterPush())) return;
+      if (cancelled) return;
       const { PushNotifications } = await import("@capacitor/push-notifications");
       const platform = nativePlatform() === "android" ? "android" : "ios";
       if (platform === "android") {
@@ -62,22 +64,11 @@ export function PushManager() {
           });
         });
       });
-      const action = await PushNotifications.addListener("pushNotificationActionPerformed", (event) => {
-        const url = event.notification.data?.url;
-        if (typeof url !== "string" || !url) return;
-        if (/^https?:\/\//i.test(url) && !url.startsWith(window.location.origin)) {
-          void import("@capacitor/app-launcher").then(({ AppLauncher }) => AppLauncher.openUrl({ url }));
-          return;
-        }
-        window.location.assign(url);
-      });
       if (cancelled) {
         await registration.remove();
-        await action.remove();
         return;
       }
       removeRegistration = () => void registration.remove();
-      removeAction = () => void action.remove();
 
       const permission = await PushNotifications.checkPermissions();
       if (permission.receive === "granted") await PushNotifications.register();
@@ -88,7 +79,6 @@ export function PushManager() {
     return () => {
       cancelled = true;
       removeRegistration?.();
-      removeAction?.();
     };
   }, []);
 

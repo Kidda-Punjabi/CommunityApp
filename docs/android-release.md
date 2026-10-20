@@ -2,7 +2,7 @@
 
 The Android app is a Capacitor shell. It loads `https://webapp.kidda.app` and sends the same `KiddaApp/1.0` user agent as iOS. Package name `app.kidda`. `versionCode` 2, `versionName` 1.0.1. `minSdk` 24, `compileSdk` and `targetSdk` 36.
 
-Do not commit the upload keystore, `keystore.properties`, or `google-services.json`.
+Do not commit the upload keystore, `keystore.properties`, or `google-services.json`. The upload keystore is `~/kidda-keys/kidda-upload.jks` (alias `kidda`). Back it up, with its password, somewhere other than this Mac.
 
 ## 1. Create the upload key
 

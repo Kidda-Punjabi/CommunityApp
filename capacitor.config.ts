@@ -9,6 +9,7 @@ const config: CapacitorConfig = {
   server: {
     url: "https://webapp.kidda.app",
     allowNavigation: ["webapp.kidda.app", "pztubczhqkzcwtkstpgi.supabase.co"],
+    errorPath: "offline.html",
   },
   ios: {
     appendUserAgent: "KiddaApp/1.0",

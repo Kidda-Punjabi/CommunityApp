@@ -10,6 +10,7 @@ import { KidsShellRouteGuard } from "@/components/kids/kids-shell-route-guard";
 import { TabNavProvider } from "@/components/navigation/tab-nav-provider";
 import { LastPlayedGameTracker } from "@/components/games/last-played-tracker";
 import { ActivityDateSync } from "@/components/activity-date-sync";
+import { OfflineBanner } from "@/components/native/offline-banner";
 import { PushPermissionPrompt } from "@/components/native/push-permission-prompt";
 import { ViewAsBanner } from "@/components/view-as-banner";
 import { FirstRunProvider } from "@/components/first-run/first-run-provider";
@@ -143,6 +144,7 @@ export default async function DashboardLayout({
                         : ui.pageBg
                   }`}
                 >
+                  <OfflineBanner />
                   <ActivityDateSync />
                   <PushPermissionPrompt />
                   <LastPlayedGameTracker />

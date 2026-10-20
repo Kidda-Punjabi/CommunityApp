@@ -363,6 +363,7 @@ export async function sendPush(input: SendPushInput): Promise<SendPushResult> {
           url: input.url,
           type: input.type,
         });
+        // postFcm sends FCM data.url beside the notification payload. APNs already includes url.
         if (response.ok) {
           sent += 1;
           sentPlatforms.add("android");

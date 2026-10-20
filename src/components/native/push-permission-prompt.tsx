@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { isNativeApp } from "@/lib/native/platform";
+import { androidMayRegisterPush } from "@/lib/native/android-push";
+import { isNativeApp, nativePlatform } from "@/lib/native/platform";
 import { nextClassEndsAt } from "@/app/dashboard/push/actions";
 
 const STATE_KEY = "kidda.pushPrompt";
@@ -15,6 +16,7 @@ export function PushPermissionPrompt() {
     const state = localStorage.getItem(STATE_KEY);
     if (state === "done") return;
     void (async () => {
+      if (nativePlatform() === "android" && !(await androidMayRegisterPush())) return;
       const { PushNotifications } = await import("@capacitor/push-notifications");
       const permission = await PushNotifications.checkPermissions();
       if (permission.receive === "granted") {
@@ -32,6 +34,10 @@ export function PushPermissionPrompt() {
   if (!open) return null;
 
   async function allow() {
+    if (nativePlatform() === "android" && !(await androidMayRegisterPush())) {
+      setOpen(false);
+      return;
+    }
     const { PushNotifications } = await import("@capacitor/push-notifications");
     await PushNotifications.requestPermissions();
     await PushNotifications.register();
