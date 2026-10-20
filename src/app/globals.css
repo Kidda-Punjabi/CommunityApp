@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-/* Native tablets only. Desktop web keeps the phone-width column. */
+/* Native tablets only, based on the shorter screen side so a sideways phone stays a phone. Desktop web keeps the phone-width column. */
 @custom-variant tab {
   &:where(html.kidda-native *) {
-    @media (min-width: 600px) {
+    @media (min-device-width: 600px) and (min-device-height: 600px) {
       @slot;
     }
   }
