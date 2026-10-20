@@ -75,6 +75,19 @@
       document.getElementById("retry").addEventListener("click", retry);
       window.addEventListener("online", retry);
       window.setInterval(retry, 4000);
+      // The launch splash stays up until the remote app hides it. This page is
+      // what loads when that app cannot be reached, so hide the splash here.
+      var splashTries = 0;
+      var splashTimer = window.setInterval(function () {
+        splashTries += 1;
+        var plugins = window.Capacitor && window.Capacitor.Plugins;
+        if (plugins && plugins.SplashScreen) {
+          plugins.SplashScreen.hide({ fadeOutDuration: 200 });
+          window.clearInterval(splashTimer);
+        } else if (splashTries > 25) {
+          window.clearInterval(splashTimer);
+        }
+      }, 100);
     </script>
   </body>
 </html>
