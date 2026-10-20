@@ -20,8 +20,8 @@ export default async function CommunityPage() {
   const native = isNativeAppRequest(await headers());
 
   return (
-    <div className={`${ui.page} !flex !h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] !flex-col !overflow-hidden !py-2`}>
-      <h1 className="mb-3 font-heading text-2xl font-bold tracking-tight text-zinc-900 tab:text-3xl">Community</h1>
+    <div className={`${ui.page} community-fit !flex !h-[calc(100dvh-var(--kidda-nav-clearance))] !max-h-[calc(100dvh-var(--kidda-nav-clearance))] !min-h-0 !flex-none !flex-col !overflow-hidden !px-5 !pb-0 !pt-[max(0.25rem,env(safe-area-inset-top,0px))]`}>
+      <h1 className="mb-2 shrink-0 font-heading text-[28px] font-bold leading-8 tracking-tight text-zinc-900">Community</h1>
       {allowed ? (
         <CommunityHome userId={user.id} />
       ) : (

@@ -515,3 +515,12 @@ html.kidda-keyboard-open .kidda-bottom-chrome {
   visibility: hidden !important;
   pointer-events: none !important;
 }
+
+/* Community home fits the phone viewport. Shorter than iPhone SE portrait, scroll instead of squashing. */
+@media (max-height: 620px) {
+  .community-fit {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}

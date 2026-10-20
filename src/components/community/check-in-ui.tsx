@@ -260,12 +260,14 @@ export function SessionCheckInButtons({
   }, [stillNeeded]);
 
   const checkInClass = anyLive
-    ? "inline-flex h-14 items-center rounded-[18px] bg-[#FDE68A] px-4 text-sm font-bold text-[#3B1A8C]"
-    : "inline-flex h-14 items-center rounded-[18px] bg-white/20 px-4 text-sm font-bold text-white";
-  const joinClass = "inline-flex h-14 items-center rounded-[18px] bg-[#FDE68A] px-4 text-sm font-bold text-[#3B1A8C]";
+    ? "flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] px-3 text-sm font-bold text-[#3B1A8C]"
+    : "flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-white/20 px-3 text-sm font-bold text-white";
+  const joinClass =
+    "flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] px-3 text-sm font-bold text-[#3B1A8C]";
 
   return (
     <>
+      <div className="grid grid-cols-2 gap-2.5">
       {canJoin && meetUrl ? (
         <a
           href={meetUrl}
@@ -282,11 +284,12 @@ export function SessionCheckInButtons({
           Join
         </a>
       ) : (
-        <span className="inline-flex h-14 items-center rounded-[18px] bg-[#FDE68A] px-4 text-sm font-bold text-[#3B1A8C]">Join</span>
+        <span className="flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] px-3 text-sm font-bold text-[#3B1A8C]">Join</span>
       )}
       <button type="button" data-testid="check-in-button" className={checkInClass} onClick={() => setOpen(true)}>
         {anyLive ? "Live now" : "Check in"}
       </button>
+      </div>
       <CheckInSheet
         open={open}
         onClose={() => setOpen(false)}

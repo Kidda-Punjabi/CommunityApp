@@ -69,38 +69,43 @@ export function CommunityTab({
       : `Start a new streak on ${home.weekdayLabel ?? "your session day"}`;
 
   return (
-    <div className="flex flex-col gap-2 font-[family-name:var(--font-community)] text-[#1F1640]">
-      <section className="rounded-[24px] bg-[#5B21B6] p-3 text-white">
-        <p className="text-sm text-violet-100">{live ? "Live now" : "Next session"}</p>
-        <h2 className="mt-1 font-heading text-2xl font-extrabold">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 font-[family-name:var(--font-community)] text-[#1F1640]">
+      <section className="shrink-0 rounded-[24px] bg-[#5B21B6] p-4 text-white">
+        <p className="text-xs text-violet-100">{live ? "Live now" : "Next session"}</p>
+        <h2 className="mt-0.5 font-heading text-xl font-extrabold leading-tight">
           {next ? formatSessionClock(next.startsAt, home.timezone) : "Your session"}
         </h2>
-        <p className="mt-1 text-sm text-violet-100">
-          {next
-            ? `Week ${next.weekNumber}${next.topic ? ` · ${next.topic}` : ""} · ${daysUntilLabel(next.startsAt, home.timezone)}`
-            : "We'll show the time here as soon as it's on the calendar."}
+        <p className="mt-0.5 text-xs leading-snug text-violet-100">
+          {next ? (
+            <>
+              Week {next.weekNumber}
+              {next.topic ? ` · ${next.topic}` : ""} · {daysUntilLabel(next.startsAt, home.timezone)}
+            </>
+          ) : (
+            "We'll show the time here as soon as it's on the calendar."
+          )}
         </p>
         <Link
           href="/dashboard/community/streak"
-          className="mt-3 inline-flex max-w-full flex-col items-start gap-1.5"
+          className="mt-2 inline-flex max-w-full flex-wrap items-center gap-1.5"
         >
-          <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#5B21B6]">
+          <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold leading-tight text-[#5B21B6]">
             <Flame className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">{streakCopy}</span>
+            <span>{streakCopy}</span>
           </span>
           {home.sessionsStarted && home.dots.length > 0 ? (
-            <span className="flex gap-1.5 px-1">
+            <span className="flex gap-1" aria-hidden="true">
               {home.dots.map((dot, index) => (
                 <span
                   key={index}
-                  className="inline-block h-2.5 w-2.5 rounded-full border-2 border-white"
+                  className="inline-block h-2 w-2 rounded-full border-2 border-white"
                   style={{ background: dot.filled ? "#ffffff" : "transparent" }}
                 />
               ))}
             </span>
           ) : null}
         </Link>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2">
           <SessionCheckInButtons
             meetUrl={next?.meetUrl ?? null}
             canJoin={Boolean(next?.meetUrl && (live || joinReady))}
@@ -110,64 +115,64 @@ export function CommunityTab({
         </div>
       </section>
 
-      <div className="grid grid-cols-2 content-start gap-2">
-        <div className="rounded-[20px] bg-white p-3">
+      <div className="grid shrink-0 grid-cols-2 items-stretch gap-2.5">
+        <div className="flex flex-col rounded-[20px] bg-white p-2.5">
           <Link href="/dashboard/community/level">
-            <p className="text-xs text-[#6B5F8A]">Level</p>
-            <p className="mt-1 font-heading text-lg font-extrabold" style={{ color: home.level == null ? undefined : levelInkVar(home.level) }}>
+            <p className="text-[11px] leading-tight text-[#6B5F8A]">Level</p>
+            <p className="mt-0.5 font-heading text-2xl font-extrabold leading-none" style={{ color: home.level == null ? undefined : levelInkVar(home.level) }}>
               {home.level == null ? "Not set" : `Level ${home.level}`}
             </p>
           </Link>
           {home.level != null ? (
             <>
-              <span className="mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: bandFillVar(bandForLevel(home.level)), color: bandInkVar(bandForLevel(home.level)) }}>
+              <span className="mt-1 inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold leading-tight" style={{ background: bandFillVar(bandForLevel(home.level)), color: bandInkVar(bandForLevel(home.level)) }}>
                 {bandLabel(bandForLevel(home.level))}
               </span>
-              <span className="mt-2 block h-1.5 rounded-full bg-[#F7F5FC]">
+              <span className="mt-1 block h-1.5 rounded-full bg-[#F7F5FC]">
                 <span className="block h-1.5 rounded-full" style={{ width: `${percent}%`, background: levelFillVar(home.level) }} />
               </span>
               {cooldownUntil ? (
-                <span className="mt-1 block text-[11px] font-semibold text-[#6B5F8A]">
+                <span className="mt-1 block text-[10px] font-semibold leading-tight text-[#6B5F8A]">
                   Try again on {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: home.timezone }).format(new Date(cooldownUntil))}
                 </span>
               ) : checkReady && target != null ? (
                 <>
-                  <span className="mt-1 block text-[11px] font-semibold text-[#6B5F8A]">
+                  <span className="mt-1 block text-[10px] font-semibold leading-tight text-[#6B5F8A]">
                     Your Level {home.level + 1} check is ready
                   </span>
                   <Link
                     href="/dashboard/community/level/retake"
-                    className="mt-2 inline-flex h-9 items-center rounded-full bg-[#FDE68A] px-3 text-xs font-bold text-[#3B1A8C]"
+                    className="mt-1 inline-flex h-7 items-center rounded-full bg-[#FDE68A] px-2.5 text-[11px] font-bold text-[#3B1A8C]"
                   >
                     Take the check
                   </Link>
                 </>
               ) : (
-                <span className="mt-1 block text-[11px] font-semibold text-[#6B5F8A]">
+                <span className="mt-1 block text-[10px] font-semibold leading-tight text-[#6B5F8A]">
                   {target == null ? "Top level" : `${earned} of ${target} XP to your Level ${home.level + 1} check`}
                 </span>
               )}
             </>
           ) : null}
         </div>
-        <Link href="/dashboard/leaderboard" className="rounded-[20px] bg-white p-3">
-          <p className="text-xs text-[#6B5F8A]">Leaderboard · This week</p>
+        <Link href="/dashboard/leaderboard" className="flex flex-col rounded-[20px] bg-white p-2.5">
+          <p className="text-[11px] leading-tight text-[#6B5F8A]">Leaderboard · This week</p>
           {leaderboard.top.length > 0 ? (
-            <ol className="mt-2 space-y-1">
+            <ol className="mt-1 space-y-0.5">
               {leaderboard.top.map((person) => (
-                <li key={person.userId} className="flex items-center gap-1.5 text-xs">
+                <li key={person.userId} className="flex items-start gap-1 text-[11px] leading-tight">
                   <span className="w-4 shrink-0 text-center" aria-hidden="true">
                     {MEDALS[person.rank - 1] ?? person.rank}
                   </span>
-                  <span className="min-w-0 flex-1 truncate font-semibold">{person.name}</span>
+                  <span className="min-w-0 flex-1 font-semibold">{person.name}</span>
                   <span className="shrink-0 tabular-nums text-[#6B5F8A]">{person.points}</span>
                 </li>
               ))}
             </ol>
           ) : (
-            <p className="mt-2 text-xs font-semibold text-[#6B5F8A]">No points yet this week</p>
+            <p className="mt-1 text-[11px] font-semibold leading-tight text-[#6B5F8A]">No points yet this week</p>
           )}
-          <p className="mt-2 text-[11px] font-semibold text-[#1F1640]">
+          <p className="mt-auto pt-1 text-[11px] font-semibold leading-tight text-[#1F1640]">
             {leaderboard.youRank == null
               ? `You: ${leaderboard.youPoints} pts`
               : `You: ${ordinal(leaderboard.youRank)} · ${leaderboard.youPoints} pts`}
@@ -175,7 +180,10 @@ export function CommunityTab({
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 content-start gap-2">
+      <div
+        className={`grid min-h-0 flex-1 gap-2.5 ${TILES.length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}
+        style={{ gridAutoRows: "minmax(72px, 1fr)" }}
+      >
         {TILES.map((tile) => {
           const Icon = tile.icon;
           const badge = tile.forum ? freshLabel(fresh) : null;
@@ -187,7 +195,7 @@ export function CommunityTab({
               subtitle={tile.forum && replies > 0 ? `${replies} ${replies === 1 ? "reply" : "replies"} to you` : undefined}
               icon={<Icon className="h-4 w-4" />}
               badge={badge}
-              stacked
+              compact
             />
           );
         })}
