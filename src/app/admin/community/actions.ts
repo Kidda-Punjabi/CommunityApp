@@ -29,7 +29,10 @@ export async function startSession(occurrenceId: string) {
 export async function endSession(occurrenceId: string) {
   const { admin } = await staff();
   const result = await endCommunitySession(admin, occurrenceId);
+  const { closeBreakoutRooms } = await import("@/lib/community/breakout");
+  await closeBreakoutRooms(admin, occurrenceId);
   revalidatePath("/admin/community/today");
+  revalidatePath("/dashboard/community");
   return result;
 }
 
@@ -46,7 +49,16 @@ export async function addCheckIn(occurrenceId: string, email: string) {
   if (error) return { error: error.message };
   if (!data) return { error: "No member with that email." };
   const result = await checkInMember(admin, data as string, occurrenceId, "", true);
+  if ("ok" in result && result.ok) {
+    const { placeLateCheckIn } = await import("@/lib/community/breakout");
+    try {
+      await placeLateCheckIn(admin, occurrenceId, data as string);
+    } catch (error) {
+      console.error("[community] late room suggestion failed", error);
+    }
+  }
   revalidatePath("/admin/community/today");
+  revalidatePath("/dashboard/community");
   return result;
 }
 

@@ -9,12 +9,21 @@ import {
   type CheckInSuccess,
 } from "@/lib/community/check-in-types";
 import { isCheckinCode } from "@/lib/community/checkin-code";
+import { placeLateCheckIn } from "@/lib/community/breakout";
 import { checkInMember } from "@/lib/community/mutations";
 import { currentStreak, type StreakOccurrence } from "@/lib/community/streak";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
+
+async function placeCheckedInMember(admin: SupabaseClient, occurrenceId: string, userId: string) {
+  try {
+    await placeLateCheckIn(admin, occurrenceId, userId);
+  } catch (error) {
+    console.error("[community] late room suggestion failed", error);
+  }
+}
 
 function one<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -134,6 +143,7 @@ export async function completeOccurrenceCheckIn(
     .maybeSingle();
   if (existingError) throw existingError;
   if (existing) {
+    await placeCheckedInMember(admin, occurrenceId, userId);
     return presentCheckIn(admin, userId, occurrenceId, {
       already: true,
       countsForStreak: null,
@@ -145,6 +155,7 @@ export async function completeOccurrenceCheckIn(
   const result = await checkInMember(admin, userId, occurrenceId, code, false);
   if ("error" in result && result.error) return { error: result.error };
   if (!("ok" in result) || !result.ok) return { error: CHECKIN_BAD_CODE };
+  await placeCheckedInMember(admin, occurrenceId, userId);
   return presentCheckIn(admin, userId, occurrenceId, {
     already: false,
     countsForStreak: result.countsForStreak,

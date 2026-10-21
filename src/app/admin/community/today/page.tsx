@@ -1,4 +1,5 @@
 import { addCheckIn, endSession, overrideWeek, startSession } from "@/app/admin/community/actions";
+import { BreakoutHost } from "@/components/community/breakout-host";
 import { LiveCheckins } from "@/components/community/live-checkins";
 import { bandForLevel, bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -88,6 +89,7 @@ export default async function CommunityTodayPage() {
       })}
 
       {live?.status === "live" ? <LiveCheckins occurrenceId={live.id} /> : null}
+      {live?.status === "live" ? <BreakoutHost occurrenceId={live.id} /> : null}
 
       {[...grouped.entries()].map(([band, rows]) => (
         <section key={band}>

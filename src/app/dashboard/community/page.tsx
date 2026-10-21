@@ -1,4 +1,6 @@
 import { CommunityTab } from "@/components/community/community-tab";
+import { LiveRoom } from "@/components/community/live-room";
+import { loadMemberRoom } from "@/lib/community/breakout";
 import { liveCheckInFlags } from "@/lib/community/check-in-by-code";
 import { loadCommunityHome, memberHasCommunity } from "@/lib/community/load-home";
 import { loadLevelView } from "@/lib/community/level-view";
@@ -40,13 +42,15 @@ export default async function CommunityPage() {
 
 async function CommunityHome({ userId }: { userId: string }) {
   const admin = createServiceRoleClient();
-  const [home, view, unread, board] = await Promise.all([
+  const [home, view, unread, board, room] = await Promise.all([
     loadCommunityHome(admin, userId),
     loadLevelView(admin, userId),
     loadForumUnread(admin, userId),
     loadLeaderboard(admin, getCurrentWeekStart(), userId),
+    loadMemberRoom(admin, userId),
   ]);
   if (!home.mainSessionId || home.level == null) redirect("/dashboard/community/welcome");
+  if (room) return <LiveRoom view={room} userId={userId} />;
   const live = await liveCheckInFlags(admin, userId, home.next?.id ?? null);
   return (
     <CommunityTab
