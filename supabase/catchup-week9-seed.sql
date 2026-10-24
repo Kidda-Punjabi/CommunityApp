@@ -174,7 +174,7 @@ BEGIN
     (v_seg, 1, 'They will be working late tonight.', 'ਉਹ ਅੱਜ ਰਾਤ ਦੇਰ ਤੱਕ ਕੰਮ ਕਰ ਰਹੇ ਹੋਣਗੇ', 'Oh ajj raat der takk kaam kar rahe honge'),
     (v_seg, 2, 'We will be travelling next week.', 'ਅਸੀਂ ਅਗਲੇ ਹਫ਼ਤੇ ਸਫ਼ਰ ਕਰ ਰਹੇ ਹੋਵਾਂਗੇ', 'Asi agle hafte safar kar rahe hovange'),
     (v_seg, 3, 'She will be studying at this time tomorrow.', 'ਉਹ ਕੱਲ੍ਹ ਇਸ ਸਮੇਂ ਪੜ੍ਹਾਈ ਕਰ ਰਹੀ ਹੋਵੇਗੀ', 'Oh kal iss samen padhai kar rahi hovegi'),
-    (v_seg, 4, 'He will be waiting outside.', 'ਉਹ ਬਾਹਰ ਇੰਤਜ਼ਾਰ ਕਰ ਰਿਹਾ ਹੋਵੇਗਾ', 'Oh bahar intzaar kar riha hovega'),
+    (v_seg, 4, 'He will be waiting outside.', 'ਉਹ ਬਾਹਰ ਉਡੀਕ ਰਿਹਾ ਹੋਵੇਗਾ', 'Oh bahar udeek riha hovega'),
     (v_seg, 5, 'I will be reading this evening.', 'ਮੈਂ ਅੱਜ ਸ਼ਾਮ ਪੜ੍ਹ ਰਿਹਾ ਹੋਵਾਂਗਾ', 'Mai ajj shaam parh riha hovanga'),
     (v_seg, 6, 'We will be eating together.', 'ਅਸੀਂ ਇਕੱਠੇ ਖਾਣਾ ਖਾ ਰਹੇ ਹੋਵਾਂਗੇ', 'Asi ikatthe khana kha rahe hovange'),
     (v_seg, 7, 'They will be watching TV.', 'ਉਹ ਟੀਵੀ ਵੇਖ ਰਹੇ ਹੋਣਗੇ', 'Oh TV vekh rahe honge'),
@@ -254,7 +254,7 @@ BEGIN
     (v_seg, 5, 'They will be able to travel next week.', 'ਉਹ ਅਗਲੇ ਹਫ਼ਤੇ ਸਫ਼ਰ ਕਰ ਸਕਣਗੇ', 'Oh agle hafte safar kar sakange'),
     (v_seg, 6, 'I will have to work tomorrow.', 'ਮੈਨੂੰ ਕੱਲ੍ਹ ਕੰਮ ਕਰਨਾ ਪਵੇਗਾ', 'Mainu kal kaam karna pavega'),
     (v_seg, 7, 'He will have to leave early.', 'ਉਸਨੂੰ ਜਲਦੀ ਜਾਣਾ ਪਵੇਗਾ', 'Usnu jaldi jaana pavega'),
-    (v_seg, 8, 'We will have to wait here.', 'ਸਾਨੂੰ ਇੱਥੇ ਇੰਤਜ਼ਾਰ ਕਰਨਾ ਪਵੇਗਾ', 'Sanu itthe intzaar karna pavega'),
+    (v_seg, 8, 'We will have to wait here.', 'ਸਾਨੂੰ ਇੱਥੇ ਉਡੀਕਣਾ ਪਵੇਗਾ', 'Sanu itthe udeekna pavega'),
     (v_seg, 9, 'You will have to read this book.', 'ਤੁਹਾਨੂੰ ਇਹ ਕਿਤਾਬ ਪੜ੍ਹਨੀ ਪਵੇਗੀ', 'Tuhaanu ih kitaab parhni pavegi'),
     (v_seg, 10, 'They will have to clean the house.', 'ਉਹਨਾਂਨੂੰ ਘਰ ਸਾਫ਼ ਕਰਨਾ ਪਵੇਗਾ', 'Uhanaanu ghar saaf karna pavega');
 
@@ -326,7 +326,7 @@ BEGIN
     (v_seg, 11, 'They will have arrived by morning.', 'ਉਹ ਸਵੇਰੇ ਤੱਕ ਪਹੁੰਚ ਚੁੱਕੇ ਹੋਣਗੇ', 'Oh savvere takk pahunch chukke honge'),
     (v_seg, 12, 'I will be able to help you.', 'ਮੈਂ ਤੁਹਾਡੀ ਮਦਦ ਕਰ ਸਕਾਂਗਾ', 'Mai tuhadi madad kar sakaanga'),
     (v_seg, 13, 'She will be able to read this document.', 'ਉਹ ਇਹ ਦਸਤਾਵੇਜ਼ ਪੜ੍ਹ ਸਕੇਗੀ', 'Oh ih dastavej parh sakegi'),
-    (v_seg, 14, 'We will have to wait here.', 'ਸਾਨੂੰ ਇੱਥੇ ਇੰਤਜ਼ਾਰ ਕਰਨਾ ਪਵੇਗਾ', 'Sanu itthe intzaar karna pavega'),
+    (v_seg, 14, 'We will have to wait here.', 'ਸਾਨੂੰ ਇੱਥੇ ਉਡੀਕਣਾ ਪਵੇਗਾ', 'Sanu itthe udeekna pavega'),
     (v_seg, 15, 'You will have to send the letter.', 'ਤੁਹਾਨੂੰ ਚਿੱਠੀ ਭੇਜਣੀ ਪਵੇਗੀ', 'Tuhaanu chitthi bhejni pavegi');
 
   RAISE NOTICE 'Week 9 catch-up seed complete for lesson %', v_lesson_id;

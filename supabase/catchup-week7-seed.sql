@@ -196,7 +196,7 @@ BEGIN
     (v_seg, 6, 'Where are you going?', 'ਤੁਸੀਂ ਕਿੱਥੇ ਜਾ ਰਹੇ ਹੋ?', 'Tusi kithhe ja rahe ho?'),
     (v_seg, 7, 'Who is coming tomorrow?', 'ਕਲ ਕੌਣ ਆ ਰਿਹਾ ਹੈ?', 'Kal kaun aa riha hai?'),
     (v_seg, 8, 'What are you eating?', 'ਤੁਸੀਂ ਕੀ ਖਾ ਰਹੇ ਹੋ?', 'Tusi ki kha rahe ho?'),
-    (v_seg, 9, 'Why are they waiting?', 'ਉਹ ਕਿਉਂ ਇੰਤਜ਼ਾਰ ਕਰ ਰਹੇ ਹਨ?', 'Oh kiun intzaar kar rahe han?'),
+    (v_seg, 9, 'Why are they waiting?', 'ਉਹ ਕਿਉਂ ਉਡੀਕ ਰਹੇ ਹਨ?', 'Oh kiun udeek rahe han?'),
     (v_seg, 10, 'Which house is yours?', 'ਕਿਹੜਾ ਘਰ ਤੁਹਾਡਾ ਹੈ?', 'Kihda ghar tuhada hai?');
 
   -- Segment 6 — Making negatives
@@ -230,7 +230,7 @@ BEGIN
     (v_seg, 5, 'They did not go to school.', 'ਉਹ ਸਕੂਲ ਨਹੀਂ ਗਏ', 'Oh school nahi gaye'),
     (v_seg, 6, 'I cannot come today.', 'ਮੈਂ ਅੱਜ ਨਹੀਂ ਆ ਸਕਦਾ ਹਾਂ', 'Mai ajj nahi aa sakda haa'),
     (v_seg, 7, 'She is not reading.', 'ਉਹ ਪੜ੍ਹ ਨਹੀਂ ਰਹੀ ਹੈ', 'Oh parh nahi rahi hai'),
-    (v_seg, 8, 'We are not waiting.', 'ਅਸੀਂ ਇੰਤਜ਼ਾਰ ਨਹੀਂ ਕਰ ਰਹੇ ਹਾਂ', 'Asi intzaar nahi kar rahe haa'),
+    (v_seg, 8, 'We are not waiting.', 'ਅਸੀਂ ਉਡੀਕ ਨਹੀਂ ਰਹੇ ਹਾਂ', 'Asi udeek nahi rahe haa'),
     (v_seg, 9, 'They do not speak Punjabi.', 'ਉਹ ਪੰਜਾਬੀ ਨਹੀਂ ਬੋਲਦੇ ਹਨ', 'Oh Punjabi nahi bolde han'),
     (v_seg, 10, 'You are not late.', 'ਤੁਸੀਂ ਲੇਟ ਨਹੀਂ ਹੋ', 'Tusi late nahi ho');
 
