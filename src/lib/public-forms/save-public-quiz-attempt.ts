@@ -72,7 +72,7 @@ export async function syncPublicQuizAttemptToNotion(
       maxScore: context.maxScore,
       submittedAt: new Date(row.submitted_at),
       cohort: submitted?.cohort?.trim() || student.cohort,
-      week: weekSelectFromQuizTitle(context.quizTitle),
+      week: weekSelectFromQuizTitle(context.quizTitle, context.courseName),
       tutor: submitted?.tutor?.trim() || student.tutor,
     });
     const { pageId } = await createNotionTestScorePage(properties);

@@ -64,16 +64,22 @@ describe("buildNotionTestScoreProperties", () => {
     assert.deepEqual(properties.Tutor, { select: { name: "Arshdeep Kaur" } });
   });
 
-  it("omits Course when the name is not a Test Scores select option", () => {
-    const properties = buildNotionTestScoreProperties({
-      fullName: "Guest",
-      email: "guest@example.com",
-      courseName: "Kids Beginners Course (Level 1)",
-      studentScore: 8,
-      maxScore: 10,
-      submittedAt: new Date("2026-09-14T00:00:00.000Z"),
-    });
-    assert.equal(properties.Course, undefined);
+  it("sets Course from the quiz course name, including courses beyond Beginners", () => {
+    for (const courseName of [
+      "Foundational Course",
+      "Intermediate Course",
+      "Kids Beginners Course (Level 1)",
+    ]) {
+      const properties = buildNotionTestScoreProperties({
+        fullName: "Guest",
+        email: "guest@example.com",
+        courseName,
+        studentScore: 8,
+        maxScore: 10,
+        submittedAt: new Date("2026-09-14T00:00:00.000Z"),
+      });
+      assert.deepEqual(properties.Course, { select: { name: courseName } });
+    }
   });
 });
 
@@ -91,10 +97,48 @@ describe("resolveTestScoresDatabaseId", () => {
 });
 
 describe("weekSelectFromQuizTitle", () => {
-  it("maps recap quizzes to Week N and leaves checkpoints blank", () => {
+  it("maps recap quizzes to Week N and leaves Beginners checkpoints blank", () => {
     assert.equal(weekSelectFromQuizTitle("Week 8 Recap Quiz"), "Week 8");
     assert.equal(weekSelectFromQuizTitle("Week 11 Recap Quiz"), "Week 11");
     assert.equal(weekSelectFromQuizTitle("Weeks 8-10 Checkpoint Quiz"), null);
+    assert.equal(
+      weekSelectFromQuizTitle("Weeks 1-4 Checkpoint Quiz", "Beginners Course"),
+      null
+    );
+    assert.equal(
+      weekSelectFromQuizTitle("Weeks 5-7 Checkpoint Quiz", "Beginners Course"),
+      null
+    );
+    assert.equal(
+      weekSelectFromQuizTitle("Weeks 8-10 Checkpoint Quiz", "Beginners Course"),
+      null
+    );
+  });
+
+  it("maps Intermediate and Foundational checkpoints onto range weeks", () => {
+    assert.equal(
+      weekSelectFromQuizTitle("Weeks 1-4 Checkpoint Quiz", "Intermediate Course"),
+      "Week 1-4"
+    );
+    assert.equal(
+      weekSelectFromQuizTitle("Weeks 5-8 Checkpoint Quiz", "Intermediate Course"),
+      "Week 5-8"
+    );
+    assert.equal(
+      weekSelectFromQuizTitle("Weeks 9-11 Final Checkpoint Quiz", "Intermediate Course"),
+      "Week 9-11"
+    );
+    assert.equal(
+      weekSelectFromQuizTitle(
+        "Foundational Weeks 1-4 Checkpoint Quiz",
+        "Foundational Course"
+      ),
+      "Week 1-4"
+    );
+    assert.equal(
+      weekSelectFromQuizTitle("Week 3 Recap Quiz", "Intermediate Course"),
+      "Week 3"
+    );
   });
 });
 

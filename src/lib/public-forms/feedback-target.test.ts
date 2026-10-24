@@ -114,9 +114,30 @@ describe("parsePublicFeedbackTarget", () => {
     assert.equal(publicFeedbackCopy(adultWeek12).title, "Week 12 course feedback");
   });
 
+  it("parses Intermediate weeks 1–11 as standard feedback and week 12 as the end-of-course form", () => {
+    for (const lessonNumber of [1, 6, 11]) {
+      assert.deepEqual(parsePublicFeedbackTarget(`intermediate-week-${lessonNumber}`), {
+        targetId: `intermediate-week-${lessonNumber}`,
+        formVariant: "standard",
+        lessonNumber,
+        lessonLabel: `Lesson ${lessonNumber}`,
+        course: "Intermediate Course",
+      });
+    }
+    assert.deepEqual(parsePublicFeedbackTarget("intermediate-week-12"), {
+      targetId: "intermediate-week-12",
+      formVariant: "week12",
+      lessonNumber: 12,
+      lessonLabel: "Lesson 12",
+      course: "Intermediate Course",
+    });
+  });
+
   it("rejects Foundational weeks outside 1–4 and unknown ids", () => {
     assert.equal(parsePublicFeedbackTarget("foundational-week-5"), null);
     assert.equal(parsePublicFeedbackTarget("foundational-week-0"), null);
+    assert.equal(parsePublicFeedbackTarget("intermediate-week-0"), null);
+    assert.equal(parsePublicFeedbackTarget("intermediate-week-13"), null);
     assert.equal(parsePublicFeedbackTarget("week-13"), null);
     assert.equal(parsePublicFeedbackTarget("week-1"), null);
     assert.equal(parsePublicFeedbackTarget("kids-l1-week-13"), null);
@@ -140,6 +161,22 @@ describe("publicFeedbackCopy", () => {
       publicFeedbackCopy(parsePublicFeedbackTarget("week-12")!).title,
       "Week 12 course feedback"
     );
+    assert.match(
+      publicFeedbackCopy(parsePublicFeedbackTarget("week-12")!).intro,
+      /Beginners Course/
+    );
+  });
+
+  it("uses the Intermediate course on session feedback and the week 12 end-of-course form", () => {
+    const week3 = parsePublicFeedbackTarget("intermediate-week-3");
+    const week12 = parsePublicFeedbackTarget("intermediate-week-12");
+    assert.ok(week3 && week12);
+    assert.equal(publicFeedbackCopy(week3).title, "Intermediate lesson 3 feedback");
+    assert.match(publicFeedbackCopy(week3).intro, /Intermediate Course/);
+    assert.equal(week12.formVariant, "week12");
+    assert.equal(publicFeedbackCopy(week12).title, "Week 12 course feedback");
+    assert.match(publicFeedbackCopy(week12).intro, /Intermediate Course/);
+    assert.doesNotMatch(publicFeedbackCopy(week12).intro, /Beginners Course/);
   });
 
   it("does not reuse adult Lesson 2 copy for Kids Beginners L1 week 2", () => {

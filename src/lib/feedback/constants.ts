@@ -1,6 +1,7 @@
 export const NOTION_COURSE_OPTIONS = [
   "Foundational Course",
   "Beginners Course",
+  "Intermediate Course",
   "Community",
 ] as const;
 

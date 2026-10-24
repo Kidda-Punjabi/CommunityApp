@@ -20,17 +20,25 @@ export function isPublicFeedbackTutor(
 export const PUBLIC_ADULT_COHORT_MAX = 50;
 export const PUBLIC_KIDS_CIRCLE_MAX = 10;
 export const PUBLIC_FOUNDATIONAL_GROUP_MAX = 10;
+export const PUBLIC_INTERMEDIATE_GROUP_MAX = 10;
 
 const PUBLIC_COHORT_SPECIALS = ["1-1", "Community", "Refresher course"] as const;
 
-export type PublicCohortAudience = "beginners" | "foundational" | "kids";
+export type PublicCohortAudience = "beginners" | "foundational" | "intermediate" | "kids";
 
-export type PublicCohortGroupId = "oneToOne" | "beginners" | "foundational" | "kids" | "other";
+export type PublicCohortGroupId =
+  | "oneToOne"
+  | "beginners"
+  | "foundational"
+  | "intermediate"
+  | "kids"
+  | "other";
 
 export const PUBLIC_COHORT_GROUP_LABELS: Record<PublicCohortGroupId, string> = {
   oneToOne: "1-1",
   beginners: "Beginners cohorts",
   foundational: "Group Foundational",
+  intermediate: "Intermediate Group",
   kids: "Kids Circle",
   other: "Other",
 };
@@ -43,6 +51,7 @@ export function publicCohortAudienceFromCourse(input: {
   const name = (input.courseName ?? "").trim();
   if (/\bkids\b/i.test(name)) return "kids";
   if (/foundational/i.test(name)) return "foundational";
+  if (/intermediate/i.test(name)) return "intermediate";
   return "beginners";
 }
 
@@ -55,6 +64,7 @@ export function publicCohortAudienceFromCourseName(
 export function publicCohortPlaceholder(audience: PublicCohortAudience): string {
   if (audience === "kids") return "Select your Kids Circle or 1-1";
   if (audience === "foundational") return "Select your foundational group or 1-1";
+  if (audience === "intermediate") return "Select your intermediate group or 1-1";
   return "Select your cohort";
 }
 
@@ -70,18 +80,26 @@ export function groupFoundationalLabel(n: number): string {
   return `Group Foundational ${n}`;
 }
 
+export function intermediateGroupLabel(n: number): string {
+  return `Intermediate Group ${n}`;
+}
+
 export function buildPublicCohortFallback(
   adultMax = PUBLIC_ADULT_COHORT_MAX,
   kidsMax = PUBLIC_KIDS_CIRCLE_MAX,
-  foundationalMax = PUBLIC_FOUNDATIONAL_GROUP_MAX
+  foundationalMax = PUBLIC_FOUNDATIONAL_GROUP_MAX,
+  intermediateMax = PUBLIC_INTERMEDIATE_GROUP_MAX
 ): string[] {
   const numbered = Array.from({ length: adultMax }, (_, index) => adultCohortLabel(index + 1));
   const kids = Array.from({ length: kidsMax }, (_, index) => kidsCircleLabel(index + 1));
   const foundational = Array.from({ length: foundationalMax }, (_, index) =>
     groupFoundationalLabel(index + 1)
   );
+  const intermediate = Array.from({ length: intermediateMax }, (_, index) =>
+    intermediateGroupLabel(index + 1)
+  );
   return mergePublicSelectOptions(
-    [...PUBLIC_COHORT_SPECIALS, ...numbered, ...kids, ...foundational],
+    [...PUBLIC_COHORT_SPECIALS, ...numbered, ...kids, ...foundational, ...intermediate],
     []
   );
 }
@@ -92,11 +110,14 @@ export function publicCohortGroupId(name: string): PublicCohortGroupId {
   if (/group\s*foundational\s*\d+/i.test(name) || /foundational\s*group\s*\d+/i.test(name)) {
     return "foundational";
   }
+  if (/intermediate\s*group\s*\d+/i.test(name) || /group\s*intermediate\s*\d+/i.test(name)) {
+    return "intermediate";
+  }
   if (/^cohort\s*\d+$/i.test(name.trim())) return "beginners";
   return "other";
 }
 
-/** Beginners: Cohort 1–50 + 1-1. Foundational: Group Foundational 1–10 + 1-1. Kids: Kids Circle + 1-1. */
+/** Beginners: Cohort 1–50 + 1-1. Foundational: Group Foundational 1–10 + 1-1. Intermediate: Intermediate Group 1–10 + 1-1. Kids: Kids Circle + 1-1. */
 export function filterPublicCohortsForAudience(
   names: readonly string[],
   audience: PublicCohortAudience
@@ -106,6 +127,7 @@ export function filterPublicCohortsForAudience(
     if (group === "oneToOne") return true;
     if (audience === "kids") return group === "kids";
     if (audience === "foundational") return group === "foundational";
+    if (audience === "intermediate") return group === "intermediate";
     return group === "beginners" || group === "other";
   });
 }
@@ -117,13 +139,14 @@ export function groupPublicCohortOptions(
     oneToOne: [],
     beginners: [],
     foundational: [],
+    intermediate: [],
     kids: [],
     other: [],
   };
   for (const name of names) {
     grouped[publicCohortGroupId(name)].push(name);
   }
-  return (["oneToOne", "beginners", "foundational", "kids", "other"] as const)
+  return (["oneToOne", "beginners", "foundational", "intermediate", "kids", "other"] as const)
     .filter((id) => grouped[id].length > 0)
     .map((id) => ({
       id,
@@ -139,6 +162,8 @@ export function canonicalPublicSelectKey(name: string): string {
   if (kids) return `kids-circle-${Number.parseInt(kids[1], 10)}`;
   const foundational = trimmed.match(/(?:group\s*foundational|foundational\s*group)\s*(\d+)/i);
   if (foundational) return `group-foundational-${Number.parseInt(foundational[1], 10)}`;
+  const intermediate = trimmed.match(/(?:intermediate\s*group|group\s*intermediate)\s*(\d+)/i);
+  if (intermediate) return `intermediate-group-${Number.parseInt(intermediate[1], 10)}`;
   const cohort = trimmed.match(/^cohort\s*(\d+)$/i);
   if (cohort) return `cohort-${Number.parseInt(cohort[1], 10)}`;
   return trimmed.toLowerCase();
@@ -160,17 +185,35 @@ function preferredPublicSelectName(current: string | undefined, incoming: string
   if (incomingFoundational) {
     return groupFoundationalLabel(Number.parseInt(incomingFoundational[1], 10));
   }
+  const incomingIntermediate = incoming.match(
+    /(?:intermediate\s*group|group\s*intermediate)\s*(\d+)/i
+  );
+  if (incomingIntermediate) {
+    return intermediateGroupLabel(Number.parseInt(incomingIntermediate[1], 10));
+  }
   return current ?? incoming;
 }
 
 function publicSelectSortValue(name: string): [number, number, string] {
   const group = publicCohortGroupId(name);
   const groupRank =
-    group === "oneToOne" ? 0 : group === "beginners" ? 1 : group === "foundational" ? 2 : group === "kids" ? 3 : 4;
+    group === "oneToOne"
+      ? 0
+      : group === "beginners"
+        ? 1
+        : group === "foundational"
+          ? 2
+          : group === "intermediate"
+            ? 3
+            : group === "kids"
+              ? 4
+              : 5;
   const kids = name.match(/kids\s*circle\s*(\d+)/i);
   if (kids) return [groupRank, Number.parseInt(kids[1], 10), name];
   const foundational = name.match(/(?:group\s*foundational|foundational\s*group)\s*(\d+)/i);
   if (foundational) return [groupRank, Number.parseInt(foundational[1], 10), name];
+  const intermediate = name.match(/(?:intermediate\s*group|group\s*intermediate)\s*(\d+)/i);
+  if (intermediate) return [groupRank, Number.parseInt(intermediate[1], 10), name];
   const cohort = name.match(/^cohort\s*(\d+)$/i);
   if (cohort) return [groupRank, Number.parseInt(cohort[1], 10), name];
   const specialIndex = PUBLIC_COHORT_SPECIALS.findIndex(
@@ -205,6 +248,7 @@ export function isJunkPublicSelectName(name: string): boolean {
   if (/^lorem ipsum/i.test(trimmed)) return true;
   if (/^week\s+\d+$/i.test(trimmed)) return true;
   if (/^foundational course$/i.test(trimmed)) return true;
+  if (/^intermediate course$/i.test(trimmed)) return true;
   return false;
 }
 
@@ -233,7 +277,7 @@ export function mergePublicTutorOptions(
   return names;
 }
 
-/** Generated Cohort 1–50, Kids Circle 1–10, Group Foundational 1–10, plus 1-1 / Community / Refresher. */
+/** Generated Cohort 1–50, Kids Circle 1–10, Group Foundational 1–10, Intermediate Group 1–10, plus 1-1 / Community / Refresher. */
 export const PUBLIC_FEEDBACK_COHORT_FALLBACK = buildPublicCohortFallback();
 
 /** Prefer the live/server list, but never show the wrong course type. */
@@ -243,7 +287,35 @@ export function cohortsForPublicForm(
 ): string[] {
   const filtered = filterPublicCohortsForAudience(names, audience);
   const expectedGroup: PublicCohortGroupId =
-    audience === "kids" ? "kids" : audience === "foundational" ? "foundational" : "beginners";
+    audience === "kids"
+      ? "kids"
+      : audience === "foundational"
+        ? "foundational"
+        : audience === "intermediate"
+          ? "intermediate"
+          : "beginners";
+  if (audience === "intermediate") return resolveIntermediateCohorts(names);
   if (filtered.some((name) => publicCohortGroupId(name) === expectedGroup)) return filtered;
   return filterPublicCohortsForAudience(PUBLIC_FEEDBACK_COHORT_FALLBACK, audience);
+}
+
+/**
+ * Intermediate forms use this course's cohort names when the list is already
+ * just those cohorts. Otherwise show 1-1 plus Intermediate Group 1–10.
+ */
+function resolveIntermediateCohorts(names: readonly string[]): string[] {
+  const labeled = filterPublicCohortsForAudience(names, "intermediate");
+  if (labeled.some((name) => publicCohortGroupId(name) === "intermediate")) return labeled;
+
+  const groups = new Set(names.map((name) => publicCohortGroupId(name)));
+  const beginnerCount = names.filter((name) => publicCohortGroupId(name) === "beginners").length;
+  const narrowed =
+    names.length > 0 &&
+    !groups.has("kids") &&
+    !groups.has("foundational") &&
+    beginnerCount < PUBLIC_ADULT_COHORT_MAX;
+  if (narrowed && names.some((name) => publicCohortGroupId(name) !== "oneToOne")) {
+    return mergePublicSelectOptions(["1-1"], names);
+  }
+  return filterPublicCohortsForAudience(PUBLIC_FEEDBACK_COHORT_FALLBACK, "intermediate");
 }

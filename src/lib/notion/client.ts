@@ -200,3 +200,54 @@ export async function ensureLeadSourceAppSignupOption(): Promise<void> {
     }),
   });
 }
+
+type NotionSelectOption = { id?: string; name: string; color?: string };
+
+/** Adds missing select options without dropping the ones already on the database. */
+export async function ensureDatabaseSelectOptions(
+  databaseId: string,
+  additions: Record<string, string[]>
+): Promise<void> {
+  const pending = Object.entries(additions).filter(([, names]) =>
+    names.some((name) => name.trim())
+  );
+  if (!databaseId || pending.length === 0) return;
+
+  const data = await notionJson<{
+    properties?: Record<
+      string,
+      { type: string; select?: { options?: NotionSelectOption[] } }
+    >;
+  }>(`/databases/${databaseId}`);
+
+  const properties: Record<string, unknown> = {};
+  for (const [propertyName, names] of pending) {
+    const property = data.properties?.[propertyName];
+    if (property?.type !== "select") continue;
+    const options = property.select?.options ?? [];
+    const existing = new Set(options.map((option) => option.name));
+    const missing = [...new Set(names.map((name) => name.trim()).filter(Boolean))].filter(
+      (name) => !existing.has(name)
+    );
+    if (missing.length === 0) continue;
+    properties[propertyName] = {
+      select: {
+        options: [
+          ...options.map((option) => ({
+            ...(option.id ? { id: option.id } : {}),
+            name: option.name,
+            ...(option.color ? { color: option.color } : {}),
+          })),
+          ...missing.map((name) => ({ name })),
+        ],
+      },
+    };
+  }
+
+  if (Object.keys(properties).length === 0) return;
+
+  await notionJson(`/databases/${databaseId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ properties }),
+  });
+}

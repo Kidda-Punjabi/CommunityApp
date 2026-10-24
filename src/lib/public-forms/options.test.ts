@@ -4,6 +4,7 @@ import {
   PUBLIC_ADULT_COHORT_MAX,
   PUBLIC_FEEDBACK_TUTOR_OPTIONS,
   buildPublicCohortFallback,
+  cohortsForPublicForm,
   filterPublicCohortsForAudience,
   groupPublicCohortOptions,
   isPublicFeedbackTutor,
@@ -40,6 +41,8 @@ describe("public form cohort options", () => {
     assert.ok(names.includes("Kids Circle 1"));
     assert.ok(names.includes("Group Foundational 1"));
     assert.ok(names.includes("Group Foundational 10"));
+    assert.ok(names.includes("Intermediate Group 1"));
+    assert.ok(names.includes("Intermediate Group 10"));
     assert.ok(names.includes("1-1"));
     assert.equal(names.includes("1-1 Class"), false);
     assert.equal(names.includes("N/A"), false);
@@ -59,6 +62,7 @@ describe("public form cohort options", () => {
     const all = buildPublicCohortFallback();
     const beginners = filterPublicCohortsForAudience(all, "beginners");
     const foundational = filterPublicCohortsForAudience(all, "foundational");
+    const intermediate = filterPublicCohortsForAudience(all, "intermediate");
     const kids = filterPublicCohortsForAudience(all, "kids");
 
     assert.ok(beginners.includes("Cohort 46"));
@@ -66,12 +70,22 @@ describe("public form cohort options", () => {
     assert.ok(beginners.includes("Community"));
     assert.equal(beginners.includes("Kids Circle 1"), false);
     assert.equal(beginners.includes("Group Foundational 1"), false);
+    assert.equal(beginners.includes("Intermediate Group 1"), false);
 
     assert.ok(foundational.includes("Group Foundational 1"));
     assert.ok(foundational.includes("Group Foundational 10"));
     assert.ok(foundational.includes("1-1"));
     assert.equal(foundational.includes("Cohort 46"), false);
     assert.equal(foundational.includes("Kids Circle 1"), false);
+    assert.equal(foundational.includes("Intermediate Group 1"), false);
+
+    assert.ok(intermediate.includes("Intermediate Group 1"));
+    assert.ok(intermediate.includes("Intermediate Group 10"));
+    assert.ok(intermediate.includes("1-1"));
+    assert.equal(intermediate.includes("Cohort 46"), false);
+    assert.equal(intermediate.includes("Kids Circle 1"), false);
+    assert.equal(intermediate.includes("Group Foundational 1"), false);
+    assert.equal(intermediate.includes("Community"), false);
 
     assert.ok(kids.includes("Kids Circle 1"));
     assert.ok(kids.includes("Kids Circle 2"));
@@ -79,10 +93,12 @@ describe("public form cohort options", () => {
     assert.equal(kids.includes("1-1 Class"), false);
     assert.equal(kids.includes("Cohort 46"), false);
     assert.equal(kids.includes("Group Foundational 1"), false);
+    assert.equal(kids.includes("Intermediate Group 1"), false);
     assert.equal(kids.includes("Community"), false);
 
     assert.equal(publicCohortAudienceFromCourseName("Beginners Course"), "beginners");
     assert.equal(publicCohortAudienceFromCourseName("Foundational Course"), "foundational");
+    assert.equal(publicCohortAudienceFromCourseName("Intermediate Course"), "intermediate");
     assert.equal(publicCohortAudienceFromCourseName("Kids Beginners Course"), "kids");
     assert.equal(
       publicCohortAudienceFromCourse({
@@ -109,5 +125,17 @@ describe("public form cohort options", () => {
         ["Kids Circle", ["Kids Circle 1"]],
       ]
     );
+  });
+
+  it("uses Intermediate course cohorts when present, otherwise Intermediate Group 1–10", () => {
+    const placeholder = cohortsForPublicForm(buildPublicCohortFallback(), "intermediate");
+    assert.ok(placeholder.includes("1-1"));
+    assert.ok(placeholder.includes("Intermediate Group 1"));
+    assert.ok(placeholder.includes("Intermediate Group 10"));
+    assert.equal(placeholder.includes("Cohort 1"), false);
+
+    const live = cohortsForPublicForm(["1-1", "Saturday Intermediate"], "intermediate");
+    assert.deepEqual(live, ["1-1", "Saturday Intermediate"]);
+    assert.equal(live.includes("Intermediate Group 1"), false);
   });
 });

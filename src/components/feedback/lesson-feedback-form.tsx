@@ -244,7 +244,7 @@ export function LessonFeedbackForm({
 
       {isWeek12 && (
         <p className="text-sm text-zinc-600">
-          You&apos;ve finished the Beginners Course — this is our end-of-course survey. Thank
+          You&apos;ve finished the {context.course} — this is our end-of-course survey. Thank
           you for learning with Kidda!
         </p>
       )}

@@ -71,7 +71,7 @@ export function publicFeedbackCopy(target: PublicFeedbackTarget): {
     return {
       kicker: "Course feedback",
       title: "Week 12 course feedback",
-      intro: "You've finished the Beginners Course — this is our end-of-course survey.",
+      intro: `You've finished the ${target.course} — this is our end-of-course survey.`,
     };
   }
   if (target.course === "Foundational Course") {
@@ -79,6 +79,13 @@ export function publicFeedbackCopy(target: PublicFeedbackTarget): {
       kicker: "Session feedback",
       title: `Foundational lesson ${target.lessonNumber} feedback`,
       intro: "How was this Foundational Course lesson for you?",
+    };
+  }
+  if (target.course === "Intermediate Course") {
+    return {
+      kicker: "Session feedback",
+      title: `Intermediate lesson ${target.lessonNumber} feedback`,
+      intro: "How was this Intermediate Course lesson for you?",
     };
   }
   if (target.course === KIDS_BEGINNERS_COURSE_NAME) {
@@ -119,6 +126,19 @@ export function parsePublicFeedbackTarget(targetId: string): PublicFeedbackTarge
       lessonNumber,
       lessonLabel: `Lesson ${lessonNumber}`,
       course: "Foundational Course",
+    };
+  }
+
+  const intermediate = /^intermediate-week-(\d+)$/.exec(targetId);
+  if (intermediate) {
+    const lessonNumber = Number.parseInt(intermediate[1], 10);
+    if (lessonNumber < 1 || lessonNumber > 12) return null;
+    return {
+      targetId,
+      formVariant: lessonNumber === 12 ? "week12" : "standard",
+      lessonNumber,
+      lessonLabel: `Lesson ${lessonNumber}`,
+      course: "Intermediate Course",
     };
   }
 

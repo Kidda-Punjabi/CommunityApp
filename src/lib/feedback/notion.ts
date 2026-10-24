@@ -1,3 +1,4 @@
+import { ensureDatabaseSelectOptions } from "@/lib/notion/client";
 import type { FutureSupportOption } from "./constants";
 import type { FeedbackContext, FeedbackSubmitPayload } from "./types";
 
@@ -140,6 +141,15 @@ export async function createNotionFeedbackPage(
     throw new Error("Notion feedback integration is not configured.");
   }
 
+  try {
+    await ensureDatabaseSelectOptions(databaseId, selectOptionAdditions(properties));
+  } catch (error) {
+    console.error(
+      "[notion feedback] could not ensure select options",
+      error instanceof Error ? error.message : error
+    );
+  }
+
   const response = await fetch("https://api.notion.com/v1/pages", {
     method: "POST",
     headers: {
@@ -160,6 +170,18 @@ export async function createNotionFeedbackPage(
 
   const data = (await response.json()) as { id: string };
   return { pageId: data.id };
+}
+
+function selectOptionAdditions(
+  properties: Record<string, NotionPropertyValue>
+): Record<string, string[]> {
+  const additions: Record<string, string[]> = {};
+  for (const [name, value] of Object.entries(properties)) {
+    if ("select" in value && value.select.name.trim()) {
+      additions[name] = [value.select.name.trim()];
+    }
+  }
+  return additions;
 }
 
 export async function updateNotionFeedbackTutor(
