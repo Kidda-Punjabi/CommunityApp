@@ -42,6 +42,7 @@ export function TutorAttendanceSection({
   const [choices, setChoices] = useState<Record<string, AttendanceChoice>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const selectedCohort = cohorts.find((cohort) => cohort.cohortId === cohortId) ?? null;
@@ -114,6 +115,7 @@ export function TutorAttendanceSection({
   function setChoice(studentId: string, attended: boolean) {
     setChoices((current) => ({ ...current, [studentId]: attended }));
     setSuccess(null);
+    setWarning(null);
   }
 
   function handleSave() {
@@ -131,14 +133,17 @@ export function TutorAttendanceSection({
     }
 
     setError(null);
+    setWarning(null);
     startTransition(async () => {
       const result = await saveCohortLessonAttendance(cohortId, lessonId, marks);
       if (result.error) {
         setError(result.error);
         setSuccess(null);
+        setWarning(null);
         return;
       }
       setSuccess(result.success ?? "Attendance saved.");
+      setWarning(result.warning ?? null);
       setMarkedLessonIds((current) =>
         current.includes(lessonId) ? current : [...current, lessonId]
       );
@@ -271,6 +276,11 @@ export function TutorAttendanceSection({
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {success && <p className="text-sm text-green-700">{success}</p>}
+        {warning && (
+          <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+            <p className="text-sm font-medium text-amber-900">⚠️ {warning}</p>
+          </div>
+        )}
       </div>
   );
 
@@ -295,6 +305,11 @@ export function TutorAttendanceSection({
           <div className="mx-auto flex max-w-lg flex-col gap-2">
             {error && <p className="text-center text-sm text-red-600">{error}</p>}
             {success && <p className="text-center text-sm text-green-700">{success}</p>}
+            {warning && (
+              <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+                <p className="text-center text-sm font-medium text-amber-900">⚠️ {warning}</p>
+              </div>
+            )}
             <button
               type="button"
               onClick={handleSave}
