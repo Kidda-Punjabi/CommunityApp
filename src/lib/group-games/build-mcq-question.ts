@@ -1,5 +1,6 @@
 import type { McqQuestionPayload } from "@/lib/group-games/buzz-race-types";
 import { pickRandomItems, shuffleArray } from "@/lib/flashcards/utils";
+import { bilingualKey } from "@/lib/group-games/split-bilingual";
 
 export type FlashcardForMcq = {
   id: string;
@@ -29,10 +30,17 @@ export function buildMcqOptions(
       ? sameCategory
       : allCards.filter((c) => c.id !== card.id);
 
+  // Dedupe by the Gurmukhi itself, so "ਸੋਮਵਾਰ" and "ਸੋਮਵਾਰ (Somvaar)" never both show,
+  // and a second copy of the right answer can never appear as a wrong option.
+  const answerKey = bilingualKey(card.back_text);
+  const seenKeys = new Set<string>([answerKey]);
   const uniqueByBack = new Map<string, FlashcardForMcq>();
   for (const c of poolCards) {
-    if (c.back_text === card.back_text) continue;
-    if (!uniqueByBack.has(c.back_text)) uniqueByBack.set(c.back_text, c);
+    const key = bilingualKey(c.back_text);
+    if (seenKeys.has(key)) continue;
+    if (c.front_text.trim().toLowerCase() === card.front_text.trim().toLowerCase()) continue;
+    seenKeys.add(key);
+    uniqueByBack.set(c.back_text, c);
   }
   const pool = [...uniqueByBack.keys()];
   const distractors = pickRandomItems(pool, 3, card.back_text);

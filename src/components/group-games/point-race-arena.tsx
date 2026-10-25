@@ -14,6 +14,8 @@ import type { PointRaceGameState, RaceStanding } from "@/lib/point-race/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 import type { GameRoomRow } from "@/lib/game-rooms/types";
 import { createClient } from "@/lib/supabase/client";
+import { containsGurmukhi, latinRomanised } from "@/lib/conjugation/romanised";
+import { splitBilingual } from "@/lib/group-games/split-bilingual";
 import { ui } from "@/lib/ui/styles";
 
 const PENDING_MS = 2000;
@@ -243,14 +245,26 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
                       : ""
               }`}
             >
-              <div className="text-center">
-                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Translate
-                </p>
-                <p className="mt-3 text-3xl font-bold leading-snug text-zinc-900">
-                  {myQuestion.prompt}
-                </p>
-              </div>
+              {(() => {
+                const promptParts = splitBilingual(myQuestion.prompt);
+                const promptIsPunjabi = containsGurmukhi(promptParts.main);
+                const promptLatin = promptIsPunjabi
+                  ? (latinRomanised(myQuestion.prompt_romanised) ?? promptParts.bracketLatin)
+                  : null;
+                return (
+                  <div className="rounded-2xl bg-zinc-50 px-4 py-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                      {promptIsPunjabi ? "What does this mean?" : "How do you say this in Punjabi?"}
+                    </p>
+                    <p className="mt-2 text-3xl font-bold leading-snug text-zinc-900">
+                      {promptParts.main}
+                    </p>
+                    {promptLatin ? (
+                      <p className="mt-1 text-base font-medium text-zinc-500">{promptLatin}</p>
+                    ) : null}
+                  </div>
+                );
+              })()}
 
               {feedback && feedback !== "pending" ? (
                 <div
@@ -276,28 +290,46 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
                 <p className="text-center text-sm font-semibold text-amber-700">Checking…</p>
               ) : null}
 
-              <div className="grid gap-3">
-                {myQuestion.options.map((option) => {
+              <div className="grid gap-3" role="radiogroup" aria-label="Answer options">
+                {myQuestion.options.map((option, optionIndex) => {
                   const isSelected = selectedAnswer === option;
+                  const isRevealedCorrect =
+                    feedback === "wrong" && lastCorrectAnswer !== null && option === lastCorrectAnswer;
+                  // Explicit per-state classes (no shared card base) so the selected
+                  // colours are never overridden by a white background or grey border.
+                  const stateClass =
+                    feedback === "pending" && isSelected
+                      ? "border-amber-500 bg-amber-50 ring-2 ring-amber-300"
+                      : feedback === "correct" && isSelected
+                        ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-300"
+                        : feedback === "wrong" && isSelected
+                          ? "border-rose-500 bg-rose-50 ring-2 ring-rose-300"
+                          : isRevealedCorrect
+                            ? "border-emerald-500 bg-emerald-50"
+                            : isSelected
+                              ? "border-violet-600 bg-violet-100 ring-2 ring-violet-300"
+                              : "border-zinc-200 bg-white enabled:hover:border-violet-300 enabled:hover:bg-violet-50";
+                  const badgeClass = isSelected
+                    ? "border-violet-600 bg-violet-600 text-white"
+                    : "border-zinc-300 bg-white text-zinc-500";
                   return (
                     <button
                       key={option}
                       type="button"
+                      role="radio"
+                      aria-checked={isSelected}
                       disabled={pending || feedback !== null}
                       onClick={() => handleSelect(option)}
-                      className={`${ui.cardBordered} w-full px-4 py-4 text-center text-lg transition-colors disabled:opacity-90 ${
-                        feedback === "pending" && isSelected
-                          ? "border-amber-400 bg-amber-50"
-                          : feedback === "correct" && isSelected
-                            ? "border-emerald-500 bg-emerald-50"
-                            : feedback === "wrong" && isSelected
-                              ? "border-rose-500 bg-rose-50"
-                              : isSelected
-                                ? "border-2 border-violet-600 bg-violet-50"
-                                : "enabled:hover:border-violet-300 enabled:hover:bg-violet-50"
-                      }`}
+                      className={`flex w-full items-center gap-4 rounded-2xl border-2 px-4 py-3 text-left transition-colors disabled:opacity-100 ${stateClass}`}
                     >
-                      <McqOptionLabel question={myQuestion} option={option} />
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold ${badgeClass}`}
+                      >
+                        {isSelected ? "✓" : String.fromCharCode(65 + optionIndex)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <McqOptionLabel question={myQuestion} option={option} />
+                      </span>
                     </button>
                   );
                 })}

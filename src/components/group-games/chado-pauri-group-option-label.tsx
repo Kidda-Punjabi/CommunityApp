@@ -1,4 +1,5 @@
 import { latinRomanised } from "@/lib/conjugation/romanised";
+import { splitBilingual } from "@/lib/group-games/split-bilingual";
 
 type ChadoPauriGroupOptionLabelProps = {
   gurmukhi: string;
@@ -7,13 +8,15 @@ type ChadoPauriGroupOptionLabelProps = {
   className?: string;
 };
 
+/** Punjabi on top (large), romanised underneath (small). Each shown once. */
 export function ChadoPauriGroupOptionLabel({
   gurmukhi,
   romanised,
   label,
   className = "",
 }: ChadoPauriGroupOptionLabelProps) {
-  const latin = latinRomanised(romanised);
+  const { main, bracketLatin } = splitBilingual(gurmukhi);
+  const latin = latinRomanised(romanised) ?? bracketLatin;
   return (
     <span className={`block ${className}`}>
       {label ? (
@@ -21,9 +24,9 @@ export function ChadoPauriGroupOptionLabel({
           {label}
         </span>
       ) : null}
-      <span className="font-semibold text-zinc-900">{gurmukhi}</span>
+      <span className="text-xl font-semibold leading-snug text-zinc-900">{main}</span>
       {latin ? (
-        <span className="mt-0.5 block text-sm font-normal text-violet-600">{latin}</span>
+        <span className="mt-1 block text-sm font-medium text-zinc-500">{latin}</span>
       ) : null}
     </span>
   );
