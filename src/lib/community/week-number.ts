@@ -18,7 +18,7 @@ function mondayUtc(y: number, m: number, d: number): number {
   return utc + offset * 86_400_000;
 }
 
-/** Week 1 is the week of 15 June 2026. The same calendar week shares a topic in every region. */
+/** Week 1 is the week of 28 September 2026. The same calendar week shares a topic in every region. */
 export function communityWeekNumber(startsAt: Date, timeZone: string): number {
   const local = localDateParts(startsAt, timeZone);
   const monday = mondayUtc(local.y, local.m, local.d);

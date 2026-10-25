@@ -1,7 +1,8 @@
 export const ARSH_USER_ID = "9967ceda-f077-4430-83b5-3198db006550";
 export const APP_REVIEW_USER_ID = "13f7e14c-6d7e-47f6-bf6c-c6aa98fe696a";
 
-export const COMMUNITY_WEEK_EPOCH = "2026-06-15";
+/** Monday of Week 1. Week of Mon 19 Oct 2026 is Week 4 (Days of the Week). */
+export const COMMUNITY_WEEK_EPOCH = "2026-09-28";
 
 export const CHECKIN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
