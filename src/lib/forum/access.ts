@@ -15,9 +15,18 @@ export async function canAccessForum(
   const actor = await resolveCourseActor(supabase, userId);
   if (actor.kind === "kid") return false;
 
-  const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
-  const { memberHasCommunity } = await import("@/lib/community/load-home");
-  return memberHasCommunity(createServiceRoleClient(), userId);
+  const [membershipResult, roles] = await Promise.all([
+    supabase
+      .from("memberships")
+      .select("status")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle(),
+    loadCurrentUserAppRoles(supabase, userId),
+  ]);
+
+  if (membershipResult.data) return true;
+  return hasAnyRole(roles, FORUM_STAFF_ROLES);
 }
 
 export async function canModerateForum(

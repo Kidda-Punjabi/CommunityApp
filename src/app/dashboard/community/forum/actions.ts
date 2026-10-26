@@ -18,6 +18,8 @@ import {
 } from "@/lib/forum/safety";
 import { deliverForumReportEmail } from "@/lib/forum/deliver-forum-report-email";
 import { getDisplayName } from "@/lib/profile/display-name";
+import { memberHasCommunity } from "@/lib/community/load-home";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -40,6 +42,9 @@ async function requireForumMember(): Promise<ForumSession> {
   } = await supabase.auth.getUser();
 
   if (!user) return { ok: false, result: { error: "You must be signed in." } };
+  if (!(await memberHasCommunity(createServiceRoleClient(), user.id))) {
+    return { ok: false, result: { error: "Community sessions are only for Kidda Community members." } };
+  }
   if (!(await canAccessForum(supabase, user.id))) {
     return { ok: false, result: { error: "Community forum is for active members only." } };
   }
