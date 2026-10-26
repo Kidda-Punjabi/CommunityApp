@@ -237,7 +237,8 @@ export async function loadCommunityCardLine(
     admin.from("community_memberships_meta").select("main_session_id").eq("user_id", userId).maybeSingle(),
     admin
       .from("community_session_occurrences")
-      .select("session_id, starts_at, status")
+      .select("session_id, starts_at, status, community_sessions!inner(is_active)")
+      .eq("community_sessions.is_active", true)
       .gte("ends_at", now)
       .neq("status", "cancelled")
       .order("starts_at", { ascending: true })

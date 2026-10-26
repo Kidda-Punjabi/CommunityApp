@@ -1,4 +1,4 @@
-import { addCheckIn, endSession, overrideWeek, startSession } from "@/app/admin/community/actions";
+import { addCheckIn, endSession, overrideWeek, startSession, startTestSession } from "@/app/admin/community/actions";
 import { BreakoutHost } from "@/components/community/breakout-host";
 import { LiveCheckins } from "@/components/community/live-checkins";
 import { bandForLevel, bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
@@ -50,6 +50,21 @@ export default async function CommunityTodayPage() {
   return (
     <div className="space-y-6">
       <h1 className="font-heading text-2xl font-bold text-zinc-900">Community today</h1>
+      <section className={ui.card}>
+        <p className="font-semibold text-zinc-900">Test session</p>
+        <p className="text-sm text-zinc-500">Staff only. Members never see it, and it counts for nothing: no XP, streaks or attendance.</p>
+        <form
+          action={async (formData) => {
+            "use server";
+            await startTestSession(Number(formData.get("week")));
+          }}
+          className="mt-3 flex items-center gap-2"
+        >
+          <label className="text-sm text-zinc-600" htmlFor="test-week">Week</label>
+          <input id="test-week" name="week" type="number" min={1} max={24} required defaultValue={5} className="h-11 w-20 rounded-xl border border-zinc-200 px-2 text-[16px]" />
+          <button type="submit" className={ui.btnSecondary}>Start a test session</button>
+        </form>
+      </section>
       {(occurrences ?? []).map((occurrence) => {
         const session = Array.isArray(occurrence.community_sessions) ? occurrence.community_sessions[0] : occurrence.community_sessions;
         const week = occurrence.week_number_override ?? occurrence.week_number;

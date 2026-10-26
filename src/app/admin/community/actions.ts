@@ -11,6 +11,7 @@ import {
   endCommunitySession,
   setOccurrenceWeek,
   startCommunitySession,
+  startTestCommunitySession,
 } from "@/lib/community/mutations";
 
 async function staff() {
@@ -22,6 +23,13 @@ async function staff() {
 export async function startSession(occurrenceId: string) {
   const { admin, userId } = await staff();
   const result = await startCommunitySession(admin, userId, occurrenceId);
+  revalidatePath("/admin/community/today");
+  return result;
+}
+
+export async function startTestSession(week: number) {
+  const { admin, userId } = await staff();
+  const result = await startTestCommunitySession(admin, userId, week);
   revalidatePath("/admin/community/today");
   return result;
 }
