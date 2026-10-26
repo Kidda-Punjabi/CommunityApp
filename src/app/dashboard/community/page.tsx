@@ -1,3 +1,4 @@
+import { CommunityLocked } from "@/components/community/community-locked";
 import { CommunityTab } from "@/components/community/community-tab";
 import { CheckInPanel } from "@/components/community/check-in-ui";
 import { LiveRoom } from "@/components/community/live-room";
@@ -16,8 +17,6 @@ import Link from "next/link";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ui } from "@/lib/ui/styles";
 import { headers } from "next/headers";
-
-const MEMBERS_ONLY = "Community sessions are only for Kidda Community members.";
 
 export default async function CommunityPage({
   searchParams,
@@ -44,9 +43,7 @@ export default async function CommunityPage({
       {allowed ? (
         <CommunityHome userId={user.id} openCheckIn={params.checkin === "1"} />
       ) : (
-        <section className={ui.card}>
-          <p className="text-sm text-zinc-700">{native ? "This isn't on your account." : MEMBERS_ONLY}</p>
-        </section>
+        <CommunityLocked native={native} />
       )}
     </div>
   );
