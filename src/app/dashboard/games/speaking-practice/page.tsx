@@ -5,11 +5,14 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 type PageProps = {
-  searchParams: Promise<{ catchupSegmentId?: string }>;
+  searchParams: Promise<{ catchupSegmentId?: string; lessonId?: string }>;
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function SpeakingPracticePage({ searchParams }: PageProps) {
-  const { catchupSegmentId } = await searchParams;
+  const { catchupSegmentId, lessonId: rawLessonId } = await searchParams;
+  const lessonId = rawLessonId && UUID.test(rawLessonId) ? rawLessonId : null;
   const supabase = await createClient();
   const {
     data: { user },
@@ -33,7 +36,9 @@ export default async function SpeakingPracticePage({ searchParams }: PageProps) 
         ? "This catch-up segment has no speaking phrases configured yet."
         : null;
   } else {
-    const base = await loadSpeakingPracticeContent(supabase, user.id);
+    let base = await loadSpeakingPracticeContent(supabase, user.id, lessonId);
+    // If that week has no usable words, fall back to the normal pool rather than an empty game.
+    if (lessonId && base.cards.length === 0) base = await loadSpeakingPracticeContent(supabase, user.id);
     cards = base.cards;
     attempts = base.attempts;
     tableReady = base.tableReady;

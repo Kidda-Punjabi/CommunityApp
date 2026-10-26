@@ -132,6 +132,7 @@ export function payloadFor(kind: RoomActivityKind, topic: TopicOffer, debate: De
   if (kind === "speak_it") {
     return {
       deckName: topic.deckName,
+      lessonId: topic.lessonId,
       instruction: "Say the line out loud. Mute yourself on the call.",
     };
   }

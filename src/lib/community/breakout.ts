@@ -121,7 +121,10 @@ export async function topicFor(admin: SupabaseClient, occurrenceId: string): Pro
     if (typeof card.back_text === "string" && card.back_text.includes("___")) frames += 1;
     for (const tag of (card.topic_tags ?? []) as string[]) tags.add(tag);
   }
-  const first = cards?.[0];
+  // The flashcards activity uses the vocab deck, never the speaking-prompt frames.
+  const first =
+    (cards ?? []).find((card) => !(typeof card.back_text === "string" && card.back_text.includes("___"))) ??
+    cards?.[0];
   const { data: quiz } = await admin
     .from("quizzes")
     .select("id, title")

@@ -210,7 +210,8 @@ function ActivityCard({
   } else if (activity.kind === "point_race") {
     action = { label: payload.joinCode ? `Join game ${payload.joinCode}` : "Start Point Race", onClick: onRace };
   } else if (activity.kind === "speak_it") {
-    action = { label: "Start Speak It", href: activityHref("/dashboard/games/speaking-practice", activity.id) };
+    const lessonQuery = typeof payload.lessonId === "string" ? `?lessonId=${encodeURIComponent(payload.lessonId)}` : "";
+    action = { label: "Start Speak It", href: activityHref(`/dashboard/games/speaking-practice${lessonQuery}`, activity.id) };
   } else if (activity.kind === "speaking_prompts") {
     // Spoken out loud, so there is nothing for the app to measure: the member says when the room is done.
     action = { label: "We've done this", onClick: onDone };
