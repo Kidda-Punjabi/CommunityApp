@@ -8,6 +8,7 @@ import { isNativeApp } from "@/lib/native/platform";
 import { notifyXpEarned } from "@/lib/points/notify-points-earned";
 import { AppTile } from "@/components/ui/app-tile";
 import { Users } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -206,17 +207,15 @@ export function CheckInSheet({
 
 export function SessionCheckInButtons({
   meetUrl,
-  canJoin,
-  anyLive,
-  returnToCheckIn,
+  live,
+  openOnMount = false,
 }: {
   meetUrl: string | null;
-  canJoin: boolean;
-  anyLive: boolean;
-  returnToCheckIn: boolean;
+  live: boolean;
+  openOnMount?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [stillNeeded, setStillNeeded] = useState(returnToCheckIn);
+  const [open, setOpen] = useState(openOnMount);
+  const [stillNeeded, setStillNeeded] = useState(live);
   const joinedAt = useRef(0);
   const away = useRef(false);
 
@@ -259,21 +258,24 @@ export function SessionCheckInButtons({
     };
   }, [stillNeeded]);
 
-  const checkInClass = anyLive
-    ? "flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] px-3 text-sm font-bold text-[#3B1A8C]"
-    : "flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-white/20 px-3 text-sm font-bold text-white";
-  const joinClass =
-    "flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] px-3 text-sm font-bold text-[#3B1A8C]";
+  if (!live) return null;
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-2.5">
-      {canJoin && meetUrl ? (
+      <button
+        type="button"
+        data-testid="check-in-button"
+        className="flex h-14 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] text-base font-bold text-[#3B1A8C]"
+        onClick={() => setOpen(true)}
+      >
+        Check in
+      </button>
+      {meetUrl ? (
         <a
           href={meetUrl}
           target="_blank"
           rel="noreferrer"
-          className={joinClass}
+          className="mt-2 flex h-11 w-full items-center justify-center rounded-[18px] bg-white/15 text-sm font-bold text-white"
           onClick={() => {
             if (!stillNeeded) return;
             joinedAt.current = Date.now();
@@ -281,15 +283,9 @@ export function SessionCheckInButtons({
             sessionStorage.setItem(JOIN_RETURN_KEY, "1");
           }}
         >
-          Join
+          Join the call
         </a>
-      ) : (
-        <span className="flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] px-3 text-sm font-bold text-[#3B1A8C]">Join</span>
-      )}
-      <button type="button" data-testid="check-in-button" className={checkInClass} onClick={() => setOpen(true)}>
-        {anyLive ? "Live now" : "Check in"}
-      </button>
-      </div>
+      ) : null}
       <CheckInSheet
         open={open}
         onClose={() => setOpen(false)}
@@ -303,7 +299,7 @@ export function SessionCheckInButtons({
 }
 
 export function CommunityHomeTile({
-  href,
+  href = "/dashboard/community",
   status,
   showLive,
 }: {
@@ -311,21 +307,18 @@ export function CommunityHomeTile({
   status: string;
   showLive: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   return (
     <div className="relative h-24">
       <AppTile href={href} title="Community" subtitle={status} icon={<Users className="h-4 w-4" />} />
       {showLive ? (
-        <button
-          type="button"
+        <Link
+          href="/dashboard/community?checkin=1"
           data-testid="home-check-in-pill"
-          className="absolute inset-x-1 bottom-1.5 z-10 rounded-full bg-[#FDE68A] px-1 py-0.5 text-[8px] font-bold leading-none text-[#3B1A8C]"
-          onClick={() => setOpen(true)}
+          className="absolute inset-x-1 bottom-1.5 z-10 rounded-full bg-[#FDE68A] px-1 py-0.5 text-center text-[8px] font-bold leading-none text-[#3B1A8C]"
         >
-          Live now · Check in
-        </button>
+          Check in
+        </Link>
       ) : null}
-      <CheckInSheet open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }

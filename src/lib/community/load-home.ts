@@ -1,7 +1,7 @@
 import "server-only";
 
 import { APP_REVIEW_USER_ID } from "@/lib/community/constants";
-import { formatSessionClock, nextLocalStart } from "@/lib/community/format";
+import { formatNextSessionWhen, formatSessionClock, nextLocalStart } from "@/lib/community/format";
 import { currentStreak, sessionsHaveStarted, streakDots, type StreakOccurrence } from "@/lib/community/streak";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -137,22 +137,29 @@ export async function loadCommunityHome(admin: SupabaseClient, userId: string): 
   const { data: past } = mainSessionId
     ? await admin
         .from("community_session_occurrences")
-        .select("id, starts_at, ends_at, community_checkins(user_id)")
+        .select("id, starts_at, ends_at")
         .eq("session_id", mainSessionId)
         .lt("ends_at", now.toISOString())
         .neq("status", "cancelled")
         .order("starts_at", { ascending: false })
         .limit(12)
-    : { data: [] };
+    : { data: [] as { id: string; starts_at: string; ends_at: string }[] };
 
-  const streakRows: StreakOccurrence[] = (past ?? []).map((row) => {
-    const checkins = (row.community_checkins ?? []) as { user_id: string }[];
-    return {
-      startsAt: row.starts_at as string,
-      endsAt: row.ends_at as string,
-      attended: checkins.some((checkin) => checkin.user_id === userId),
-    };
-  });
+  const pastIds = (past ?? []).map((row) => row.id as string);
+  const { data: myCheckins } = pastIds.length
+    ? await admin
+        .from("community_checkins")
+        .select("occurrence_id")
+        .eq("user_id", userId)
+        .in("occurrence_id", pastIds)
+    : { data: [] as { occurrence_id: string }[] };
+  const attendedIds = new Set((myCheckins ?? []).map((row) => row.occurrence_id as string));
+
+  const streakRows: StreakOccurrence[] = (past ?? []).map((row) => ({
+    startsAt: row.starts_at as string,
+    endsAt: row.ends_at as string,
+    attended: attendedIds.has(row.id as string),
+  }));
 
   const slots: SlotChoice[] = sessions
     .map((session) => {
@@ -192,16 +199,61 @@ export async function loadCommunityHome(admin: SupabaseClient, userId: string): 
 }
 
 export async function memberHasCommunity(admin: SupabaseClient, userId: string): Promise<boolean> {
-  const { data, error } = await admin
-    .from("student_packages")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("course_id", COMMUNITY_COURSE_ID)
-    .eq("status", "confirmed")
-    .limit(1)
-    .maybeSingle();
+  const [pkg, profile, host, roles] = await Promise.all([
+    admin
+      .from("student_packages")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("course_id", COMMUNITY_COURSE_ID)
+      .eq("status", "confirmed")
+      .limit(1)
+      .maybeSingle(),
+    admin.from("profiles").select("app_role").eq("id", userId).maybeSingle(),
+    admin
+      .from("community_sessions")
+      .select("id")
+      .eq("host_tutor_id", userId)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle(),
+    admin.from("profile_roles").select("role").eq("user_id", userId),
+  ]);
+  if (pkg.error) throw pkg.error;
+  if (pkg.data) return true;
+  if (host.error) throw host.error;
+  if (host.data) return true;
+  if (profile.data?.app_role === "master_admin") return true;
+  if ((roles.data ?? []).some((row) => row.role === "master_admin")) return true;
+  return false;
+}
+
+export async function loadCommunityCardLine(
+  admin: SupabaseClient,
+  userId: string
+): Promise<{ line: string; live: boolean; startsAt: string | null }> {
+  const now = new Date().toISOString();
+  const [{ data: profile }, { data: meta }, { data: upcoming, error }] = await Promise.all([
+    admin.from("profiles").select("timezone").eq("id", userId).maybeSingle(),
+    admin.from("community_memberships_meta").select("main_session_id").eq("user_id", userId).maybeSingle(),
+    admin
+      .from("community_session_occurrences")
+      .select("session_id, starts_at, status")
+      .gte("ends_at", now)
+      .neq("status", "cancelled")
+      .order("starts_at", { ascending: true })
+      .limit(20),
+  ]);
   if (error) throw error;
-  return Boolean(data);
+  const mainId = (meta?.main_session_id as string | null) ?? null;
+  const rows = upcoming ?? [];
+  const row = (mainId ? rows.find((item) => item.session_id === mainId) : null) ?? rows[0] ?? null;
+  if (!row) return { line: "Next session", live: false, startsAt: null };
+  const timeZone = (profile?.timezone as string | null) || "Europe/London";
+  return {
+    line: `Next session · ${formatNextSessionWhen(row.starts_at as string, timeZone)}`,
+    live: row.status === "live",
+    startsAt: row.starts_at as string,
+  };
 }
 
 export function isReviewAccount(userId: string): boolean {

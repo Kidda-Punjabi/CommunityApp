@@ -55,6 +55,10 @@ export async function login(
         "@/lib/notion/lead-purchase-access-grant"
       );
       await maybeGrantAccessForLinkedProfile(createServiceRoleClient(), user.id);
+      if (user.email) {
+        const { syncStripePurchasesForUser } = await import("@/lib/stripe/sync-purchases");
+        await syncStripePurchasesForUser(user.id, user.email);
+      }
     }
   } catch (grantError) {
     console.error(

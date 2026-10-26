@@ -541,8 +541,10 @@ export async function closeBreakoutRooms(admin: SupabaseClient, occurrenceId: st
 
 export type MemberRoomView = {
   occurrenceId: string;
+  roomId: string | null;
   checkedInCount: number;
   meetUrl: string | null;
+  approvedRoomCount: number;
   phase: "waiting" | "room";
   roomNumber: number | null;
   band: CommunityBand | null;
@@ -579,10 +581,17 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
   if (!checkin) return null;
   const occurrenceId = checkin.occurrence_id as string;
   const occurrence = (live ?? []).find((row) => row.id === occurrenceId);
-  const { count } = await admin
-    .from("community_checkins")
-    .select("user_id", { count: "exact", head: true })
-    .eq("occurrence_id", occurrenceId);
+  const [{ count }, { count: approvedRoomCount }] = await Promise.all([
+    admin
+      .from("community_checkins")
+      .select("user_id", { count: "exact", head: true })
+      .eq("occurrence_id", occurrenceId),
+    admin
+      .from("community_rooms")
+      .select("id", { count: "exact", head: true })
+      .eq("occurrence_id", occurrenceId)
+      .eq("status", "approved"),
+  ]);
   const { data: membership, error: membershipError } = await admin
     .from("community_room_members")
     .select("room_id, assigned_by, assigned_at")
@@ -595,8 +604,10 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
   }
   const base = {
     occurrenceId,
+    roomId: null,
     checkedInCount: count ?? 0,
     meetUrl: (occurrence?.meet_url as string | null) ?? null,
+    approvedRoomCount: approvedRoomCount ?? 0,
     phase: "waiting" as const,
     roomNumber: null,
     band: null,
@@ -650,6 +661,7 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
   return {
     ...base,
     phase: "room",
+    roomId: room.id as string,
     roomNumber: room.room_number as number,
     band: room.band as CommunityBand,
     names: seated.map((mate) => {

@@ -24,6 +24,7 @@ import {
 import { sumPointsEarned } from "@/lib/points/notify-points-earned";
 import { learningProductForFlashcard } from "@/lib/learning/learning-product";
 import { recordStreakActivity, type StreakResult } from "@/lib/progress/streak";
+import { RoomActivityHandoff } from "@/components/community/room-activity-handoff";
 
 type FlashcardStudyModeProps = {
   deck: FlashcardDeckContext;
@@ -162,30 +163,40 @@ export function FlashcardStudyMode({
       });
   }, [phase, allConfident, kidsMode, deck.cards]);
 
+  const ratingLock = useRef(false);
+
   async function recordConfidence(confidence: FlashcardConfidence) {
-    if (!card) return;
+    if (!card || ratingLock.current) return;
+    ratingLock.current = true;
+    window.setTimeout(() => {
+      ratingLock.current = false;
+    }, 350);
 
     playSound(confidence === "confident" ? "correct" : "incorrect");
 
+    const cardId = card.id;
     const userId = userIdRef.current;
-    if (!userId) return;
-
-    const supabase = createClient();
-    const result = await saveFlashcardConfidence(supabase, userId, card.id, confidence);
-    if (!kidsMode) {
-      sumPointsEarned([result.flashcardPoints, result.lessonBonus]);
-    }
     setProgressMap((prev) => {
       const next = new Map(prev);
-      next.set(card.id, { flashcard_id: card.id, confidence });
+      next.set(cardId, { flashcard_id: cardId, confidence });
       return next;
     });
-
     if (index < orderedCards.length - 1) {
       setIndex((prev) => prev + 1);
       setFlipped(false);
     } else {
       setPhase("summary");
+    }
+
+    if (!userId) return;
+    const supabase = createClient();
+    try {
+      const result = await saveFlashcardConfidence(supabase, userId, cardId, confidence);
+      if (!kidsMode) {
+        sumPointsEarned([result.flashcardPoints, result.lessonBonus]);
+      }
+    } catch (error) {
+      console.error("Failed to save flashcard confidence:", error);
     }
   }
 
@@ -227,6 +238,8 @@ export function FlashcardStudyMode({
 
   if (phase === "summary") {
     return (
+      <>
+      <RoomActivityHandoff done />
       <StudySessionSummary
         deck={deck}
         stats={fullStats}
@@ -240,6 +253,7 @@ export function FlashcardStudyMode({
         kidsMode={kidsMode}
         onKidsComplete={onKidsComplete}
       />
+      </>
     );
   }
 
@@ -334,10 +348,10 @@ export function FlashcardStudyMode({
               goNext();
             }}
             disabled={index === orderedCards.length - 1}
-            aria-label="Next card"
-            className="absolute right-2 top-2 z-10 rounded-full p-1.5 text-lg leading-none text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:pointer-events-none disabled:opacity-30"
+            aria-label="Skip"
+            className="absolute right-2 top-2 z-10 px-1 text-xs font-semibold text-zinc-400 hover:text-zinc-600 disabled:pointer-events-none disabled:opacity-30"
           >
-            →
+            Skip
           </button>
 
           <button
@@ -399,7 +413,7 @@ export function FlashcardStudyMode({
                   : "rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 hover:bg-amber-100 tab:h-[60px] tab:text-base"
               }`}
             >
-              {kidsMode ? "Try again" : "Not confident"}
+              {kidsMode ? "Try again" : "Not yet"}
             </button>
             <button
               type="button"

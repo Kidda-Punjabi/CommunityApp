@@ -24,6 +24,7 @@ import {
 } from "@/lib/learning/learning-product";
 import { recordStreakActivity, type StreakResult } from "@/lib/progress/streak";
 import { SessionProgressBar } from "@/components/session-progress-bar";
+import { RoomActivityHandoff } from "@/components/community/room-activity-handoff";
 
 export type QuizQuestion = {
   id: string;
@@ -198,6 +199,7 @@ export function QuizPlayer({
   if (finished) {
     return (
       <div className="relative rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+        <RoomActivityHandoff done />
         <FloatingSoundToggle />
         <p className="text-sm font-medium text-violet-600">Quiz complete</p>
         <h2 className="mt-2 text-2xl font-bold text-zinc-900">

@@ -1,3 +1,23 @@
+export function formatNextSessionWhen(iso: string, timeZone: string): string {
+  const when = new Date(iso);
+  const weekday = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short" }).format(when);
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  })
+    .format(when)
+    .replace(/\s/g, "")
+    .toLowerCase();
+  return `${weekday} ${time}`;
+}
+
+export function formatCheckInOpensAt(startsAt: string, timeZone: string): string {
+  const opens = new Date(Date.parse(startsAt) - 2 * 60 * 1000);
+  return formatNextSessionWhen(opens.toISOString(), timeZone).replace(/^\S+\s/, "");
+}
+
 export function formatSessionClock(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone,

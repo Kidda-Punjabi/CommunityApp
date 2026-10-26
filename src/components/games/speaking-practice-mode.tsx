@@ -30,6 +30,7 @@ import {
 import { formatHeardTranscript, VOICE_PRACTICE_MAX_ATTEMPTS } from "@/lib/games/voice-practice";
 import type { GameSessionSettingsChoice } from "@/lib/games/session-settings";
 import { createClient } from "@/lib/supabase/client";
+import { RoomActivityHandoff } from "@/components/community/room-activity-handoff";
 
 const ADVANCE_MS = 1400;
 const MAX_RECORDING_MS = 8000;
@@ -410,6 +411,8 @@ export function SpeakingPracticeMode({
 
   if (phase === "finished") {
     return (
+      <>
+      <RoomActivityHandoff done />
       <GameSessionReview
         title="Session complete"
         correct={passedCount}
@@ -419,6 +422,7 @@ export function SpeakingPracticeMode({
         scoreSubtitle={`${passedCount} passed out of ${totalQuestions}`}
         onPlayAgain={() => setPhase("ready")}
       />
+      </>
     );
   }
 

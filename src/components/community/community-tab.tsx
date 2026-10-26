@@ -1,6 +1,7 @@
 import { SessionCheckInButtons } from "@/components/community/check-in-ui";
+import { CommunityLiveSync } from "@/components/community/room-refresh";
 import { AppTile } from "@/components/ui/app-tile";
-import { canJoinSession, daysUntilLabel, formatSessionClock } from "@/lib/community/format";
+import { daysUntilLabel, formatCheckInOpensAt, formatNextSessionWhen } from "@/lib/community/format";
 import type { CommunityHome } from "@/lib/community/load-home";
 import { bandFillVar, bandForLevel, bandInkVar, bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
 import { freshLabel } from "@/lib/forum/unread";
@@ -43,6 +44,8 @@ export function CommunityTab({
   replies = 0,
   anyLive = false,
   checkedIntoNext = false,
+  openCheckIn = false,
+  liveIds = [],
   checkReady = false,
   cooldownUntil = null,
   leaderboard,
@@ -55,13 +58,14 @@ export function CommunityTab({
   replies?: number;
   anyLive?: boolean;
   checkedIntoNext?: boolean;
+  openCheckIn?: boolean;
+  liveIds?: string[];
   checkReady?: boolean;
   cooldownUntil?: string | null;
   leaderboard: CommunityLeaderboardPreview;
 }) {
   const next = home.next;
-  const live = next?.status === "live";
-  const joinReady = next ? canJoinSession(next.startsAt, next.endsAt) : false;
+  const live = Boolean(anyLive || next?.status === "live");
   const streakCopy = !home.sessionsStarted
     ? home.startsLabel ?? "Your first session is coming up"
     : home.streak > 0
@@ -70,11 +74,30 @@ export function CommunityTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 font-[family-name:var(--font-community)] text-[#1F1640]">
+      <CommunityLiveSync
+        channelId={next?.id ?? "community-tab"}
+        occurrenceId={next?.id ?? null}
+        occurrenceIds={liveIds}
+      />
       <section className="shrink-0 rounded-[24px] bg-[#5B21B6] p-4 text-white">
-        <p className="text-xs text-violet-100">{live ? "Live now" : "Next session"}</p>
-        <h2 className="mt-0.5 font-heading text-xl font-extrabold leading-tight">
-          {next ? formatSessionClock(next.startsAt, home.timezone) : "Your session"}
-        </h2>
+        {live ? (
+          <SessionCheckInButtons
+            meetUrl={next?.meetUrl ?? null}
+            live={!checkedIntoNext}
+            openOnMount={openCheckIn}
+          />
+        ) : (
+          <>
+            <h2 className="font-heading text-xl font-extrabold leading-tight">
+              {next ? `Next session · ${formatNextSessionWhen(next.startsAt, home.timezone)}` : "Next session"}
+            </h2>
+            {next ? (
+              <p className="mt-1 text-sm font-semibold text-violet-100">
+                Check in opens at {formatCheckInOpensAt(next.startsAt, home.timezone)}
+              </p>
+            ) : null}
+          </>
+        )}
         <p className="mt-0.5 text-xs leading-snug text-violet-100">
           {next ? (
             <>
@@ -105,14 +128,6 @@ export function CommunityTab({
             </span>
           ) : null}
         </Link>
-        <div className="mt-2">
-          <SessionCheckInButtons
-            meetUrl={next?.meetUrl ?? null}
-            canJoin={Boolean(next?.meetUrl && (live || joinReady))}
-            anyLive={anyLive}
-            returnToCheckIn={Boolean(live && next && !checkedIntoNext)}
-          />
-        </div>
       </section>
 
       <div className="grid shrink-0 grid-cols-2 items-stretch gap-2.5">

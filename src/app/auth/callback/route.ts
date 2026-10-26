@@ -83,6 +83,16 @@ export async function GET(request: Request) {
               claimError instanceof Error ? claimError.message : claimError
             );
           }
+
+          try {
+            const { syncStripePurchasesForUser } = await import("@/lib/stripe/sync-purchases");
+            await syncStripePurchasesForUser(user.id, userEmail);
+          } catch (purchaseError) {
+            console.error(
+              "[auth/callback] community purchase sync failed:",
+              purchaseError instanceof Error ? purchaseError.message : purchaseError
+            );
+          }
         }
       }
 

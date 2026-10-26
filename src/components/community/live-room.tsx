@@ -1,13 +1,29 @@
 "use client";
 
 import { castDebateVote, markActivityDone, openPointRace } from "@/app/dashboard/community/breakout-actions";
-import { RoomRefresh } from "@/components/community/room-refresh";
+import { CommunityLiveSync } from "@/components/community/room-refresh";
 import type { MemberRoomView } from "@/lib/community/breakout";
 import { bandFillVar, bandInkVar, bandLabel } from "@/lib/community/levels";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function LiveRoom({ view, userId }: { view: MemberRoomView; userId: string }) {
+const SPOKEN = new Set(["warmup_debate", "speaking_prompts", "bonus"]);
+
+function activityHref(path: string, activityId: string) {
+  const join = path.includes("?") ? "&" : "?";
+  return `${path}${join}roomActivity=${encodeURIComponent(activityId)}`;
+}
+
+export function LiveRoom({
+  view,
+  userId,
+  needsOnboarding = false,
+}: {
+  view: MemberRoomView;
+  userId: string;
+  needsOnboarding?: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -22,7 +38,7 @@ export function LiveRoom({ view, userId }: { view: MemberRoomView; userId: strin
     const result = await action();
     setPending(false);
     if ("href" in result && result.href) {
-      router.push(result.href);
+      router.push(active ? activityHref(result.href, active.id) : result.href);
       return;
     }
     if ("error" in result && result.error) setError(result.error);
@@ -30,7 +46,13 @@ export function LiveRoom({ view, userId }: { view: MemberRoomView; userId: strin
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-3">
-      <RoomRefresh channelId={view.occurrenceId} />
+      <CommunityLiveSync
+        channelId={view.roomId ?? view.occurrenceId}
+        occurrenceId={view.occurrenceId}
+        roomId={view.roomId}
+        activityId={active?.id ?? null}
+        poll={view.phase === "waiting"}
+      />
       {view.phase === "waiting" ? (
         <section className="rounded-[24px] bg-[#5B21B6] p-4 text-white">
           <p className="font-heading text-2xl font-extrabold leading-tight">{"You're checked in."}</p>
@@ -47,12 +69,15 @@ export function LiveRoom({ view, userId }: { view: MemberRoomView; userId: strin
               Room {view.roomNumber} · {bandLabel(view.band ?? "beginner")}
             </p>
             <p className="mt-2 text-sm font-semibold">{view.names.join(", ")}</p>
-            <p className="mt-3 text-base font-bold">Go to Breakout room {view.roomNumber} in Meet</p>
-            {view.meetUrl ? (
-              <a href={view.meetUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex h-12 items-center rounded-2xl bg-white px-4 text-sm font-bold text-[#5B21B6]">
-                Open Meet
-              </a>
-            ) : null}
+            {view.approvedRoomCount >= 2 ? (
+              view.meetUrl ? (
+                <a href={view.meetUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex h-12 items-center rounded-2xl bg-white px-4 text-sm font-bold text-[#5B21B6]">
+                  Open breakout room in Meet
+                </a>
+              ) : null
+            ) : (
+              <p className="mt-3 text-base font-bold">Stay in the main call</p>
+            )}
           </section>
           {active ? (
             <ActivityCard
@@ -64,7 +89,7 @@ export function LiveRoom({ view, userId }: { view: MemberRoomView; userId: strin
               iSigned={iSigned}
               needsVote={needsVote}
               myVote={view.myVote}
-              voteCount={view.votes.length}
+              votes={view.votes}
               pending={pending}
               onVote={(choice) => run(() => castDebateVote(active.id, choice))}
               onDone={() => run(() => markActivityDone(active.id))}
@@ -78,6 +103,11 @@ export function LiveRoom({ view, userId }: { view: MemberRoomView; userId: strin
           )}
         </>
       )}
+      {needsOnboarding ? (
+        <Link href="/dashboard/community/welcome" className="text-sm font-bold text-[#5B21B6]">
+          Finish onboarding when you can
+        </Link>
+      ) : null}
       {error ? <p className="text-sm font-semibold text-red-700">{error}</p> : null}
     </div>
   );
@@ -91,7 +121,7 @@ function ActivityCard({
   iSigned,
   needsVote,
   myVote,
-  voteCount,
+  votes,
   pending,
   onVote,
   onDone,
@@ -104,14 +134,24 @@ function ActivityCard({
   iSigned: boolean;
   needsVote: boolean;
   myVote: "a" | "b" | null;
-  voteCount: number;
+  votes: { userId: string; choice: "a" | "b" }[];
   pending: boolean;
   onVote: (choice: "a" | "b") => void;
   onDone: () => void;
   onRace: () => void;
 }) {
   const payload = activity.payload;
-  const instruction = typeof payload.instruction === "string" ? payload.instruction : "";
+  const instruction =
+    activity.kind === "warmup_debate"
+      ? "Vote, then each person says why in Punjabi."
+      : typeof payload.instruction === "string"
+        ? payload.instruction
+        : "";
+  const waiting = people.filter((person) => !signed.has(person.userId)).map((person) => person.name);
+  const namesFor = (choice: "a" | "b") =>
+    votes
+      .filter((vote) => vote.choice === choice)
+      .map((vote) => people.find((person) => person.userId === vote.userId)?.name ?? "Member");
   const prompts = Array.isArray(payload.prompts) ? (payload.prompts as { front?: string; back?: string }[]) : [];
   const [promptIndex, setPromptIndex] = useState(0);
   const prompt = prompts[promptIndex];
@@ -131,16 +171,22 @@ function ActivityCard({
         <div className="mt-4 grid grid-cols-2 gap-2">
           <VoteButton label={String(payload.optionA ?? "A")} selected={myVote === "a"} disabled={pending} onClick={() => onVote("a")} />
           <VoteButton label={String(payload.optionB ?? "B")} selected={myVote === "b"} disabled={pending} onClick={() => onVote("b")} />
-          <p className="col-span-2 text-sm text-[#6B5F8A]">{voteCount} voted</p>
+          <VoteTally label={String(payload.optionA ?? "A")} names={namesFor("a")} />
+          <VoteTally label={String(payload.optionB ?? "B")} names={namesFor("b")} />
         </div>
       ) : null}
       {activity.kind === "flashcards" && payload.lessonId && payload.deckId ? (
-        <a className={actionClass} href={`/dashboard/practice/flashcards/${payload.lessonId}/${payload.deckId}/study`}>
-          Open flashcards
-        </a>
+        <>
+          <a className={actionClass} href={activityHref(`/dashboard/practice/flashcards/${payload.lessonId}/${payload.deckId}/study`, activity.id)}>
+            Open flashcards
+          </a>
+          <a className={actionClass} href={activityHref(`/dashboard/practice/flashcards/${payload.lessonId}/${payload.deckId}/match`, activity.id)}>
+            Open match
+          </a>
+        </>
       ) : null}
       {activity.kind === "quiz" && payload.quizId ? (
-        <a className={actionClass} href={`/dashboard/practice/quiz/${payload.quizId}`}>
+        <a className={actionClass} href={activityHref(`/dashboard/practice/quiz/${payload.quizId}`, activity.id)}>
           Open quiz
         </a>
       ) : null}
@@ -150,7 +196,7 @@ function ActivityCard({
         </button>
       ) : null}
       {activity.kind === "speak_it" ? (
-        <a className={actionClass} href="/dashboard/games/speaking-practice">
+        <a className={actionClass} href={activityHref("/dashboard/games/speaking-practice", activity.id)}>
           Open Speak It
         </a>
       ) : null}
@@ -185,17 +231,30 @@ function ActivityCard({
         ))}
       </div>
       <p className="mt-2 text-sm font-semibold text-[#6B5F8A]">
-        {signed.size} of {people.length} done
+        {waiting.length === 0 ? "Everyone's done" : `Waiting for ${waiting.join(", ")}`}
       </p>
-      <button
-        type="button"
-        disabled={pending || iSigned || needsVote}
-        onClick={onDone}
-        className="mt-3 inline-flex h-14 w-full items-center justify-center rounded-[18px] bg-[#5B21B6] text-base font-bold text-white disabled:opacity-40"
-      >
-        {iSigned ? "You're done" : "Done"}
-      </button>
+      {SPOKEN.has(activity.kind) ? (
+        <button
+          type="button"
+          disabled={pending || iSigned || needsVote}
+          onClick={onDone}
+          className="mt-3 inline-flex h-14 w-full items-center justify-center rounded-[18px] bg-[#5B21B6] text-base font-bold text-white disabled:opacity-40"
+        >
+          {iSigned ? "You're done" : "We've done this"}
+        </button>
+      ) : null}
     </section>
+  );
+}
+
+function VoteTally({ label, names }: { label: string; names: string[] }) {
+  return (
+    <div className="col-span-2">
+      <p className="text-sm font-bold text-[#1F1640]">
+        {label} · {names.length}
+      </p>
+      {names.length > 0 ? <p className="text-sm text-[#6B5F8A]">{names.join(", ")}</p> : null}
+    </div>
   );
 }
 

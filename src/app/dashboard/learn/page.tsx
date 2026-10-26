@@ -34,7 +34,7 @@ import {
   getCachedAuthSession,
   getCachedCourseAccess,
 } from "@/lib/supabase/cached-session";
-import { memberNeedsLiveCheckIn } from "@/lib/community/check-in-by-code";
+import { loadCommunityCardLine } from "@/lib/community/load-home";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
@@ -181,12 +181,15 @@ export default async function LearnPage() {
       ? shortStartsStatus(beginnersGate.startDate)
       : "Lessons ready";
 
-  const communityStatus = communityLocked ? lockedLabel : "Lessons ready";
+  const communityCard = communityLocked
+    ? null
+    : await loadCommunityCardLine(createServiceRoleClient(), user.id);
+  const communityStatus = communityLocked ? lockedLabel : communityCard?.line ?? "Next session";
   const communityHref = communityLocked
     ? nativeApp
       ? ""
       : community.unlockUrl ?? "/courses/community"
-    : learnTrackPath("community");
+    : "/dashboard/community";
 
   const classCards =
     actor.kind === "kid" || kidProfileCount === 0
@@ -290,7 +293,7 @@ export default async function LearnPage() {
   const timeZone = (me?.timezone as string) || "Europe/London";
   const foundationalClass = courseWhen(classCards, "foundational", timeZone);
   const beginnersClass = courseWhen(classCards, "beginners", timeZone);
-  const communityLiveCheckIn = communityLocked ? false : await memberNeedsLiveCheckIn(createServiceRoleClient(), user.id);
+  const communityLiveCheckIn = communityLocked ? false : Boolean(communityCard?.live);
 
   return (
     <div className={`${ui.page} !flex !h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] !flex-col !overflow-hidden !py-3`}>

@@ -95,7 +95,7 @@ function payloadFor(kind: RoomActivityKind, topic: TopicOffer, debate: DebatePic
       optionB: debate.optionB,
       promptPa: debate.promptPa,
       romanised: debate.romanised,
-      instruction: "Vote, then say why out loud.",
+      instruction: "Vote, then each person says why in Punjabi.",
     };
   }
   if (kind === "flashcards") {

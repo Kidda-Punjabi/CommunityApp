@@ -210,6 +210,17 @@ export async function syncMembershipFromStripeEvent(event: Stripe.Event) {
       typeof full.customer === "string" ? full.customer : full.customer?.id ?? null;
 
     const grantResult = await grantCoursesToUser(userId, purchasedTiers, customerId);
+    if (purchasedTiers.includes("community")) {
+      const purchasedAt = new Date(full.created * 1000).toISOString();
+      await syncStudentPackagesFromPurchases(userId, [
+        {
+          tier: "community",
+          checkoutKey: "community",
+          purchasedAt,
+          mode: "subscription",
+        },
+      ]);
+    }
     return grantResult;
   }
 

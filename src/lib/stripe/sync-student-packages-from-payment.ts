@@ -135,11 +135,11 @@ export async function upsertStudentPackageFromPurchase(
   userId: string,
   purchase: PurchaseForStudentPackage
 ): Promise<{ studentPackageId: string | null; error?: string }> {
-  if (purchase.skipOnboarding) {
+  const slug = resolvePackageSlug(purchase);
+  if (purchase.skipOnboarding && slug !== COMMUNITY_PACKAGE_SLUG) {
     return { studentPackageId: null };
   }
 
-  const slug = resolvePackageSlug(purchase);
   const purchasedAt = purchase.purchasedAt ?? new Date().toISOString();
   const sessionId = purchase.sessionId ?? null;
 
