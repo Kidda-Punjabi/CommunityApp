@@ -198,7 +198,7 @@ export async function startCommunitySession(admin: SupabaseClient, actorId: stri
       },
     });
   }
-  return { ok: true, code };
+  return { ok: true, code, occurrenceId };
 }
 
 export async function endCommunitySession(admin: SupabaseClient, occurrenceId: string) {

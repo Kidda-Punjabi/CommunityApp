@@ -137,7 +137,11 @@ function payloadFor(kind: RoomActivityKind, topic: TopicOffer, debate: DebatePic
   }
   return {
     deckName: topic.deckName,
-    instruction: "Practise a focus from this week's deck, or play a game.",
+    topicTags: topic.topicTags.slice(0, 8),
+    gameRoomId: null,
+    joinCode: null,
+    gameType: null,
+    instruction: "Play a game on this week's topic together.",
   };
 }
 

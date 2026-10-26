@@ -12,6 +12,7 @@ import { requireCommunityStaff } from "@/lib/community/member-guard";
 
 function refresh() {
   revalidatePath("/admin/community/today");
+  revalidatePath("/admin/community/session/[id]", "page");
   revalidatePath("/dashboard/community");
 }
 

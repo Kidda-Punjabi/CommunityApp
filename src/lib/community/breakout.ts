@@ -71,7 +71,7 @@ async function peopleFor(admin: SupabaseClient, occurrenceId: string): Promise<R
   });
 }
 
-async function topicFor(admin: SupabaseClient, occurrenceId: string): Promise<TopicOffer> {
+export async function topicFor(admin: SupabaseClient, occurrenceId: string): Promise<TopicOffer> {
   const { data: occurrence, error } = await admin
     .from("community_session_occurrences")
     .select("topic_lesson_id, week_number, week_number_override")

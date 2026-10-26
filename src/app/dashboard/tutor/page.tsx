@@ -20,6 +20,41 @@ function londonDateLabel(now = new Date()): string {
     .replace(",", "");
 }
 
+type HostingCard = { occurrenceId: string; title: string; when: string; live: boolean; week: number; topic: string | null };
+
+/** The tutor's next (or live) Community session, if they host one. Only hosts see the card. */
+async function loadHostingCard(admin: NonNullable<ReturnType<typeof tryCreateServiceRoleClient>["client"]>, userId: string): Promise<HostingCard | null> {
+  const { data: sessions } = await admin.from("community_sessions").select("id").eq("host_tutor_id", userId).eq("is_active", true);
+  const ids = (sessions ?? []).map((row) => row.id as string);
+  if (ids.length === 0) return null;
+  const { data: rows } = await admin
+    .from("community_session_occurrences")
+    .select("id, starts_at, status, week_number, week_number_override, community_sessions(title), lessons:topic_lesson_id(title)")
+    .in("session_id", ids)
+    .in("status", ["live", "scheduled"])
+    .gte("ends_at", new Date().toISOString())
+    .order("starts_at")
+    .limit(10);
+  const list = rows ?? [];
+  const row = list.find((item) => item.status === "live") ?? list[0];
+  if (!row) return null;
+  const session = Array.isArray(row.community_sessions) ? row.community_sessions[0] : row.community_sessions;
+  const lesson = Array.isArray(row.lessons) ? row.lessons[0] : row.lessons;
+  return {
+    occurrenceId: row.id as string,
+    title: (session?.title as string | undefined) ?? "Community",
+    when: new Date(row.starts_at as string).toLocaleString("en-GB", {
+      weekday: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "Europe/London",
+    }),
+    live: row.status === "live",
+    week: (row.week_number_override as number | null) ?? (row.week_number as number),
+    topic: (lesson?.title as string | null | undefined) ?? null,
+  };
+}
+
 export default async function TutorHomePage() {
   const supabase = await createClient();
   const {
@@ -28,10 +63,11 @@ export default async function TutorHomePage() {
   if (!user) redirect("/login");
 
   const { client: admin } = tryCreateServiceRoleClient();
-  const [board, homework, profile] = await Promise.all([
+  const [board, homework, profile, hosting] = await Promise.all([
     loadTutorClassBoard(admin ?? supabase, user.id),
     loadHomeworkReviewBoard(supabase, user.id),
     loadEditableProfile(supabase, user.id),
+    admin ? loadHostingCard(admin, user.id) : Promise.resolve(null),
   ]);
   const attention = attentionItems(board.active);
   const avatarProfile = profile ?? {
@@ -57,6 +93,28 @@ export default async function TutorHomePage() {
           <UserAvatar profile={avatarProfile} size="sm" />
         </Link>
       </header>
+
+      {hosting ? (
+        <Link
+          href={`/admin/community/session/${hosting.occurrenceId}`}
+          className="flex flex-col gap-2 rounded-3xl bg-violet-700 p-5 text-white"
+        >
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.08em] text-violet-200">
+              {hosting.live ? "Community · Live now" : "Community · You're hosting"}
+            </span>
+            <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-bold">Week {hosting.week}</span>
+          </span>
+          <span className="font-heading text-2xl font-extrabold leading-tight">{hosting.when}</span>
+          <span className="text-sm text-violet-100">
+            {hosting.title}
+            {hosting.topic ? ` · ${hosting.topic}` : ""}
+          </span>
+          <span className="mt-1 flex min-h-12 items-center justify-center rounded-2xl bg-white text-base font-extrabold text-violet-800">
+            {hosting.live ? "Open live session" : "Open host page"}
+          </span>
+        </Link>
+      ) : null}
 
       <Link href="/dashboard/tutor/log" className={ui.heroCard}>
         <p className={ui.heroTitle}>Log a lesson</p>
