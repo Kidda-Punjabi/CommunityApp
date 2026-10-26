@@ -2,7 +2,16 @@ import "server-only";
 
 import type { CommunityBand } from "@/lib/community/constants";
 import { planBreakoutRooms, suggestLateRoom, type RoomPerson } from "@/lib/community/breakout-rooms";
-import { pickDebateId, planRoomActivities, type DebatePick, type TopicOffer } from "@/lib/community/room-activities";
+import {
+  ACTIVITY_TITLES,
+  kindsWithContent,
+  payloadFor,
+  pickDebateId,
+  planRoomActivities,
+  type DebatePick,
+  type RoomActivityKind,
+  type TopicOffer,
+} from "@/lib/community/room-activities";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const COURSE_ID = "22f0e217-92a7-46f0-b38e-651409d7d118";
@@ -545,7 +554,9 @@ export type MemberRoomView = {
   checkedInCount: number;
   meetUrl: string | null;
   approvedRoomCount: number;
-  phase: "waiting" | "room";
+  phase: "waiting" | "room" | "main";
+  /** Whole-group game in the main room, if the host started one. */
+  groupGame: { gameRoomId: string; joinCode: string; gameType: string } | null;
   roomNumber: number | null;
   band: CommunityBand | null;
   names: string[];
@@ -566,7 +577,7 @@ export type MemberRoomView = {
 export async function loadMemberRoom(admin: SupabaseClient, userId: string): Promise<MemberRoomView | null> {
   const { data: live, error } = await admin
     .from("community_session_occurrences")
-    .select("id, meet_url, status")
+    .select("id, meet_url, status, main_room_at, group_game")
     .eq("status", "live");
   if (error) throw error;
   const occurrenceIds = (live ?? []).map((row) => row.id as string);
@@ -617,7 +628,20 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
     signedUserIds: [] as string[],
     myVote: null,
     votes: [] as { userId: string; choice: "a" | "b" }[],
+    groupGame: null as MemberRoomView["groupGame"],
   };
+  // Host brought everyone back: every checked-in member sees the main-room screen.
+  if (occurrence?.main_room_at) {
+    const game = occurrence.group_game as { gameRoomId?: string; joinCode?: string; gameType?: string } | null;
+    return {
+      ...base,
+      phase: "main" as const,
+      groupGame:
+        game?.gameRoomId && game.joinCode
+          ? { gameRoomId: game.gameRoomId, joinCode: game.joinCode, gameType: game.gameType ?? "point_race" }
+          : null,
+    };
+  }
   if (!membership) return base;
   const { data: room } = await admin
     .from("community_rooms")
@@ -684,4 +708,207 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
     myVote: (mine?.choice as "a" | "b" | undefined) ?? null,
     votes: (votes ?? []).map((vote) => ({ userId: vote.user_id as string, choice: vote.choice as "a" | "b" })),
   };
+}
+
+
+// ---------------------------------------------------------------------------
+// Host editing of a room's activity list (add, swap, remove, reorder).
+// Rooms move on by position + 1, so positions must always stay 0..n-1 with no gaps.
+// ---------------------------------------------------------------------------
+
+type ActivityRow = { id: string; position: number; kind: string; status: string };
+
+async function roomActivities(admin: SupabaseClient, roomId: string): Promise<ActivityRow[]> {
+  const { data, error } = await admin
+    .from("community_room_activities")
+    .select("id, position, kind, status")
+    .eq("room_id", roomId)
+    .order("position");
+  if (error) throw error;
+  return (data ?? []) as ActivityRow[];
+}
+
+/** Write positions 0..n-1 in the given order. Two passes so the (room_id, position) unique key never clashes. */
+async function writeOrder(admin: SupabaseClient, roomId: string, orderedIds: string[]) {
+  for (let index = 0; index < orderedIds.length; index += 1) {
+    const { error } = await admin.from("community_room_activities").update({ position: 1000 + index }).eq("id", orderedIds[index]).eq("room_id", roomId);
+    if (error) throw error;
+  }
+  for (let index = 0; index < orderedIds.length; index += 1) {
+    const { error } = await admin.from("community_room_activities").update({ position: index }).eq("id", orderedIds[index]).eq("room_id", roomId);
+    if (error) throw error;
+  }
+}
+
+async function roomContext(admin: SupabaseClient, roomId: string) {
+  const { data: room, error } = await admin
+    .from("community_rooms")
+    .select("id, occurrence_id, status")
+    .eq("id", roomId)
+    .maybeSingle();
+  if (error) throw error;
+  return room as { id: string; occurrence_id: string; status: string } | null;
+}
+
+/** Builds a ready-to-insert activity of this kind on this week's topic. */
+async function buildActivity(admin: SupabaseClient, room: { id: string; occurrence_id: string }, kind: RoomActivityKind) {
+  const topic = await topicFor(admin, room.occurrence_id);
+  if (!kindsWithContent(topic).includes(kind)) return { error: "This week's content doesn't support that activity yet." as const };
+  const { data: members } = await admin.from("community_room_members").select("user_id").eq("room_id", room.id);
+  const debate =
+    kind === "warmup_debate"
+      ? await freshDebate(admin, room.id, (members ?? []).map((row) => row.user_id as string))
+      : { id: "", prompt: "", optionA: "", optionB: "", promptPa: null, romanised: null };
+  if (!debate) return { error: "There are no warm-up debates to use." as const };
+  let payload = payloadFor(kind, topic, debate);
+  if (kind === "speaking_prompts" && topic.lessonId) {
+    const { data: cards } = await admin
+      .from("flashcards")
+      .select("id, front_text, back_text")
+      .eq("lesson_id", topic.lessonId)
+      .like("deck_name", "%(Community)")
+      .like("back_text", "%___%")
+      .order("id")
+      .limit(8);
+    payload = {
+      ...payload,
+      prompts: (cards ?? []).map((card) => ({ id: card.id as string, front: card.front_text as string, back: card.back_text as string })),
+    };
+  }
+  const title = kind === "quiz" && topic.quizTitle ? topic.quizTitle : ACTIVITY_TITLES[kind];
+  return { kind, title, payload };
+}
+
+/**
+ * Adds an activity as the room's next one. If the room has finished, or is on the open-ended
+ * bonus round, the new activity starts straight away.
+ */
+export async function addRoomActivity(admin: SupabaseClient, roomId: string, kind: RoomActivityKind) {
+  const room = await roomContext(admin, roomId);
+  if (!room || room.status !== "approved") return { error: "Approve the room before changing its activities." };
+  const built = await buildActivity(admin, room, kind);
+  if ("error" in built) return { error: built.error };
+  const rows = await roomActivities(admin, roomId);
+  const active = rows.find((row) => row.status === "active");
+  const startNow = !active || active.kind === "bonus";
+  const now = new Date().toISOString();
+
+  const { data: inserted, error } = await admin
+    .from("community_room_activities")
+    .insert({
+      room_id: roomId,
+      position: 2000 + rows.length,
+      kind: built.kind,
+      title: built.title,
+      payload: built.payload,
+      status: "locked",
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  const newId = inserted.id as string;
+
+  // Order: everything up to and including the active one (or all done ones), then the new one, then the rest.
+  const ids = rows.map((row) => row.id);
+  const cut = active ? rows.indexOf(active) + 1 : rows.length;
+  await writeOrder(admin, roomId, [...ids.slice(0, cut), newId, ...ids.slice(cut)]);
+
+  if (startNow) {
+    if (active) await admin.from("community_room_activities").update({ status: "done", completed_at: now }).eq("id", active.id);
+    await admin.from("community_room_activities").update({ status: "active", unlocked_at: now }).eq("id", newId);
+  }
+  return { ok: true as const };
+}
+
+/** Swaps a not-yet-started activity for another kind, in the same place. */
+export async function replaceRoomActivity(admin: SupabaseClient, activityId: string, kind: RoomActivityKind) {
+  const { data: current } = await admin.from("community_room_activities").select("id, room_id, status").eq("id", activityId).maybeSingle();
+  if (!current) return { error: "That activity has gone." };
+  if (current.status !== "locked") return { error: "You can only change activities the room hasn't started." };
+  const room = await roomContext(admin, current.room_id as string);
+  if (!room) return { error: "That room has gone." };
+  const built = await buildActivity(admin, room, kind);
+  if ("error" in built) return { error: built.error };
+  const { error } = await admin
+    .from("community_room_activities")
+    .update({ kind: built.kind, title: built.title, payload: built.payload })
+    .eq("id", activityId)
+    .eq("status", "locked");
+  if (error) throw error;
+  return { ok: true as const };
+}
+
+/** Removes a not-yet-started activity. */
+export async function removeRoomActivity(admin: SupabaseClient, activityId: string) {
+  const { data: current } = await admin.from("community_room_activities").select("id, room_id, status").eq("id", activityId).maybeSingle();
+  if (!current) return { error: "That activity has gone." };
+  if (current.status !== "locked") return { error: "You can only remove activities the room hasn't started." };
+  const roomId = current.room_id as string;
+  const { error } = await admin.from("community_room_activities").delete().eq("id", activityId).eq("status", "locked");
+  if (error) throw error;
+  await writeOrder(admin, roomId, (await roomActivities(admin, roomId)).map((row) => row.id));
+  return { ok: true as const };
+}
+
+/** Moves a not-yet-started activity one place earlier or later, among the ones not started. */
+export async function moveRoomActivity(admin: SupabaseClient, activityId: string, direction: "up" | "down") {
+  const { data: current } = await admin.from("community_room_activities").select("id, room_id, status").eq("id", activityId).maybeSingle();
+  if (!current) return { error: "That activity has gone." };
+  if (current.status !== "locked") return { error: "You can only move activities the room hasn't started." };
+  const roomId = current.room_id as string;
+  const rows = await roomActivities(admin, roomId);
+  const index = rows.findIndex((row) => row.id === activityId);
+  const target = direction === "up" ? index - 1 : index + 1;
+  if (target < 0 || target >= rows.length || rows[target].status !== "locked") return { ok: true as const };
+  const ids = rows.map((row) => row.id);
+  [ids[index], ids[target]] = [ids[target], ids[index]];
+  await writeOrder(admin, roomId, ids);
+  return { ok: true as const };
+}
+
+/** The activity kinds this week's content supports, for the host's picker. */
+export async function availableActivityKinds(admin: SupabaseClient, occurrenceId: string): Promise<RoomActivityKind[]> {
+  return kindsWithContent(await topicFor(admin, occurrenceId));
+}
+
+// ---------------------------------------------------------------------------
+// Main room: bringing everyone back from breakout rooms, and a whole-group game.
+// ---------------------------------------------------------------------------
+
+/** Closes every breakout room and moves everyone's phone to the main-room screen. */
+export async function bringEveryoneBack(admin: SupabaseClient, occurrenceId: string) {
+  await closeBreakoutRooms(admin, occurrenceId);
+  const { error } = await admin
+    .from("community_session_occurrences")
+    .update({ main_room_at: new Date().toISOString() })
+    .eq("id", occurrenceId)
+    .eq("status", "live");
+  if (error) throw error;
+  return { ok: true as const };
+}
+
+/** Sends everyone back into their breakout rooms (undo for Bring everyone back). */
+export async function reopenBreakoutRooms(admin: SupabaseClient, occurrenceId: string) {
+  const { data: rooms } = await admin
+    .from("community_rooms")
+    .select("id")
+    .eq("occurrence_id", occurrenceId)
+    .eq("status", "closed")
+    .not("approved_at", "is", null);
+  if ((rooms ?? []).length > 0) {
+    await admin.from("community_rooms").update({ status: "approved" }).in("id", (rooms ?? []).map((row) => row.id as string));
+  }
+  await admin.from("community_session_occurrences").update({ main_room_at: null }).eq("id", occurrenceId);
+  return { ok: true as const };
+}
+
+/** Saves the whole-group game so every phone shows its join code. */
+export async function saveGroupGame(
+  admin: SupabaseClient,
+  occurrenceId: string,
+  game: { gameRoomId: string; joinCode: string; gameType: string } | null
+) {
+  const { error } = await admin.from("community_session_occurrences").update({ group_game: game }).eq("id", occurrenceId);
+  if (error) throw error;
+  return { ok: true as const };
 }

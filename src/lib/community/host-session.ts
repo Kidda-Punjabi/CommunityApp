@@ -1,6 +1,7 @@
 import "server-only";
 
-import { isSeated } from "@/lib/community/breakout";
+import { availableActivityKinds, isSeated } from "@/lib/community/breakout";
+import type { RoomActivityKind } from "@/lib/community/room-activities";
 import type { CommunityBand } from "@/lib/community/constants";
 import { bandForLevel } from "@/lib/community/levels";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -45,6 +46,11 @@ export type HostSessionView = {
   rooms: HostRoom[];
   /** The step the session is actually at, from its data. */
   autoStep: HostStep;
+  /** Set once the host brought everyone back to the main call. */
+  mainRoomAt: string | null;
+  groupGame: { gameRoomId: string; joinCode: string; gameType: string } | null;
+  /** Activity kinds this week's content supports, for the add / change picker. */
+  availableKinds: RoomActivityKind[];
 };
 
 type Profile = { full_name: string | null; kidda_level: number | null };
@@ -62,7 +68,7 @@ export async function loadHostSession(admin: SupabaseClient, occurrenceId: strin
   const { data: occurrence, error } = await admin
     .from("community_session_occurrences")
     .select(
-      "id, session_id, status, starts_at, started_at, checkin_code, week_number, week_number_override, community_sessions(title, is_active), lessons:topic_lesson_id(title)"
+      "id, session_id, status, starts_at, started_at, checkin_code, week_number, week_number_override, main_room_at, group_game, community_sessions(title, is_active), lessons:topic_lesson_id(title)"
     )
     .eq("id", occurrenceId)
     .maybeSingle();
@@ -101,7 +107,9 @@ export async function loadHostSession(admin: SupabaseClient, occurrenceId: strin
   const checkedIds = new Set(checkins.map((row) => row.userId));
 
   // Rooms: closed rooms only matter once the session has ended (for the wrap-up).
-  const visibleRooms = (roomRows ?? []).filter((room) => status === "ended" || room.status !== "closed");
+  const visibleRooms = (roomRows ?? []).filter(
+    (room) => status === "ended" || Boolean(occurrence.main_room_at) || room.status !== "closed"
+  );
   const roomIds = visibleRooms.map((room) => room.id as string);
   const [{ data: memberRows }, { data: activityRows }] = roomIds.length
     ? await Promise.all([
@@ -181,8 +189,10 @@ export async function loadHostSession(admin: SupabaseClient, occurrenceId: strin
   }
 
   const openRooms = rooms.filter((room) => room.status !== "closed");
+  const mainRoomAt = (occurrence.main_room_at as string | null) ?? null;
+  const game = occurrence.group_game as { gameRoomId?: string; joinCode?: string; gameType?: string } | null;
   let autoStep: HostStep = "checkin";
-  if (status === "ended") autoStep = "wrap";
+  if (status === "ended" || mainRoomAt) autoStep = "wrap";
   else if (openRooms.some((room) => room.status === "approved")) autoStep = "running";
   else if (openRooms.length > 0) autoStep = "rooms";
 
@@ -200,6 +210,10 @@ export async function loadHostSession(admin: SupabaseClient, occurrenceId: strin
     missing: [...missingMap.values()].sort((a, b) => a.name.localeCompare(b.name)),
     rooms,
     autoStep,
+    mainRoomAt,
+    groupGame:
+      game?.gameRoomId && game.joinCode ? { gameRoomId: game.gameRoomId, joinCode: game.joinCode, gameType: game.gameType ?? "point_race" } : null,
+    availableKinds: status === "live" ? await availableActivityKinds(admin, occurrenceId) : [],
   };
 }
 

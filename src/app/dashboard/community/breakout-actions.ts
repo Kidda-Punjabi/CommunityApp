@@ -148,3 +148,24 @@ export async function openBonusGame(activityId: string, gameType?: GroupGameType
   refresh();
   return { ok: true as const, href: `/dashboard/group-games/room/${created.room_id}` };
 }
+
+
+/** Main room: joins the whole-group game the host started. */
+export async function joinGroupGame(occurrenceId: string) {
+  const member = await requireCommunityMember();
+  if ("error" in member) return { error: member.error };
+  const { data: occurrence, error } = await member.admin
+    .from("community_session_occurrences")
+    .select("status, group_game")
+    .eq("id", occurrenceId)
+    .maybeSingle();
+  if (error) return { error: error.message };
+  const game = occurrence?.group_game as { gameRoomId?: string; joinCode?: string } | null;
+  if (occurrence?.status !== "live" || !game?.gameRoomId || !game.joinCode) return { error: "There's no group game running." };
+  const supabase = await createClient();
+  const { error: joinError } = await supabase.rpc("join_game_room", { p_join_code: game.joinCode });
+  if (joinError && !joinError.message.toLowerCase().includes("already")) {
+    return { error: joinError.message, href: `/dashboard/group-games/room/${game.gameRoomId}` };
+  }
+  return { ok: true as const, href: `/dashboard/group-games/room/${game.gameRoomId}` };
+}

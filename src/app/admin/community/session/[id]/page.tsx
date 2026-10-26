@@ -1,4 +1,5 @@
 import { addCheckIn, endSession, startSession } from "@/app/admin/community/actions";
+import { HostMainRoom } from "@/components/community/host-main-room";
 import { HostSessionRooms } from "@/components/community/host-session-rooms";
 import { CommunityLiveSync } from "@/components/community/room-refresh";
 import type { CommunityBand } from "@/lib/community/constants";
@@ -251,7 +252,12 @@ export default async function HostSessionPage({
       ) : null}
 
       {view.status !== "scheduled" && (step === "rooms" || step === "running") ? (
-        <HostSessionRooms occurrenceId={view.occurrenceId} rooms={view.rooms} running={step === "running"} />
+        <HostSessionRooms
+          occurrenceId={view.occurrenceId}
+          rooms={view.rooms}
+          running={step === "running"}
+          availableKinds={view.availableKinds}
+        />
       ) : null}
 
       {view.status !== "scheduled" && step === "wrap" ? (
@@ -284,35 +290,45 @@ export default async function HostSessionPage({
               </section>
             ) : null}
           </div>
-          <section className="flex flex-col gap-3 rounded-3xl border border-zinc-200 bg-white p-6">
-            <p className="font-heading text-lg font-extrabold">{live ? "Ready to finish?" : "Session ended"}</p>
-            <p className="text-sm text-zinc-500">
-              {live
-                ? "Bring everyone back to the main call, then end the session. That closes every room."
-                : "Rooms are closed. End-of-session feedback will show here once the feedback form is built."}
-            </p>
+          <div className="flex flex-col gap-4">
             {live ? (
-              <form
-                action={async () => {
-                  "use server";
-                  await endSession(view.occurrenceId);
-                  const { redirect } = await import("next/navigation");
-                  redirect(`/admin/community/session/${view.occurrenceId}?step=wrap`);
-                }}
-              >
-                <button type="submit" className="min-h-12 rounded-2xl bg-violet-600 px-6 text-base font-bold text-white">
-                  End session
-                </button>
-              </form>
-            ) : (
-              <Link
-                href="/admin/community/today"
-                className="inline-flex min-h-12 w-fit items-center rounded-2xl bg-zinc-900 px-6 text-base font-bold text-white"
-              >
-                Back to Community
-              </Link>
-            )}
-          </section>
+              <HostMainRoom
+                occurrenceId={view.occurrenceId}
+                inMainRoom={Boolean(view.mainRoomAt)}
+                groupGame={view.groupGame}
+                hadRooms={view.rooms.length > 0}
+              />
+            ) : null}
+            <section className="flex flex-col gap-3 rounded-3xl border border-zinc-200 bg-white p-6">
+              <p className="font-heading text-lg font-extrabold">{live ? "3 · End the session" : "Session ended"}</p>
+              <p className="text-sm text-zinc-500">
+                {live
+                  ? "When you're finished with everyone, end the session. That closes the session and any rooms. Check-ins and XP are already saved."
+                  : "Rooms are closed and attendance is saved."}
+              </p>
+              {live ? (
+                <form
+                  action={async () => {
+                    "use server";
+                    await endSession(view.occurrenceId);
+                    const { redirect } = await import("next/navigation");
+                    redirect(`/admin/community/session/${view.occurrenceId}?step=wrap`);
+                  }}
+                >
+                  <button type="submit" className="min-h-12 rounded-2xl bg-zinc-900 px-6 text-base font-bold text-white">
+                    End session
+                  </button>
+                </form>
+              ) : (
+                <Link
+                  href="/admin/community/today"
+                  className="inline-flex min-h-12 w-fit items-center rounded-2xl bg-zinc-900 px-6 text-base font-bold text-white"
+                >
+                  Back to Community
+                </Link>
+              )}
+            </section>
+          </div>
         </div>
       ) : null}
     </div>

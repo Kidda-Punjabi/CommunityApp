@@ -61,7 +61,7 @@ function shuffle<T>(items: T[], random: () => number): T[] {
   return copy;
 }
 
-const TITLES: Record<RoomActivityKind, string> = {
+export const ACTIVITY_TITLES: Record<RoomActivityKind, string> = {
   warmup_debate: "Warm-up debate",
   flashcards: "Flashcards",
   point_race: "Point Race",
@@ -86,7 +86,7 @@ function topicKinds(band: CommunityBand, topic: TopicOffer): RoomActivityKind[] 
   return kinds;
 }
 
-function payloadFor(kind: RoomActivityKind, topic: TopicOffer, debate: DebatePick): Record<string, unknown> {
+export function payloadFor(kind: RoomActivityKind, topic: TopicOffer, debate: DebatePick): Record<string, unknown> {
   if (kind === "warmup_debate") {
     return {
       debateId: debate.id,
@@ -162,7 +162,7 @@ export function planRoomActivities(input: {
   return kinds.map((kind, index) => ({
     position: index,
     kind,
-    title: kind === "quiz" && input.topic.quizTitle ? input.topic.quizTitle : TITLES[kind],
+    title: kind === "quiz" && input.topic.quizTitle ? input.topic.quizTitle : ACTIVITY_TITLES[kind],
     payload:
       kind === "point_race" && genericRace && available.length === 0
         ? { ...payloadFor(kind, input.topic, input.debate), topicTags: [], questionCount: 10 }
@@ -175,4 +175,39 @@ export function pickDebateId(roomId: string, debateIds: string[]): string | null
   const random = mix(`${roomId}:debate`);
   const sorted = [...debateIds].sort();
   return sorted[Math.floor(random() * sorted.length)] ?? null;
+}
+
+
+/** One line on what each activity is, for the host's add / swap picker. */
+export const ACTIVITY_DESCRIPTIONS: Record<RoomActivityKind, string> = {
+  warmup_debate: "A light either/or question. Everyone votes, then says why in Punjabi.",
+  flashcards: "This week's cards on each phone. Done when everyone finishes the deck.",
+  point_race: "A 10-question race on this week's topic. First to finish wins.",
+  quiz: "This week's quiz on each phone. Marks itself done when finished.",
+  speak_it: "Read the English, say it in Punjabi to your phone. Mute on the call.",
+  speaking_prompts: "Prompt cards answered out loud, one person at a time.",
+  bonus: "The room picks a game on this week's topic. Runs until you bring everyone back.",
+};
+
+/** Which levels each activity suits, for grouping the host's picker Beginner, Intermediate, Advanced. */
+export const ACTIVITY_BANDS: Record<RoomActivityKind, ("beginner" | "intermediate" | "advanced")[]> = {
+  warmup_debate: ["beginner", "intermediate", "advanced"],
+  flashcards: ["beginner"],
+  quiz: ["beginner", "intermediate"],
+  point_race: ["beginner", "intermediate", "advanced"],
+  speak_it: ["intermediate", "advanced"],
+  speaking_prompts: ["intermediate", "advanced"],
+  bonus: ["beginner", "intermediate", "advanced"],
+};
+
+/** Kinds this week's content can actually support, whatever the room's level. */
+export function kindsWithContent(topic: TopicOffer): RoomActivityKind[] {
+  const kinds: RoomActivityKind[] = ["warmup_debate"];
+  if (topic.deckId && topic.lessonId) kinds.push("flashcards");
+  if (topic.quizId) kinds.push("quiz");
+  kinds.push("point_race");
+  if (topic.deckName) kinds.push("speak_it");
+  if (topic.speakingPromptCount > 0) kinds.push("speaking_prompts");
+  kinds.push("bonus");
+  return kinds;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { castDebateVote, markActivityDone, openBonusGame, openPointRace } from "@/app/dashboard/community/breakout-actions";
+import { castDebateVote, joinGroupGame, markActivityDone, openBonusGame, openPointRace } from "@/app/dashboard/community/breakout-actions";
 import { GROUP_GAME_LABELS } from "@/lib/game-rooms/constants";
 import type { GroupGameType } from "@/lib/game-rooms/types";
 import { CommunityLiveSync } from "@/components/community/room-refresh";
@@ -53,7 +53,33 @@ export function LiveRoom({
         activityId={active?.id ?? null}
         poll={view.phase === "waiting"}
       />
-      {view.phase === "waiting" ? (
+      {view.phase === "main" ? (
+        <section className="rounded-[24px] bg-[#5B21B6] p-5 text-white">
+          <p className="font-heading text-2xl font-extrabold leading-tight">{"Back in the main room"}</p>
+          <p className="mt-2 text-base text-violet-100">
+            {view.groupGame ? "Everyone's playing one game together." : "Arsh is running the last part with everyone together."}
+          </p>
+          {view.groupGame ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                void (async () => {
+                  setPending(true);
+                  const result = await joinGroupGame(view.occurrenceId);
+                  setPending(false);
+                  if ("href" in result && result.href) router.push(result.href);
+                  else if ("error" in result && result.error) setError(result.error);
+                })()
+              }
+              className="mt-4 flex h-14 w-full items-center justify-center rounded-[18px] bg-white px-4 text-base font-extrabold text-[#5B21B6] disabled:opacity-50"
+            >
+              Join {GROUP_GAME_LABELS[view.groupGame.gameType as GroupGameType] ?? "the game"} · code {view.groupGame.joinCode}
+            </button>
+          ) : null}
+          <p className="mt-3 text-sm text-violet-100">Stay on the call until Arsh ends the session.</p>
+        </section>
+      ) : view.phase === "waiting" ? (
         <section className="rounded-[24px] bg-[#5B21B6] p-4 text-white">
           <p className="font-heading text-2xl font-extrabold leading-tight">{"You're checked in."}</p>
           <p className="mt-2 text-base text-violet-100">Arsh is setting up rooms.</p>

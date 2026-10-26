@@ -342,7 +342,8 @@ export async function startTestCommunitySession(admin: SupabaseClient, actorId: 
     .limit(1)
     .maybeSingle();
   if (runningError) throw runningError;
-  if (running) return { error: "A test session is already live. End it first." };
+  // One test at a time: if one is already live, open that one instead of doing nothing.
+  if (running) return { ok: true as const, code: "", occurrenceId: running.id as string };
 
   const { data: lesson, error: lessonError } = await admin
     .from("lessons")
