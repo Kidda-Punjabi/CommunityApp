@@ -10,7 +10,9 @@ import { loadLeaderboard } from "@/lib/leaderboard/load-leaderboard";
 import { getCurrentWeekStart } from "@/lib/leaderboard/week";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { isNativeAppRequest } from "@/lib/native/platform";
+import { pendingSessionFeedback } from "@/lib/community/session-feedback";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
+import Link from "next/link";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ui } from "@/lib/ui/styles";
 import { headers } from "next/headers";
@@ -75,12 +77,29 @@ async function CommunityHome({ userId, openCheckIn }: { userId: string; openChec
     );
   }
 
-  const [view, unread, board] = await Promise.all([
+  const [view, unread, board, feedback] = await Promise.all([
     loadLevelView(admin, userId),
     loadForumUnread(admin, userId),
     loadLeaderboard(admin, getCurrentWeekStart(), userId),
+    pendingSessionFeedback(admin, userId).catch((error) => {
+      console.error("[community] feedback prompt failed", error);
+      return null;
+    }),
   ]);
   return (
+    <>
+    {feedback ? (
+      <Link
+        href={`/dashboard/community/feedback/${feedback.formSessionId}`}
+        className="mb-3 flex items-center justify-between gap-3 rounded-[24px] bg-[#5B21B6] px-4 py-4 text-white"
+      >
+        <span>
+          <span className="block font-heading text-lg font-extrabold">How was {feedback.title}?</span>
+          <span className="block text-sm text-violet-100">Three quick ratings. It helps Arsh plan next week.</span>
+        </span>
+        <span className="shrink-0 rounded-2xl bg-white px-4 py-2.5 text-sm font-extrabold text-[#5B21B6]">Give feedback</span>
+      </Link>
+    ) : null}
     <CommunityTab
       home={home}
       earned={view?.done ?? 0}
@@ -105,5 +124,6 @@ async function CommunityHome({ userId, openCheckIn }: { userId: string; openChec
         youPoints: board.viewerRow.points,
       }}
     />
+    </>
   );
 }

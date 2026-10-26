@@ -173,6 +173,37 @@ export function HostSessionRooms({
                 </span>
               </div>
 
+              {running && room.status === "approved" ? (
+                <div className="flex flex-wrap gap-2">
+                  {(() => {
+                    const active = room.activities.find((item) => item.status === "active");
+                    if (!active) return null;
+                    const everyoneDone = !room.signoff || room.signoff.done >= room.signoff.of;
+                    const isLast = room.activities[room.activities.length - 1]?.id === active.id;
+                    return (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => (everyoneDone || active.kind === "bonus" ? run(() => skipActivity(room.id)) : setConfirmSkip(room))}
+                        className="min-h-11 flex-1 rounded-xl bg-violet-600 px-3 text-sm font-bold text-white disabled:opacity-50"
+                      >
+                        {isLast ? "Finish this activity" : "Next activity →"}
+                      </button>
+                    );
+                  })()}
+                  {availableKinds.length > 0 ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => setPicker({ mode: "add", room })}
+                      className="min-h-11 flex-1 rounded-xl border-2 border-violet-300 bg-white px-3 text-sm font-bold text-violet-700 disabled:opacity-50"
+                    >
+                      + Add activity
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+
               <ul className="space-y-1.5">
                 {room.members.map((member) => (
                   <li key={member.userId} className="flex min-h-10 flex-wrap items-center gap-2 rounded-xl bg-zinc-50 px-2.5">
@@ -287,16 +318,6 @@ export function HostSessionRooms({
                     })}
                   </ol>
                 )}
-                {running && room.status === "approved" && availableKinds.length > 0 ? (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => setPicker({ mode: "add", room })}
-                    className="mt-1 flex min-h-10 w-full items-center justify-center rounded-xl border-2 border-dashed border-violet-300 text-sm font-bold text-violet-700"
-                  >
-                    {state === "working" ? "+ Add activity next" : "+ Start another activity now"}
-                  </button>
-                ) : null}
               </div>
 
               {running && room.signoff && state === "working" ? (
@@ -307,14 +328,6 @@ export function HostSessionRooms({
                       ? ` · waiting for ${room.signoff.waitingFor.join(" and ")}`
                       : ""}
                   </span>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => setConfirmSkip(room)}
-                    className="min-h-9 rounded-lg border border-zinc-200 bg-white px-3 text-[13px] font-bold text-zinc-700"
-                  >
-                    Skip
-                  </button>
                 </div>
               ) : null}
             </section>
@@ -407,9 +420,14 @@ export function HostSessionRooms({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/45 px-4" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="skip-title" className="w-full max-w-md space-y-3 rounded-[22px] bg-white p-6">
             <h2 id="skip-title" className="font-heading text-xl font-extrabold">
-              Skip {confirmSkip.activities.find((item) => item.status === "active")?.title ?? "this activity"} for Room {confirmSkip.roomNumber}?
+              Move Room {confirmSkip.roomNumber} on from {confirmSkip.activities.find((item) => item.status === "active")?.title ?? "this activity"}?
             </h2>
-            <p className="text-sm text-zinc-600">Everyone in the room moves on to the next activity, even if they haven&apos;t finished.</p>
+            <p className="text-sm text-zinc-600">
+              {confirmSkip.signoff && confirmSkip.signoff.waitingFor.length > 0
+                ? `${confirmSkip.signoff.waitingFor.join(", ")} ${confirmSkip.signoff.waitingFor.length === 1 ? "hasn't" : "haven't"} finished yet. `
+                : ""}
+              Everyone in the room moves on together.
+            </p>
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
@@ -428,7 +446,7 @@ export function HostSessionRooms({
                 }}
                 className="min-h-11 rounded-xl bg-zinc-900 px-4 text-sm font-bold text-white"
               >
-                Skip activity
+                Move them on
               </button>
             </div>
           </div>

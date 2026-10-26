@@ -45,8 +45,15 @@ export async function startTestSession(week: number) {
 }
 
 export async function endSession(occurrenceId: string) {
-  const { admin } = await staff();
+  const { admin, userId } = await staff();
   const result = await endCommunitySession(admin, occurrenceId);
+  // Everyone who checked in gets the feedback form. A failure here must never stop the session ending.
+  try {
+    const { notifySessionFeedback } = await import("@/lib/community/session-feedback");
+    await notifySessionFeedback(admin, occurrenceId, userId);
+  } catch (error) {
+    console.error("[community] feedback notifications failed", error);
+  }
   const { closeBreakoutRooms } = await import("@/lib/community/breakout");
   await closeBreakoutRooms(admin, occurrenceId);
   revalidateHost();

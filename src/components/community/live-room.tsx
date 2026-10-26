@@ -77,7 +77,7 @@ export function LiveRoom({
               Join {GROUP_GAME_LABELS[view.groupGame.gameType as GroupGameType] ?? "the game"} · code {view.groupGame.joinCode}
             </button>
           ) : null}
-          <p className="mt-3 text-sm text-violet-100">Stay on the call until Arsh ends the session.</p>
+          <p className="mt-3 text-sm text-violet-100">Stay on the call. The feedback form opens when Arsh ends the session.</p>
         </section>
       ) : view.phase === "waiting" ? (
         <section className="rounded-[24px] bg-[#5B21B6] p-4 text-white">

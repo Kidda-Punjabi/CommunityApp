@@ -1,6 +1,8 @@
 import "server-only";
 
 import { availableActivityKinds, isSeated } from "@/lib/community/breakout";
+import { sessionFeedbackStatus } from "@/lib/community/session-feedback";
+import { isCommunityStaffUser } from "@/lib/community/test-sessions";
 import type { RoomActivityKind } from "@/lib/community/room-activities";
 import type { CommunityBand } from "@/lib/community/constants";
 import { bandForLevel } from "@/lib/community/levels";
@@ -51,6 +53,8 @@ export type HostSessionView = {
   groupGame: { gameRoomId: string; joinCode: string; gameType: string } | null;
   /** Activity kinds this week's content supports, for the add / change picker. */
   availableKinds: RoomActivityKind[];
+  /** End-of-session feedback: who has sent the form. Not offered for test sessions. */
+  feedback: { available: boolean; sent: { name: string; notion: boolean; scores: string }[]; notSent: string[] };
 };
 
 type Profile = { full_name: string | null; kidda_level: number | null };
@@ -68,7 +72,7 @@ export async function loadHostSession(admin: SupabaseClient, occurrenceId: strin
   const { data: occurrence, error } = await admin
     .from("community_session_occurrences")
     .select(
-      "id, session_id, status, starts_at, started_at, checkin_code, week_number, week_number_override, main_room_at, group_game, community_sessions(title, is_active), lessons:topic_lesson_id(title)"
+      "id, session_id, status, starts_at, started_at, checkin_code, week_number, week_number_override, main_room_at, group_game, google_event_id, community_sessions(title, is_active), lessons:topic_lesson_id(title)"
     )
     .eq("id", occurrenceId)
     .maybeSingle();
@@ -214,9 +218,24 @@ export async function loadHostSession(admin: SupabaseClient, occurrenceId: strin
     groupGame:
       game?.gameRoomId && game.joinCode ? { gameRoomId: game.gameRoomId, joinCode: game.joinCode, gameType: game.gameType ?? "point_race" } : null,
     availableKinds: status === "live" ? await availableActivityKinds(admin, occurrenceId) : [],
+    feedback:
+      status === "ended"
+        ? await sessionFeedbackStatus(
+            admin,
+            { google_event_id: (occurrence.google_event_id as string | null) ?? null, isTest: session?.is_active === false },
+            await membersOnly(admin, checkins.map((row) => ({ userId: row.userId, name: row.name })))
+          )
+        : { available: session?.is_active !== false, sent: [], notSent: [] },
   };
 }
 
 export function bandOfPerson(level: number): CommunityBand {
   return bandForLevel(level);
+}
+
+
+/** Leaves out hosts and admins, who don't give feedback on their own sessions. */
+async function membersOnly<T extends { userId: string }>(admin: SupabaseClient, people: T[]): Promise<T[]> {
+  const flags = await Promise.all(people.map((person) => isCommunityStaffUser(admin, person.userId)));
+  return people.filter((_, index) => !flags[index]);
 }

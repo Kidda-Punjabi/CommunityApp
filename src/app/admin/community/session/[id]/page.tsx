@@ -328,6 +328,45 @@ export default async function HostSessionPage({
                 </Link>
               )}
             </section>
+            {view.feedback.available ? (
+              <section className="flex flex-col gap-3 rounded-3xl border border-zinc-200 bg-white p-6">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="font-heading text-lg font-extrabold">Feedback</p>
+                  {view.status === "ended" ? (
+                    <p className="text-sm font-bold text-emerald-700">
+                      {view.feedback.sent.length} of {view.feedback.sent.length + view.feedback.notSent.length} sent
+                      {view.feedback.sent.length > 0
+                        ? ` · ${view.feedback.sent.filter((row) => row.notion).length} in Notion`
+                        : ""}
+                    </p>
+                  ) : null}
+                </div>
+                <p className="text-sm text-zinc-500">
+                  {view.status === "ended"
+                    ? "Everyone who checked in got a notification and a feedback card on their Community tab. Answers go to the feedback database and Notion like class feedback."
+                    : "When you end the session, everyone who checked in gets the standard feedback form."}
+                </p>
+                {view.status === "ended" ? (
+                  <ul className="divide-y divide-zinc-100">
+                    {view.feedback.sent.map((row) => (
+                      <li key={row.name} className="flex min-h-11 items-center gap-3 text-sm">
+                        <span className="w-32 truncate font-bold">{row.name}</span>
+                        <span className="flex-1 text-zinc-600">Relevance · tutor · confidence: {row.scores}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${row.notion ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+                          {row.notion ? "In Notion" : "Saved, Notion pending"}
+                        </span>
+                      </li>
+                    ))}
+                    {view.feedback.notSent.map((name) => (
+                      <li key={name} className="flex min-h-11 items-center gap-3 text-sm">
+                        <span className="w-32 truncate font-bold">{name}</span>
+                        <span className="flex-1 text-zinc-400">Not sent yet</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
+            ) : null}
           </div>
         </div>
       ) : null}
