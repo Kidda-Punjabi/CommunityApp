@@ -107,6 +107,24 @@ function asWeekNumberLabel(
   );
 }
 
+function formatRequestedAt(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: UK_DISPLAY_TIMEZONE,
+  });
+  const time = d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: UK_DISPLAY_TIMEZONE,
+  });
+  return `${date} at ${time}`;
+}
+
 function buildAlternativeSuggestion(option: AlternateCohortOption): string {
   const start = new Date(option.startsAt);
   const date = start.toLocaleDateString("en-GB", {
@@ -171,6 +189,7 @@ function AdminCohortSwitchCard({
         <div>
           <p className="font-semibold text-zinc-900">{row.studentName}</p>
           {row.studentEmail ? <p className="text-xs text-zinc-500">{row.studentEmail}</p> : null}
+          <p className="text-xs text-zinc-500">Requested {formatRequestedAt(row.createdAt)}</p>
         </div>
         <AdminStatusPill
           tone={
