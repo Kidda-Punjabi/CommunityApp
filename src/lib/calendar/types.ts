@@ -123,6 +123,8 @@ export type GoogleCalendarEvent = {
   summary: string;
   start: string;
   end: string;
+  /** Google Calendar start.timeZone. Null when the event did not include one. */
+  timeZone: string | null;
   hangoutLink: string | null;
   location: string | null;
   attendeeEmails: string[];

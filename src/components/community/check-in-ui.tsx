@@ -8,6 +8,7 @@ import { isNativeApp } from "@/lib/native/platform";
 import { notifyXpEarned } from "@/lib/points/notify-points-earned";
 import { AppTile } from "@/components/ui/app-tile";
 import { Users } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -53,27 +54,29 @@ function SuccessView({ result }: { result: CheckInSuccess }) {
 }
 
 export function CheckInPanel({ occurrenceId, onSuccess }: { occurrenceId?: string; onSuccess?: () => void }) {
-  const [digits, setDigits] = useState(["", "", "", ""]);
+  // One real input drawn as four boxes. Separate inputs made phones reset the keyboard
+  // to letters every time focus jumped to the next box, which broke typing numbers.
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [success, setSuccess] = useState<CheckInSuccess | null>(null);
   const router = useRouter();
-  const refs = useRef<Array<HTMLInputElement | null>>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const busy = useRef(false);
 
-  async function submit(next: string[]) {
-    const code = next.join("");
-    if (code.length < 4 || busy.current) return;
+  async function submit(value: string) {
+    if (value.length < 4 || busy.current) return;
     busy.current = true;
     setPending(true);
     setError(null);
-    const result = occurrenceId ? await submitCheckIn(occurrenceId, code) : await checkInByCode(code);
+    const result = occurrenceId ? await submitCheckIn(occurrenceId, value) : await checkInByCode(value);
     busy.current = false;
     setPending(false);
     if ("error" in result && result.error) {
       setError(result.error);
-      setDigits(["", "", "", ""]);
-      refs.current[0]?.focus();
+      setCode("");
+      inputRef.current?.focus();
       return;
     }
     if ("ok" in result && result.ok) {
@@ -84,75 +87,52 @@ export function CheckInPanel({ occurrenceId, onSuccess }: { occurrenceId?: strin
     }
   }
 
-  function fill(raw: string) {
+  function update(raw: string) {
     const chars = takeCheckinChars(raw);
-    if (!chars) return;
-    const next = ["", "", "", ""];
-    [...chars].forEach((char, index) => {
-      next[index] = char;
-    });
-    setDigits(next);
+    setCode(chars);
     setError(null);
-    if (chars.length >= 4) void submit(next);
-    else refs.current[chars.length]?.focus();
+    if (chars.length >= 4) void submit(chars);
   }
 
   if (success) return <SuccessView result={success} />;
 
+  const activeIndex = Math.min(code.length, 3);
+
   return (
     <div>
-      <p className="text-base font-semibold text-[#1F1640]">Enter the code Arsh shows on screen</p>
-      <div className="mt-4 grid grid-cols-4 gap-2" onPaste={(event) => {
-        const text = event.clipboardData.getData("text");
-        if (!takeCheckinChars(text)) return;
-        event.preventDefault();
-        fill(text);
-      }}>
-        {digits.map((digit, index) => (
-          <input
-            key={index}
-            ref={(node) => {
-              refs.current[index] = node;
-            }}
-            value={digit}
-            inputMode="text"
-            autoCapitalize="characters"
-            autoCorrect="off"
-            autoComplete="off"
-            spellCheck={false}
-            maxLength={4}
-            aria-label={`Code character ${index + 1}`}
-            disabled={pending}
-            className="h-16 w-full min-w-0 rounded-[18px] border border-[#E4DFEE] bg-[#F7F5FC] text-center text-3xl font-extrabold uppercase text-[#1F1640] disabled:opacity-60"
-            onPaste={(event) => {
-              const text = event.clipboardData.getData("text");
-              if (!takeCheckinChars(text)) return;
-              event.preventDefault();
-              fill(text);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Backspace" && !digits[index] && index > 0) {
-                const next = [...digits];
-                next[index - 1] = "";
-                setDigits(next);
-                refs.current[index - 1]?.focus();
-              }
-            }}
-            onChange={(event) => {
-              const chars = takeCheckinChars(event.target.value);
-              if (chars.length > 1) {
-                fill(chars);
-                return;
-              }
-              const next = [...digits];
-              next[index] = chars;
-              setDigits(next);
-              setError(null);
-              if (chars && index < 3) refs.current[index + 1]?.focus();
-              if (next.every(Boolean)) void submit(next);
-            }}
-          />
-        ))}
+      <label htmlFor="community-checkin-code" className="block text-base font-semibold text-[#1F1640]">
+        Enter the code Arsh shows on screen
+      </label>
+      <div className="relative mt-4" onClick={() => inputRef.current?.focus()}>
+        <div className="grid grid-cols-4 gap-2" aria-hidden="true">
+          {[0, 1, 2, 3].map((index) => (
+            <div
+              key={index}
+              className={`flex h-16 items-center justify-center rounded-[18px] border bg-[#F7F5FC] text-3xl font-extrabold uppercase text-[#1F1640] ${
+                focused && index === activeIndex && !pending ? "border-[#5B21B6] ring-2 ring-[#DDD6FE]" : "border-[#E4DFEE]"
+              } ${pending ? "opacity-60" : ""}`}
+            >
+              {code[index] ?? ""}
+            </div>
+          ))}
+        </div>
+        <input
+          id="community-checkin-code"
+          ref={inputRef}
+          value={code}
+          inputMode="text"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          autoComplete="one-time-code"
+          spellCheck={false}
+          maxLength={4}
+          disabled={pending}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onChange={(event) => update(event.target.value)}
+          className="absolute inset-0 h-full w-full cursor-text opacity-0"
+          style={{ fontSize: 16, caretColor: "transparent" }}
+        />
       </div>
       {error ? <p className="mt-3 text-sm font-semibold text-red-700">{error}</p> : null}
     </div>
@@ -206,17 +186,15 @@ export function CheckInSheet({
 
 export function SessionCheckInButtons({
   meetUrl,
-  canJoin,
-  anyLive,
-  returnToCheckIn,
+  live,
+  openOnMount = false,
 }: {
   meetUrl: string | null;
-  canJoin: boolean;
-  anyLive: boolean;
-  returnToCheckIn: boolean;
+  live: boolean;
+  openOnMount?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [stillNeeded, setStillNeeded] = useState(returnToCheckIn);
+  const [open, setOpen] = useState(openOnMount);
+  const [stillNeeded, setStillNeeded] = useState(live);
   const joinedAt = useRef(0);
   const away = useRef(false);
 
@@ -259,21 +237,24 @@ export function SessionCheckInButtons({
     };
   }, [stillNeeded]);
 
-  const checkInClass = anyLive
-    ? "flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] px-3 text-sm font-bold text-[#3B1A8C]"
-    : "flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-white/20 px-3 text-sm font-bold text-white";
-  const joinClass =
-    "flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] px-3 text-sm font-bold text-[#3B1A8C]";
+  if (!live) return null;
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-2.5">
-      {canJoin && meetUrl ? (
+      <button
+        type="button"
+        data-testid="check-in-button"
+        className="flex h-14 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] text-base font-bold text-[#3B1A8C]"
+        onClick={() => setOpen(true)}
+      >
+        Check in
+      </button>
+      {meetUrl ? (
         <a
           href={meetUrl}
           target="_blank"
           rel="noreferrer"
-          className={joinClass}
+          className="mt-2 flex h-11 w-full items-center justify-center rounded-[18px] bg-white/15 text-sm font-bold text-white"
           onClick={() => {
             if (!stillNeeded) return;
             joinedAt.current = Date.now();
@@ -281,15 +262,9 @@ export function SessionCheckInButtons({
             sessionStorage.setItem(JOIN_RETURN_KEY, "1");
           }}
         >
-          Join
+          Join the call
         </a>
-      ) : (
-        <span className="flex h-11 min-h-11 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] px-3 text-sm font-bold text-[#3B1A8C]">Join</span>
-      )}
-      <button type="button" data-testid="check-in-button" className={checkInClass} onClick={() => setOpen(true)}>
-        {anyLive ? "Live now" : "Check in"}
-      </button>
-      </div>
+      ) : null}
       <CheckInSheet
         open={open}
         onClose={() => setOpen(false)}
@@ -303,7 +278,7 @@ export function SessionCheckInButtons({
 }
 
 export function CommunityHomeTile({
-  href,
+  href = "/dashboard/community",
   status,
   showLive,
 }: {
@@ -311,21 +286,18 @@ export function CommunityHomeTile({
   status: string;
   showLive: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   return (
     <div className="relative h-24">
       <AppTile href={href} title="Community" subtitle={status} icon={<Users className="h-4 w-4" />} />
       {showLive ? (
-        <button
-          type="button"
+        <Link
+          href="/dashboard/community?checkin=1"
           data-testid="home-check-in-pill"
-          className="absolute inset-x-1 bottom-1.5 z-10 rounded-full bg-[#FDE68A] px-1 py-0.5 text-[8px] font-bold leading-none text-[#3B1A8C]"
-          onClick={() => setOpen(true)}
+          className="absolute inset-x-1 bottom-1.5 z-10 rounded-full bg-[#FDE68A] px-1 py-0.5 text-center text-[8px] font-bold leading-none text-[#3B1A8C]"
         >
-          Live now · Check in
-        </button>
+          Check in
+        </Link>
       ) : null}
-      <CheckInSheet open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }

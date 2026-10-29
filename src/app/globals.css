@@ -55,6 +55,7 @@
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-poppins), var(--font-geist-sans), sans-serif;
   --font-community: var(--font-dm-sans), var(--font-geist-sans), sans-serif;
+  --font-gurmukhi: var(--font-noto-gurmukhi), var(--font-dm-sans), sans-serif;
   --radius-card: var(--kidda-radius-card);
 }
 
@@ -522,5 +523,28 @@ html.kidda-keyboard-open .kidda-bottom-chrome {
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
+  }
+}
+
+
+/* Flashcard study: next card rises from the stack after a swipe. */
+@keyframes flashcard-rise {
+  from {
+    transform: translateY(10px) scale(0.96);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.flashcard-rise {
+  animation: flashcard-rise 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flashcard-rise {
+    animation: none;
   }
 }

@@ -30,7 +30,8 @@ export async function fetchLearnContent(supabase: SupabaseClient) {
     supabase.from("quizzes").select("id, course_id, level_number, title"),
     supabase
       .from("flashcards")
-      .select("id, lesson_id, deck_id, deck_name, front_text, back_text"),
+      .select("id, lesson_id, deck_id, deck_name, front_text, back_text")
+      .neq("card_type", "speak"),
     supabase.from("set_course_links").select("deck_id, lesson_id, course_id"),
     supabase.from("flashcard_sets").select("id, name"),
   ]);

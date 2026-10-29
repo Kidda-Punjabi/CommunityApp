@@ -3,6 +3,7 @@ import "server-only";
 import { actorFilter, resolveCourseActor } from "@/lib/kids/course-actor";
 import { LEARN_COURSE_LEVELS } from "@/lib/learn/course-levels";
 import { getDisplayName } from "@/lib/profile/display-name";
+import { properName } from "@/lib/learn/proper-name";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export const CERTIFICATE_FOUNDER_NAME = "Gurupma Singh";
@@ -141,7 +142,7 @@ export async function loadBeginnerCertificateAward(
   const studentName = await studentNamePromise;
 
   return {
-    studentName,
+    studentName: properName(studentName) || "Student",
     courseTitle: beginner.title,
     cefr: beginner.cefr,
     awardedOn:
@@ -153,7 +154,7 @@ export async function loadBeginnerCertificateAward(
         year: "numeric",
         timeZone: "UTC",
       }),
-    tutorName: tutorName || "Course Tutor",
+    tutorName: properName(tutorName) || "Course Tutor",
     founderName: CERTIFICATE_FOUNDER_NAME,
   };
 }

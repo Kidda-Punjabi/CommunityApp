@@ -1,4 +1,5 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import { properName } from "@/lib/learn/proper-name";
 import fontkit from "@pdf-lib/fontkit";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -259,11 +260,11 @@ export function certificatePdfFileName(studentName: string, courseTitle: string)
 }
 
 export async function buildCertificatePdf(input: CertificatePdfInput): Promise<Uint8Array> {
-  const studentName = pdfSafeText(input.studentName) || "Student";
+  const studentName = pdfSafeText(properName(input.studentName)) || "Student";
   const courseTitle = pdfSafeText(input.courseTitle) || "Beginner";
   const cefr = pdfSafeText(input.cefr) || "A2";
   const awardedOn = pdfSafeText(input.awardedOn) || "";
-  const tutorName = pdfSafeText(input.tutorName) || "Course Tutor";
+  const tutorName = pdfSafeText(properName(input.tutorName)) || "Course Tutor";
   const founderName = pdfSafeText(input.founderName || FOUNDER_NAME) || FOUNDER_NAME;
   const courseName = courseLabel(courseTitle);
 

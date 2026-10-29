@@ -150,7 +150,7 @@ export async function collectPurchasesForCustomer(
     }
 
     const purchasedAt = new Date(subscription.created * 1000).toISOString();
-    const checkoutKey = subscription.metadata?.checkout_key ?? "community";
+    const checkoutKey = subscription.metadata?.checkout_key ?? null;
 
     for (const item of subscription.items.data) {
       const price = item.price;
@@ -161,9 +161,9 @@ export async function collectPurchasesForCustomer(
       if (tier && tier !== "free") {
         purchases.push({
           tier,
-          checkoutKey,
+          checkoutKey: tier === "community" ? "community" : checkoutKey,
           purchasedAt,
-          skipOnboarding: true,
+          skipOnboarding: tier !== "community",
         });
       }
     }

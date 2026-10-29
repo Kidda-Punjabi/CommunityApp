@@ -271,3 +271,38 @@ export async function resetGameRoomToLobby(input: {
   revalidatePath(`/dashboard/group-games/room/${input.roomId}/play`);
   return { roomId: input.roomId };
 }
+
+/**
+ * Host-only escape hatch when a game can't load: marks the room cancelled so
+ * nobody is sent back into the broken game on refresh.
+ */
+export async function endGameRoom(roomId: string): Promise<GroupGameActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: participant, error: participantError } = await supabase
+    .from("game_room_participants")
+    .select("is_host")
+    .eq("room_id", roomId)
+    .eq("user_id", user.id)
+    .is("left_at", null)
+    .maybeSingle();
+  if (participantError) return { error: participantError.message };
+  if (!participant?.is_host) return { error: "Only the host can end this game." };
+
+  const { createServiceRoleClient } = await import("@/lib/supabase/admin-server");
+  const admin = createServiceRoleClient();
+  const { error } = await admin
+    .from("game_rooms")
+    .update({ status: "cancelled", ended_at: new Date().toISOString() })
+    .eq("id", roomId)
+    .in("status", ["waiting", "in_progress"]);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/group-games");
+  revalidatePath(`/dashboard/group-games/room/${roomId}/play`);
+  return { roomId };
+}

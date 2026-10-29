@@ -2,6 +2,7 @@ import { BreakoutHostView, type HostRoomCard } from "@/components/community/brea
 import { isSeated } from "@/lib/community/breakout";
 import type { CommunityBand } from "@/lib/community/constants";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
+import { parseFlashcardCardType } from "@/lib/flashcards/types";
 
 export async function BreakoutHost({ occurrenceId }: { occurrenceId: string }) {
   const admin = createServiceRoleClient();
@@ -23,7 +24,7 @@ export async function BreakoutHost({ occurrenceId }: { occurrenceId: string }) {
       .eq("room_id", room.id);
     const { data: activities } = await admin
       .from("community_room_activities")
-      .select("id, position, status")
+      .select("id, position, status, kind, payload")
       .eq("room_id", room.id)
       .order("position");
     const active = (activities ?? []).find((item) => item.status === "active");
@@ -39,6 +40,14 @@ export async function BreakoutHost({ occurrenceId }: { occurrenceId: string }) {
       roomNumber: room.room_number as number,
       band: room.band as CommunityBand,
       status: room.status as string,
+      flashcards: (activities ?? [])
+        .filter((item) => item.kind === "flashcards")
+        .map((item) => ({
+          id: item.id as string,
+          position: item.position as number,
+          status: item.status as string,
+          cardType: parseFlashcardCardType((item.payload as { cardType?: unknown } | null)?.cardType) ?? "word",
+        })),
       progress: active
         ? `Activity ${(active.position as number) + 1} of ${(activities ?? []).length} · ${count ?? 0}/${seated.length} done`
         : null,

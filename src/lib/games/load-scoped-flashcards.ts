@@ -44,7 +44,8 @@ export async function loadScopedFlashcardPoolRows<T extends FlashcardRowWithLess
   let from = 0;
 
   while (true) {
-    let query = supabase.from("flashcards").select(selectCols);
+    // "Speak about" prompts are never quiz answers.
+    let query = supabase.from("flashcards").select(selectCols).neq("card_type", "speak");
     if (options?.eq) {
       for (const [key, value] of Object.entries(options.eq)) {
         query = query.eq(key, value);

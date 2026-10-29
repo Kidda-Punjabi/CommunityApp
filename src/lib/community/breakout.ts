@@ -1,4 +1,5 @@
 import "server-only";
+import { parseFlashcardCardType, type FlashcardCardType } from "@/lib/flashcards/types";
 
 import type { CommunityBand } from "@/lib/community/constants";
 import { planBreakoutRooms, suggestLateRoom, type RoomPerson } from "@/lib/community/breakout-rooms";
@@ -101,14 +102,17 @@ async function topicFor(admin: SupabaseClient, occurrenceId: string): Promise<To
   if (!lessonId) return empty;
   const { data: cards, error: cardError } = await admin
     .from("flashcards")
-    .select("deck_name, deck_id, topic_tags, back_text")
+    .select("deck_name, deck_id, topic_tags, back_text, card_type")
     .eq("lesson_id", lessonId)
     .like("deck_name", "%(Community)")
     .not("deck_name", "like", "Old -%");
   if (cardError) throw cardError;
   const tags = new Set<string>();
+  const cardTypes = new Set<FlashcardCardType>();
   let frames = 0;
   for (const card of cards ?? []) {
+    const type = parseFlashcardCardType(card.card_type);
+    if (type) cardTypes.add(type);
     if (typeof card.back_text === "string" && card.back_text.includes("___")) frames += 1;
     for (const tag of (card.topic_tags ?? []) as string[]) tags.add(tag);
   }
@@ -127,6 +131,7 @@ async function topicFor(admin: SupabaseClient, occurrenceId: string): Promise<To
     quizId: (quiz?.id as string | null) ?? null,
     quizTitle: (quiz?.title as string | null) ?? null,
     speakingPromptCount: frames,
+    cardTypes: [...cardTypes],
   };
 }
 
@@ -497,6 +502,36 @@ export async function signRoomActivity(admin: SupabaseClient, userId: string, ac
   return { ok: true as const };
 }
 
+/**
+ * Warm-up debate round robin: once everyone has voted, people explain one at a time.
+ * A seated member can pass the turn for someone who has dropped off the call.
+ */
+export async function skipDebateSpeaker(
+  admin: SupabaseClient,
+  actorId: string,
+  speakerId: string,
+  activityId: string
+) {
+  const [actorOk, speakerOk] = await Promise.all([
+    userCanTouch(admin, actorId, activityId),
+    userCanTouch(admin, speakerId, activityId),
+  ]);
+  if (!actorOk || !speakerOk) return { error: "This debate is not open for you." };
+  const { data: activity } = await admin
+    .from("community_room_activities")
+    .select("kind")
+    .eq("id", activityId)
+    .maybeSingle();
+  if (activity?.kind !== "warmup_debate") return { error: "Only debate turns can be skipped." };
+  const { error } = await admin.from("community_room_signoffs").upsert(
+    { activity_id: activityId, user_id: speakerId, signed_at: new Date().toISOString() },
+    { onConflict: "activity_id,user_id" }
+  );
+  if (error) throw error;
+  await unlockNext(admin, activityId);
+  return { ok: true as const };
+}
+
 export async function voteInDebate(admin: SupabaseClient, userId: string, activityId: string, choice: "a" | "b") {
   const allowed = await userCanTouch(admin, userId, activityId);
   if (!allowed) return { error: "This debate is not open for you." };
@@ -541,8 +576,10 @@ export async function closeBreakoutRooms(admin: SupabaseClient, occurrenceId: st
 
 export type MemberRoomView = {
   occurrenceId: string;
+  roomId: string | null;
   checkedInCount: number;
   meetUrl: string | null;
+  approvedRoomCount: number;
   phase: "waiting" | "room";
   roomNumber: number | null;
   band: CommunityBand | null;
@@ -579,10 +616,17 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
   if (!checkin) return null;
   const occurrenceId = checkin.occurrence_id as string;
   const occurrence = (live ?? []).find((row) => row.id === occurrenceId);
-  const { count } = await admin
-    .from("community_checkins")
-    .select("user_id", { count: "exact", head: true })
-    .eq("occurrence_id", occurrenceId);
+  const [{ count }, { count: approvedRoomCount }] = await Promise.all([
+    admin
+      .from("community_checkins")
+      .select("user_id", { count: "exact", head: true })
+      .eq("occurrence_id", occurrenceId),
+    admin
+      .from("community_rooms")
+      .select("id", { count: "exact", head: true })
+      .eq("occurrence_id", occurrenceId)
+      .eq("status", "approved"),
+  ]);
   const { data: membership, error: membershipError } = await admin
     .from("community_room_members")
     .select("room_id, assigned_by, assigned_at")
@@ -595,8 +639,10 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
   }
   const base = {
     occurrenceId,
+    roomId: null,
     checkedInCount: count ?? 0,
     meetUrl: (occurrence?.meet_url as string | null) ?? null,
+    approvedRoomCount: approvedRoomCount ?? 0,
     phase: "waiting" as const,
     roomNumber: null,
     band: null,
@@ -618,7 +664,13 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
     .from("community_room_members")
     .select("user_id, assigned_by, assigned_at, profiles(full_name)")
     .eq("room_id", room.id);
-  const seated = (mates ?? []).filter((mate) => isSeated(mate, room));
+  // Stable order: it is also the speaking order for the vote-then-explain round robin.
+  const seated = (mates ?? [])
+    .filter((mate) => isSeated(mate, room))
+    .sort((a, b) =>
+      String(a.assigned_at ?? "").localeCompare(String(b.assigned_at ?? "")) ||
+      String(a.user_id).localeCompare(String(b.user_id))
+    );
   const { data: loadedActivities } = await admin
     .from("community_room_activities")
     .select("id, position, kind, title, status, payload")
@@ -650,6 +702,7 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
   return {
     ...base,
     phase: "room",
+    roomId: room.id as string,
     roomNumber: room.room_number as number,
     band: room.band as CommunityBand,
     names: seated.map((mate) => {

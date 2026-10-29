@@ -1,6 +1,9 @@
 "use server";
 
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { createLessonLogInNotionAndSupabase } from "@/lib/notion/lesson-log-sync";
+import { planTutorLessonLogForTarget } from "@/lib/tutoring/match-lesson-log-session";
+import { planTutorLessonLog } from "@/lib/tutoring/lesson-log-session";
 import { tryCreateServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveLogLessonCoverOverride } from "@/lib/tutoring/log-lesson-cover";
@@ -85,14 +88,44 @@ export async function logCohortLessonAction(
   });
   if (!cover.ok) return { error: cover.error };
 
+  const isAdmin = await canAccessAdminPanel(user, supabase);
+  const planned = adminClient
+    ? await planTutorLessonLogForTarget(adminClient, {
+        typedDate: lessonDate,
+        cohortId,
+        packageInstanceId: null,
+        isAdmin,
+        earlyOverrideReason: null,
+        earlyOverrideBy: isAdmin ? user.id : null,
+      })
+    : planTutorLessonLog({
+        now: new Date(),
+        typedDate: lessonDate,
+        sessions: [],
+        isAdmin,
+        earlyOverrideReason: null,
+        earlyOverrideBy: null,
+      });
+  if (!planned.ok) return { error: planned.error };
+
   const result = await createLessonLogInNotionAndSupabase(supabase, {
     cohortId,
-    lessonDate,
+    lessonDate: planned.lessonDate,
     notes: notes || null,
     recordingUrl: recordingUrl || null,
     loggedBy: user.id,
     notionTutorUserId: cover.notionTutorUserId,
     isCoverSession: cover.isCoverSession,
+    actualTutorId: cover.isCoverSession ? coverTutorId : null,
+    scheduledSessionId: planned.scheduledSessionId,
+    googleEventId: planned.googleEventId,
+    googleEventIds: planned.googleEventIds,
+    sessionStartsAt: planned.sessionStartsAt,
+    eventTimeZone: planned.eventTimeZone,
+    needsReview: planned.needsReview,
+    needsReviewReason: planned.needsReviewReason,
+    earlyLogOverrideBy: planned.earlyOverrideBy,
+    earlyLogOverrideReason: planned.earlyOverrideReason,
   });
 
   if (!result.ok) {
@@ -112,8 +145,10 @@ export async function logCohortLessonAction(
   revalidatePath("/dashboard/learn");
 
   return {
-    success: result.reusedExisting
-      ? "This lesson was already logged — updated the existing entry in the app and Notion."
-      : "Lesson logged — saved in the app and Notion.",
+    success: planned.needsReview
+      ? "Saved for review. This lesson is not on the calendar, so it will not count for pay until it is confirmed."
+      : result.reusedExisting
+        ? "This lesson was already logged — updated the existing entry in the app and Notion."
+        : "Lesson logged — saved in the app and Notion.",
   };
 }

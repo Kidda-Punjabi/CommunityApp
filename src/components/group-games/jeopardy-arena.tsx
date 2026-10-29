@@ -465,6 +465,7 @@ export function JeopardyArena({ initialState, initialRoom }: JeopardyArenaProps)
               isBuzzer={isBuzzer}
               buzzerDisplayName={buzzerDisplayName}
               buzzedBy={activeTile.buzzed_by}
+              buzzedAt={activeTile.buzzed_at}
               answerCorrect={activeTile.answer_correct}
               pending={pending}
               onBuzz={handleBuzz}

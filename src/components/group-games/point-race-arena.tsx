@@ -17,6 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import { containsGurmukhi, latinRomanised } from "@/lib/conjugation/romanised";
 import { splitBilingual } from "@/lib/group-games/split-bilingual";
 import { ui } from "@/lib/ui/styles";
+import { RoomActivityHandoff } from "@/components/community/room-activity-handoff";
 
 const PENDING_MS = 2000;
 
@@ -197,6 +198,7 @@ export function PointRaceArena({ initialState, initialRoom }: PointRaceArenaProp
 
   return (
     <div className="space-y-5">
+      <RoomActivityHandoff done={finished} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">

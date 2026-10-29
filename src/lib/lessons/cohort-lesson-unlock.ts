@@ -142,7 +142,7 @@ export async function maybeAutoUnlockAfterLessonLog(
 
   const { data: entry, error: entryError } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, cohort_id, lesson_id, status")
+    .select("id, cohort_id, lesson_id, status, needs_review")
     .eq("id", options.entryId)
     .maybeSingle();
 
@@ -153,6 +153,9 @@ export async function maybeAutoUnlockAfterLessonLog(
 
   if (!isCountableLessonLogStatus(entry.status as string | null)) {
     return { ok: false, skipped: true, reason: "Cancelled sessions are not auto-unlocked." };
+  }
+  if (entry.needs_review === true) {
+    return { ok: false, skipped: true, reason: "Lessons held for review are not auto-unlocked." };
   }
 
   let lessonId = entry.lesson_id as string | null;

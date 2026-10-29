@@ -1,4 +1,5 @@
 import type { CommunityBand } from "@/lib/community/constants";
+import { FLASHCARD_CARD_TYPE_LABELS, type FlashcardCardType } from "@/lib/flashcards/types";
 
 export type RoomActivityKind =
   | "warmup_debate"
@@ -17,7 +18,29 @@ export type TopicOffer = {
   quizId: string | null;
   quizTitle: string | null;
   speakingPromptCount: number;
+  /** Card types present in the week's Community deck. Missing means words only. */
+  cardTypes?: FlashcardCardType[];
 };
+
+/** Which flashcard type suits each level, best first (approved 29 Oct 2026). */
+const CARD_TYPE_PREFERENCE: Record<CommunityBand, FlashcardCardType[]> = {
+  sounds: ["word", "sentence"],
+  beginner: ["word", "sentence"],
+  intermediate: ["question", "sentence", "word"],
+  advanced: ["speak", "question", "sentence"],
+};
+
+export function cardTypeForBand(band: CommunityBand, available: FlashcardCardType[] | undefined): FlashcardCardType | null {
+  const have = new Set(available && available.length > 0 ? available : (["word"] as FlashcardCardType[]));
+  return CARD_TYPE_PREFERENCE[band].find((type) => have.has(type)) ?? null;
+}
+
+export function flashcardInstruction(type: FlashcardCardType): string {
+  if (type === "question") return "Take turns: one person answers each card out loud.";
+  if (type === "speak") return "Each person talks for 60 seconds on a card.";
+  if (type === "sentence") return "Say each sentence out loud before you flip it.";
+  return "Go through this week's cards together.";
+}
 
 export type DebatePick = {
   id: string;
@@ -79,6 +102,8 @@ function topicKinds(band: CommunityBand, topic: TopicOffer): RoomActivityKind[] 
     if (topic.topicTags.length > 0) kinds.push("point_race");
     if (topic.quizId) kinds.push("quiz");
   } else {
+    const deckType = cardTypeForBand(band, topic.cardTypes);
+    if (topic.deckId && topic.lessonId && deckType && deckType !== "word") kinds.push("flashcards");
     if (topic.speakingPromptCount > 0) kinds.push("speaking_prompts");
     if (topic.topicTags.length > 0) kinds.push("point_race");
     if (topic.deckName) kinds.push("speak_it");
@@ -86,7 +111,12 @@ function topicKinds(band: CommunityBand, topic: TopicOffer): RoomActivityKind[] 
   return kinds;
 }
 
-function payloadFor(kind: RoomActivityKind, topic: TopicOffer, debate: DebatePick): Record<string, unknown> {
+function payloadFor(
+  kind: RoomActivityKind,
+  topic: TopicOffer,
+  debate: DebatePick,
+  band: CommunityBand
+): Record<string, unknown> {
   if (kind === "warmup_debate") {
     return {
       debateId: debate.id,
@@ -95,15 +125,17 @@ function payloadFor(kind: RoomActivityKind, topic: TopicOffer, debate: DebatePic
       optionB: debate.optionB,
       promptPa: debate.promptPa,
       romanised: debate.romanised,
-      instruction: "Vote, then say why out loud.",
+      instruction: "Vote, then each person says why in Punjabi.",
     };
   }
   if (kind === "flashcards") {
+    const cardType = cardTypeForBand(band, topic.cardTypes) ?? "word";
     return {
       lessonId: topic.lessonId,
       deckId: topic.deckId,
       deckName: topic.deckName,
-      instruction: "Go through this week's cards together.",
+      cardType,
+      instruction: flashcardInstruction(cardType),
     };
   }
   if (kind === "point_race") {
@@ -137,7 +169,12 @@ function payloadFor(kind: RoomActivityKind, topic: TopicOffer, debate: DebatePic
   }
   return {
     deckName: topic.deckName,
-    instruction: "Practise a focus from this week's deck, or play a game.",
+    topicTags: topic.topicTags.slice(0, 8),
+    questionCount: 10,
+    gameRoomId: null,
+    joinCode: null,
+    gameType: null,
+    instruction: "Pick a game to play together on this week's topic.",
   };
 }
 
@@ -158,11 +195,16 @@ export function planRoomActivities(input: {
   return kinds.map((kind, index) => ({
     position: index,
     kind,
-    title: kind === "quiz" && input.topic.quizTitle ? input.topic.quizTitle : TITLES[kind],
+    title:
+      kind === "quiz" && input.topic.quizTitle
+        ? input.topic.quizTitle
+        : kind === "flashcards"
+          ? `Flashcards · ${FLASHCARD_CARD_TYPE_LABELS[cardTypeForBand(input.band, input.topic.cardTypes) ?? "word"]}`
+          : TITLES[kind],
     payload:
       kind === "point_race" && genericRace && available.length === 0
-        ? { ...payloadFor(kind, input.topic, input.debate), topicTags: [], questionCount: 10 }
-        : payloadFor(kind, input.topic, input.debate),
+        ? { ...payloadFor(kind, input.topic, input.debate, input.band), topicTags: [], questionCount: 10 }
+        : payloadFor(kind, input.topic, input.debate, input.band),
   }));
 }
 

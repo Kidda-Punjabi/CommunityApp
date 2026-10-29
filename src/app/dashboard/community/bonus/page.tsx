@@ -68,12 +68,12 @@ function SwitchForm({ sessions }: { sessions: { id: string; title: string }[] })
         await requestSessionSwitch(String(formData.get("sessionId") ?? ""), String(formData.get("reason") ?? ""));
       }}
     >
-      <p className="font-heading font-extrabold text-[#1F1640]">Request to switch my main session</p>
+      <p className="font-heading font-extrabold text-[#1F1640]">Switch my main session</p>
       <select name="sessionId" className="mt-3 h-14 w-full rounded-[18px] border border-[#E7E0F4] px-3 text-[16px]">
         {sessions.map((session) => <option key={session.id} value={session.id}>{session.title}</option>)}
       </select>
       <input name="reason" placeholder="Reason, if you want to add one" className="mt-2 h-14 w-full rounded-[18px] border border-[#E7E0F4] px-3 text-[16px]" />
-      <SubmitButton className="mt-3 h-14 w-full rounded-[18px] bg-[#5B21B6] text-sm font-bold text-white">Send request</SubmitButton>
+      <SubmitButton className="mt-3 h-14 w-full rounded-[18px] bg-[#5B21B6] text-sm font-bold text-white">Switch now</SubmitButton>
     </form>
   );
 }

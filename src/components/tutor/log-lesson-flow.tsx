@@ -30,6 +30,7 @@ type LogLessonFlowProps = {
   userId: string;
   tutors: CoverTutorChoice[];
   includeTest: boolean;
+  canOverrideEarlyLog: boolean;
 };
 
 function suggestedLesson(lessons: LogLessonChoice[]): LogLessonChoice | null {
@@ -44,6 +45,7 @@ export function LogLessonFlow({
   userId,
   tutors,
   includeTest,
+  canOverrideEarlyLog,
 }: LogLessonFlowProps) {
   const initialCohort = catalog.cohorts.find((cohort) => cohort.id === initialCohortId) ?? null;
   const initialStudent =
@@ -75,6 +77,7 @@ export function LogLessonFlow({
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<LogLessonSweepResult | null>(null);
   const [cover, setCover] = useState(false);
+  const [earlyReason, setEarlyReason] = useState("");
   const [classScope, setClassScope] = useState<"mine" | "all">("mine");
   const [allCatalog, setAllCatalog] = useState<LogLessonCatalog | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
@@ -204,6 +207,7 @@ export function LogLessonFlow({
       attendance,
       isCoverSession: cover,
       actualTutorId: cover ? teacherId : null,
+      earlyLogOverrideReason: canOverrideEarlyLog ? earlyReason : null,
     });
     setSaving(false);
     if (!saved.ok) {
@@ -394,6 +398,23 @@ export function LogLessonFlow({
               className="mt-1 min-h-11 w-full rounded-2xl border border-zinc-200 px-3 text-base"
             />
           </label>
+          <p className="mt-2 text-xs text-zinc-500">
+            If this class is on the calendar, the pay date is the start time in that
+            calendar&apos;s timezone. A lesson with no calendar event is saved for review and does
+            not count for pay.
+          </p>
+          {canOverrideEarlyLog ? (
+            <label className="mt-4 block text-sm font-semibold text-zinc-800">
+              Reason for logging before the lesson starts
+              <textarea
+                value={earlyReason}
+                onChange={(event) => setEarlyReason(event.target.value)}
+                rows={2}
+                placeholder="Required only if the class has not started yet"
+                className="mt-1 w-full rounded-2xl border border-zinc-200 px-3 py-2 text-base font-normal"
+              />
+            </label>
+          ) : null}
           <label className="mt-4 block text-sm font-semibold text-zinc-800">
             Recording link
             <input
@@ -648,6 +669,12 @@ function DoneScreen({
     <section>
       <h1 className="font-heading text-2xl font-bold text-zinc-900">Done</h1>
       <p className="mt-2 text-base font-medium text-zinc-800">{result.headline}</p>
+      {result.needsReview ? (
+        <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Held for review. This is not on the calendar, so it will not count for pay until Arshdeep
+          confirms it.
+        </p>
+      ) : null}
       <div
         className={`mt-4 rounded-3xl p-4 ${confirmed ? "bg-emerald-50 text-emerald-950" : "bg-red-50 text-red-950"}`}
       >

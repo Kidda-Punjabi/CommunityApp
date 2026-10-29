@@ -142,7 +142,8 @@ BEGIN
     AND log.cohort_id = v_cohort_id
     AND log.lesson_id IS NOT NULL
     AND log.lesson_date <= CURRENT_DATE
-    AND COALESCE(log.status, '') <> 'Cancelled';
+    AND COALESCE(log.status, '') <> 'Cancelled'
+    AND COALESCE(log.needs_review, false) = false;
 
   SELECT COUNT(DISTINCT hs.lesson_id)::INTEGER
   INTO v_hw_done
@@ -167,6 +168,7 @@ BEGIN
           AND log.lesson_id = hs.lesson_id
           AND log.lesson_date <= CURRENT_DATE
           AND COALESCE(log.status, '') <> 'Cancelled'
+          AND COALESCE(log.needs_review, false) = false
       )
     );
 
@@ -180,6 +182,7 @@ BEGIN
     AND log.lesson_id IS NOT NULL
     AND log.lesson_date <= CURRENT_DATE
     AND COALESCE(log.status, '') <> 'Cancelled'
+    AND COALESCE(log.needs_review, false) = false
     AND NOT EXISTS (
       SELECT 1
       FROM public.homework_submissions hs

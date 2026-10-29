@@ -22,6 +22,7 @@ import {
   resolvePresentLeads,
   type PresentStudent,
 } from "@/lib/tutoring/log-lesson-notion";
+import { planTutorLessonLogForTarget } from "@/lib/tutoring/match-lesson-log-session";
 import { canManageCohort } from "@/lib/tutoring/tutor-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -43,6 +44,8 @@ export type LogLessonSweepInput = {
   attendance: LogAttendanceMark[];
   isCoverSession?: boolean;
   actualTutorId?: string | null;
+  /** Admin-only. Ignored unless the server has confirmed an admin role. */
+  earlyLogOverrideReason?: string | null;
 };
 
 export type LogLessonSweepResult = {
@@ -58,6 +61,7 @@ export type LogLessonSweepResult = {
   confirmed: boolean;
   readAt: string;
   notionError: string | null;
+  needsReview: boolean;
 };
 
 type TargetContext = {
@@ -86,6 +90,7 @@ function emptyResult(error: string): LogLessonSweepResult {
     confirmed: false,
     readAt: londonTimeLabel(),
     notionError: null,
+    needsReview: false,
   };
 }
 
@@ -425,7 +430,8 @@ async function markNotion(
 export async function logTutorLessonSweep(
   userClient: SupabaseClient,
   userId: string,
-  input: LogLessonSweepInput
+  input: LogLessonSweepInput,
+  options?: { isAdmin?: boolean }
 ): Promise<LogLessonSweepResult> {
   const lessonDate = dateOnly(input.lessonDate);
   if (!lessonDate) return emptyResult("Choose the date you taught.");
@@ -449,12 +455,28 @@ export async function logTutorLessonSweep(
   });
   if (!cover.ok) return emptyResult(cover.error);
 
+  const isAdmin = options?.isAdmin === true;
+  let planned;
+  try {
+    planned = await planTutorLessonLogForTarget(admin, {
+      typedDate: lessonDate,
+      cohortId: loaded.target.cohortId,
+      packageInstanceId: loaded.target.packageInstanceId,
+      isAdmin,
+      earlyOverrideReason: input.earlyLogOverrideReason ?? null,
+      earlyOverrideBy: isAdmin ? userId : null,
+    });
+  } catch (error) {
+    return emptyResult(error instanceof Error ? error.message : "The lesson could not be matched to a class.");
+  }
+  if (!planned.ok) return emptyResult(planned.error);
+
   const slot = lessonSlotLabel(loaded.target.courseName, loaded.target.lessonNumber);
   const title = formatLogNotionTitle({
     name: loaded.target.targetName,
     courseName: loaded.target.courseName,
     lessonNumber: loaded.target.lessonNumber,
-    lessonDate,
+    lessonDate: planned.lessonDate,
   });
   if (!logTitleMatchesLessonNumber(title, loaded.target.lessonNumber)) {
     return emptyResult("The lesson title does not match the selected lesson.");
@@ -467,7 +489,7 @@ export async function logTutorLessonSweep(
     p_package_instance_id: loaded.target.packageInstanceId,
     p_lesson_id: input.lessonId,
     p_lesson_title: title,
-    p_lesson_date: lessonDate,
+    p_lesson_date: planned.lessonDate,
     p_recording_url: recordingUrl || null,
     p_notes: input.notes.trim() || null,
     p_logged_by: userId,
@@ -479,6 +501,17 @@ export async function logTutorLessonSweep(
       attended: mark.attended,
     })),
     p_recording_student_id: loaded.target.recordingStudentId,
+    p_google_event_id: planned.googleEventId,
+    p_google_event_ids: planned.googleEventIds,
+    p_scheduled_session_id: planned.scheduledSessionId,
+    p_session_starts_at: planned.sessionStartsAt,
+    p_event_timezone: planned.eventTimeZone,
+    p_needs_review: planned.needsReview,
+    p_needs_review_reason: planned.needsReviewReason,
+    p_early_override_by: planned.earlyOverrideBy,
+    p_early_override_reason: planned.earlyOverrideReason,
+    p_is_cover_session: cover.isCoverSession,
+    p_actual_tutor_id: cover.actualTutorId,
   });
 
   if (rpcError || !entryId) {
@@ -497,15 +530,17 @@ export async function logTutorLessonSweep(
   if (coverError) return emptyResult(coverError.message);
 
   const notion = await pushNotionForEntry(admin, entryId as string);
-  const unlockedCount = input.attendance.length;
-  const headline = isFoundationalCourse(loaded.target.courseName)
-    ? `${slot} logged · ${loaded.target.targetName} · ${slot} unlocked`
-    : `${slot} logged · ${loaded.target.targetName} · ${slot} unlocked for ${unlockedCount} students`;
+  const unlockedCount = planned.needsReview ? 0 : input.attendance.length;
+  const logged = planned.needsReview
+    ? `${slot} saved for review · ${loaded.target.targetName}`
+    : isFoundationalCourse(loaded.target.courseName)
+      ? `${slot} logged · ${loaded.target.targetName} · ${slot} unlocked`
+      : `${slot} logged · ${loaded.target.targetName} · ${slot} unlocked for ${unlockedCount} students`;
 
   return {
     ok: true,
     entryId: entryId as string,
-    headline,
+    headline: logged,
     slotLabel: slot,
     targetName: loaded.target.targetName,
     unlockedCount,
@@ -514,6 +549,7 @@ export async function logTutorLessonSweep(
     confirmed: notion.confirmed,
     readAt: londonTimeLabel(),
     notionError: notion.notionError,
+    needsReview: planned.needsReview,
   };
 }
 
@@ -558,6 +594,7 @@ export async function retryTutorLessonNotion(
     confirmed: notion.confirmed,
     readAt: londonTimeLabel(),
     notionError: notion.notionError,
+    needsReview: false,
   };
 }
 

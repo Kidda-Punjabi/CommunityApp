@@ -60,6 +60,7 @@ type SessionUpsertRow = {
   updated_at: string;
   status: "scheduled";
   rescheduling_allowed: boolean;
+  event_timezone: string | null;
   lesson_id?: string | null;
   lesson_assignment_status?: "needs_assignment" | null;
 };
@@ -142,6 +143,7 @@ function buildSessionRow(
     title: event.summary,
     starts_at: event.start,
     ends_at: event.end,
+    event_timezone: event.timeZone,
     meet_link: event.hangoutLink ?? null,
     location: event.location ?? null,
     attendee_emails: event.attendeeEmails,
@@ -257,6 +259,7 @@ export async function syncTutorGoogleCalendar(
           title: event.summary,
           starts_at: event.start,
           ends_at: event.end,
+          event_timezone: event.timeZone,
           meet_link: event.hangoutLink ?? null,
           location: event.location ?? null,
           attendee_emails: event.attendeeEmails,

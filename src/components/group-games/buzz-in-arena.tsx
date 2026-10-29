@@ -442,6 +442,7 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
             isBuzzer={isBuzzer}
             buzzerDisplayName={buzzerDisplayName}
             buzzedBy={round.buzzed_by}
+            buzzedAt={round.buzzed_at}
             answerCorrect={round.answer_correct}
             pending={pending}
             onBuzz={handleBuzz}

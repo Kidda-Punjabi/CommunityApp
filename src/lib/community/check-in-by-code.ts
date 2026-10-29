@@ -201,7 +201,7 @@ export async function liveCheckInFlags(
   admin: SupabaseClient,
   userId: string,
   nextOccurrenceId: string | null
-): Promise<{ anyLive: boolean; checkedIntoNext: boolean }> {
+): Promise<{ anyLive: boolean; checkedIntoNext: boolean; liveIds: string[] }> {
   const { data: live, error } = await admin.from("community_session_occurrences").select("id").eq("status", "live");
   if (error) throw error;
   const ids = (live ?? []).map((row) => row.id as string);
@@ -216,7 +216,7 @@ export async function liveCheckInFlags(
     if (mineError) throw mineError;
     checkedIntoNext = Boolean(data);
   }
-  return { anyLive: ids.length > 0, checkedIntoNext };
+  return { anyLive: ids.length > 0, checkedIntoNext, liveIds: ids };
 }
 
 export async function memberNeedsLiveCheckIn(admin: SupabaseClient, userId: string): Promise<boolean> {

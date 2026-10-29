@@ -38,13 +38,19 @@ export async function requestSessionSwitch(sessionId: string, reason: string) {
   if (error) return { error: error.message };
   if (!meta?.main_session_id) return { error: "Pick a main session first." };
   if (meta.main_session_id === sessionId) return { error: "That is already your main session." };
+  const result = await chooseMainSession(member.admin, member.userId, sessionId);
+  if ("error" in result && result.error) return result;
   const { error: insertError } = await member.admin.from("community_session_switch_requests").insert({
     user_id: member.userId,
     from_session_id: meta.main_session_id,
     to_session_id: sessionId,
     reason: reason.trim() || null,
+    status: "auto_approved",
+    reviewed_at: new Date().toISOString(),
   });
   if (insertError) return { error: insertError.message };
+  revalidatePath("/dashboard/community");
+  revalidatePath("/dashboard/community/bonus");
   console.info(`[community] requestSessionSwitch ${Date.now() - started}ms`);
   return { ok: true as const };
 }

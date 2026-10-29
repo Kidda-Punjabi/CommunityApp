@@ -18,6 +18,7 @@ import {
   type MatchTile,
 } from "@/lib/flashcards/match-rounds";
 import { nativeTabletNow, useNativeTablet } from "@/lib/native/use-native-tablet";
+import { RoomActivityHandoff } from "@/components/community/room-activity-handoff";
 import { ChallengeModeBanner } from "@/components/challenges/challenge-mode-banner";
 import { ChallengePostGameBanner } from "@/components/challenges/challenge-post-game-banner";
 import { useChallengeFinish } from "@/lib/challenges/use-challenge-finish";
@@ -402,6 +403,7 @@ function MatchFinishedScreen({
 
   return (
     <div className="relative space-y-6">
+      <RoomActivityHandoff done />
       {!kidsMode && <FloatingSoundToggle />}
       {challenge && (
         <ChallengePostGameBanner

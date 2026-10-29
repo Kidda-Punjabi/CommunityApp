@@ -1,6 +1,14 @@
 "use client";
 
-import { approveLate, approveRooms, movePerson, skipActivity, suggestRooms } from "@/app/admin/community/breakout-actions";
+import {
+  approveLate,
+  approveRooms,
+  movePerson,
+  setFlashcardActivityType,
+  skipActivity,
+  suggestRooms,
+} from "@/app/admin/community/breakout-actions";
+import { FLASHCARD_CARD_TYPES, FLASHCARD_CARD_TYPE_LABELS, type FlashcardCardType } from "@/lib/flashcards/types";
 import { RoomRefresh } from "@/components/community/room-refresh";
 import { bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
 import type { CommunityBand } from "@/lib/community/constants";
@@ -13,6 +21,7 @@ export type HostRoomCard = {
   band: CommunityBand;
   status: string;
   progress: string | null;
+  flashcards: { id: string; position: number; status: string; cardType: FlashcardCardType }[];
   members: { userId: string; name: string; level: number; pending: boolean }[];
 };
 
@@ -66,6 +75,25 @@ export function BreakoutHostView({
                 Skip to next
               </button>
             ) : null}
+            {room.flashcards
+              .filter((item) => item.status !== "done")
+              .map((item) => (
+                <label key={item.id} className="mt-2 flex items-center gap-2 text-sm text-zinc-700">
+                  Activity {item.position + 1} flashcards
+                  <select
+                    className="h-10 rounded-xl border border-zinc-200 px-2 text-sm"
+                    value={item.cardType}
+                    disabled={pending}
+                    onChange={(event) => void run(() => setFlashcardActivityType(item.id, event.target.value))}
+                  >
+                    {FLASHCARD_CARD_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {FLASHCARD_CARD_TYPE_LABELS[type]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
             <ul className="mt-3 space-y-2">
               {room.members.map((member) => (
                 <li key={member.userId} className="flex flex-wrap items-center gap-2">

@@ -132,7 +132,7 @@ async function loadCompletedCountByCohort(
 
   const { data, error } = await adminClient
     .from("cohort_lesson_log_entries")
-    .select("cohort_id, status, dismissed_at")
+    .select("cohort_id, status, dismissed_at, needs_review")
     .in("cohort_id", cohortIds);
 
   if (error) throw error;
@@ -143,6 +143,7 @@ async function loadCompletedCountByCohort(
       !isCompletedLessonLogEntry({
         status: row.status as string | null,
         dismissed_at: (row.dismissed_at as string | null) ?? null,
+        needs_review: (row.needs_review as boolean | null) ?? null,
       })
     ) {
       continue;

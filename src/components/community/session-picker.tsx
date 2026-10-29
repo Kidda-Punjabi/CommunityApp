@@ -105,7 +105,7 @@ function SessionCard({
           {large ? <p className="text-sm font-semibold">{session.cardName}</p> : null}
           <p className="text-xs text-[#6B5F8A]">
             {large
-              ? `UK session · next on ${formatWeekdayDate(session.startsAt, "Europe/London")}`
+              ? `${session.hostCity} · next on ${formatWeekdayDate(session.startsAt, session.hostTimeZone)}`
               : `${host} ${session.hostCity}${session.firstStartsOn ? ` · from ${formatStartDate(session.firstStartsOn)}` : ""}`}
           </p>
         </div>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
+  approveAdminLessonLogReview,
   createAdminLessonLogEntry,
   dismissAdminLessonLogAttention,
   fetchAdminLessonLog,
@@ -59,6 +60,7 @@ function attentionLabel(entry: AdminLessonLogEntry): string | null {
   if (entry.attentionReasons.includes("unresolved_tutor")) parts.push("unresolved tutor");
   if (entry.attentionReasons.includes("missing_recording")) parts.push("missing recording");
   if (entry.attentionReasons.includes("unlinked_package")) parts.push("unlinked package");
+  if (entry.attentionReasons.includes("needs_review")) parts.push("needs review — not counted for pay");
   return parts.join(" · ");
 }
 
@@ -607,6 +609,29 @@ export function AdminLessonLogSection() {
                                 <p className="mt-1 text-[11px] font-semibold text-amber-700">
                                   Needs attention · {attention}
                                 </p>
+                              ) : null}
+                              {entry.attentionReasons.includes("needs_review") &&
+                              !entry.dismissedAt ? (
+                                <button
+                                  type="button"
+                                  disabled={pending}
+                                  className="mt-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-900 disabled:opacity-60"
+                                  onClick={() => {
+                                    startTransition(async () => {
+                                      setError(null);
+                                      setMessage(null);
+                                      const result = await approveAdminLessonLogReview(entry.id);
+                                      if (result.error) {
+                                        setError(result.error);
+                                        return;
+                                      }
+                                      setMessage(result.success ?? "Approved.");
+                                      reload();
+                                    });
+                                  }}
+                                >
+                                  Approve for pay and unlock
+                                </button>
                               ) : null}
                               {entry.attentionReasons.includes("unlinked_package") &&
                               !entry.dismissedAt ? (

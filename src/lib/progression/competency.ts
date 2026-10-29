@@ -192,7 +192,8 @@ async function computeFlashcardConfidencePct(
 ): Promise<{ pct: number; confident: number; total: number }> {
   const { count: total } = await supabase
     .from("flashcards")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .neq("card_type", "speak");
 
   if (!total) return { pct: 0, confident: 0, total: 0 };
 

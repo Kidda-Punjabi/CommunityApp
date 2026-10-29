@@ -1,5 +1,6 @@
 "use server";
 
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { logTutorLessonSweep, retryTutorLessonNotion } from "@/lib/tutoring/log-lesson-sweep";
 import type { LogLessonSweepInput, LogLessonSweepResult } from "@/lib/tutoring/log-lesson-sweep";
 import { loadLogLessonCatalog } from "@/lib/tutoring/load-log-lesson-catalog";
@@ -17,7 +18,7 @@ async function requireTutor() {
   if (!user) return { error: "You must be signed in." as const };
   const allowed = await canAccessTutorDashboard(supabase, user.id);
   if (!allowed) return { error: "Tutor access required." as const };
-  return { supabase, userId: user.id };
+  return { supabase, userId: user.id, user };
 }
 
 export async function loadAllClassesCatalogAction(
@@ -50,9 +51,11 @@ export async function saveTutorLessonAction(
       confirmed: false,
       readAt: "",
       notionError: null,
+      needsReview: false,
     };
   }
-  const result = await logTutorLessonSweep(auth.supabase!, auth.userId!, input);
+  const isAdmin = await canAccessAdminPanel(auth.user!, auth.supabase!);
+  const result = await logTutorLessonSweep(auth.supabase!, auth.userId!, input, { isAdmin });
   if (result.ok) {
     revalidatePath("/dashboard/tutor");
     revalidatePath("/dashboard/tutor/log");
@@ -77,6 +80,7 @@ export async function retryTutorLessonSyncAction(entryId: string): Promise<LogLe
       confirmed: false,
       readAt: "",
       notionError: null,
+      needsReview: false,
     };
   }
   return retryTutorLessonNotion(auth.supabase!, auth.userId!, entryId);
