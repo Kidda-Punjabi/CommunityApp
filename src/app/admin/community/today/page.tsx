@@ -2,6 +2,8 @@ import { overrideWeek, startSession, startTestSession } from "@/app/admin/commun
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 type Row = {
   id: string;
   starts_at: string;

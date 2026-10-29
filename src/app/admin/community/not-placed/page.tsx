@@ -3,6 +3,8 @@ import { loadUnplacedMembers } from "@/lib/community/not-placed";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ui } from "@/lib/ui/styles";
 
+export const dynamic = "force-dynamic";
+
 export default async function NotPlacedPage() {
   const admin = createServiceRoleClient();
   const members = await loadUnplacedMembers(admin);
