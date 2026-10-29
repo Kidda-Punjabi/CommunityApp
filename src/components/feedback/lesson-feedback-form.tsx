@@ -31,6 +31,8 @@ type LessonFeedbackFormProps = {
   compact?: boolean;
   guestSubmit?: GuestFeedbackSubmitConfig;
   testimonialCalendarUrl?: string | null;
+  /** Shows the real form but sends nothing (test sessions, staff previews). */
+  previewOnly?: boolean;
 };
 
 export function LessonFeedbackForm({
@@ -41,6 +43,7 @@ export function LessonFeedbackForm({
   compact = false,
   guestSubmit,
   testimonialCalendarUrl,
+  previewOnly = false,
 }: LessonFeedbackFormProps) {
   const isWeek12 = context.formVariant === "week12";
   const isCommunity = context.formVariant === "community";
@@ -85,6 +88,12 @@ export function LessonFeedbackForm({
             ? "Please complete all ratings and the recommend question."
             : "Please complete all ratings."
       );
+      return;
+    }
+
+    if (previewOnly) {
+      setSuccess("Preview only: nothing was sent. Members' answers save and sync to Notion.");
+      onSubmitted?.();
       return;
     }
 

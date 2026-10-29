@@ -11,7 +11,8 @@ import { loadLeaderboard } from "@/lib/leaderboard/load-leaderboard";
 import { getCurrentWeekStart } from "@/lib/leaderboard/week";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { isNativeAppRequest } from "@/lib/native/platform";
-import { pendingSessionFeedback } from "@/lib/community/session-feedback";
+import { loadMainRoomFeedback, pendingSessionFeedback } from "@/lib/community/session-feedback";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 import Link from "next/link";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
@@ -23,7 +24,7 @@ export default async function CommunityPage({
 }: {
   searchParams: Promise<{ checkin?: string }>;
 }) {
-  const { user } = await requireNoKidCommunityAccess();
+  const { user, supabase } = await requireNoKidCommunityAccess();
   const admin = createServiceRoleClient();
   let allowed = await memberHasCommunity(admin, user.id);
   if (!allowed && user.email) {
@@ -41,7 +42,13 @@ export default async function CommunityPage({
     <div className={`${ui.page} community-fit !flex !h-[calc(100dvh-var(--kidda-nav-clearance))] !max-h-[calc(100dvh-var(--kidda-nav-clearance))] !min-h-0 !flex-none !flex-col !overflow-hidden !px-5 !pb-0 !pt-[max(0.25rem,env(safe-area-inset-top,0px))]`}>
       <h1 className="mb-2 shrink-0 font-heading text-[28px] font-bold leading-8 tracking-tight text-zinc-900">Community</h1>
       {allowed ? (
-        <CommunityHome userId={user.id} openCheckIn={params.checkin === "1"} />
+        <CommunityHome
+          userId={user.id}
+          openCheckIn={params.checkin === "1"}
+          supabase={supabase}
+          email={user.email ?? null}
+          phone={user.phone ?? null}
+        />
       ) : (
         <CommunityLocked native={native} />
       )}
@@ -49,14 +56,38 @@ export default async function CommunityPage({
   );
 }
 
-async function CommunityHome({ userId, openCheckIn }: { userId: string; openCheckIn: boolean }) {
+async function CommunityHome({
+  userId,
+  openCheckIn,
+  supabase,
+  email,
+  phone,
+}: {
+  userId: string;
+  openCheckIn: boolean;
+  supabase: SupabaseClient;
+  email: string | null;
+  phone: string | null;
+}) {
   const admin = createServiceRoleClient();
   const [home, room] = await Promise.all([
     loadCommunityHome(admin, userId),
     loadMemberRoom(admin, userId),
   ]);
   const onboarded = Boolean(home.mainSessionId && home.level != null);
-  if (room) return <LiveRoom view={room} userId={userId} needsOnboarding={!onboarded} />;
+  if (room) {
+    // Back in the main room: every phone shows this session's feedback form.
+    const feedback =
+      room.phase === "main"
+        ? await loadMainRoomFeedback(admin, supabase, { id: userId, email, phone }, room.occurrenceId).catch(
+            (error) => {
+              console.error("[community] main-room feedback failed", error);
+              return null;
+            }
+          )
+        : null;
+    return <LiveRoom view={room} userId={userId} needsOnboarding={!onboarded} feedback={feedback} />;
+  }
 
   const live = await liveCheckInFlags(admin, userId, home.next?.id ?? null);
   if (!onboarded) {
