@@ -2,6 +2,7 @@ import { approvePlacementClip, generatePlacementAudio } from "@/app/admin/commun
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ui } from "@/lib/ui/styles";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export default async function PlacementAudioPage() {
