@@ -5,6 +5,8 @@ import { GROUP_GAME_LABELS } from "@/lib/game-rooms/constants";
 import type { GroupGameType } from "@/lib/game-rooms/types";
 import { CommunityLiveSync } from "@/components/community/room-refresh";
 import type { MemberRoomView } from "@/lib/community/breakout";
+import type { MainRoomFeedback } from "@/lib/community/session-feedback";
+import { MainRoomFeedbackCard } from "@/components/community/main-room-feedback";
 import { bandFillVar, bandInkVar, bandLabel } from "@/lib/community/levels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,10 +21,13 @@ export function LiveRoom({
   view,
   userId,
   needsOnboarding = false,
+  feedback = null,
 }: {
   view: MemberRoomView;
   userId: string;
   needsOnboarding?: boolean;
+  /** Session feedback form, once the host brings everyone back. */
+  feedback?: MainRoomFeedback | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +59,7 @@ export function LiveRoom({
         poll={view.phase === "waiting"}
       />
       {view.phase === "main" ? (
+        <>
         <section className="rounded-[24px] bg-[#5B21B6] p-5 text-white">
           <p className="font-heading text-2xl font-extrabold leading-tight">{"Back in the main room"}</p>
           <p className="mt-2 text-base text-violet-100">
@@ -77,8 +83,10 @@ export function LiveRoom({
               Join {GROUP_GAME_LABELS[view.groupGame.gameType as GroupGameType] ?? "the game"} · code {view.groupGame.joinCode}
             </button>
           ) : null}
-          <p className="mt-3 text-sm text-violet-100">Stay on the call. The feedback form opens when Arsh ends the session.</p>
+          <p className="mt-3 text-sm text-violet-100">Stay on the call.</p>
         </section>
+        {feedback ? <MainRoomFeedbackCard feedback={feedback} /> : null}
+        </>
       ) : view.phase === "waiting" ? (
         <section className="rounded-[24px] bg-[#5B21B6] p-4 text-white">
           <p className="font-heading text-2xl font-extrabold leading-tight">{"You're checked in."}</p>

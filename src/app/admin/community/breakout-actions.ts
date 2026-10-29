@@ -137,6 +137,14 @@ export async function bringBack(occurrenceId: string) {
   const staff = await requireCommunityStaff();
   if ("error" in staff) return { error: staff.error };
   const result = await bringEveryoneBack(staff.admin, occurrenceId);
+  // Everyone's phone switches to the feedback form; also send the one-off notification.
+  // A failure here must never stop the rooms closing.
+  try {
+    const { notifySessionFeedback } = await import("@/lib/community/session-feedback");
+    await notifySessionFeedback(staff.admin, occurrenceId, staff.userId);
+  } catch (error) {
+    console.error("[community] feedback notifications on bring-back failed", error);
+  }
   refresh();
   return result;
 }

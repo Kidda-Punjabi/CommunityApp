@@ -332,7 +332,7 @@ export default async function HostSessionPage({
               <section className="flex flex-col gap-3 rounded-3xl border border-zinc-200 bg-white p-6">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="font-heading text-lg font-extrabold">Feedback</p>
-                  {view.status === "ended" ? (
+                  {view.status === "ended" || view.mainRoomAt || view.feedbackPrompted ? (
                     <p className="text-sm font-bold text-emerald-700">
                       {view.feedback.sent.length} of {view.feedback.sent.length + view.feedback.notSent.length} sent
                       {view.feedback.sent.length > 0
@@ -342,11 +342,13 @@ export default async function HostSessionPage({
                   ) : null}
                 </div>
                 <p className="text-sm text-zinc-500">
-                  {view.status === "ended"
-                    ? "Everyone who checked in got a notification and a feedback card on their Community tab. Answers go to the feedback database and Notion like class feedback."
-                    : "When you end the session, everyone who checked in gets the standard feedback form."}
+                  {view.status === "ended" || view.mainRoomAt || view.feedbackPrompted
+                    ? view.status === "ended"
+                      ? "Everyone who checked in got the feedback form and a notification. Answers go to the feedback database and Notion like class feedback."
+                      : "Everyone who checked in has the feedback form on their phone. Give them a minute to finish before you end the session; answers go to the feedback database and Notion."
+                    : "When you bring everyone back, every phone switches to the feedback form."}
                 </p>
-                {view.status === "ended" ? (
+                {view.status === "ended" || view.mainRoomAt || view.feedbackPrompted ? (
                   <ul className="divide-y divide-zinc-100">
                     {view.feedback.sent.map((row) => (
                       <li key={row.name} className="flex min-h-11 items-center gap-3 text-sm">

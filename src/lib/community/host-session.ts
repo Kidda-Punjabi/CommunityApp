@@ -50,6 +50,8 @@ export type HostSessionView = {
   autoStep: HostStep;
   /** Set once the host brought everyone back to the main call. */
   mainRoomAt: string | null;
+  /** Members have been asked for feedback (on bring-back or at the end). */
+  feedbackPrompted: boolean;
   groupGame: { gameRoomId: string; joinCode: string; gameType: string } | null;
   /** Activity kinds this week's content supports, for the add / change picker. */
   availableKinds: RoomActivityKind[];
@@ -72,7 +74,7 @@ export async function loadHostSession(admin: SupabaseClient, occurrenceId: strin
   const { data: occurrence, error } = await admin
     .from("community_session_occurrences")
     .select(
-      "id, session_id, status, starts_at, started_at, checkin_code, week_number, week_number_override, main_room_at, group_game, google_event_id, community_sessions(title, is_active), lessons:topic_lesson_id(title)"
+      "id, session_id, status, starts_at, started_at, checkin_code, week_number, week_number_override, main_room_at, feedback_prompted_at, group_game, google_event_id, community_sessions(title, is_active), lessons:topic_lesson_id(title)"
     )
     .eq("id", occurrenceId)
     .maybeSingle();
@@ -215,11 +217,12 @@ export async function loadHostSession(admin: SupabaseClient, occurrenceId: strin
     rooms,
     autoStep,
     mainRoomAt,
+    feedbackPrompted: Boolean(occurrence.feedback_prompted_at),
     groupGame:
       game?.gameRoomId && game.joinCode ? { gameRoomId: game.gameRoomId, joinCode: game.joinCode, gameType: game.gameType ?? "point_race" } : null,
     availableKinds: status === "live" ? await availableActivityKinds(admin, occurrenceId) : [],
     feedback:
-      status === "ended"
+      status === "ended" || mainRoomAt || occurrence.feedback_prompted_at
         ? await sessionFeedbackStatus(
             admin,
             { google_event_id: (occurrence.google_event_id as string | null) ?? null, isTest: session?.is_active === false },
