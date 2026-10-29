@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { pickDebateId, planRoomActivities, type DebatePick, type TopicOffer } from "./room-activities";
+import {
+  COMMUNITY_FLASHCARD_CAP,
+  communityFlashcardPick,
+  flashcardActivityTitle,
+  pickDebateId,
+  planRoomActivities,
+  type DebatePick,
+  type TopicOffer,
+} from "./room-activities";
 
 const debate: DebatePick = {
   id: "chai",
@@ -98,5 +106,38 @@ describe("pickDebateId", () => {
     const ids = ["b", "a", "c"];
     assert.equal(pickDebateId("room-a", ids), pickDebateId("room-a", ids));
     assert.equal(pickDebateId("room-a", []), null);
+  });
+});
+
+describe("communityFlashcardPick", () => {
+  const deck = Array.from({ length: 54 }, (_, index) => index);
+
+  it("never gives more than 20 cards", () => {
+    assert.equal(communityFlashcardPick(deck, "activity-a").length, COMMUNITY_FLASHCARD_CAP);
+  });
+
+  it("leaves small decks untouched", () => {
+    assert.deepEqual(communityFlashcardPick([1, 2, 3], "activity-a"), [1, 2, 3]);
+  });
+
+  it("gives everyone in the same activity the same cards", () => {
+    assert.deepEqual(communityFlashcardPick(deck, "activity-a"), communityFlashcardPick(deck, "activity-a"));
+  });
+
+  it("gives a different set to a different activity", () => {
+    assert.notDeepEqual(communityFlashcardPick(deck, "activity-a"), communityFlashcardPick(deck, "activity-b"));
+  });
+
+  it("only picks real cards, with no repeats", () => {
+    const picked = communityFlashcardPick(deck, "activity-a");
+    assert.equal(new Set(picked).size, picked.length);
+    assert.ok(picked.every((card) => deck.includes(card)));
+  });
+});
+
+describe("flashcardActivityTitle", () => {
+  it("names the type, or Mixed when the whole deck is used", () => {
+    assert.equal(flashcardActivityTitle("question"), "Flashcards · Questions");
+    assert.equal(flashcardActivityTitle(null), "Flashcards · Mixed");
   });
 });

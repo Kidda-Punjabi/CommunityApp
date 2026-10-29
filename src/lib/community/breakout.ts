@@ -1,11 +1,12 @@
 import "server-only";
-import { FLASHCARD_CARD_TYPE_LABELS, parseFlashcardCardType, type FlashcardCardType } from "@/lib/flashcards/types";
+import { parseFlashcardCardType, type FlashcardCardType } from "@/lib/flashcards/types";
 
 import type { CommunityBand } from "@/lib/community/constants";
 import { planBreakoutRooms, suggestLateRoom, type RoomPerson } from "@/lib/community/breakout-rooms";
 import {
   ACTIVITY_TITLES,
   cardTypeForBand,
+  flashcardActivityTitle,
   kindsWithContent,
   payloadFor,
   pickDebateId,
@@ -824,8 +825,8 @@ async function buildActivity(admin: SupabaseClient, room: { id: string; occurren
   const title =
     kind === "quiz" && topic.quizTitle
       ? topic.quizTitle
-      : kind === "flashcards" && cardType
-        ? `Flashcards · ${FLASHCARD_CARD_TYPE_LABELS[cardType]}`
+      : kind === "flashcards"
+        ? flashcardActivityTitle(cardType)
         : ACTIVITY_TITLES[kind];
   return { kind, title, payload };
 }
