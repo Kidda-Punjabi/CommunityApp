@@ -8,6 +8,7 @@ import { currentStreak, type StreakOccurrence } from "@/lib/community/streak";
 import { insertRoutedNotifications } from "@/lib/notifications/insert-notifications";
 import type { CommunityBand } from "@/lib/community/constants";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { TEST_SESSION_TITLE, occurrenceIsTest } from "@/lib/community/test-sessions";
 
 export async function chooseMainSession(
   admin: SupabaseClient,
@@ -197,7 +198,7 @@ export async function startCommunitySession(admin: SupabaseClient, actorId: stri
       },
     });
   }
-  return { ok: true, code };
+  return { ok: true, code, occurrenceId };
 }
 
 export async function endCommunitySession(admin: SupabaseClient, occurrenceId: string) {
@@ -264,6 +265,9 @@ export async function checkInMember(
     .eq("user_id", userId)
     .maybeSingle();
   const mainSessionId = meta?.main_session_id as string | null;
+  // Test sessions (inactive) count for nothing: no XP, no streak.
+  const isTest = await occurrenceIsTest(admin, occurrence.session_id as string);
+  if (isTest) return { ok: true, isLate, streak: 0, countsForStreak: false, xpAwarded: 0 };
   const isMain = mainSessionId === occurrence.session_id;
   let streak = 0;
   if (isMain && mainSessionId) {
@@ -311,4 +315,59 @@ export async function checkInMember(
   }
 
   return { ok: true, isLate, streak, countsForStreak: isMain, xpAwarded };
+}
+
+
+/**
+ * Staff-only test session: creates an occurrence of the inactive "Kidda team test" session
+ * starting now on the chosen week, then starts it (status live + check-in code).
+ * Members never see it (see visibleLiveOccurrences) and check-ins to it earn nothing.
+ */
+export async function startTestCommunitySession(admin: SupabaseClient, actorId: string, week: number) {
+  if (!Number.isInteger(week) || week < 1 || week > 24) return { error: "Week must be from 1 to 24." };
+  const { data: session, error } = await admin
+    .from("community_sessions")
+    .select("id, is_active, meet_url")
+    .eq("title", TEST_SESSION_TITLE)
+    .maybeSingle();
+  if (error) throw error;
+  if (!session) return { error: `No "${TEST_SESSION_TITLE}" session found.` };
+  if (session.is_active) return { error: `"${TEST_SESSION_TITLE}" must stay inactive so members never see it.` };
+
+  const { data: running, error: runningError } = await admin
+    .from("community_session_occurrences")
+    .select("id")
+    .eq("session_id", session.id)
+    .eq("status", "live")
+    .limit(1)
+    .maybeSingle();
+  if (runningError) throw runningError;
+  // One test at a time: if one is already live, open that one instead of doing nothing.
+  if (running) return { ok: true as const, code: "", occurrenceId: running.id as string };
+
+  const { data: lesson, error: lessonError } = await admin
+    .from("lessons")
+    .select("id")
+    .eq("course_id", "22f0e217-92a7-46f0-b38e-651409d7d118")
+    .eq("lesson_number", week)
+    .maybeSingle();
+  if (lessonError) throw lessonError;
+
+  const now = Date.now();
+  const { data: created, error: insertError } = await admin
+    .from("community_session_occurrences")
+    .insert({
+      session_id: session.id,
+      starts_at: new Date(now).toISOString(),
+      ends_at: new Date(now + 75 * 60 * 1000).toISOString(),
+      week_number: week,
+      week_number_override: week,
+      topic_lesson_id: lesson?.id ?? null,
+      meet_url: session.meet_url ?? null,
+      late_after: new Date(now + 5 * 60 * 1000).toISOString(),
+    })
+    .select("id")
+    .single();
+  if (insertError) throw insertError;
+  return startCommunitySession(admin, actorId, created.id as string);
 }

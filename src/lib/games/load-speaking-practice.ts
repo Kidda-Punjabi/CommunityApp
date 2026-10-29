@@ -17,16 +17,19 @@ export type SpeakingPracticeLoadResult = {
 
 export async function loadSpeakingPracticeContent(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  lessonId?: string | null
 ): Promise<SpeakingPracticeLoadResult> {
   const monthKey = currentMonthKeyUtc();
+  // From a Community room, Speak It uses only that week's words.
+  const eq: Record<string, string> = lessonId ? { category: "vocab", lesson_id: lessonId } : { category: "vocab" };
 
   const [cardsResult, attemptsResult] = await Promise.all([
     loadScopedFlashcardPoolRows<SpeakingPracticeFlashcardRow & { lesson_id?: string | null }>(
       supabase,
       userId,
       "id, front_text, back_text, romanised, icon_name, difficulty, lesson_id",
-      { eq: { category: "vocab" } }
+      { eq }
     ),
     supabase
       .from("speaking_practice_attempts")

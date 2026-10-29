@@ -1,142 +1,199 @@
-import { addCheckIn, endSession, overrideWeek, startSession } from "@/app/admin/community/actions";
-import { BreakoutHost } from "@/components/community/breakout-host";
-import { LiveCheckins } from "@/components/community/live-checkins";
-import { bandForLevel, bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
+import { overrideWeek, startSession, startTestSession } from "@/app/admin/community/actions";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
-import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
-export default async function CommunityTodayPage() {
-  const admin = createServiceRoleClient();
-  const until = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: occurrences } = await admin
+type Row = {
+  id: string;
+  starts_at: string;
+  status: string;
+  week_number: number;
+  week_number_override: number | null;
+  community_sessions: { title: string; is_active: boolean } | { title: string; is_active: boolean }[] | null;
+  lessons: { title: string | null } | { title: string | null }[] | null;
+};
+
+function one<T>(value: T | T[] | null): T | null {
+  if (value == null) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function when(iso: string) {
+  return new Date(iso).toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Europe/London",
+  });
+}
+
+/** Sessions from 3 hours ago to 8 days ahead. */
+async function loadWindow(): Promise<Row[]> {
+  const now = Date.now();
+  const { data } = await createServiceRoleClient()
     .from("community_session_occurrences")
-    .select("id, session_id, starts_at, status, checkin_code, week_number, week_number_override, community_sessions(title)")
-    .gte("starts_at", new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString())
-    .lte("starts_at", until)
+    .select("id, starts_at, status, week_number, week_number_override, community_sessions(title, is_active), lessons:topic_lesson_id(title)")
+    .gte("starts_at", new Date(now - 3 * 60 * 60 * 1000).toISOString())
+    .lte("starts_at", new Date(now + 8 * 24 * 60 * 60 * 1000).toISOString())
     .neq("status", "cancelled")
     .order("starts_at");
+  return (data ?? []) as Row[];
+}
 
-  const live = (occurrences ?? []).find((row) => row.status === "live") ?? occurrences?.[0];
-  const { data: checkins } = live
-    ? await admin
-        .from("community_checkins")
-        .select("user_id, checked_in_at, is_late, added_by_tutor, profiles(full_name, kidda_level)")
-        .eq("occurrence_id", live.id)
-        .order("checked_in_at")
-    : { data: [] };
-  const checkedIds = new Set((checkins ?? []).map((row) => row.user_id as string));
-  const { data: pods } = live
-    ? await admin.from("pods").select("id, name, pod_members(user_id, profiles(full_name, kidda_level))").eq("session_id", live.session_id)
-    : { data: [] };
-  const missing = (pods ?? []).flatMap((pod) =>
-    ((pod.pod_members ?? []) as { user_id: string; profiles: { full_name: string | null; kidda_level: number | null } | { full_name: string | null; kidda_level: number | null }[] | null }[])
-      .filter((member) => !checkedIds.has(member.user_id))
-      .map((member) => {
-        const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
-        return { userId: member.user_id, name: profile?.full_name || "Member", pod: pod.name as string };
-      })
-  );
+export default async function CommunityTodayPage() {
+  const rows = await loadWindow();
 
-  const grouped = new Map<string, typeof checkins>();
-  for (const checkin of checkins ?? []) {
-    const profile = Array.isArray(checkin.profiles) ? checkin.profiles[0] : checkin.profiles;
-    const band = bandLabel(bandForLevel(profile?.kidda_level ?? 0));
-    const list = grouped.get(band) ?? [];
-    list.push(checkin);
-    grouped.set(band, list);
-  }
+  const live = rows.filter((row) => row.status === "live");
+  const upcoming = rows.filter((row) => row.status === "scheduled" && one(row.community_sessions)?.is_active !== false);
+  const next = upcoming[0] ?? null;
+  const later = upcoming.slice(1);
+  const nextSession = next ? one(next.community_sessions) : null;
+  const nextLesson = next ? one(next.lessons) : null;
+  const nextWeek = next ? (next.week_number_override ?? next.week_number) : null;
 
   return (
-    <div className="space-y-6">
-      <h1 className="font-heading text-2xl font-bold text-zinc-900">Community today</h1>
-      {(occurrences ?? []).map((occurrence) => {
-        const session = Array.isArray(occurrence.community_sessions) ? occurrence.community_sessions[0] : occurrence.community_sessions;
-        const week = occurrence.week_number_override ?? occurrence.week_number;
+    <div className="space-y-5 pb-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-heading text-3xl font-extrabold text-zinc-900">Community</h1>
+          {nextWeek ? (
+            <p className="text-sm text-zinc-500">
+              This week is Week {nextWeek}
+              {nextLesson?.title ? ` · ${nextLesson.title}` : ""}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {live.map((row) => {
+        const session = one(row.community_sessions);
+        const test = session?.is_active === false;
         return (
-          <section key={occurrence.id} className={ui.card}>
-            <p className="font-semibold text-zinc-900">{session?.title}</p>
-            <p className="text-sm text-zinc-500">{new Date(occurrence.starts_at).toLocaleString("en-GB", { timeZone: "Europe/London" })} · Week {week} · {occurrence.status}</p>
-            {occurrence.status === "scheduled" ? (
-              <form action={async () => { "use server"; await startSession(occurrence.id); }} className="mt-3">
-                <button type="submit" className={ui.btnPrimary}>Start session</button>
-              </form>
-            ) : null}
-            {occurrence.status === "live" ? (
-              <div className="mt-3">
-                <p className="font-heading text-4xl font-bold tracking-[0.3em] text-zinc-900">{occurrence.checkin_code}</p>
-                <Link href={`/admin/community/today/code?occurrence=${occurrence.id}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-violet-700">
-                  Show full screen to share
-                </Link>
-                <form action={async () => { "use server"; await endSession(occurrence.id); }} className="mt-3">
-                  <button type="submit" className={ui.btnSecondary}>End session</button>
-                </form>
-              </div>
-            ) : null}
-            <form
-              action={async (formData) => {
-                "use server";
-                await overrideWeek(occurrence.id, Number(formData.get("week")));
-              }}
-              className="mt-3 flex items-center gap-2"
-            >
-              <label className="text-sm text-zinc-600" htmlFor={`week-${occurrence.id}`}>Week</label>
-              <input id={`week-${occurrence.id}`} name="week" type="number" min={1} max={24} defaultValue={week} className="h-11 w-20 rounded-xl border border-zinc-200 px-2 text-[16px]" />
-              <button type="submit" className={ui.btnSecondary}>Save</button>
-            </form>
-          </section>
+          <Link
+            key={row.id}
+            href={`/admin/community/session/${row.id}`}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-violet-700 px-6 py-5 text-white"
+          >
+            <span>
+              <span className="block text-xs font-bold uppercase tracking-[0.08em] text-violet-200">
+                {test ? "Test session live · staff only" : "Live now"}
+              </span>
+              <span className="block font-heading text-2xl font-extrabold">
+                {session?.title} · Week {row.week_number_override ?? row.week_number}
+              </span>
+            </span>
+            <span className="inline-flex min-h-12 items-center rounded-2xl bg-white px-5 text-base font-extrabold text-violet-800">
+              Open live session
+            </span>
+          </Link>
         );
       })}
 
-      {live?.status === "live" ? <LiveCheckins occurrenceId={live.id} /> : null}
-      {live?.status === "live" ? <BreakoutHost occurrenceId={live.id} /> : null}
-
-      {[...grouped.entries()].map(([band, rows]) => (
-        <section key={band}>
-          <h2 className="font-heading text-lg font-semibold">{band}</h2>
-          <ul className="mt-2 space-y-2">
-            {(rows ?? []).map((row) => {
-              const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-              const level = profile?.kidda_level ?? 0;
-              return (
-                <li key={row.user_id} className="flex min-h-11 items-center justify-between gap-3 rounded-2xl bg-white px-3">
-                  <span className="text-sm font-medium">{profile?.full_name || "Member"}</span>
-                  <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: levelFillVar(level), color: levelInkVar(level) }}>
-                    Level {level}
-                  </span>
-                  <span className="text-xs text-zinc-500">
-                    {new Date(row.checked_in_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                    {row.is_late ? " · Late" : ""}
-                    {row.added_by_tutor ? " · Added" : ""}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+      <div className="grid gap-5 lg:grid-cols-[3fr_2fr]">
+        <section className="flex flex-col gap-4 rounded-3xl border border-zinc-200 bg-white p-6">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-zinc-500">Next session</p>
+          {next ? (
+            <>
+              <div>
+                <p className="font-heading text-3xl font-extrabold text-zinc-900">{nextSession?.title}</p>
+                <p className="text-base text-zinc-600">{when(next.starts_at)}</p>
+              </div>
+              <form
+                action={async (formData) => {
+                  "use server";
+                  await overrideWeek(next.id, Number(formData.get("week")));
+                }}
+                className="flex flex-wrap items-center gap-2 rounded-2xl bg-zinc-50 px-3 py-2.5"
+              >
+                <label className="text-sm font-bold text-zinc-700" htmlFor="next-week">
+                  Week
+                </label>
+                <input
+                  id="next-week"
+                  name="week"
+                  type="number"
+                  min={1}
+                  max={24}
+                  defaultValue={nextWeek ?? 1}
+                  className="h-10 w-16 rounded-lg border border-zinc-200 px-2 text-[16px]"
+                />
+                <span className="flex-1 text-sm font-semibold text-zinc-800">{nextLesson?.title ?? ""}</span>
+                <button type="submit" className="min-h-10 rounded-lg px-3 text-sm font-bold text-violet-700">
+                  Change week
+                </button>
+              </form>
+              <form
+                action={async () => {
+                  "use server";
+                  await startSession(next.id);
+                }}
+              >
+                <button type="submit" className="min-h-14 rounded-2xl bg-violet-600 px-7 text-[17px] font-bold text-white">
+                  Start session
+                </button>
+              </form>
+              <p className="text-[13px] text-zinc-500">Start session opens the live session page and creates the check-in code.</p>
+            </>
+          ) : (
+            <p className="text-base text-zinc-600">No sessions in the next 8 days.</p>
+          )}
         </section>
-      ))}
 
-      {live?.status === "live" ? (
-        <section className={ui.card}>
-          <h2 className="font-heading text-lg font-semibold">Add someone</h2>
-          <form
-            action={async (formData) => {
-              "use server";
-              await addCheckIn(live.id, String(formData.get("email") ?? ""));
-            }}
-            className="mt-3 flex gap-2"
-          >
-            <input name="email" type="email" required placeholder="Email" className="h-11 flex-1 rounded-xl border border-zinc-200 px-3 text-[16px]" />
-            <button type="submit" className={ui.btnPrimary}>Add</button>
-          </form>
-          <h2 className="mt-6 font-heading text-lg font-semibold">Not here yet</h2>
-          <ul className="mt-2 space-y-2">
-            {missing.map((member) => (
-              <li key={member.userId} className="text-sm text-zinc-700">{member.name} · {member.pod}</li>
-            ))}
-          </ul>
+        <section className="flex flex-col gap-1 rounded-3xl border border-zinc-200 bg-white p-6">
+          <p className="pb-2 text-base font-extrabold">This week</p>
+          {later.length === 0 ? <p className="text-sm text-zinc-500">Nothing else scheduled.</p> : null}
+          {later.map((row) => {
+            const session = one(row.community_sessions);
+            return (
+              <Link
+                key={row.id}
+                href={`/admin/community/session/${row.id}`}
+                className="flex min-h-14 items-center gap-3 border-b border-zinc-100 last:border-0"
+              >
+                <span className="flex-1">
+                  <span className="block text-[15px] font-bold text-zinc-900">{session?.title}</span>
+                  <span className="block text-[13px] text-zinc-500">
+                    {when(row.starts_at)} · Week {row.week_number_override ?? row.week_number}
+                  </span>
+                </span>
+                <span className="text-sm font-bold text-violet-700">Open</span>
+              </Link>
+            );
+          })}
         </section>
-      ) : null}
+      </div>
+
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-zinc-200 bg-white px-6 py-4">
+        <div>
+          <p className="text-[15px] font-bold text-zinc-900">Test session</p>
+          <p className="text-[13px] text-zinc-500">Staff only. Members never see it, and it counts for nothing: no XP, streaks or attendance.</p>
+        </div>
+        <form
+          action={async (formData) => {
+            "use server";
+            await startTestSession(Number(formData.get("week")));
+          }}
+          className="flex items-center gap-2"
+        >
+          <label className="text-sm text-zinc-600" htmlFor="test-week">
+            Week
+          </label>
+          <input
+            id="test-week"
+            name="week"
+            type="number"
+            min={1}
+            max={24}
+            required
+            defaultValue={nextWeek ?? 1}
+            className="h-11 w-16 rounded-xl border border-zinc-200 px-2 text-[16px]"
+          />
+          <button type="submit" className="min-h-11 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-bold text-violet-700">
+            Start a test session
+          </button>
+        </form>
+      </section>
     </div>
   );
 }

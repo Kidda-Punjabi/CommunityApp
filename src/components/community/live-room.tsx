@@ -1,22 +1,14 @@
 "use client";
 
-import {
-  castDebateVote,
-  markActivityDone,
-  openPointRace,
-  openRoomGame,
-  skipSpeaker,
-  type BonusGameType,
-} from "@/app/dashboard/community/breakout-actions";
+import { castDebateVote, joinGroupGame, markActivityDone, openBonusGame, openPointRace, skipSpeaker } from "@/app/dashboard/community/breakout-actions";
+import { GROUP_GAME_LABELS } from "@/lib/game-rooms/constants";
+import type { GroupGameType } from "@/lib/game-rooms/types";
 import { CommunityLiveSync } from "@/components/community/room-refresh";
 import type { MemberRoomView } from "@/lib/community/breakout";
 import { bandFillVar, bandInkVar, bandLabel } from "@/lib/community/levels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-// The warm-up debate has its own vote-then-explain controls (DebateFlow).
-const SPOKEN = new Set(["speaking_prompts", "bonus"]);
 
 function activityHref(path: string, activityId: string) {
   const join = path.includes("?") ? "&" : "?";
@@ -61,7 +53,33 @@ export function LiveRoom({
         activityId={active?.id ?? null}
         poll={view.phase === "waiting"}
       />
-      {view.phase === "waiting" ? (
+      {view.phase === "main" ? (
+        <section className="rounded-[24px] bg-[#5B21B6] p-5 text-white">
+          <p className="font-heading text-2xl font-extrabold leading-tight">{"Back in the main room"}</p>
+          <p className="mt-2 text-base text-violet-100">
+            {view.groupGame ? "Everyone's playing one game together." : "Arsh is running the last part with everyone together."}
+          </p>
+          {view.groupGame ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                void (async () => {
+                  setPending(true);
+                  const result = await joinGroupGame(view.occurrenceId);
+                  setPending(false);
+                  if ("href" in result && result.href) router.push(result.href);
+                  else if ("error" in result && result.error) setError(result.error);
+                })()
+              }
+              className="mt-4 flex h-14 w-full items-center justify-center rounded-[18px] bg-white px-4 text-base font-extrabold text-[#5B21B6] disabled:opacity-50"
+            >
+              Join {GROUP_GAME_LABELS[view.groupGame.gameType as GroupGameType] ?? "the game"} · code {view.groupGame.joinCode}
+            </button>
+          ) : null}
+          <p className="mt-3 text-sm text-violet-100">Stay on the call. The feedback form opens when Arsh ends the session.</p>
+        </section>
+      ) : view.phase === "waiting" ? (
         <section className="rounded-[24px] bg-[#5B21B6] p-4 text-white">
           <p className="font-heading text-2xl font-extrabold leading-tight">{"You're checked in."}</p>
           <p className="mt-2 text-base text-violet-100">Arsh is setting up rooms.</p>
@@ -102,14 +120,14 @@ export function LiveRoom({
               onVote={(choice) => run(() => castDebateVote(active.id, choice))}
               onDone={() => run(() => markActivityDone(active.id))}
               onSkip={(speakerId) => run(() => skipSpeaker(active.id, speakerId))}
-              userId={userId}
               onRace={() => run(() => openPointRace(active.id))}
-              onBonusGame={(game) => run(() => openRoomGame(active.id, game))}
+              meId={userId}
+              onBonus={(gameType) => run(() => openBonusGame(active.id, gameType))}
             />
           ) : (
             <section className="rounded-[24px] bg-white p-4">
-              <p className="font-heading text-xl font-extrabold text-[#1F1640]">{"That's the set."}</p>
-              <p className="mt-1 text-sm text-[#6B5F8A]">Stay in the room until Arsh brings everyone back.</p>
+              <p className="font-heading text-xl font-extrabold text-[#1F1640]">{"Your room is done."}</p>
+              <p className="mt-1 text-sm text-[#6B5F8A]">Arsh can see you&apos;ve finished. Stay in the call and she&apos;ll bring everyone back.</p>
             </section>
           )}
         </>
@@ -130,16 +148,15 @@ function ActivityCard({
   people,
   signed,
   iSigned,
-  needsVote,
   myVote,
   votes,
   pending,
   onVote,
   onDone,
   onSkip,
-  userId,
   onRace,
-  onBonusGame,
+  meId,
+  onBonus,
 }: {
   activity: MemberRoomView["activities"][number];
   total: number;
@@ -153,11 +170,17 @@ function ActivityCard({
   onVote: (choice: "a" | "b") => void;
   onDone: () => void;
   onSkip: (speakerId: string) => void;
-  userId: string;
   onRace: () => void;
-  onBonusGame: (game: BonusGameType) => void;
+  meId: string;
+  onBonus: (gameType?: GroupGameType) => void;
 }) {
   const payload = activity.payload;
+  // The app picks the bonus-game host: the first person in the room by name.
+  const host = [...people].sort((a, b) => a.name.localeCompare(b.name))[0] ?? null;
+  const iAmHost = host?.userId === meId;
+  const bonusGame = typeof payload.joinCode === "string" && payload.joinCode ? (payload.gameType as GroupGameType | null) : null;
+  const [pickAnyway, setPickAnyway] = useState(false);
+  const isBonus = activity.kind === "bonus";
   const instruction =
     activity.kind === "warmup_debate"
       ? "Vote first. Then explain in Punjabi why you voted the way you did."
@@ -165,6 +188,7 @@ function ActivityCard({
         ? payload.instruction
         : "";
   const waiting = people.filter((person) => !signed.has(person.userId)).map((person) => person.name);
+  const doneCount = people.length - waiting.length;
   const namesFor = (choice: "a" | "b") =>
     votes
       .filter((vote) => vote.choice === choice)
@@ -173,6 +197,31 @@ function ActivityCard({
   const [promptIndex, setPromptIndex] = useState(0);
   const prompt = prompts[promptIndex];
   const heading = activity.kind === "warmup_debate" && typeof payload.prompt === "string" ? payload.prompt : activity.title;
+
+  // The one action for this activity. Finishing it in the app signs the member off on its own.
+  let action: { label: string; href?: string; onClick?: () => void } | null = null;
+  if (activity.kind === "flashcards" && payload.lessonId && payload.deckId) {
+    const typeQuery = typeof payload.cardType === "string" ? `?type=${encodeURIComponent(payload.cardType)}` : "";
+    action = {
+      label: "Start flashcards",
+      href: activityHref(`/dashboard/practice/flashcards/${payload.lessonId}/${payload.deckId}/study${typeQuery}`, activity.id),
+    };
+  } else if (activity.kind === "quiz" && payload.quizId) {
+    action = { label: "Start quiz", href: activityHref(`/dashboard/practice/quiz/${payload.quizId}`, activity.id) };
+  } else if (activity.kind === "point_race") {
+    action = { label: payload.joinCode ? `Join game ${payload.joinCode}` : "Start Point Race", onClick: onRace };
+  } else if (activity.kind === "speak_it") {
+    const lessonQuery = typeof payload.lessonId === "string" ? `?lessonId=${encodeURIComponent(payload.lessonId)}` : "";
+    action = { label: "Start Speak It", href: activityHref(`/dashboard/games/speaking-practice${lessonQuery}`, activity.id) };
+  } else if (activity.kind === "speaking_prompts") {
+    // Spoken out loud, so there is nothing for the app to measure: the member says when the room is done.
+    action = { label: "We've done this", onClick: onDone };
+  } else if (isBonus && bonusGame) {
+    action = {
+      label: `${iAmHost ? "Open" : "Join"} ${GROUP_GAME_LABELS[bonusGame] ?? "game"} · code ${String(payload.joinCode)}`,
+      onClick: () => onBonus(),
+    };
+  }
 
   return (
     <section className="rounded-[24px] bg-white p-4 text-[#1F1640]">
@@ -183,7 +232,8 @@ function ActivityCard({
       {typeof payload.romanised === "string" && payload.romanised ? (
         <p className="mt-1 text-sm text-[#6B5F8A]">{payload.romanised}</p>
       ) : null}
-      <p className="mt-2 text-base">{instruction}</p>
+      {!iSigned || isBonus ? <p className="mt-2 text-base">{instruction}</p> : null}
+
       {activity.kind === "warmup_debate" ? (
         <DebateFlow
           optionA={String(payload.optionA ?? "A")}
@@ -192,7 +242,7 @@ function ActivityCard({
           votes={votes}
           myVote={myVote}
           signed={signed}
-          userId={userId}
+          userId={meId}
           pending={pending}
           namesFor={namesFor}
           onVote={onVote}
@@ -200,47 +250,15 @@ function ActivityCard({
           onSkip={onSkip}
         />
       ) : null}
-      {activity.kind === "flashcards" && payload.lessonId && payload.deckId ? (
-        <>
-          <a
-            className={actionClass}
-            href={activityHref(
-              `/dashboard/practice/flashcards/${payload.lessonId}/${payload.deckId}/study${
-                typeof payload.cardType === "string" ? `?type=${encodeURIComponent(payload.cardType)}` : ""
-              }`,
-              activity.id
-            )}
-          >
-            Open flashcards
-          </a>
-          <a className={actionClass} href={activityHref(`/dashboard/practice/flashcards/${payload.lessonId}/${payload.deckId}/match`, activity.id)}>
-            Open match
-          </a>
-        </>
-      ) : null}
-      {activity.kind === "quiz" && payload.quizId ? (
-        <a className={actionClass} href={activityHref(`/dashboard/practice/quiz/${payload.quizId}`, activity.id)}>
-          Open quiz
-        </a>
-      ) : null}
-      {activity.kind === "point_race" ? (
-        <button type="button" className={actionClass} disabled={pending} onClick={onRace}>
-          {payload.joinCode ? `Join game ${payload.joinCode}` : "Start Point Race"}
-        </button>
-      ) : null}
-      {activity.kind === "speak_it" ? (
-        <a className={actionClass} href={activityHref("/dashboard/games/speaking-practice", activity.id)}>
-          Open Speak It
-        </a>
-      ) : null}
-      {activity.kind === "speaking_prompts" && prompt ? (
+
+      {activity.kind === "speaking_prompts" && prompt && !iSigned ? (
         <div className="mt-4 rounded-2xl bg-[#F7F5FC] p-3">
           <p className="text-lg font-bold">{prompt.front}</p>
           <p className="mt-2 text-base text-[#5B21B6]">{prompt.back}</p>
           {prompts.length > 1 ? (
             <button
               type="button"
-              className="mt-3 text-sm font-bold text-[#5B21B6]"
+              className="mt-3 min-h-11 text-sm font-bold text-[#5B21B6]"
               onClick={() => setPromptIndex((index) => (index + 1) % prompts.length)}
             >
               Next prompt
@@ -248,87 +266,68 @@ function ActivityCard({
           ) : null}
         </div>
       ) : null}
-      {activity.kind === "bonus" ? (
-        <BonusGames
-          joinCode={typeof payload.joinCode === "string" ? payload.joinCode : null}
-          gameType={typeof payload.gameType === "string" ? payload.gameType : null}
-          pending={pending}
-          onPick={onBonusGame}
-        />
+
+      {isBonus && !bonusGame ? (
+        iAmHost || pickAnyway ? (
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-bold text-[#6B5F8A]">
+              {iAmHost ? "You're the host. Pick the game for your room:" : "Pick the game for your room:"}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {BONUS_CHOICES.map((game) => (
+                <button
+                  key={game}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => onBonus(game)}
+                  className="min-h-14 rounded-2xl bg-[#F7F5FC] px-3 text-base font-bold text-[#1F1640] disabled:opacity-40"
+                >
+                  {GROUP_GAME_LABELS[game]}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-[#6B5F8A]">The game uses this week&apos;s topic. Everyone else gets a code to join.</p>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl bg-[#F7F5FC] p-4">
+            <p className="text-base font-bold">Waiting for {host?.name ?? "the host"} to pick the game.</p>
+            <button type="button" onClick={() => setPickAnyway(true)} className="mt-2 min-h-11 text-sm font-bold text-[#5B21B6]">
+              Pick the game instead
+            </button>
+          </div>
+        )
       ) : null}
-      {activity.kind !== "warmup_debate" ? (
-      <>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {people.map((person) => (
-          <span
-            key={person.userId}
-            className={`inline-flex h-11 min-w-11 items-center justify-center rounded-full px-2 text-sm font-bold ${signed.has(person.userId) ? "bg-[#5B21B6] text-white" : "bg-[#F7F5FC]"}`}
-          >
-            {person.name.slice(0, 1)}
-          </span>
-        ))}
-      </div>
-      <p className="mt-2 text-sm font-semibold text-[#6B5F8A]">
-        {waiting.length === 0 ? "Everyone's done" : `Waiting for ${waiting.join(", ")}`}
-      </p>
-      </>
-      ) : null}
-      {SPOKEN.has(activity.kind) ? (
-        <button
-          type="button"
-          disabled={pending || iSigned || needsVote}
-          onClick={onDone}
-          className="mt-3 inline-flex h-14 w-full items-center justify-center rounded-[18px] bg-[#5B21B6] text-base font-bold text-white disabled:opacity-40"
-        >
-          {iSigned ? "You're done" : "We've done this"}
-        </button>
-      ) : null}
+
+      {activity.kind === "warmup_debate" ? null : iSigned && !isBonus ? (
+        <div className="mt-4 rounded-2xl bg-[#EAF6EE] p-4 text-[#14532D]">
+          <p className="font-heading text-xl font-extrabold">{"You're done."}</p>
+          <p className="mt-1 text-base">
+            {waiting.length === 0 ? "Everyone's done. Moving on…" : `Waiting for ${waiting.join(", ")}.`}
+          </p>
+        </div>
+      ) : (
+        <>
+          {action ? (
+            action.href ? (
+              <a href={action.href} className={primaryClass}>
+                {action.label}
+              </a>
+            ) : (
+              <button type="button" disabled={pending} onClick={action.onClick} className={primaryClass}>
+                {action.label}
+              </button>
+            )
+          ) : null}
+          {!isBonus ? (
+            <p className="mt-3 text-sm font-semibold text-[#6B5F8A]">
+              {doneCount} of {people.length} done
+            </p>
+          ) : (
+            <p className="mt-3 text-sm font-semibold text-[#6B5F8A]">Keep going until Arsh brings everyone back.</p>
+          )}
+        </>
+      )}
     </section>
-  );
-}
-
-const BONUS_GAME_LABELS: Record<BonusGameType, string> = {
-  buzz_in: "Buzz-in",
-  point_race: "Point Race",
-  sentence_builder_group: "Sentence Builder",
-};
-
-function BonusGames({
-  joinCode,
-  gameType,
-  pending,
-  onPick,
-}: {
-  joinCode: string | null;
-  gameType: string | null;
-  pending: boolean;
-  onPick: (game: BonusGameType) => void;
-}) {
-  const current = gameType && gameType in BONUS_GAME_LABELS ? (gameType as BonusGameType) : null;
-  return (
-    <div className="mt-4 space-y-2">
-      {current && joinCode ? (
-        <button type="button" className={`${actionClass} mt-0 w-full`} disabled={pending} onClick={() => onPick(current)}>
-          Join {BONUS_GAME_LABELS[current]} · {joinCode}
-        </button>
-      ) : null}
-      <p className="text-sm font-semibold text-[#6B5F8A]">
-        {current ? "Or start a new game when that one ends:" : "Pick a game. The first person to tap hosts it."}
-      </p>
-      <div className="grid grid-cols-3 gap-2">
-        {(Object.keys(BONUS_GAME_LABELS) as BonusGameType[]).map((game) => (
-          <button
-            key={game}
-            type="button"
-            disabled={pending}
-            onClick={() => onPick(game)}
-            className="min-h-12 rounded-2xl bg-[#F7F5FC] px-2 text-sm font-bold text-[#3B1A8C] disabled:opacity-50"
-          >
-            {BONUS_GAME_LABELS[game]}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -366,7 +365,6 @@ function DebateFlow({
   const labelOf = (choice: "a" | "b" | null) => (choice === "a" ? optionA : choice === "b" ? optionB : "");
 
   if (!allVoted) {
-    // Step 1: everyone votes. Results stay hidden until the whole room has voted.
     return (
       <div className="mt-4 space-y-3">
         <div className="grid grid-cols-2 gap-2">
@@ -384,7 +382,6 @@ function DebateFlow({
     );
   }
 
-  // Step 2: round robin. One person explains at a time, in room order.
   const speaker = people.find((person) => !signed.has(person.userId)) ?? null;
   const isMe = speaker?.userId === userId;
 
@@ -396,9 +393,7 @@ function DebateFlow({
       </div>
       {speaker ? (
         <div className={`rounded-2xl p-4 ${isMe ? "bg-[#5B21B6] text-white" : "bg-[#F1ECFF] text-[#3B1A8C]"}`}>
-          <p className="font-heading text-xl font-extrabold leading-tight">
-            {isMe ? "Your turn" : `It's ${speaker.name}'s turn`}
-          </p>
+          <p className="font-heading text-xl font-extrabold leading-tight">{isMe ? "Your turn" : `It's ${speaker.name}'s turn`}</p>
           <p className={`mt-1 text-base ${isMe ? "text-violet-100" : ""}`}>
             {isMe
               ? `Explain in Punjabi why you chose ${labelOf(choiceOf(userId))}.`
@@ -481,5 +476,7 @@ function VoteButton({
   );
 }
 
-const actionClass =
-  "mt-4 inline-flex h-12 items-center justify-center rounded-2xl bg-[#FDE68A] px-4 text-sm font-bold text-[#3B1A8C]";
+const BONUS_CHOICES: GroupGameType[] = ["point_race", "buzz_in", "jeopardy", "sentence_builder_group"];
+
+const primaryClass =
+  "mt-4 flex h-14 w-full items-center justify-center rounded-[18px] bg-[#5B21B6] px-4 text-base font-bold text-white disabled:opacity-40";

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireCommunityStaff } from "@/lib/community/member-guard";
 import { syncCommunityCalendarGuest } from "@/lib/community/calendar-invite";
 import { setMemberLevel as writeMemberLevel } from "@/lib/community/level-move";
@@ -11,6 +12,7 @@ import {
   endCommunitySession,
   setOccurrenceWeek,
   startCommunitySession,
+  startTestCommunitySession,
 } from "@/lib/community/mutations";
 
 async function staff() {
@@ -19,19 +21,42 @@ async function staff() {
   return result;
 }
 
+function revalidateHost() {
+  revalidatePath("/admin/community/today");
+  revalidatePath("/admin/community/session/[id]", "page");
+}
+
+/** Starts the session and opens its live session page. */
 export async function startSession(occurrenceId: string) {
   const { admin, userId } = await staff();
   const result = await startCommunitySession(admin, userId, occurrenceId);
-  revalidatePath("/admin/community/today");
+  revalidateHost();
+  if ("ok" in result && result.ok) redirect(`/admin/community/session/${occurrenceId}`);
+  return result;
+}
+
+/** Starts a staff-only test session and opens its live session page. */
+export async function startTestSession(week: number) {
+  const { admin, userId } = await staff();
+  const result = await startTestCommunitySession(admin, userId, week);
+  revalidateHost();
+  if ("ok" in result && result.ok) redirect(`/admin/community/session/${result.occurrenceId}`);
   return result;
 }
 
 export async function endSession(occurrenceId: string) {
-  const { admin } = await staff();
+  const { admin, userId } = await staff();
   const result = await endCommunitySession(admin, occurrenceId);
+  // Everyone who checked in gets the feedback form. A failure here must never stop the session ending.
+  try {
+    const { notifySessionFeedback } = await import("@/lib/community/session-feedback");
+    await notifySessionFeedback(admin, occurrenceId, userId);
+  } catch (error) {
+    console.error("[community] feedback notifications failed", error);
+  }
   const { closeBreakoutRooms } = await import("@/lib/community/breakout");
   await closeBreakoutRooms(admin, occurrenceId);
-  revalidatePath("/admin/community/today");
+  revalidateHost();
   revalidatePath("/dashboard/community");
   return result;
 }
@@ -39,7 +64,7 @@ export async function endSession(occurrenceId: string) {
 export async function overrideWeek(occurrenceId: string, week: number) {
   const { admin } = await staff();
   const result = await setOccurrenceWeek(admin, occurrenceId, week);
-  revalidatePath("/admin/community/today");
+  revalidateHost();
   return result;
 }
 
@@ -57,7 +82,7 @@ export async function addCheckIn(occurrenceId: string, email: string) {
       console.error("[community] late room suggestion failed", error);
     }
   }
-  revalidatePath("/admin/community/today");
+  revalidateHost();
   revalidatePath("/dashboard/community");
   return result;
 }

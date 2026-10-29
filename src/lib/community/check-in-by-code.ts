@@ -12,6 +12,7 @@ import { isCheckinCode } from "@/lib/community/checkin-code";
 import { placeLateCheckIn } from "@/lib/community/breakout";
 import { checkInMember } from "@/lib/community/mutations";
 import { currentStreak, type StreakOccurrence } from "@/lib/community/streak";
+import { visibleLiveOccurrences } from "@/lib/community/test-sessions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -167,24 +168,14 @@ export async function completeOccurrenceCheckIn(
 export async function checkInByCodeForMember(admin: SupabaseClient, userId: string, rawCode: string): Promise<CheckInResponse> {
   if (await attemptsAreBlocked(admin, userId)) return { error: CHECKIN_TOO_MANY };
 
-  const { count, error: liveError } = await admin
-    .from("community_session_occurrences")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "live");
-  if (liveError) throw liveError;
-  if (!count) return { error: CHECKIN_NOT_LIVE };
+  const live = await visibleLiveOccurrences(admin, userId);
+  if (live.length === 0) return { error: CHECKIN_NOT_LIVE };
 
   const code = rawCode.trim().toUpperCase();
   if (!isCheckinCode(code)) return { error: CHECKIN_BAD_CODE };
 
-  const { data: match, error } = await admin
-    .from("community_session_occurrences")
-    .select("id")
-    .eq("status", "live")
-    .eq("checkin_code", code)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
+  // Only codes for sessions this user can see. A test-session code typed by a member is just a wrong code.
+  const match = live.find((row) => (row.checkinCode ?? "").toUpperCase() === code);
   if (!match) return { error: CHECKIN_BAD_CODE };
 
   const result = await completeOccurrenceCheckIn(admin, userId, match.id as string, code);
@@ -202,9 +193,7 @@ export async function liveCheckInFlags(
   userId: string,
   nextOccurrenceId: string | null
 ): Promise<{ anyLive: boolean; checkedIntoNext: boolean; liveIds: string[] }> {
-  const { data: live, error } = await admin.from("community_session_occurrences").select("id").eq("status", "live");
-  if (error) throw error;
-  const ids = (live ?? []).map((row) => row.id as string);
+  const ids = (await visibleLiveOccurrences(admin, userId)).map((row) => row.id);
   let checkedIntoNext = false;
   if (nextOccurrenceId && ids.includes(nextOccurrenceId)) {
     const { data, error: mineError } = await admin
@@ -220,9 +209,7 @@ export async function liveCheckInFlags(
 }
 
 export async function memberNeedsLiveCheckIn(admin: SupabaseClient, userId: string): Promise<boolean> {
-  const { data: live, error } = await admin.from("community_session_occurrences").select("id").eq("status", "live");
-  if (error) throw error;
-  const ids = (live ?? []).map((row) => row.id as string);
+  const ids = (await visibleLiveOccurrences(admin, userId)).map((row) => row.id);
   if (ids.length === 0) return false;
   const { data: mine, error: mineError } = await admin
     .from("community_checkins")

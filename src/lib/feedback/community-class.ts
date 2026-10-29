@@ -302,3 +302,28 @@ export async function loadCommunityClassFeedbackContext(
     },
   };
 }
+
+
+/**
+ * The feedback form's session id for a live Community session, found through its Google
+ * Calendar event. Each event has more than one calendar copy; this returns the same canonical
+ * one the feedback list uses, so one answer counts for all copies.
+ */
+export async function communityFeedbackSessionIdForEvent(
+  admin: SupabaseClient,
+  googleEventId: string | null | undefined
+): Promise<{ id: string; siblingIds: string[] } | null> {
+  const eventId = googleEventId?.trim();
+  if (!eventId) return null;
+  const { data, error } = await admin
+    .from("tutor_scheduled_sessions")
+    .select("id, title, starts_at, ends_at, tutor_id, student_id, match_method, google_event_id")
+    .eq("google_event_id", eventId)
+    .ilike("title", `%${COMMUNITY_CLASS_TITLE_NEEDLE}%`)
+    .eq("status", "scheduled");
+  if (error) throw error;
+  const rows = (data ?? []) as RawCommunitySession[];
+  if (rows.length === 0) return null;
+  const tutors = await loadTutorNames(admin, rows.map((row) => row.tutor_id));
+  return { id: pickCanonical(rows, tutors).id, siblingIds: rows.map((row) => row.id) };
+}
