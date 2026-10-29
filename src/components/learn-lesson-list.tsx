@@ -32,6 +32,8 @@ type LearnLessonListProps = {
     total: number;
   };
   backHref?: string;
+  /** Replaces the default title/subtitle/progress block when set. */
+  headerSection?: ReactNode;
   staffSection?: ReactNode;
   footerSection?: ReactNode;
   contentUnlockedMap?: Map<string, boolean>;
@@ -72,6 +74,7 @@ export async function LearnLessonList({
   completionMap,
   courseProgress,
   backHref = "/dashboard/learn",
+  headerSection,
   staffSection,
   footerSection,
   contentUnlockedMap,
@@ -211,19 +214,21 @@ export async function LearnLessonList({
     <div className={ui.page}>
       <BackLink fallbackHref={backHref}>← Back</BackLink>
 
-      <div className={compactHeader ? "mb-5 mt-2" : "mb-8 mt-4"}>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
-        {subtitle.trim() ? (
-          <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
-        ) : null}
-        {showCourseProgress && accessibleLessons.length > 0 && (
-          <CourseProgressBar
-            className="mt-4"
-            completed={progressSummary.completed}
-            total={progressSummary.total}
-          />
-        )}
-      </div>
+      {headerSection ?? (
+        <div className={compactHeader ? "mb-5 mt-2" : "mb-8 mt-4"}>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
+          {subtitle.trim() ? (
+            <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
+          ) : null}
+          {showCourseProgress && accessibleLessons.length > 0 && (
+            <CourseProgressBar
+              className="mt-4"
+              completed={progressSummary.completed}
+              total={progressSummary.total}
+            />
+          )}
+        </div>
+      )}
 
       {staffSection}
 
