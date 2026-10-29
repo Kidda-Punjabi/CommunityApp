@@ -35,7 +35,24 @@ export function cardTypeForBand(band: CommunityBand, available: FlashcardCardTyp
   return CARD_TYPE_PREFERENCE[band].find((type) => have.has(type)) ?? null;
 }
 
-export function flashcardInstruction(type: FlashcardCardType): string {
+/** Most flashcards a Community activity shows, whatever the deck size (decision 29 Oct 2026). */
+export const COMMUNITY_FLASHCARD_CAP = 20;
+
+/**
+ * Picks up to 20 cards for one Community activity. Shuffled with the activity id as the seed,
+ * so everyone in the room gets the same cards, and the next session gets a fresh set.
+ */
+export function communityFlashcardPick<T>(cards: T[], activityId: string): T[] {
+  if (cards.length <= COMMUNITY_FLASHCARD_CAP) return cards;
+  return shuffle(cards, mix(`${activityId}:flashcards`)).slice(0, COMMUNITY_FLASHCARD_CAP);
+}
+
+/** Room title for a flashcards activity. No matching type means the whole deck, so "Mixed". */
+export function flashcardActivityTitle(type: FlashcardCardType | null): string {
+  return `Flashcards · ${type ? FLASHCARD_CARD_TYPE_LABELS[type] : "Mixed"}`;
+}
+
+export function flashcardInstruction(type: FlashcardCardType | null): string {
   if (type === "question") return "Take turns: one person answers each card out loud.";
   if (type === "speak") return "Each person talks for 60 seconds on a card.";
   if (type === "sentence") return "Say each sentence out loud before you flip it.";
@@ -129,12 +146,12 @@ export function payloadFor(
     };
   }
   if (kind === "flashcards") {
-    const cardType = cardTypeForBand(band, topic.cardTypes) ?? "word";
+    const cardType = cardTypeForBand(band, topic.cardTypes);
     return {
       lessonId: topic.lessonId,
       deckId: topic.deckId,
       deckName: topic.deckName,
-      cardType,
+      cardType: cardType ?? undefined,
       instruction: flashcardInstruction(cardType),
     };
   }
@@ -200,7 +217,7 @@ export function planRoomActivities(input: {
       kind === "quiz" && input.topic.quizTitle
         ? input.topic.quizTitle
         : kind === "flashcards"
-          ? `Flashcards · ${FLASHCARD_CARD_TYPE_LABELS[cardTypeForBand(input.band, input.topic.cardTypes) ?? "word"]}`
+          ? flashcardActivityTitle(cardTypeForBand(input.band, input.topic.cardTypes))
           : ACTIVITY_TITLES[kind],
     payload:
       kind === "point_race" && genericRace && available.length === 0

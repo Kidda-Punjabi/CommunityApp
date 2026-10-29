@@ -139,6 +139,34 @@ export function CheckInPanel({ occurrenceId, onSuccess }: { occurrenceId?: strin
   );
 }
 
+/**
+ * The part of the screen the keyboard leaves visible. On iPhone the keyboard slides over the
+ * page without shrinking it, so a sheet pinned to the bottom ends up hidden underneath.
+ * Sizing the backdrop to the visual viewport keeps the sheet sitting just above the keyboard.
+ */
+function useVisibleArea(active: boolean): { top: number; height: number; keyboardOpen: boolean } | null {
+  const [area, setArea] = useState<{ top: number; height: number; keyboardOpen: boolean } | null>(null);
+  useEffect(() => {
+    const viewport = typeof window === "undefined" ? null : window.visualViewport;
+    if (!active || !viewport) return;
+    const update = () =>
+      setArea({
+        top: viewport.offsetTop,
+        height: viewport.height,
+        keyboardOpen: window.innerHeight - viewport.height > 120,
+      });
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      setArea(null);
+    };
+  }, [active]);
+  return area;
+}
+
 export function CheckInSheet({
   open,
   onClose,
@@ -149,6 +177,7 @@ export function CheckInSheet({
   onSuccess?: () => void;
 }) {
   const first = useRef<HTMLDivElement | null>(null);
+  const visible = useVisibleArea(open);
 
   useEffect(() => {
     if (!open) return;
@@ -164,12 +193,20 @@ export function CheckInSheet({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 flex items-end bg-[#1F1640]/40" style={{ zIndex: 80 }} role="dialog" aria-modal="true" aria-label="Check in">
+    <div
+      className="fixed inset-x-0 top-0 flex h-[100dvh] items-end bg-[#1F1640]/40"
+      style={{ zIndex: 80, ...(visible ? { top: visible.top, height: visible.height } : null) }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Check in"
+    >
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
       <div
         ref={first}
         data-testid="check-in-sheet"
-        className="relative max-h-[100dvh] w-full overflow-hidden rounded-t-[28px] bg-white px-5 pt-4 pb-[calc(var(--kidda-nav-clearance)+0.75rem)]"
+        className={`relative max-h-full w-full overflow-y-auto rounded-t-[28px] bg-white px-5 pt-4 ${
+          visible?.keyboardOpen ? "pb-4" : "pb-[calc(var(--kidda-nav-clearance)+0.75rem)]"
+        }`}
       >
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs font-bold uppercase tracking-wide text-[#6B5F8A]">Check in</p>

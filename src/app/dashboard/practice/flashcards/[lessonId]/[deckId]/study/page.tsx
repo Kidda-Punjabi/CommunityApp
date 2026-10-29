@@ -3,6 +3,7 @@ import {
   FlashcardAccessDenied,
   FlashcardDeckEmpty,
 } from "@/components/flashcards/deck-states";
+import { communityFlashcardPick } from "@/lib/community/room-activities";
 import { loadFlashcardDeck } from "@/lib/flashcards/load-deck";
 import { parseFlashcardCardType } from "@/lib/flashcards/types";
 import { createClient } from "@/lib/supabase/server";
@@ -10,12 +11,12 @@ import { notFound } from "next/navigation";
 
 type StudyPageProps = {
   params: Promise<{ lessonId: string; deckId: string }>;
-  searchParams: Promise<{ catchupReturn?: string; type?: string }>;
+  searchParams: Promise<{ catchupReturn?: string; type?: string; roomActivity?: string }>;
 };
 
 export default async function FlashcardsStudyPage({ params, searchParams }: StudyPageProps) {
   const { lessonId, deckId } = await params;
-  const { catchupReturn, type } = await searchParams;
+  const { catchupReturn, type, roomActivity } = await searchParams;
   const cardType = parseFlashcardCardType(type);
   const supabase = await createClient();
   const {
@@ -37,7 +38,10 @@ export default async function FlashcardsStudyPage({ params, searchParams }: Stud
   const typedCards = cardType
     ? result.deck.cards.filter((card) => (card.card_type ?? "word") === cardType)
     : [];
-  const deck = typedCards.length > 0 ? { ...result.deck, cards: typedCards } : result.deck;
+  const pool = typedCards.length > 0 ? typedCards : result.deck.cards;
+  // Opened from a Community room: at most 20 cards, the same 20 for everyone in that room.
+  const cards = roomActivity ? communityFlashcardPick(pool, roomActivity) : pool;
+  const deck = { ...result.deck, cards };
 
   return (
     <div className="flex flex-1 flex-col bg-[#F4F1FB] px-4 py-6">
