@@ -1,3 +1,6 @@
+/** What the prompt asks for. Set by Buzz-in; older payloads and other games leave it out. */
+export type McqQuestionKind = "word" | "sentence" | "number";
+
 /** Shared MCQ question shape used by Buzz-in, Jeopardy, and Point Race. */
 export type McqQuestionPayload = {
   flashcard_id: string;
@@ -8,6 +11,7 @@ export type McqQuestionPayload = {
   options: string[];
   /** Parallel to options — romanised Gurmukhi when the option is Punjabi. */
   options_romanised?: (string | null)[];
+  kind?: McqQuestionKind;
 };
 
 export type BuzzRacePhase = "open" | "buzzed" | "result" | "waiting" | "finished";

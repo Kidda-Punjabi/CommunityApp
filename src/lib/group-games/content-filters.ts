@@ -85,6 +85,8 @@ export function buildRoomContentSettings(input: {
   questionCount: number;
   gameType: GroupGameType;
   topicTags: string[];
+  /** Short name of the pick, shown in the game header (Buzz-in). */
+  topicLabel?: string;
   winScore?: number;
   soundMatchGroups?: string[];
 }): GameRoomSettings {
@@ -97,6 +99,10 @@ export function buildRoomContentSettings(input: {
     input.topicTags.length > 0
   ) {
     settings.topic_tags = input.topicTags;
+  }
+
+  if (input.topicLabel) {
+    settings.topic_label = input.topicLabel.slice(0, 60);
   }
 
   if (

@@ -28,6 +28,7 @@ import {
 } from "@/lib/game-rooms/race";
 import { loadChadoPauriFlashcards } from "@/lib/games/chado-pauri/load-flashcards";
 import { loadGameRoom } from "@/lib/game-rooms/load-room";
+import { parseBuzzInSelection, resolveBuzzInSelection } from "@/lib/buzz-in/topic-catalogue";
 import { createClient } from "@/lib/supabase/server";
 
 export type GroupGameActionResult = { error?: string; roomId?: string };
@@ -43,7 +44,8 @@ export async function createGameRoom(
   const gameType = String(formData.get("game_type") ?? "").trim();
   const questionCountRaw = String(formData.get("question_count") ?? "10").trim();
   const questionCount = Number.parseInt(questionCountRaw, 10);
-  const topicTags = parseTopicTagsFromForm(formData.get("topic_tags"));
+  let topicTags = parseTopicTagsFromForm(formData.get("topic_tags"));
+  let topicLabel: string | undefined;
   const winScore = parseWinScore(formData.get("win_score"), DEFAULT_GROUP_RACE_WIN_SCORE);
   const soundMatchGroups = parseTopicTagsFromForm(formData.get("sound_match_groups"));
 
@@ -55,10 +57,22 @@ export async function createGameRoom(
     return { error: "Question count must be between 1 and 50." };
   }
 
+  // Buzz-in picks a course week, themes or a course mix; the server resolves the tags.
+  const rawSelection = formData.get("buzz_in_selection");
+  if (gameType === "buzz_in" && rawSelection !== null) {
+    const selection = parseBuzzInSelection(rawSelection);
+    if (!selection) return { error: "Pick a week, a theme or Mixed." };
+    const resolved = resolveBuzzInSelection(selection);
+    if ("error" in resolved) return { error: resolved.error };
+    topicTags = resolved.tags;
+    topicLabel = resolved.label;
+  }
+
   const settings = buildRoomContentSettings({
     questionCount,
     gameType,
     topicTags,
+    topicLabel,
     winScore: isRaceGameType(gameType) && gameType !== "point_race" ? winScore : undefined,
     soundMatchGroups: gameType === "sound_match_group" ? soundMatchGroups : undefined,
   });
@@ -249,6 +263,11 @@ export async function resetGameRoomToLobby(input: {
         : DEFAULT_QUESTION_COUNT,
     gameType: nextType,
     topicTags: Array.isArray(topicTags) ? topicTags : [],
+    // Keep the header label when replaying the same pick.
+    topicLabel:
+      nextType === room.game_type && !input.topicTags && typeof room.settings?.topic_label === "string"
+        ? room.settings.topic_label
+        : undefined,
     winScore:
       isRaceGameType(nextType) && nextType !== "point_race"
         ? parseWinScore(room.settings?.win_score, DEFAULT_GROUP_RACE_WIN_SCORE)

@@ -7,6 +7,8 @@ import {
   type GroupGameActionResult,
 } from "@/app/dashboard/group-games/actions";
 import { GroupGameTopicPicker } from "@/components/group-games/group-game-content-filters";
+import { BuzzInTopicPicker } from "@/components/group-games/buzz-in-topic-picker";
+import type { BuzzInTopicCatalogue } from "@/lib/buzz-in/topic-catalogue";
 import { BackLink } from "@/components/navigation/back-link";
 import {
   DEFAULT_QUESTION_COUNT,
@@ -38,6 +40,8 @@ type GroupGamesHubProps = {
   lockedGameType?: GroupGameType | null;
   flashcardTopics?: TopicOption[];
   grammarTopics?: TopicOption[];
+  /** Course / week / theme picker for Buzz-in. Falls back to plain topics when missing. */
+  buzzInCatalogue?: BuzzInTopicCatalogue | null;
 };
 
 function isGroupGameType(value: string | undefined | null): value is GroupGameType {
@@ -49,6 +53,7 @@ export function GroupGamesHub({
   lockedGameType = null,
   flashcardTopics = [],
   grammarTopics = [],
+  buzzInCatalogue = null,
 }: GroupGamesHubProps) {
   const gameLocked = isGroupGameType(lockedGameType);
   const [step, setStep] = useState<HubStep>(initialJoinCode ? "join" : "entry");
@@ -76,7 +81,9 @@ export function GroupGamesHub({
     return [];
   }, [activeGameType, flashcardTopics, grammarTopics]);
 
-  const showTopics = GROUP_GAMES_WITH_TOPIC_FILTER.has(activeGameType);
+  const useBuzzInPicker = activeGameType === "buzz_in" && buzzInCatalogue !== null;
+  const [buzzInReady, setBuzzInReady] = useState(false);
+  const showTopics = GROUP_GAMES_WITH_TOPIC_FILTER.has(activeGameType) && !useBuzzInPicker;
   const showQuestionCount =
     activeGameType === "buzz_in" || activeGameType === "sentence_builder_group";
   const showRaceWinScore =
@@ -299,6 +306,10 @@ export function GroupGamesHub({
           </>
         ) : null}
 
+        {useBuzzInPicker && buzzInCatalogue ? (
+          <BuzzInTopicPicker catalogue={buzzInCatalogue} onReadyChange={setBuzzInReady} />
+        ) : null}
+
         {activeGameType === "chado_pauri_group" ? (
           <p className="text-sm text-zinc-500">
             Chaṛo Pauṛī steps up difficulty with each rung. Topics narrow which flashcards fill the
@@ -315,7 +326,11 @@ export function GroupGamesHub({
 
         {createState.error ? <p className="text-sm text-rose-600">{createState.error}</p> : null}
 
-        <button type="submit" disabled={createPending} className={ui.btnPrimaryBlock}>
+        <button
+          type="submit"
+          disabled={createPending || (useBuzzInPicker && !buzzInReady)}
+          className={ui.btnPrimaryBlock}
+        >
           {createPending ? "Creating…" : "Create room & get code"}
         </button>
       </form>
