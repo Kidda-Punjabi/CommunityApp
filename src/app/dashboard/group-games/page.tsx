@@ -6,6 +6,15 @@ import {
   loadGrammarSentenceTopicOptions,
 } from "@/lib/group-games/load-topic-options";
 import { createClient } from "@/lib/supabase/server";
+import { loadBuzzInTopicCatalogue } from "@/lib/buzz-in/load-topic-catalogue";
+import { BUZZ_IN_MIN_QUESTIONS, type BuzzInTopicCatalogue } from "@/lib/buzz-in/topic-catalogue";
+
+function catalogueHasQuestions(catalogue: BuzzInTopicCatalogue): boolean {
+  return (
+    catalogue.themes.some((theme) => theme.count >= BUZZ_IN_MIN_QUESTIONS) ||
+    catalogue.courses.some((course) => course.weeks.some((week) => week.count >= BUZZ_IN_MIN_QUESTIONS))
+  );
+}
 import { ui } from "@/lib/ui/styles";
 import { redirect } from "next/navigation";
 
@@ -29,9 +38,19 @@ export default async function GroupGamesPage({ searchParams }: GroupGamesPagePro
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [flashcardTopics, grammarTopics] = await Promise.all([
+  const needsBuzzInCatalogue = lockedGameType === null || lockedGameType === "buzz_in";
+  const [flashcardTopics, grammarTopics, buzzInCatalogue] = await Promise.all([
     loadFlashcardTopicOptions(supabase).catch(() => []),
     loadGrammarSentenceTopicOptions(supabase).catch(() => []),
+    needsBuzzInCatalogue
+      ? loadBuzzInTopicCatalogue(supabase)
+          // No askable cards at all (e.g. a Learn English account): keep the plain topic picker.
+          .then((catalogue) => (catalogueHasQuestions(catalogue) ? catalogue : null))
+          .catch((error) => {
+          console.error("[group-games] buzz-in topic catalogue failed", error);
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -45,6 +64,7 @@ export default async function GroupGamesPage({ searchParams }: GroupGamesPagePro
         lockedGameType={lockedGameType}
         flashcardTopics={flashcardTopics}
         grammarTopics={grammarTopics}
+        buzzInCatalogue={buzzInCatalogue}
       />
     </div>
   );

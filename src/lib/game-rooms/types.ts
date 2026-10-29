@@ -13,6 +13,8 @@ export type GameRoomSettings = {
   question_count?: number;
   /** Host-selected flashcard/grammar topic tags (lowercase). */
   topic_tags?: string[];
+  /** Short label for the host's pick ("Week 6", "Food and Family"). */
+  topic_label?: string;
   /** Inclusive difficulty floor (1–5) for filtered group games. */
   difficulty_min?: number;
   /** Inclusive difficulty ceiling (1–5) for filtered group games. */

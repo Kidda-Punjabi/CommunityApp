@@ -56,6 +56,7 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [stuckVisible, setStuckVisible] = useState(false);
+  const [answerAttempt, setAnswerAttempt] = useState(0);
   const resultTimerRef = useRef<number | null>(null);
   const resultRoundIdRef = useRef<string | null>(null);
   const roundRef = useRef<BuzzInRoundRow | null>(initialState.currentRound);
@@ -358,7 +359,10 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
     setError(null);
     startTransition(async () => {
       const result = await submitBuzzInAnswer(round.id, answer);
-      if (result.error) setError(result.error);
+      if (result.error) {
+        setError(result.error);
+        setAnswerAttempt((value) => value + 1);
+      }
     });
   };
 
@@ -381,12 +385,27 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
   const finished = phase === "finished" || room.status === "completed";
   const loading = !finished && (!round || phase === "waiting" || !question);
 
+  const topicLabel =
+    typeof room.settings?.topic_label === "string" && room.settings.topic_label
+      ? room.settings.topic_label
+      : null;
+  const roundsDone = round
+    ? round.round_number - 1 + (phase === "result" ? 1 : 0)
+    : 0;
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">Buzz-in</p>
-          <h1 className="text-lg font-bold text-zinc-900">
+    <div className="space-y-3.5">
+      {/* Covers the phone's status bar so the page never scrolls underneath the clock. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-[0px] z-40 h-[env(safe-area-inset-top,0px)] bg-background"
+      />
+      <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <p className="truncate text-xs font-bold uppercase tracking-[0.08em] text-violet-600">
+            Buzz-in{topicLabel ? ` · ${topicLabel}` : ""}
+          </p>
+          <h1 className="text-[17px] font-extrabold text-zinc-900">
             {finished
               ? "Game over"
               : round
@@ -394,15 +413,29 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
                 : "Get ready"}
           </h1>
         </div>
-        <div className="flex items-center gap-3">
-          {!finished ? (
-            <p className="text-xs font-medium text-zinc-500">
-              +{BUZZ_IN_POINTS_PER_CORRECT} per correct
-            </p>
-          ) : null}
-          <GameTutorialHost tutorialId="buzz_in" />
-        </div>
+        <GameTutorialHost tutorialId="buzz_in" />
       </div>
+
+      {!finished && state.totalRounds > 0 ? (
+        <div
+          className="grid gap-1"
+          style={{ gridTemplateColumns: `repeat(${Math.min(state.totalRounds, 50)}, minmax(0, 1fr))` }}
+          aria-hidden="true"
+        >
+          {Array.from({ length: Math.min(state.totalRounds, 50) }, (_, index) => (
+            <span
+              key={index}
+              className={`h-1 rounded-full ${
+                index < roundsDone
+                  ? "bg-violet-600"
+                  : index === roundsDone
+                    ? "bg-violet-300"
+                    : "bg-zinc-200"
+              }`}
+            />
+          ))}
+        </div>
+      ) : null}
 
       {finished ? (
         <GroupGameLeaderboard
@@ -433,7 +466,7 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
 
       {!finished && !loading && round && question ? (
         <>
-          <GroupGameScoreboard entries={state.scoreboard} currentUserId={currentUserId} />
+          <GroupGameScoreboard entries={state.scoreboard} currentUserId={currentUserId} compact />
 
           <BuzzRacePanel
             question={question}
@@ -443,10 +476,14 @@ export function BuzzInArena({ initialState, initialRoom }: BuzzInArenaProps) {
             buzzerDisplayName={buzzerDisplayName}
             buzzedBy={round.buzzed_by}
             buzzedAt={round.buzzed_at}
+            openedAt={round.opened_at}
+            answerGiven={round.answer_given}
             answerCorrect={round.answer_correct}
+            pointsLabel={`+${BUZZ_IN_POINTS_PER_CORRECT} points`}
             pending={pending}
             onBuzz={handleBuzz}
             onAnswer={handleAnswer}
+            answerAttempt={answerAttempt}
           />
 
           {isHost && stuckVisible ? (
