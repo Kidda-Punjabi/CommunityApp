@@ -3,9 +3,14 @@ import { FreeLessonsPath } from "@/components/learn/free-lessons-path";
 import { GroupCohortOpensPanel } from "@/components/learn/group-cohort-opens-panel";
 import {
   BuyExtraOneToOneCard,
+  BuyExtraOneToOneLink,
   NeedMoreSupportLink,
   PackageHubPanel,
+  packageStatusClass,
+  packageStatusLabel,
 } from "@/components/packages/package-hub-panel";
+import { CourseMinimalHeader } from "@/components/learn/course-minimal-header";
+import { CohortLeaderboardButton } from "@/components/leaderboard/cohort-leaderboard-button";
 import {
   findStudentPackageForTrack,
   loadStudentPackages,
@@ -39,7 +44,6 @@ import { fetchLessonProgressMap } from "@/lib/progress/lesson-progress";
 import { fetchFlashcardProgressMap } from "@/lib/progress/flashcard-progress";
 import { fetchQuizProgressMap } from "@/lib/progress/quiz-progress";
 import { CommunityLeadSection } from "@/components/learn/course-staff-section";
-import { CourseAboutBlock } from "@/components/learn/course-about-block";
 import {
   loadCommunityLeads,
 } from "@/lib/tutoring/load-course-staff";
@@ -75,7 +79,7 @@ type LearnTrackPageProps = {
   searchParams: Promise<{ homework?: string; catchupReturn?: string }>;
 };
 
-function groupCourseProgressLine(params: {
+type GroupWeekParams = {
   trackId: string;
   pkg: StudentPackage | null;
   totalWeeks: number;
@@ -85,8 +89,10 @@ function groupCourseProgressLine(params: {
     week_number?: number | null;
     status?: string | null;
   }>;
-}): string | null {
-  const { trackId, pkg, totalWeeks, sessions } = params;
+};
+
+function groupCourseCurrentWeek(params: GroupWeekParams): number | null {
+  const { trackId, pkg, sessions } = params;
   if (!pkg || !isSwitchCohortTrack(trackId) || pkg.deliveryMode !== "group" || !pkg.cohortId) {
     return null;
   }
@@ -96,12 +102,22 @@ function groupCourseProgressLine(params: {
     )?.week ??
     pkg.groupRescheduleSession?.week_number ??
     null;
-  return formatStartedWeekProgressLine({
-    startDateIso: pkg.cohortStartDate,
-    currentWeek: resolveCohortProgressCurrentWeek({
+  return (
+    resolveCohortProgressCurrentWeek({
       startDateIso: pkg.cohortStartDate,
       storedWeek,
-    }),
+    }) ?? null
+  );
+}
+
+function groupCourseProgressLine(params: GroupWeekParams): string | null {
+  const { trackId, pkg, totalWeeks } = params;
+  if (!pkg || !isSwitchCohortTrack(trackId) || pkg.deliveryMode !== "group" || !pkg.cohortId) {
+    return null;
+  }
+  return formatStartedWeekProgressLine({
+    startDateIso: pkg.cohortStartDate,
+    currentWeek: groupCourseCurrentWeek(params),
     totalWeeks,
   });
 }
@@ -389,7 +405,41 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
     courseIds
   );
 
-  if (groupBoard && groupBoard.entries.length > 0) {
+  // Beginners group: minimal header (title, one meta line, thin week bar) with the
+  // leaderboard behind a button, instead of the package card + full leaderboard.
+  const useMinimalHeader =
+    track.id === "beginners" && studentPackage?.deliveryMode === "group";
+  let headerSection = null;
+  if (useMinimalHeader && studentPackage) {
+    const currentWeek = groupCourseCurrentWeek({
+      trackId: track.id,
+      pkg: studentPackage,
+      totalWeeks: lessons.length,
+      sessions: upcomingLoad.sessions,
+    });
+    const metaParts = [
+      studentPackage.tutorName ?? "Tutor being assigned",
+      studentPackage.cohortName,
+      currentWeek != null && lessons.length > 0
+        ? `Week ${currentWeek} of ${lessons.length}`
+        : null,
+    ].filter(Boolean);
+    headerSection = (
+      <CourseMinimalHeader
+        title={track.title}
+        statusLabel={packageStatusLabel(studentPackage.status)}
+        statusClassName={packageStatusClass(studentPackage.status)}
+        metaLine={metaParts.join(" · ")}
+        currentWeek={currentWeek}
+        totalWeeks={lessons.length}
+      >
+        {groupBoard && groupBoard.entries.length > 0 ? (
+          <CohortLeaderboardButton board={groupBoard} viewerId={user!.id} />
+        ) : null}
+      </CourseMinimalHeader>
+    );
+    staffSection = null;
+  } else if (groupBoard && groupBoard.entries.length > 0) {
     staffSection = (
       <div className="space-y-4">
         {staffSection}
@@ -427,14 +477,16 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
             }
           : undefined
       }
+      headerSection={headerSection}
       staffSection={staffSection}
       footerSection={
-        track.id === "beginners" || studentPackage || showSwitchCohort ? (
+        studentPackage || showSwitchCohort ? (
           <div className="space-y-4">
-            {track.id === "beginners" ? <CourseAboutBlock level="beginners" /> : null}
             {studentPackage ? (
               isFoundational ? (
                 <NeedMoreSupportLink pkg={studentPackage} />
+              ) : track.id === "beginners" ? (
+                <BuyExtraOneToOneLink pkg={studentPackage} />
               ) : (
                 <BuyExtraOneToOneCard pkg={studentPackage} />
               )

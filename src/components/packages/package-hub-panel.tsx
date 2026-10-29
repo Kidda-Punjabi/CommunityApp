@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { CourseCohortStats } from "@/components/learn/course-cohort-stats";
 import { GroupCohortRescheduleControl } from "@/components/schedule/group-cohort-reschedule-control";
@@ -18,7 +19,7 @@ type PackageHubPanelProps = {
   showGroupReschedule?: boolean;
 };
 
-function statusLabel(status: StudentPackage["status"]): string {
+export function packageStatusLabel(status: StudentPackage["status"]): string {
   switch (status) {
     case "active":
       return "Active";
@@ -29,7 +30,7 @@ function statusLabel(status: StudentPackage["status"]): string {
   }
 }
 
-function statusClass(status: StudentPackage["status"]): string {
+export function packageStatusClass(status: StudentPackage["status"]): string {
   switch (status) {
     case "active":
       return "bg-emerald-100 text-emerald-800";
@@ -59,6 +60,24 @@ export function BuyExtraOneToOneCard({ pkg }: { pkg: StudentPackage }) {
         </Link>
       </div>
     </div>
+  );
+}
+
+/** Text-only version of the extra 1-to-1 prompt (Beginners course page). */
+export function BuyExtraOneToOneLink({ pkg }: { pkg: StudentPackage }) {
+  if (!shouldShowBuyExtraOneToOneLesson(pkg)) return null;
+
+  return (
+    <p className="flex flex-wrap items-center justify-center gap-x-1 text-center text-sm font-medium text-zinc-500">
+      Need an extra 1-to-1 lesson?
+      <Link
+        href="/dashboard/schedule"
+        className="inline-flex items-center gap-0.5 font-semibold text-violet-700 hover:text-violet-900"
+      >
+        Book on Schedule
+        <ChevronRight className="h-4 w-4" aria-hidden />
+      </Link>
+    </p>
   );
 }
 
@@ -106,9 +125,9 @@ export function PackageHubPanel({
           <p className="mt-0.5 truncate text-sm font-semibold text-zinc-900">{pkg.name}</p>
         </div>
         <span
-          className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusClass(pkg.status)}`}
+          className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${packageStatusClass(pkg.status)}`}
         >
-          {statusLabel(pkg.status)}
+          {packageStatusLabel(pkg.status)}
         </span>
       </div>
 
