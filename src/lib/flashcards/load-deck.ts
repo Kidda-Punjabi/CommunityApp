@@ -11,7 +11,7 @@ import type { FlashcardDeckCard, FlashcardDeckContext } from "./types";
 import { resolveDeckName } from "./utils";
 
 const CARD_SELECT =
-  "id, front_text, back_text, romanised, deck_id, deck_name, icon_name, flashcard_sets(name)";
+  "id, front_text, back_text, romanised, deck_id, deck_name, icon_name, card_type, example_sentence_gurmukhi, example_sentence_romanised, example_sentence_english, flashcard_sets(name)";
 
 type CardRow = FlashcardDeckCard & {
   flashcard_sets: { name: string } | { name: string }[] | null;
@@ -232,7 +232,8 @@ export async function loadFlashcardDeck(
   supabase: SupabaseClient,
   userId: string,
   lessonId: string,
-  deckId: string
+  deckId: string,
+  options: { includeSpeak?: boolean } = {}
 ) {
   const access = await resolveLessonAccess(supabase, userId, lessonId);
   if (access.kind !== "ok") return access;
@@ -248,12 +249,17 @@ export async function loadFlashcardDeck(
     return { kind: "not_found" as const };
   }
 
-  const cardRows = await loadCardsForDeck(
+  const allRows = await loadCardsForDeck(
     supabase,
     lessonId,
     deckId,
     playableDeckIds
   );
+  // "Speak about" prompts only appear when a Community room asks for them (?type=speak);
+  // games, match and normal study never get them.
+  const cardRows = options.includeSpeak
+    ? allRows
+    : allRows.filter((row) => (row.card_type ?? "word") !== "speak");
 
   if (!cardRows.length) {
     return { kind: "empty" as const, lesson: access.lesson };

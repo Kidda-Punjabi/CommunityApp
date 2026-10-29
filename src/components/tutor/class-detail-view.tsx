@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { UnlockEarlyButton } from "@/components/tutor/class-lesson-actions";
 import { LessonLogEdit } from "@/components/tutor/lesson-log-edit";
@@ -23,11 +24,14 @@ export function ClassDetailView({
   cohortId,
   packageInstanceId,
   tutors,
+  leaderboard = null,
 }: {
   detail: ClassDetail;
   cohortId?: string;
   packageInstanceId?: string;
   tutors: CoverTutorChoice[];
+  /** Group cohorts: this week's points and XP for everyone in the class. */
+  leaderboard?: ReactNode;
 }) {
   return (
     <div className="mx-auto flex w-full max-w-[390px] flex-col gap-4 px-4 py-5">
@@ -62,6 +66,8 @@ export function ClassDetailView({
           <p className="text-[11px] text-zinc-500">Recordings missing</p>
         </div>
       </div>
+
+      {leaderboard}
 
       {detail.pinned ? (
         <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">

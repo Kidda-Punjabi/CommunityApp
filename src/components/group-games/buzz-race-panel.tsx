@@ -4,10 +4,9 @@ import type { BuzzRacePhase } from "@/lib/group-games/buzz-race-types";
 import type { McqQuestionPayload } from "@/lib/group-games/buzz-race-types";
 import { McqOptionLabel } from "@/components/group-games/mcq-option-label";
 import { ChadoPauriGroupOptionLabel } from "@/components/group-games/chado-pauri-group-option-label";
+import { BUZZ_RACE_ANSWER_WINDOW_MS } from "@/lib/group-games/buzz-race-constants";
 import { ui } from "@/lib/ui/styles";
-import { useEffect, useState, useTransition } from "react";
-
-const PENDING_MS = 2000;
+import { useEffect, useState } from "react";
 
 type BuzzRacePanelProps = {
   question: McqQuestionPayload;
@@ -16,11 +15,25 @@ type BuzzRacePanelProps = {
   isBuzzer: boolean;
   buzzerDisplayName: string;
   buzzedBy: string | null;
+  /** When the buzz landed, so the buzzer sees how long they have left. */
+  buzzedAt?: string | null;
   answerCorrect: boolean | null;
   pending: boolean;
   onBuzz: () => void;
   onAnswer: (answer: string) => void;
 };
+
+function useSecondsLeft(buzzedAt: string | null | undefined, active: boolean): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active || !buzzedAt) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [active, buzzedAt]);
+  if (!active || !buzzedAt) return null;
+  const deadline = new Date(buzzedAt).getTime() + BUZZ_RACE_ANSWER_WINDOW_MS;
+  return Math.max(0, Math.ceil((deadline - now) / 1000));
+}
 
 export function BuzzRacePanel({
   question,
@@ -29,34 +42,24 @@ export function BuzzRacePanel({
   isBuzzer,
   buzzerDisplayName,
   buzzedBy,
+  buzzedAt = null,
   answerCorrect,
   pending,
   onBuzz,
   onAnswer,
 }: BuzzRacePanelProps) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [localPhase, setLocalPhase] = useState<"idle" | "pending" | null>(null);
-  const [localPending, startLocal] = useTransition();
+  // The tapped option is sent straight away: the answer window is short, so there is
+  // no separate Submit step and no artificial "checking" pause.
+  // Keyed to the question + phase so a new round starts fresh without an effect.
+  const roundKey = `${question.prompt}|${phase}`;
+  const [sentFor, setSentFor] = useState<{ key: string; option: string } | null>(null);
+  const sent = sentFor?.key === roundKey ? sentFor.option : null;
+  const secondsLeft = useSecondsLeft(buzzedAt, phase === "buzzed");
 
-  useEffect(() => {
-    setSelected(null);
-    setLocalPhase(null);
-  }, [question.prompt, phase]);
-
-  function handleSelect(option: string) {
-    if (pending || localPending || localPhase === "pending") return;
-    setSelected(option);
-  }
-
-  function handleSubmit() {
-    if (!selected || pending || localPending || localPhase === "pending") return;
-    const option = selected;
-    setLocalPhase("pending");
-    startLocal(async () => {
-      await new Promise((r) => setTimeout(r, PENDING_MS));
-      onAnswer(option);
-      setLocalPhase(null);
-    });
+  function handlePick(option: string) {
+    if (pending || sent) return;
+    setSentFor({ key: roundKey, option });
+    onAnswer(option);
   }
 
   return (
@@ -78,33 +81,39 @@ export function BuzzRacePanel({
       ) : null}
 
       {phase === "open" && !isPlaying ? (
-        <p className="text-center text-sm text-zinc-500">You&apos;re spectating — waiting for a buzz…</p>
+        <p className="text-center text-sm text-zinc-500">You&apos;re spectating, waiting for a buzz…</p>
       ) : null}
 
       {phase === "buzzed" && isBuzzer ? (
         <div className="space-y-3">
-          <p className="text-center text-sm font-semibold text-violet-600">
-            You buzzed in — pick an answer!
-          </p>
-          {localPhase === "pending" ? (
-            <p className="text-center text-sm font-semibold text-amber-700">Checking…</p>
-          ) : null}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-violet-600">
+              {sent ? "Answer sent…" : "You buzzed in. Tap your answer!"}
+            </p>
+            {secondsLeft != null ? (
+              <span
+                className={`inline-flex h-10 min-w-10 items-center justify-center rounded-full px-3 text-base font-bold tabular-nums ${
+                  secondsLeft <= 5 ? "bg-rose-100 text-rose-700" : "bg-violet-100 text-violet-700"
+                }`}
+                aria-label={`${secondsLeft} seconds left`}
+              >
+                {secondsLeft}s
+              </span>
+            ) : null}
+          </div>
           <div className="grid gap-3">
             {question.options.map((option) => {
-              const isSelected = selected === option;
-              const pendingStyle = localPhase === "pending" && isSelected;
+              const isSent = sent === option;
               return (
                 <button
                   key={option}
                   type="button"
-                  disabled={pending || localPending || localPhase === "pending"}
-                  onClick={() => handleSelect(option)}
+                  disabled={pending || Boolean(sent)}
+                  onClick={() => handlePick(option)}
                   className={`${ui.cardBordered} w-full px-4 py-4 text-center text-lg transition-colors disabled:opacity-90 ${
-                    pendingStyle
-                      ? "border-amber-400 bg-amber-50"
-                      : isSelected
-                        ? "border-2 border-violet-600 bg-violet-50"
-                        : "enabled:hover:border-violet-300 enabled:hover:bg-violet-50"
+                    isSent
+                      ? "border-2 border-violet-600 bg-violet-50"
+                      : "enabled:hover:border-violet-300 enabled:hover:bg-violet-50 enabled:active:bg-violet-100"
                   }`}
                 >
                   <McqOptionLabel question={question} option={option} />
@@ -112,22 +121,13 @@ export function BuzzRacePanel({
               );
             })}
           </div>
-          {localPhase !== "pending" ? (
-            <button
-              type="button"
-              disabled={!selected || pending || localPending}
-              onClick={handleSubmit}
-              className={ui.btnPrimaryBlock}
-            >
-              Submit answer
-            </button>
-          ) : null}
         </div>
       ) : null}
 
       {phase === "buzzed" && !isBuzzer ? (
         <p className="rounded-2xl bg-violet-50 px-4 py-4 text-center text-sm font-medium text-violet-800">
-          {buzzerDisplayName} buzzed in — waiting for their answer…
+          {buzzerDisplayName} buzzed in, waiting for their answer…
+          {secondsLeft != null ? ` (${secondsLeft}s)` : ""}
         </p>
       ) : null}
 

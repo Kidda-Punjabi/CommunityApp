@@ -105,7 +105,7 @@ export async function attachLessonLabelsToSessions<T extends ScheduledSessionRow
   if (cohortIds.length > 0) {
     const { data: logRows, error } = await supabase
       .from("cohort_lesson_log_entries")
-      .select("cohort_id, status, dismissed_at")
+      .select("cohort_id, status, dismissed_at, needs_review")
       .in("cohort_id", cohortIds);
 
     if (error) throw error;
@@ -116,6 +116,7 @@ export async function attachLessonLabelsToSessions<T extends ScheduledSessionRow
         !isCompletedLessonLogEntry({
           status: row.status as string | null,
           dismissed_at: (row.dismissed_at as string | null) ?? null,
+          needs_review: (row.needs_review as boolean | null) ?? null,
         })
       ) {
         continue;

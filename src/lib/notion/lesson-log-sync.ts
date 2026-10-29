@@ -11,10 +11,21 @@ import {
   relationIds,
 } from "@/lib/notion/client";
 import { omitLessonLogManualFieldsFromPullPatch } from "@/lib/notion/lesson-log-field-source";
+import { eventTimeZone, lessonDateFromNotionStart } from "@/lib/calendar/event-timezone";
 import {
   formatLessonLogWriteError,
   logLessonLogWriteFailure,
 } from "@/lib/lessons/lesson-log-write-error";
+import {
+  findOpenLessonLogForSession,
+  loadClassSessionsForLessonLog,
+} from "@/lib/tutoring/match-lesson-log-session";
+import {
+  lessonDateForMatchedSession,
+  lessonLogRowCanReceiveSession,
+  matchClassSessionGroup,
+  type LessonLogSessionCandidate,
+} from "@/lib/tutoring/lesson-log-session";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type NotionQueryResponse = {
@@ -32,6 +43,7 @@ export type ParsedLessonLogPage = {
   lastEditedTime: string;
   title: string | null;
   lessonDate: string | null;
+  lessonDateRaw: string | null;
   packageNotionPageId: string | null;
   recordingUrl: string | null;
   slidesUrl: string | null;
@@ -74,11 +86,7 @@ function parseLessonLogStatus(
 }
 
 function calendarDateOnly(isoOrDate: string | null): string | null {
-  if (!isoOrDate?.trim()) return null;
-  const trimmed = isoOrDate.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
-  return match?.[1] ?? null;
+  return lessonDateFromNotionStart(isoOrDate, null);
 }
 
 export function parseNotionLessonLogPage(page: {
@@ -100,6 +108,7 @@ export function parseNotionLessonLogPage(page: {
     title:
       plainTextFromTitle(props.Lesson as { title?: Array<{ plain_text?: string }> }) ||
       null,
+    lessonDateRaw: dateStart(props["Lesson Date"] as { date?: { start?: string } | null }),
     lessonDate: calendarDateOnly(
       dateStart(props["Lesson Date"] as { date?: { start?: string } | null })
     ),
@@ -272,22 +281,84 @@ export async function upsertLessonLogEntryFromNotion(
     }
   }
 
-  const { data: existing } = await supabase
+  const nowDate = new Date();
+  let lessonDate = page.lessonDate;
+  let matchedSession: LessonLogSessionCandidate | null = null;
+  let matchedEventIds: string[] = [];
+  if (lessonDate && (cohortId || packageInstanceId)) {
+    try {
+      const sessions = await loadClassSessionsForLessonLog(supabase, {
+        cohortId,
+        packageInstanceId,
+      });
+      const group = matchClassSessionGroup({
+        candidates: sessions,
+        typedDate: lessonDate,
+        now: nowDate,
+        alsoMatchUtcDate: true,
+      });
+      matchedSession = group?.[0] ?? null;
+      matchedEventIds = group?.map((session) => session.googleEventId) ?? [];
+      if (matchedSession) lessonDate = lessonDateForMatchedSession(matchedSession);
+    } catch (error) {
+      console.error("[lesson-log] calendar match failed", error);
+    }
+  }
+  const sessionStarted =
+    matchedSession !== null && new Date(matchedSession.startsAt).getTime() <= nowDate.getTime();
+
+  const { data: existingByPage } = await supabase
     .from("cohort_lesson_log_entries")
     .select(
-      "id, source, status_source, reviewed_source, notes_source, status, dismissed_at, recording_url"
+      "id, notion_page_id, source, status_source, reviewed_source, notes_source, status, dismissed_at, recording_url, needs_review, is_cover_session, actual_tutor_id, google_event_id, created_at"
     )
     .eq("notion_page_id", page.pageId)
     .maybeSingle();
 
-  const now = new Date().toISOString();
+  let existing = existingByPage;
+  if (!existing?.id && lessonDate && (cohortId || packageInstanceId)) {
+    const linked = await findOpenLessonLogForSession(supabase, {
+      cohortId,
+      packageInstanceId,
+      googleEventIds: matchedEventIds,
+      sessionStartsAt: matchedSession?.startsAt ?? null,
+      lessonDate,
+    });
+    if (linked?.id) {
+      const { data: linkedRow } = await supabase
+        .from("cohort_lesson_log_entries")
+        .select(
+          "id, notion_page_id, source, status_source, reviewed_source, notes_source, status, dismissed_at, recording_url, needs_review, is_cover_session, actual_tutor_id, google_event_id, created_at"
+        )
+        .eq("id", linked.id)
+        .maybeSingle();
+      existing = linkedRow;
+    }
+  }
+
+  // Do not backfill calendar keys, or rewrite the pay date from a matched
+  // event, onto a row that existed before those columns shipped.
+  if (
+    existing?.id &&
+    !lessonLogRowCanReceiveSession(existing.created_at as string | null)
+  ) {
+    matchedSession = null;
+    matchedEventIds = [];
+    lessonDate = page.lessonDate;
+  }
+
+  const needsReview = existing?.id
+    ? existing.needs_review === true && !sessionStarted
+    : !sessionStarted;
+
+  const now = nowDate.toISOString();
   const patch = omitLessonLogManualFieldsFromPullPatch(
     {
       notion_page_id: page.pageId,
       cohort_id: cohortId,
       package_instance_id: packageInstanceId,
       lesson_title: page.title,
-      lesson_date: page.lessonDate,
+      lesson_date: lessonDate,
       recording_url: page.recordingUrl,
       slides_url: page.slidesUrl,
       flashcards_url: page.flashcardsUrl,
@@ -306,9 +377,38 @@ export async function upsertLessonLogEntryFromNotion(
       notion_sync_error: syncError,
       notion_synced_at: now,
       source: existing?.source === "app" ? "app" : "notion",
+      needs_review: needsReview,
+      needs_review_reason: needsReview
+        ? matchedSession && !sessionStarted
+          ? "before_start"
+          : "no_calendar_event"
+        : null,
+      ...(matchedSession && !existing?.google_event_id
+        ? {
+            google_event_id: matchedSession.googleEventId,
+            scheduled_session_id: matchedSession.id,
+            session_starts_at: matchedSession.startsAt,
+            event_timezone: eventTimeZone(matchedSession.eventTimeZone),
+          }
+        : {}),
     },
     existing
   );
+
+  if (
+    existing?.notion_page_id &&
+    !String(existing.notion_page_id).startsWith("pending-") &&
+    existing.notion_page_id !== page.pageId
+  ) {
+    delete patch.notion_page_id;
+  }
+  if (!page.isCoverSession && existing?.is_cover_session) {
+    delete patch.is_cover_session;
+    delete patch.actual_tutor_id;
+    delete patch.actual_tutor_notion_user_id;
+  } else if (page.isCoverSession && !actualTutorId && existing?.actual_tutor_id) {
+    delete patch.actual_tutor_id;
+  }
 
   // Never wipe a local recording with an empty Notion Recording Link.
   const existingRecording =
@@ -415,6 +515,16 @@ export type CreateLessonLogInput = {
   loggedBy?: string | null;
   notionTutorUserId?: string | null;
   isCoverSession?: boolean;
+  actualTutorId?: string | null;
+  scheduledSessionId?: string | null;
+  googleEventId?: string | null;
+  googleEventIds?: string[];
+  sessionStartsAt?: string | null;
+  eventTimeZone?: string | null;
+  needsReview?: boolean;
+  needsReviewReason?: string | null;
+  earlyLogOverrideBy?: string | null;
+  earlyLogOverrideReason?: string | null;
 };
 
 async function resolvePackageNotionPageId(
@@ -541,7 +651,7 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string | nu
 
 async function loadOldestLessonLogRow(
   supabase: SupabaseClient,
-  filters: { column: "cohort_id" | "package_instance_id" | "notion_page_id"; value: string },
+  filters: { column: "id" | "cohort_id" | "package_instance_id" | "notion_page_id"; value: string },
   lessonDate?: string
 ): Promise<ExistingCohortLessonLogRow | null> {
   let query = supabase
@@ -743,6 +853,30 @@ function buildLessonLogRowPayload(options: {
     notion_tutor_user_id: notionTutorUserId,
     ...(input.isCoverSession !== undefined
       ? { is_cover_session: Boolean(input.isCoverSession) }
+      : {}),
+    ...(input.actualTutorId !== undefined
+      ? { actual_tutor_id: input.actualTutorId }
+      : {}),
+    ...(input.needsReview !== undefined
+      ? {
+          needs_review: input.needsReview,
+          needs_review_reason: input.needsReview ? input.needsReviewReason ?? "no_calendar_event" : null,
+        }
+      : {}),
+    ...(input.googleEventId
+      ? {
+          google_event_id: input.googleEventId,
+          scheduled_session_id: input.scheduledSessionId ?? null,
+          session_starts_at: input.sessionStartsAt ?? null,
+          event_timezone: input.eventTimeZone ?? null,
+        }
+      : {}),
+    ...(input.earlyLogOverrideBy
+      ? {
+          early_log_override_by: input.earlyLogOverrideBy,
+          early_log_override_reason: input.earlyLogOverrideReason ?? null,
+          early_log_overridden_at: now,
+        }
       : {}),
     notion_sync_status: "synced",
     notion_sync_error: null,
@@ -972,7 +1106,22 @@ async function createOrUpdateLessonLogInNotionAndSupabase(
   const title = `${target.name}  - ${lessonDate} `;
   let existing: ExistingCohortLessonLogRow | null = null;
   try {
-    existing = await findExistingLessonLogEntry(supabase, {
+    if (input.googleEventId || input.sessionStartsAt || input.needsReview) {
+      const linked = await findOpenLessonLogForSession(supabase, {
+        cohortId: target.cohortId,
+        packageInstanceId: target.packageInstanceId,
+        googleEventIds: input.googleEventIds ?? (input.googleEventId ? [input.googleEventId] : []),
+        sessionStartsAt: input.sessionStartsAt ?? null,
+        lessonDate,
+      });
+      if (linked?.id) {
+        existing = await loadOldestLessonLogRow(supabase, {
+          column: "id",
+          value: linked.id,
+        });
+      }
+    }
+    if (!existing) existing = await findExistingLessonLogEntry(supabase, {
       cohortId: target.cohortId,
       packageInstanceId: target.packageInstanceId,
       lessonDate,

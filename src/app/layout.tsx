@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Geist, Geist_Mono, Poppins } from "next/font/google";
+import localFont from "next/font/local";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { noteRequest } from "@/lib/perf/context";
@@ -34,6 +35,15 @@ const dmSans = DM_Sans({
   variable: "--font-dm-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+});
+
+// Crisp Gurmukhi for flashcards. Self-hosted: next/font/google fails this
+// family because Google Fonts returns extensionless URLs (Next.js #99114).
+const notoGurmukhi = localFont({
+  src: "./fonts/noto-sans-gurmukhi.woff2",
+  variable: "--font-noto-gurmukhi",
+  weight: "100 900",
+  display: "swap",
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -71,7 +81,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} ${dmSans.variable} min-h-dvh bg-zinc-50 antialiased${nativeApp ? " kidda-native" : ""}`}
+      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} ${dmSans.variable} ${notoGurmukhi.variable} min-h-dvh bg-zinc-50 antialiased${nativeApp ? " kidda-native" : ""}`}
     >
       <body className="flex min-h-dvh flex-1 flex-col bg-zinc-50">
         <NativeAppProvider isNative={nativeApp}>

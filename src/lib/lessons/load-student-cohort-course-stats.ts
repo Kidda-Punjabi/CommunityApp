@@ -53,7 +53,7 @@ export async function loadStudentCohortCourseStats(
   const today = new Date().toISOString().slice(0, 10);
   const { data: logRows, error: logError } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("lesson_id, lesson_date, status, dismissed_at")
+    .select("lesson_id, lesson_date, status, dismissed_at, needs_review")
     .eq("cohort_id", cohortId)
     .not("lesson_id", "is", null)
     .lte("lesson_date", today);
@@ -70,6 +70,7 @@ export async function loadStudentCohortCourseStats(
           isCompletedLessonLogEntry({
             status: row.status as string | null,
             dismissed_at: (row.dismissed_at as string | null) ?? null,
+            needs_review: (row.needs_review as boolean | null) ?? null,
           })
         )
         .map((row) => row.lesson_id as string)

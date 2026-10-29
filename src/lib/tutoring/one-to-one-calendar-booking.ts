@@ -92,6 +92,7 @@ export async function createOneToOneCalendarSession(
       title: params.title,
       starts_at: params.startsAt,
       ends_at: params.endsAt,
+      event_timezone: params.timeZone,
       meet_link: googleEvent.meetLink,
       attendee_emails: attendeeEmails,
       match_method: "manual",

@@ -1,9 +1,11 @@
 import "server-only";
+import { FLASHCARD_CARD_TYPE_LABELS, parseFlashcardCardType, type FlashcardCardType } from "@/lib/flashcards/types";
 
 import type { CommunityBand } from "@/lib/community/constants";
 import { planBreakoutRooms, suggestLateRoom, type RoomPerson } from "@/lib/community/breakout-rooms";
 import {
   ACTIVITY_TITLES,
+  cardTypeForBand,
   kindsWithContent,
   payloadFor,
   pickDebateId,
@@ -110,14 +112,17 @@ export async function topicFor(admin: SupabaseClient, occurrenceId: string): Pro
   if (!lessonId) return empty;
   const { data: cards, error: cardError } = await admin
     .from("flashcards")
-    .select("deck_name, deck_id, topic_tags, back_text")
+    .select("deck_name, deck_id, topic_tags, back_text, card_type")
     .eq("lesson_id", lessonId)
     .like("deck_name", "%(Community)")
     .not("deck_name", "like", "Old -%");
   if (cardError) throw cardError;
   const tags = new Set<string>();
+  const cardTypes = new Set<FlashcardCardType>();
   let frames = 0;
   for (const card of cards ?? []) {
+    const type = parseFlashcardCardType(card.card_type);
+    if (type) cardTypes.add(type);
     if (typeof card.back_text === "string" && card.back_text.includes("___")) frames += 1;
     for (const tag of (card.topic_tags ?? []) as string[]) tags.add(tag);
   }
@@ -139,6 +144,7 @@ export async function topicFor(admin: SupabaseClient, occurrenceId: string): Pro
     quizId: (quiz?.id as string | null) ?? null,
     quizTitle: (quiz?.title as string | null) ?? null,
     speakingPromptCount: frames,
+    cardTypes: [...cardTypes],
   };
 }
 
@@ -509,6 +515,36 @@ export async function signRoomActivity(admin: SupabaseClient, userId: string, ac
   return { ok: true as const };
 }
 
+/**
+ * Warm-up debate round robin: once everyone has voted, people explain one at a time.
+ * A seated member can pass the turn for someone who has dropped off the call.
+ */
+export async function skipDebateSpeaker(
+  admin: SupabaseClient,
+  actorId: string,
+  speakerId: string,
+  activityId: string
+) {
+  const [actorOk, speakerOk] = await Promise.all([
+    userCanTouch(admin, actorId, activityId),
+    userCanTouch(admin, speakerId, activityId),
+  ]);
+  if (!actorOk || !speakerOk) return { error: "This debate is not open for you." };
+  const { data: activity } = await admin
+    .from("community_room_activities")
+    .select("kind")
+    .eq("id", activityId)
+    .maybeSingle();
+  if (activity?.kind !== "warmup_debate") return { error: "Only debate turns can be skipped." };
+  const { error } = await admin.from("community_room_signoffs").upsert(
+    { activity_id: activityId, user_id: speakerId, signed_at: new Date().toISOString() },
+    { onConflict: "activity_id,user_id" }
+  );
+  if (error) throw error;
+  await unlockNext(admin, activityId);
+  return { ok: true as const };
+}
+
 export async function voteInDebate(admin: SupabaseClient, userId: string, activityId: string, choice: "a" | "b") {
   const allowed = await userCanTouch(admin, userId, activityId);
   if (!allowed) return { error: "This debate is not open for you." };
@@ -656,7 +692,13 @@ export async function loadMemberRoom(admin: SupabaseClient, userId: string): Pro
     .from("community_room_members")
     .select("user_id, assigned_by, assigned_at, profiles(full_name)")
     .eq("room_id", room.id);
-  const seated = (mates ?? []).filter((mate) => isSeated(mate, room));
+  // Stable order: it is also the speaking order for the vote-then-explain round robin.
+  const seated = (mates ?? [])
+    .filter((mate) => isSeated(mate, room))
+    .sort((a, b) =>
+      String(a.assigned_at ?? "").localeCompare(String(b.assigned_at ?? "")) ||
+      String(a.user_id).localeCompare(String(b.user_id))
+    );
   const { data: loadedActivities } = await admin
     .from("community_room_activities")
     .select("id, position, kind, title, status, payload")
@@ -746,15 +788,15 @@ async function writeOrder(admin: SupabaseClient, roomId: string, orderedIds: str
 async function roomContext(admin: SupabaseClient, roomId: string) {
   const { data: room, error } = await admin
     .from("community_rooms")
-    .select("id, occurrence_id, status")
+    .select("id, occurrence_id, status, band")
     .eq("id", roomId)
     .maybeSingle();
   if (error) throw error;
-  return room as { id: string; occurrence_id: string; status: string } | null;
+  return room as { id: string; occurrence_id: string; status: string; band: CommunityBand } | null;
 }
 
 /** Builds a ready-to-insert activity of this kind on this week's topic. */
-async function buildActivity(admin: SupabaseClient, room: { id: string; occurrence_id: string }, kind: RoomActivityKind) {
+async function buildActivity(admin: SupabaseClient, room: { id: string; occurrence_id: string; band: CommunityBand }, kind: RoomActivityKind) {
   const topic = await topicFor(admin, room.occurrence_id);
   if (!kindsWithContent(topic).includes(kind)) return { error: "This week's content doesn't support that activity yet." as const };
   const { data: members } = await admin.from("community_room_members").select("user_id").eq("room_id", room.id);
@@ -763,7 +805,7 @@ async function buildActivity(admin: SupabaseClient, room: { id: string; occurren
       ? await freshDebate(admin, room.id, (members ?? []).map((row) => row.user_id as string))
       : { id: "", prompt: "", optionA: "", optionB: "", promptPa: null, romanised: null };
   if (!debate) return { error: "There are no warm-up debates to use." as const };
-  let payload = payloadFor(kind, topic, debate);
+  let payload = payloadFor(kind, topic, debate, room.band);
   if (kind === "speaking_prompts" && topic.lessonId) {
     const { data: cards } = await admin
       .from("flashcards")
@@ -778,7 +820,13 @@ async function buildActivity(admin: SupabaseClient, room: { id: string; occurren
       prompts: (cards ?? []).map((card) => ({ id: card.id as string, front: card.front_text as string, back: card.back_text as string })),
     };
   }
-  const title = kind === "quiz" && topic.quizTitle ? topic.quizTitle : ACTIVITY_TITLES[kind];
+  const cardType = cardTypeForBand(room.band, topic.cardTypes);
+  const title =
+    kind === "quiz" && topic.quizTitle
+      ? topic.quizTitle
+      : kind === "flashcards" && cardType
+        ? `Flashcards · ${FLASHCARD_CARD_TYPE_LABELS[cardType]}`
+        : ACTIVITY_TITLES[kind];
   return { kind, title, payload };
 }
 

@@ -28,12 +28,18 @@ export function isCountableLessonLogStatus(status: string | null | undefined): b
   return status !== "Cancelled";
 }
 
-/** Dismissed rows stay in the table but do not count as a completed lesson. */
+/**
+ * Dismissed rows stay in the table but do not count as a completed lesson.
+ * needs_review rows are held for Arshdeep and must not become a pay date.
+ */
 export function isCompletedLessonLogEntry(row: {
   status?: string | null;
   dismissed_at?: string | null;
+  needs_review?: boolean | null;
 }): boolean {
-  return isCountableLessonLogStatus(row.status) && !row.dismissed_at;
+  return (
+    isCountableLessonLogStatus(row.status) && !row.dismissed_at && row.needs_review !== true
+  );
 }
 
 /** Assign week numbers by chronological order (date, then id). */

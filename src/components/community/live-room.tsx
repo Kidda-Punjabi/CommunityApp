@@ -1,6 +1,6 @@
 "use client";
 
-import { castDebateVote, joinGroupGame, markActivityDone, openBonusGame, openPointRace } from "@/app/dashboard/community/breakout-actions";
+import { castDebateVote, joinGroupGame, markActivityDone, openBonusGame, openPointRace, skipSpeaker } from "@/app/dashboard/community/breakout-actions";
 import { GROUP_GAME_LABELS } from "@/lib/game-rooms/constants";
 import type { GroupGameType } from "@/lib/game-rooms/types";
 import { CommunityLiveSync } from "@/components/community/room-refresh";
@@ -117,14 +117,9 @@ export function LiveRoom({
               myVote={view.myVote}
               votes={view.votes}
               pending={pending}
-              onVote={(choice) =>
-                run(async () => {
-                  const voted = await castDebateVote(active.id, choice);
-                  if ("error" in voted && voted.error) return voted;
-                  return markActivityDone(active.id);
-                })
-              }
+              onVote={(choice) => run(() => castDebateVote(active.id, choice))}
               onDone={() => run(() => markActivityDone(active.id))}
+              onSkip={(speakerId) => run(() => skipSpeaker(active.id, speakerId))}
               onRace={() => run(() => openPointRace(active.id))}
               meId={userId}
               onBonus={(gameType) => run(() => openBonusGame(active.id, gameType))}
@@ -158,6 +153,7 @@ function ActivityCard({
   pending,
   onVote,
   onDone,
+  onSkip,
   onRace,
   meId,
   onBonus,
@@ -173,6 +169,7 @@ function ActivityCard({
   pending: boolean;
   onVote: (choice: "a" | "b") => void;
   onDone: () => void;
+  onSkip: (speakerId: string) => void;
   onRace: () => void;
   meId: string;
   onBonus: (gameType?: GroupGameType) => void;
@@ -186,7 +183,7 @@ function ActivityCard({
   const isBonus = activity.kind === "bonus";
   const instruction =
     activity.kind === "warmup_debate"
-      ? "Vote, then each person says why in Punjabi."
+      ? "Vote first. Then explain in Punjabi why you voted the way you did."
       : typeof payload.instruction === "string"
         ? payload.instruction
         : "";
@@ -204,7 +201,11 @@ function ActivityCard({
   // The one action for this activity. Finishing it in the app signs the member off on its own.
   let action: { label: string; href?: string; onClick?: () => void } | null = null;
   if (activity.kind === "flashcards" && payload.lessonId && payload.deckId) {
-    action = { label: "Start flashcards", href: activityHref(`/dashboard/practice/flashcards/${payload.lessonId}/${payload.deckId}/study`, activity.id) };
+    const typeQuery = typeof payload.cardType === "string" ? `?type=${encodeURIComponent(payload.cardType)}` : "";
+    action = {
+      label: "Start flashcards",
+      href: activityHref(`/dashboard/practice/flashcards/${payload.lessonId}/${payload.deckId}/study${typeQuery}`, activity.id),
+    };
   } else if (activity.kind === "quiz" && payload.quizId) {
     action = { label: "Start quiz", href: activityHref(`/dashboard/practice/quiz/${payload.quizId}`, activity.id) };
   } else if (activity.kind === "point_race") {
@@ -234,16 +235,20 @@ function ActivityCard({
       {!iSigned || isBonus ? <p className="mt-2 text-base">{instruction}</p> : null}
 
       {activity.kind === "warmup_debate" ? (
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {!iSigned ? (
-            <>
-              <VoteButton label={String(payload.optionA ?? "A")} selected={myVote === "a"} disabled={pending} onClick={() => onVote("a")} />
-              <VoteButton label={String(payload.optionB ?? "B")} selected={myVote === "b"} disabled={pending} onClick={() => onVote("b")} />
-            </>
-          ) : null}
-          <VoteTally label={String(payload.optionA ?? "A")} names={namesFor("a")} />
-          <VoteTally label={String(payload.optionB ?? "B")} names={namesFor("b")} />
-        </div>
+        <DebateFlow
+          optionA={String(payload.optionA ?? "A")}
+          optionB={String(payload.optionB ?? "B")}
+          people={people}
+          votes={votes}
+          myVote={myVote}
+          signed={signed}
+          userId={meId}
+          pending={pending}
+          namesFor={namesFor}
+          onVote={onVote}
+          onDone={onDone}
+          onSkip={onSkip}
+        />
       ) : null}
 
       {activity.kind === "speaking_prompts" && prompt && !iSigned ? (
@@ -293,7 +298,7 @@ function ActivityCard({
         )
       ) : null}
 
-      {iSigned && !isBonus ? (
+      {activity.kind === "warmup_debate" ? null : iSigned && !isBonus ? (
         <div className="mt-4 rounded-2xl bg-[#EAF6EE] p-4 text-[#14532D]">
           <p className="font-heading text-xl font-extrabold">{"You're done."}</p>
           <p className="mt-1 text-base">
@@ -316,7 +321,6 @@ function ActivityCard({
           {!isBonus ? (
             <p className="mt-3 text-sm font-semibold text-[#6B5F8A]">
               {doneCount} of {people.length} done
-              {activity.kind === "warmup_debate" ? " · voting counts as done" : ""}
             </p>
           ) : (
             <p className="mt-3 text-sm font-semibold text-[#6B5F8A]">Keep going until Arsh brings everyone back.</p>
@@ -324,6 +328,117 @@ function ActivityCard({
         </>
       )}
     </section>
+  );
+}
+
+function DebateFlow({
+  optionA,
+  optionB,
+  people,
+  votes,
+  myVote,
+  signed,
+  userId,
+  pending,
+  namesFor,
+  onVote,
+  onDone,
+  onSkip,
+}: {
+  optionA: string;
+  optionB: string;
+  people: { userId: string; name: string }[];
+  votes: { userId: string; choice: "a" | "b" }[];
+  myVote: "a" | "b" | null;
+  signed: Set<string>;
+  userId: string;
+  pending: boolean;
+  namesFor: (choice: "a" | "b") => string[];
+  onVote: (choice: "a" | "b") => void;
+  onDone: () => void;
+  onSkip: (speakerId: string) => void;
+}) {
+  const voted = new Set(votes.map((vote) => vote.userId));
+  const notVoted = people.filter((person) => !voted.has(person.userId)).map((person) => person.name);
+  const allVoted = people.length > 0 && notVoted.length === 0;
+  const choiceOf = (id: string) => votes.find((vote) => vote.userId === id)?.choice ?? null;
+  const labelOf = (choice: "a" | "b" | null) => (choice === "a" ? optionA : choice === "b" ? optionB : "");
+
+  if (!allVoted) {
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <VoteButton label={optionA} selected={myVote === "a"} disabled={pending} onClick={() => onVote("a")} />
+          <VoteButton label={optionB} selected={myVote === "b"} disabled={pending} onClick={() => onVote("b")} />
+        </div>
+        <p className="text-sm font-semibold text-[#6B5F8A]">
+          {voted.size} of {people.length} voted
+          {notVoted.length > 0 ? ` · waiting for ${notVoted.join(", ")}` : ""}
+        </p>
+        {myVote ? (
+          <p className="text-sm text-[#4A3F66]">You picked {labelOf(myVote)}. You can change it until everyone has voted.</p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const speaker = people.find((person) => !signed.has(person.userId)) ?? null;
+  const isMe = speaker?.userId === userId;
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <VoteTally label={optionA} names={namesFor("a")} />
+        <VoteTally label={optionB} names={namesFor("b")} />
+      </div>
+      {speaker ? (
+        <div className={`rounded-2xl p-4 ${isMe ? "bg-[#5B21B6] text-white" : "bg-[#F1ECFF] text-[#3B1A8C]"}`}>
+          <p className="font-heading text-xl font-extrabold leading-tight">{isMe ? "Your turn" : `It's ${speaker.name}'s turn`}</p>
+          <p className={`mt-1 text-base ${isMe ? "text-violet-100" : ""}`}>
+            {isMe
+              ? `Explain in Punjabi why you chose ${labelOf(choiceOf(userId))}.`
+              : `${speaker.name} is explaining in Punjabi why they chose ${labelOf(choiceOf(speaker.userId))}.`}
+          </p>
+          {isMe ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onDone}
+              className="mt-3 inline-flex h-14 w-full items-center justify-center rounded-[18px] bg-white text-base font-bold text-[#5B21B6] disabled:opacity-50"
+            >
+              {"I've finished explaining"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onSkip(speaker.userId)}
+              className="mt-2 text-sm font-bold underline disabled:opacity-50"
+            >
+              {`Skip ${speaker.name}`}
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm font-semibold text-[#6B5F8A]">{"Everyone's explained. Moving on…"}</p>
+      )}
+      <ol className="flex flex-wrap gap-2" aria-label="Speaking order">
+        {people.map((person, index) => {
+          const done = signed.has(person.userId);
+          const current = speaker?.userId === person.userId;
+          return (
+            <li
+              key={person.userId}
+              className={`inline-flex h-9 items-center rounded-full px-3 text-sm font-bold ${
+                current ? "bg-[#5B21B6] text-white" : done ? "bg-[#E4DFEE] text-[#6B5F8A] line-through" : "bg-[#F7F5FC] text-[#1F1640]"
+              }`}
+            >
+              {index + 1}. {person.name}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 

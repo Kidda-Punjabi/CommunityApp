@@ -65,6 +65,9 @@ import { ui } from "@/lib/ui/styles";
 import { SwitchCohortLink } from "@/components/learn/switch-cohort-link";
 import { BackLink } from "@/components/navigation/back-link";
 import { notFound, redirect } from "next/navigation";
+import { CohortLeaderboardCard } from "@/components/leaderboard/cohort-leaderboard-card";
+import { findViewerGroupCohortId, loadCohortLeaderboard } from "@/lib/leaderboard/load-cohort-leaderboard";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import type { StudentPackage } from "@/lib/packages/load-student-packages";
 
 type LearnTrackPageProps = {
@@ -257,6 +260,21 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
   const contentGate = await resolveGroupCohortContentGate(supabase, user!.id, courseIds);
   const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
 
+  // Beginners group: who's in my class and where they stand this week.
+  const groupBoard =
+    track.id === "beginners"
+      ? await (async () => {
+          try {
+            const admin = createServiceRoleClient();
+            const cohortId = await findViewerGroupCohortId(admin, user!.id, courseIds);
+            return cohortId ? await loadCohortLeaderboard(admin, cohortId) : null;
+          } catch (error) {
+            console.error("[learn] group leaderboard failed", error);
+            return null;
+          }
+        })()
+      : null;
+
   const studentPackage = findStudentPackageForTrack(studentPackages, track.id);
   const showSwitchCohort = shouldShowSwitchCohortLink(track.id, studentPackage);
   const gatedProgressLine = groupCourseProgressLine({
@@ -370,6 +388,15 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
     lessons,
     courseIds
   );
+
+  if (groupBoard && groupBoard.entries.length > 0) {
+    staffSection = (
+      <div className="space-y-4">
+        {staffSection}
+        <CohortLeaderboardCard board={groupBoard} viewerId={user!.id} audience="student" />
+      </div>
+    );
+  }
 
   return (
     <LearnLessonList

@@ -162,7 +162,9 @@ export async function fetchLessonCompletionMap(
       .from("flashcards")
       .select("id, deck_id, lesson_id")
       .in("lesson_id", lessonIds)
-      .is("deck_id", null),
+      .is("deck_id", null)
+      // "Speak about" prompts are live-room only and don't count towards lesson completion.
+      .neq("card_type", "speak"),
   ]);
 
   const deckIds = [
@@ -174,7 +176,8 @@ export async function fetchLessonCompletionMap(
     const { data } = await supabase
       .from("flashcards")
       .select("id, deck_id")
-      .in("deck_id", deckIds);
+      .in("deck_id", deckIds)
+      .neq("card_type", "speak");
     flashcards = data ?? [];
   }
 

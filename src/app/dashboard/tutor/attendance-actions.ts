@@ -157,7 +157,7 @@ export async function saveCohortLessonAttendance(
       );
       const { data: logRows } = await admin
         .from("cohort_lesson_log_entries")
-        .select("id, notion_page_id, status, lesson_date, lesson_id, dismissed_at")
+        .select("id, notion_page_id, status, lesson_date, lesson_id, dismissed_at, needs_review")
         .eq("cohort_id", cohortId)
         .order("lesson_date", { ascending: true })
         .order("id", { ascending: true });
@@ -166,6 +166,7 @@ export async function saveCohortLessonAttendance(
         isCompletedLessonLogEntry({
           status: row.status as string | null,
           dismissed_at: (row.dismissed_at as string | null) ?? null,
+          needs_review: (row.needs_review as boolean | null) ?? null,
         })
       );
       // Prefer the log row already linked to this curriculum lesson; fall back to

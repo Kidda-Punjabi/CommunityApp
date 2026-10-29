@@ -1,4 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound, redirect, unstable_rethrow } from "next/navigation";
+import { GameLoadError } from "@/components/group-games/game-load-error";
+import { GROUP_GAME_LABELS } from "@/lib/game-rooms/constants";
 import { BuzzInArena } from "@/components/group-games/buzz-in-arena";
 import { GameRoomPlayStub } from "@/components/group-games/game-room-play-stub";
 import { JeopardyArena } from "@/components/group-games/jeopardy-arena";
@@ -42,11 +44,40 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
     redirect(`/dashboard/group-games/room/${roomId}`);
   }
 
+  try {
+    return await renderGame(supabase, view, roomId, user.id);
+  } catch (error) {
+    // Let Next's own redirect / notFound signals through; anything else is a real failure.
+    unstable_rethrow(error);
+    console.error("[group-games] play page failed to load", { roomId, error });
+    return (
+      <div className={ui.page}>
+        <GameLoadError
+          roomId={roomId}
+          isHost={view.isHost}
+          gameLabel={GROUP_GAME_LABELS[view.room.game_type] ?? "Group game"}
+          message={
+            error instanceof Error && /topic|not enough|no grammar|no questions/i.test(error.message)
+              ? error.message
+              : "Something went wrong setting this game up. You can head back and pick another game."
+          }
+        />
+      </div>
+    );
+  }
+}
+
+async function renderGame(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  view: NonNullable<Awaited<ReturnType<typeof loadGameRoomView>>>,
+  roomId: string,
+  userId: string
+) {
   if (view.room.game_type === "buzz_in") {
     await ensureBuzzInInitialized(supabase, view.room);
-    const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
+    const refreshedView = await loadGameRoomView(supabase, roomId, userId);
     const room = refreshedView?.room ?? view.room;
-    const buzzState = await loadBuzzInGameState(supabase, room, user.id);
+    const buzzState = await loadBuzzInGameState(supabase, room, userId);
     if (!buzzState) notFound();
 
     return (
@@ -58,9 +89,9 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
 
   if (view.room.game_type === "jeopardy") {
     await ensureJeopardyInitialized(supabase, view.room);
-    const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
+    const refreshedView = await loadGameRoomView(supabase, roomId, userId);
     const room = refreshedView?.room ?? view.room;
-    const jeopardyState = await loadJeopardyGameState(supabase, room, user.id);
+    const jeopardyState = await loadJeopardyGameState(supabase, room, userId);
     if (!jeopardyState) notFound();
 
     return (
@@ -72,9 +103,9 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
 
   if (view.room.game_type === "chado_pauri_group") {
     await ensureLadderInitialized(supabase, view.room);
-    const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
+    const refreshedView = await loadGameRoomView(supabase, roomId, userId);
     const room = refreshedView?.room ?? view.room;
-    const ladderState = await loadLadderGameState(supabase, room, user.id);
+    const ladderState = await loadLadderGameState(supabase, room, userId);
     if (!ladderState) notFound();
 
     const { cards } = await loadChadoPauriFlashcards(supabase, room.settings);
@@ -93,10 +124,10 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
 
   if (view.room.game_type === "sentence_builder_group") {
     await ensureSentenceBuilderInitialized(supabase, view.room);
-    const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
+    const refreshedView = await loadGameRoomView(supabase, roomId, userId);
     const room = refreshedView?.room ?? view.room;
     await ensureSentenceBuilderContinued(supabase, room);
-    const sentenceState = await loadSentenceBuilderGroupState(supabase, room, user.id);
+    const sentenceState = await loadSentenceBuilderGroupState(supabase, room, userId);
     if (!sentenceState) notFound();
 
     return (
@@ -108,9 +139,9 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
 
   if (view.room.game_type === "point_race") {
     await ensureRaceInitialized(supabase, view.room);
-    const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
+    const refreshedView = await loadGameRoomView(supabase, roomId, userId);
     const room = refreshedView?.room ?? view.room;
-    const raceState = await loadPointRaceGameState(supabase, room, user.id);
+    const raceState = await loadPointRaceGameState(supabase, room, userId);
     if (!raceState) notFound();
 
     return (
@@ -122,9 +153,9 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
 
   if (view.room.game_type === "sound_match_group") {
     await ensureRaceInitialized(supabase, view.room);
-    const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
+    const refreshedView = await loadGameRoomView(supabase, roomId, userId);
     const room = refreshedView?.room ?? view.room;
-    const raceState = await loadPointRaceGameState(supabase, room, user.id);
+    const raceState = await loadPointRaceGameState(supabase, room, userId);
     if (!raceState) notFound();
 
     return (
@@ -136,9 +167,9 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
 
   if (view.room.game_type === "vowel_match_group") {
     await ensureRaceInitialized(supabase, view.room);
-    const refreshedView = await loadGameRoomView(supabase, roomId, user.id);
+    const refreshedView = await loadGameRoomView(supabase, roomId, userId);
     const room = refreshedView?.room ?? view.room;
-    const raceState = await loadPointRaceGameState(supabase, room, user.id);
+    const raceState = await loadPointRaceGameState(supabase, room, userId);
     if (!raceState) notFound();
 
     return (
@@ -149,7 +180,9 @@ export default async function GameRoomPlayPage({ params }: GameRoomPlayPageProps
   }
 
   if (view.room.status !== "in_progress") {
-    redirect(`/dashboard/group-games/room/${roomId}`);
+    // A finished room with no play screen: go to the games list, not back to the
+    // room page (which would send us straight here again, in a loop).
+    redirect("/dashboard/group-games");
   }
 
   return (

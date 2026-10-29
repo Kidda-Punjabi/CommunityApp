@@ -66,6 +66,33 @@ describe("planRoomActivities", () => {
   });
 });
 
+describe("flashcard types by level", () => {
+  it("gives a beginner room word cards", () => {
+    const plan = planRoomActivities({
+      roomId: "room-d",
+      band: "beginner",
+      topic: { ...fullTopic, cardTypes: ["word", "question"] },
+      debate,
+    });
+    const cards = plan.find((item) => item.kind === "flashcards");
+    if (cards) {
+      assert.equal(cards.payload.cardType, "word");
+      assert.equal(cards.title, "Flashcards · Words");
+    }
+  });
+
+  it("gives an intermediate room question cards when the deck has them", () => {
+    const plan = planRoomActivities({
+      roomId: "room-e",
+      band: "intermediate",
+      topic: { ...fullTopic, cardTypes: ["word", "question"] },
+      debate,
+    });
+    const cards = plan.find((item) => item.kind === "flashcards");
+    if (cards) assert.equal(cards.payload.cardType, "question");
+  });
+});
+
 describe("pickDebateId", () => {
   it("picks the same debate for the same room", () => {
     const ids = ["b", "a", "c"];

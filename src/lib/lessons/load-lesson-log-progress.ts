@@ -70,7 +70,7 @@ export async function loadLessonLogEntriesForCohorts(
 
   const { data, error } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, cohort_id, lesson_date, lesson_title, recording_url, notes, status, dismissed_at")
+    .select("id, cohort_id, lesson_date, lesson_title, recording_url, notes, status, dismissed_at, needs_review")
     .in("cohort_id", cohortIds)
     .order("lesson_date", { ascending: true });
 
@@ -97,6 +97,7 @@ export async function loadLessonLogEntriesForCohorts(
       !isCompletedLessonLogEntry({
         status: row.status as string | null,
         dismissed_at: (row.dismissed_at as string | null) ?? null,
+        needs_review: (row.needs_review as boolean | null) ?? null,
       })
     ) {
       continue;

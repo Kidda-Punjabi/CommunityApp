@@ -1,7 +1,6 @@
 "use client";
 
 import { emojiForIcon } from "@/components/games/PictureMatch/emojiMap";
-import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
 import { LessonFeedbackPanel } from "@/components/feedback/lesson-feedback-panel";
@@ -13,7 +12,13 @@ import { DeckProgressBar } from "@/components/deck-progress-bar";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { usePlaySoundOnce } from "@/lib/audio/use-play-sound";
 import { createClient } from "@/lib/supabase/client";
-import type { FlashcardDeckCard, FlashcardDeckContext } from "@/lib/flashcards/types";
+import {
+  FLASHCARD_CARD_TYPE_LABELS,
+  type FlashcardCardType,
+  type FlashcardDeckCard,
+  type FlashcardDeckContext,
+} from "@/lib/flashcards/types";
+import { SwipeCard, type SwipeCardHandle } from "@/components/flashcards/swipe-card";
 import { deckPracticeHref, shuffleArray } from "@/lib/flashcards/utils";
 import {
   computeDeckConfidenceStats,
@@ -71,7 +76,8 @@ export function FlashcardStudyMode({
 
   const userIdRef = useRef<string | null>(null);
   const streakUpdatedRef = useRef(false);
-  const touchStartXRef = useRef(0);
+  const swipeRef = useRef<SwipeCardHandle | null>(null);
+  const [hintDismissed, setHintDismissed] = useState(false);
   const { playSound } = useAudioManager();
 
   const deckHubHref =
@@ -119,9 +125,6 @@ export function FlashcardStudyMode({
       ? card.front_text
       : card.back_text
     : "";
-  const shownText =
-    kidsMode && !flipped ? "" : flipped ? answerText : kidsMode ? "?" : promptText;
-  const shownLine = card && shownText ? studyCardLine(card, shownText) : null;
 
   useEffect(() => {
     const supabase = createClient();
@@ -200,29 +203,9 @@ export function FlashcardStudyMode({
     }
   }
 
-  function goNext() {
-    setIndex((prev) => Math.min(prev + 1, orderedCards.length - 1));
-    setFlipped(false);
-  }
-
   function goPrev() {
     setIndex((prev) => Math.max(prev - 1, 0));
     setFlipped(false);
-  }
-
-  function handleTouchStart(event: React.TouchEvent) {
-    touchStartXRef.current = event.touches[0]?.clientX ?? 0;
-  }
-
-  function handleTouchEnd(event: React.TouchEvent) {
-    if (!flipped || phase !== "studying") return;
-
-    const touchEndX = event.changedTouches[0]?.clientX ?? 0;
-    const delta = touchEndX - touchStartXRef.current;
-    if (Math.abs(delta) < 60) return;
-
-    if (delta > 0) void recordConfidence("confident");
-    else void recordConfidence("not_confident");
   }
 
   function startReview() {
@@ -275,162 +258,288 @@ export function FlashcardStudyMode({
     );
   }
 
+  const cardType: FlashcardCardType = card.card_type ?? "word";
+  const isSpeak = cardType === "speak";
+  const isQuestion = cardType === "question";
+  const leftLabel = kidsMode ? "Try again" : isSpeak || isQuestion ? "Skip" : "Not yet";
+  const rightLabel = kidsMode ? "Got it!" : isSpeak ? "Done" : isQuestion ? "Answered" : "Confident";
+  const showHint = !kidsMode && index === 0 && !hintDismissed && !reviewMode;
+  // Kids see only the picture on the front, as before.
+  const frontLine = kidsMode ? { text: "", romanised: null } : studyCardLine(card, promptText);
+  const backLine = studyCardLine(card, answerText);
+
+  function rate(direction: "left" | "right") {
+    setHintDismissed(true);
+    void recordConfidence(direction === "right" ? "confident" : "not_confident");
+  }
+
   return (
-    <div className="relative space-y-4">
+    <div className="relative flex min-h-[calc(100dvh-7rem)] flex-1 flex-col gap-3 font-[family-name:var(--font-community)]">
       {!kidsMode && <FloatingSoundToggle />}
-      <div>
-        <BackLink fallbackHref={deckHubHref} className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to deck</BackLink>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-violet-600">
-          Flashcards · {deck.deckName}
-          {reviewMode && " · Review"}
-        </p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-900 tab:text-3xl">{deck.lessonTitle}</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Card {index + 1} of {orderedCards.length}
-          {reviewMode ? " (not confident)" : ""}
-        </p>
-        <DeckProgressBar
-          confident={fullStats.confident}
-          notConfident={fullStats.notConfident}
-          total={fullStats.total}
-        />
+      <div className="flex items-center gap-3">
+        <BackLink
+          fallbackHref={deckHubHref}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-white text-lg font-bold text-[#1F1640] hover:text-[#1F1640]"
+        >
+          <span aria-hidden="true">←</span>
+          <span className="sr-only">Back to deck</span>
+        </BackLink>
+        <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[#E4DFEE]">
+          <div
+            className="h-full rounded-full bg-[#5B21B6] transition-[width] duration-300"
+            style={{ width: `${Math.round(((index + 1) / Math.max(1, orderedCards.length)) * 100)}%` }}
+          />
+        </div>
+        <span className="text-[15px] font-bold tabular-nums text-[#4A3F66]">
+          {index + 1} / {orderedCards.length}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex h-8 items-center rounded-full bg-[#EDE6FF] px-3 text-[13px] font-bold uppercase tracking-wide text-[#3B1A8C]">
+          {FLASHCARD_CARD_TYPE_LABELS[cardType]}
+          {reviewMode ? " · Review" : ""}
+        </span>
+        <span className="truncate text-sm font-medium text-[#6B5F8A]">
+          {fullStats.confident} confident · {fullStats.notConfident} not yet
+        </span>
       </div>
 
       {!kidsMode && (
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setShuffled((prev) => !prev)}
-          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-            shuffled
-              ? "bg-violet-600 text-white"
-              : "border border-zinc-200 bg-white text-zinc-700"
-          }`}
-        >
-          Shuffle {shuffled ? "on" : "off"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowBackFirst((prev) => !prev)}
-          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-            showBackFirst
-              ? "bg-violet-600 text-white"
-              : "border border-zinc-200 bg-white text-zinc-700"
-          }`}
-        >
-          {showBackFirst ? "Back first" : "Front first"}
-        </button>
-      </div>
-      )}
-
-      <div className="mx-auto w-full max-w-lg space-y-3 tab:max-w-[680px]">
-        <div
-          className="relative"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              goPrev();
-            }}
-            disabled={index === 0}
-            aria-label="Previous card"
-            className="absolute left-2 top-2 z-10 rounded-full p-1.5 text-lg leading-none text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:pointer-events-none disabled:opacity-30"
-          >
-            ←
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              goNext();
-            }}
-            disabled={index === orderedCards.length - 1}
-            aria-label="Skip"
-            className="absolute right-2 top-2 z-10 px-1 text-xs font-semibold text-zinc-400 hover:text-zinc-600 disabled:pointer-events-none disabled:opacity-30"
-          >
-            Skip
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFlipped((prev) => !prev)}
-            className={`min-h-56 w-full rounded-2xl border px-6 pb-6 pt-10 text-left shadow-sm transition-colors tab:min-h-[520px] ${
-              kidsMode
-                ? "min-h-64 border-sky-200 bg-white hover:border-violet-300"
-                : "border-zinc-200 bg-white hover:border-violet-300"
+            onClick={() => setShuffled((prev) => !prev)}
+            className={`h-9 rounded-full px-3 text-xs font-bold ${
+              shuffled ? "bg-[#5B21B6] text-white" : "bg-white text-[#4A3F66]"
             }`}
           >
-            {!kidsMode && (
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-              {flipped ? "Answer" : "Prompt"}
-            </p>
-            )}
-            {kidsMode && card?.icon_name && !flipped && (
-              <p className="text-center text-6xl" aria-hidden>
-                {emojiForIcon(card.icon_name)}
-              </p>
-            )}
-            {shownLine ? (
-              <FlashcardBilingualLine
-                text={shownLine.text}
-                romanised={shownLine.romanised}
-                className={`text-zinc-900 ${kidsMode ? "mt-4 text-center" : "mt-4"}`}
-                gurmukhiClassName={`font-semibold text-zinc-900 ${kidsMode ? "text-2xl" : "text-xl"} tab:text-5xl`}
-                romanisedClassName={`mt-2 block font-normal text-violet-600 ${
-                  kidsMode ? "text-center text-base" : "text-sm"
-                }`}
-              />
-            ) : null}
-            <p className={`text-violet-600 ${kidsMode ? "mt-8 text-center text-base font-bold" : "mt-6 text-sm"}`}>
-              {flipped
-                ? kidsMode
-                  ? "Great! Tap a button below"
-                  : "Swipe right = confident · left = not confident"
-                : kidsMode
-                  ? "Tap to hear the word!"
-                  : "Tap to flip"}
-            </p>
-            {cardProgress && (
-              <p className="mt-2 text-xs font-medium text-zinc-500">
-                Last rated:{" "}
-                {cardProgress.confidence === "confident" ? "Confident" : "Not confident"}
-              </p>
-            )}
+            Shuffle {shuffled ? "on" : "off"}
           </button>
+          {!isSpeak ? (
+            <button
+              type="button"
+              onClick={() => setShowBackFirst((prev) => !prev)}
+              className={`h-9 rounded-full px-3 text-xs font-bold ${
+                showBackFirst ? "bg-[#5B21B6] text-white" : "bg-white text-[#4A3F66]"
+              }`}
+            >
+              {showBackFirst ? "Punjabi first" : "English first"}
+            </button>
+          ) : null}
+          {index > 0 ? (
+            <button type="button" onClick={goPrev} className="h-9 rounded-full bg-white px-3 text-xs font-bold text-[#4A3F66]">
+              Previous card
+            </button>
+          ) : null}
         </div>
+      )}
 
-        {flipped && (
-          <div className={`flex gap-2 ${kidsMode ? "gap-4" : ""}`}>
-            <button
-              type="button"
-              onClick={() => void recordConfidence("not_confident")}
-              className={`flex-1 font-semibold ${
-                kidsMode
-                  ? "rounded-2xl border-2 border-amber-300 bg-amber-100 px-4 py-5 text-lg text-amber-900"
-                  : "rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 hover:bg-amber-100 tab:h-[60px] tab:text-base"
-              }`}
-            >
-              {kidsMode ? "Try again" : "Not yet"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void recordConfidence("confident")}
-              className={`flex-1 font-semibold ${
-                kidsMode
-                  ? "rounded-2xl border-2 border-green-300 bg-green-100 px-4 py-5 text-lg text-green-900"
-                  : "rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 hover:bg-green-100 tab:h-[60px] tab:text-base"
-              }`}
-            >
-              {kidsMode ? "Got it!" : "Confident"}
-            </button>
-          </div>
-        )}
+      <div className="relative mx-auto mt-1 w-full max-w-lg flex-1 tab:max-w-[680px]" style={{ minHeight: 380 }}>
+        {orderedCards.length - index > 2 ? (
+          <div aria-hidden="true" className="absolute inset-x-[22px] bottom-[-14px] top-[22px] rounded-[28px] bg-[#E4DCF7]" />
+        ) : null}
+        {orderedCards.length - index > 1 ? (
+          <div aria-hidden="true" className="absolute inset-x-[11px] bottom-[-7px] top-[11px] rounded-[28px] bg-[#EEE8FB]" />
+        ) : null}
+        <div key={card.id} className="flashcard-rise absolute inset-0">
+          <SwipeCard
+            ref={swipeRef}
+            flipped={flipped}
+            canFlip
+            onFlip={() => {
+              setHintDismissed(true);
+              setFlipped((prev) => !prev);
+            }}
+            onSwiped={rate}
+            leftStamp={leftLabel.toUpperCase()}
+            rightStamp={rightLabel.toUpperCase()}
+            front={
+              <CardFace
+                label={frontLabel(cardType, showBackFirst)}
+                line={frontLine}
+                icon={kidsMode && card.icon_name ? emojiForIcon(card.icon_name) : null}
+                footer={
+                  isSpeak ? (
+                    <span className="flex flex-col items-center gap-2">
+                      <SpeakTimer key={card.id} />
+                      <span>Tap the card for helper words</span>
+                    </span>
+                  ) : kidsMode ? (
+                    "Tap to see the word!"
+                  ) : (
+                    "Tap to flip"
+                  )
+                }
+              />
+            }
+            back={
+              <CardFace
+                label={isQuestion ? "Example answer" : isSpeak ? "Helper words" : promptText}
+                labelIsPrompt={!isQuestion && !isSpeak}
+                line={backLine}
+                example={
+                  (cardType === "word" || isSpeak) && card.example_sentence_gurmukhi
+                    ? {
+                        label: isSpeak ? "Start like this" : "In a sentence",
+                        gurmukhi: card.example_sentence_gurmukhi,
+                        romanised: card.example_sentence_romanised ?? null,
+                        english: card.example_sentence_english ?? null,
+                      }
+                    : null
+                }
+                footer={cardProgress ? `Last time: ${cardProgress.confidence === "confident" ? rightLabel : leftLabel}` : "Swipe or tap a button"}
+              />
+            }
+            overlay={
+              showHint ? (
+                <button
+                  type="button"
+                  onClick={() => setHintDismissed(true)}
+                  className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 rounded-[28px] bg-[#1F1640]/80 p-6 text-white"
+                >
+                  <span className="font-heading text-[22px] font-bold leading-tight">Swipe to rate each card</span>
+                  <span className="grid w-full grid-cols-2 gap-3">
+                    <span className="flex flex-col items-center gap-1 rounded-[18px] bg-orange-100 px-2 py-3 text-orange-800">
+                      <span className="text-2xl font-extrabold leading-none">←</span>
+                      <span className="text-[15px] font-bold">{leftLabel}</span>
+                    </span>
+                    <span className="flex flex-col items-center gap-1 rounded-[18px] bg-teal-100 px-2 py-3 text-teal-800">
+                      <span className="text-2xl font-extrabold leading-none">→</span>
+                      <span className="text-[15px] font-bold">{rightLabel}</span>
+                    </span>
+                  </span>
+                  <span className="text-sm text-violet-200">Or use the buttons below. Tap to start.</span>
+                </button>
+              ) : null
+            }
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => swipeRef.current?.fling("left")}
+          className="h-14 rounded-[18px] bg-orange-100 text-base font-bold text-orange-800 active:scale-[0.98]"
+        >
+          ← {leftLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => swipeRef.current?.fling("right")}
+          className="h-14 rounded-[18px] bg-teal-700 text-base font-bold text-white active:scale-[0.98]"
+        >
+          {rightLabel} →
+        </button>
       </div>
     </div>
   );
+}
+
+function frontLabel(type: FlashcardCardType, punjabiFirst: boolean): string {
+  if (punjabiFirst) return "What does it mean?";
+  if (type === "sentence") return "Say the whole sentence";
+  if (type === "question") return "Answer out loud";
+  if (type === "speak") return "Talk for 60 seconds";
+  return "Say it in Punjabi";
+}
+
+const GURMUKHI_TEXT = /[\u0A00-\u0A7F]/;
+
+/** Big, centred text that shrinks for long sentences so it always fits the card. */
+function sizeFor(text: string): string {
+  const length = [...text].length;
+  if (length <= 14) return "text-[44px] leading-[1.15]";
+  if (length <= 28) return "text-[34px] leading-[1.2]";
+  if (length <= 60) return "text-[26px] leading-[1.3]";
+  return "text-[21px] leading-[1.35]";
+}
+
+function CardFace({
+  label,
+  labelIsPrompt = false,
+  line,
+  icon = null,
+  example = null,
+  footer,
+}: {
+  label: string;
+  labelIsPrompt?: boolean;
+  line: { text: string; romanised: string | null };
+  icon?: string | null;
+  example?: { label: string; gurmukhi: string; romanised: string | null; english: string | null } | null;
+  footer: React.ReactNode;
+}) {
+  const gurmukhi = GURMUKHI_TEXT.test(line.text);
+  return (
+    <div className="flex h-full flex-col items-center justify-center px-6 pb-14 pt-12 text-center text-[#1F1640]">
+      <span
+        className={`absolute top-6 px-6 ${
+          labelIsPrompt ? "text-[15px] font-medium text-[#6B5F8A]" : "text-[13px] font-bold uppercase tracking-[0.08em] text-[#6B5F8A]"
+        }`}
+      >
+        {label}
+      </span>
+      {icon ? (
+        <span className="mb-3 text-6xl" aria-hidden="true">
+          {icon}
+        </span>
+      ) : null}
+      <span
+        className={`${sizeFor(line.text)} font-bold ${
+          gurmukhi ? "font-[family-name:var(--font-gurmukhi)]" : "font-heading"
+        }`}
+      >
+        {line.text}
+      </span>
+      {line.romanised && gurmukhi ? (
+        <span className="mt-2 text-xl font-medium text-[#5B21B6]">{line.romanised}</span>
+      ) : null}
+      {example ? (
+        <span className="mt-6 flex w-full flex-col items-center gap-1 rounded-[18px] bg-[#F7F5FC] px-4 py-3 text-center">
+          <span className="text-xs font-bold uppercase tracking-[0.08em] text-[#6B5F8A]">{example.label}</span>
+          <span className="font-[family-name:var(--font-gurmukhi)] text-lg font-medium">{example.gurmukhi}</span>
+          {example.romanised || example.english ? (
+            <span className="text-sm text-[#4A3F66]">
+              {[example.romanised, example.english].filter(Boolean).join(" · ")}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+      <span className="absolute bottom-5 text-sm font-medium text-[#6B5F8A]">{footer}</span>
+    </div>
+  );
+}
+
+/** "Speak about" cards: a 60 second talk timer, started by tapping. */
+function SpeakTimer() {
+  const [endsAt, setEndsAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (endsAt == null) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [endsAt]);
+  if (endsAt == null) {
+    return (
+      <span
+        role="button"
+        tabIndex={0}
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerUp={(event) => {
+          event.stopPropagation();
+          setEndsAt(Date.now() + 60_000);
+          setNow(Date.now());
+        }}
+        className="inline-flex h-10 items-center rounded-full bg-[#5B21B6] px-4 text-sm font-bold text-white"
+      >
+        Start 60s timer
+      </span>
+    );
+  }
+  const left = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  return <span className="text-base font-bold tabular-nums text-[#5B21B6]">{left > 0 ? `${left}s left` : "Time's up!"}</span>;
 }
 
 function StudySessionSummary({

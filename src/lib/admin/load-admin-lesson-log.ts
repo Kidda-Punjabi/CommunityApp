@@ -9,7 +9,8 @@ export type LessonLogStatus = "Scheduled" | "Completed" | "Cancelled";
 export type LessonLogAttentionReason =
   | "unresolved_tutor"
   | "missing_recording"
-  | "unlinked_package";
+  | "unlinked_package"
+  | "needs_review";
 
 export type AdminLessonLogEntry = {
   id: string;
@@ -108,6 +109,7 @@ type EntryRow = {
   dismissed_at?: string | null;
   is_cover_session?: boolean | null;
   actual_tutor_id?: string | null;
+  needs_review?: boolean | null;
 };
 
 function asFieldSource(value: string | null): "notion" | "manual" {
@@ -177,7 +179,7 @@ export async function loadAdminLessonLogSnapshot(
   };
 
   const selectWithSources =
-    "id, notion_page_id, cohort_id, package_instance_id, lesson_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, is_cover_session, actual_tutor_id, status, reviewed, status_source, reviewed_source, notes_source, notion_sync_status, notion_sync_error, notion_synced_at, source, dismissed_at";
+    "id, notion_page_id, cohort_id, package_instance_id, lesson_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, is_cover_session, actual_tutor_id, status, reviewed, status_source, reviewed_source, notes_source, notion_sync_status, notion_sync_error, notion_synced_at, source, dismissed_at, needs_review";
   const selectWithoutSources =
     "id, notion_page_id, cohort_id, package_instance_id, lesson_title, lesson_date, recording_url, slides_url, flashcards_url, notes, notion_tutor_user_id, status, reviewed, notion_sync_status, notion_sync_error, notion_synced_at, source";
 
@@ -194,7 +196,8 @@ export async function loadAdminLessonLogSnapshot(
       first.error?.message.includes("reviewed_source") ||
       first.error?.message.includes("notes_source") ||
       first.error?.message.includes("dismissed_at") ||
-      first.error?.message.includes("lesson_id")
+      first.error?.message.includes("lesson_id") ||
+      first.error?.message.includes("needs_review")
     ) {
       const second = await supabase
         .from("cohort_lesson_log_entries")
@@ -402,6 +405,9 @@ export async function loadAdminLessonLogSnapshot(
     if (!row.cohort_id && !row.package_instance_id && !row.dismissed_at) {
       attentionReasons.push("unlinked_package");
       unlinked += 1;
+    }
+    if (row.needs_review === true && !row.dismissed_at) {
+      attentionReasons.push("needs_review");
     }
     if (attentionReasons.length > 0) attention += 1;
 

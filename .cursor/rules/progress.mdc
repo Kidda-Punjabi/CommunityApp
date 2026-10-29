@@ -1,0 +1,15 @@
+---
+description: Progress checklist and time estimate for every build task
+alwaysApply: true
+---
+Before writing any code:
+1. Read the task and post a numbered checklist of every step, including deploy and verification.
+2. Next to each step, give a rough time estimate (e.g. ~5 min) and a total at the top.
+3. Flag anything that needs my input before you start.
+
+While working:
+- After finishing each step, repost the checklist with ✅ done, 🔄 in progress, ⬜ not started, plus "X of Y done, about N min left".
+- If a step takes much longer than estimated, say why and give a new estimate.
+
+At the end:
+- Post the final checklist, what was deployed, and anything not done or uncertain.

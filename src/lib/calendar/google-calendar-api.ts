@@ -1,4 +1,5 @@
 import { calendarSyncRangeEnd, calendarSyncRangeStart } from "@/lib/calendar/constants";
+import { googleEventTimeZone } from "@/lib/calendar/event-timezone";
 import type { GoogleCalendarEvent } from "@/lib/calendar/types";
 
 type GoogleEventsListResponse = {
@@ -7,7 +8,7 @@ type GoogleEventsListResponse = {
   nextSyncToken?: string;
 };
 
-type GoogleApiDate = { dateTime?: string; date?: string };
+type GoogleApiDate = { dateTime?: string; date?: string; timeZone?: string };
 
 type GoogleApiEvent = {
   id?: string;
@@ -65,6 +66,7 @@ function mapGoogleEvent(event: GoogleApiEvent): GoogleCalendarEvent | null {
     summary: event.summary?.trim() || "Lesson",
     start: startIso,
     end: endIso,
+    timeZone: googleEventTimeZone(event.start, event.end),
     hangoutLink: extractMeetLink(event),
     location: event.location ?? null,
     attendeeEmails,

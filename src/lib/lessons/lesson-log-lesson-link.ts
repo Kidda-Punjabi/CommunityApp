@@ -46,7 +46,7 @@ export async function resolveCurriculumLessonForCohortLogEntry(
 
   const { data: logRows, error: logError } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, lesson_date, status, dismissed_at")
+    .select("id, lesson_date, status, dismissed_at, needs_review")
     .eq("cohort_id", cohortId)
     .order("lesson_date", { ascending: true })
     .order("id", { ascending: true });
@@ -57,6 +57,7 @@ export async function resolveCurriculumLessonForCohortLogEntry(
     isCompletedLessonLogEntry({
       status: row.status as string | null,
       dismissed_at: (row.dismissed_at as string | null) ?? null,
+      needs_review: (row.needs_review as boolean | null) ?? null,
     })
   );
   const index = countable.findIndex((row) => row.id === entryId);
@@ -130,7 +131,7 @@ export async function syncCohortLessonLogLessonIds(
 
   const { data: logRows, error: logError } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, lesson_date, status, lesson_id, dismissed_at")
+    .select("id, lesson_date, status, lesson_id, dismissed_at, needs_review")
     .eq("cohort_id", cohortId)
     .order("lesson_date", { ascending: true })
     .order("id", { ascending: true });
@@ -144,6 +145,7 @@ export async function syncCohortLessonLogLessonIds(
     isCompletedLessonLogEntry({
       status: row.status as string | null,
       dismissed_at: (row.dismissed_at as string | null) ?? null,
+      needs_review: (row.needs_review as boolean | null) ?? null,
     })
   );
   const updates = assignMissingLessonIds(
@@ -167,10 +169,12 @@ export async function syncCohortLessonLogLessonIds(
 
   // Cancelled, dismissed, and other non-countable rows should not keep a curriculum link.
   for (const row of logRows ?? []) {
+    if (row.needs_review === true) continue;
     if (
       isCompletedLessonLogEntry({
         status: row.status as string | null,
         dismissed_at: (row.dismissed_at as string | null) ?? null,
+        needs_review: (row.needs_review as boolean | null) ?? null,
       })
     ) {
       continue;

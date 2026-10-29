@@ -142,7 +142,7 @@ export async function loadParentKidsCourseProgress(
         groupCohortIds.length
           ? unlockDb
               .from("cohort_lesson_log_entries")
-              .select("cohort_id, lesson_id, lesson_date, status, dismissed_at")
+              .select("cohort_id, lesson_id, lesson_date, status, dismissed_at, needs_review")
               .in("cohort_id", groupCohortIds)
               .not("lesson_id", "is", null)
               .lte("lesson_date", today)
@@ -180,6 +180,7 @@ export async function loadParentKidsCourseProgress(
         !isCompletedLessonLogEntry({
           status: row.status as string | null,
           dismissed_at: (row.dismissed_at as string | null) ?? null,
+          needs_review: (row.needs_review as boolean | null) ?? null,
         })
       ) {
         continue;

@@ -246,6 +246,41 @@ export async function saveAdminLessonLogRecordingForLearn(
   }
 }
 
+/** Clear needs_review, count the row for pay, and unlock the lesson for the student. */
+export async function approveAdminLessonLogReview(entryId: string): Promise<ActionResult> {
+  try {
+    await requireAdminFromActions();
+    const { createClient } = await import("@/lib/supabase/server");
+    const authClient = await createClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const supabase = createServiceRoleClient();
+    const { approveLessonLogReview } = await import("@/lib/lessons/approve-lesson-log-review");
+    const result = await approveLessonLogReview(supabase, {
+      entryId,
+      approvedBy: user.id,
+    });
+    if (!result.ok) return { error: result.error };
+
+    revalidateLessonLog();
+    revalidatePath("/admin/packages");
+    revalidatePath("/dashboard/learn");
+    revalidatePath("/dashboard/tutor");
+    revalidatePath("/dashboard/kids");
+    return {
+      success:
+        result.unlockedCount > 0
+          ? "Approved. This lesson now counts for pay and is unlocked for the student."
+          : "Approved. This lesson now counts for pay.",
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to approve this lesson." };
+  }
+}
+
 export async function unlockAdminLessonLogEntry(entryId: string): Promise<ActionResult> {
   try {
     await requireAdminFromActions();

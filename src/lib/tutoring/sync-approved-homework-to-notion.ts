@@ -69,7 +69,7 @@ async function findLessonLogNotionPageId(
 
   const { data: logRows } = await supabase
     .from("cohort_lesson_log_entries")
-    .select("id, notion_page_id, status, lesson_date, lesson_id, dismissed_at")
+    .select("id, notion_page_id, status, lesson_date, lesson_id, dismissed_at, needs_review")
     .eq("cohort_id", cohortId)
     .order("lesson_date", { ascending: true })
     .order("id", { ascending: true });
@@ -78,6 +78,7 @@ async function findLessonLogNotionPageId(
     isCompletedLessonLogEntry({
       status: row.status as string | null,
       dismissed_at: (row.dismissed_at as string | null) ?? null,
+      needs_review: (row.needs_review as boolean | null) ?? null,
     })
   );
   const matchedByLessonId = countable.find((row) => row.lesson_id === lessonId);

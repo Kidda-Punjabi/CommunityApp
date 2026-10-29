@@ -54,27 +54,29 @@ function SuccessView({ result }: { result: CheckInSuccess }) {
 }
 
 export function CheckInPanel({ occurrenceId, onSuccess }: { occurrenceId?: string; onSuccess?: () => void }) {
-  const [digits, setDigits] = useState(["", "", "", ""]);
+  // One real input drawn as four boxes. Separate inputs made phones reset the keyboard
+  // to letters every time focus jumped to the next box, which broke typing numbers.
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [success, setSuccess] = useState<CheckInSuccess | null>(null);
   const router = useRouter();
-  const refs = useRef<Array<HTMLInputElement | null>>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const busy = useRef(false);
 
-  async function submit(next: string[]) {
-    const code = next.join("");
-    if (code.length < 4 || busy.current) return;
+  async function submit(value: string) {
+    if (value.length < 4 || busy.current) return;
     busy.current = true;
     setPending(true);
     setError(null);
-    const result = occurrenceId ? await submitCheckIn(occurrenceId, code) : await checkInByCode(code);
+    const result = occurrenceId ? await submitCheckIn(occurrenceId, value) : await checkInByCode(value);
     busy.current = false;
     setPending(false);
     if ("error" in result && result.error) {
       setError(result.error);
-      setDigits(["", "", "", ""]);
-      refs.current[0]?.focus();
+      setCode("");
+      inputRef.current?.focus();
       return;
     }
     if ("ok" in result && result.ok) {
@@ -85,75 +87,52 @@ export function CheckInPanel({ occurrenceId, onSuccess }: { occurrenceId?: strin
     }
   }
 
-  function fill(raw: string) {
+  function update(raw: string) {
     const chars = takeCheckinChars(raw);
-    if (!chars) return;
-    const next = ["", "", "", ""];
-    [...chars].forEach((char, index) => {
-      next[index] = char;
-    });
-    setDigits(next);
+    setCode(chars);
     setError(null);
-    if (chars.length >= 4) void submit(next);
-    else refs.current[chars.length]?.focus();
+    if (chars.length >= 4) void submit(chars);
   }
 
   if (success) return <SuccessView result={success} />;
 
+  const activeIndex = Math.min(code.length, 3);
+
   return (
     <div>
-      <p className="text-base font-semibold text-[#1F1640]">Enter the code Arsh shows on screen</p>
-      <div className="mt-4 grid grid-cols-4 gap-2" onPaste={(event) => {
-        const text = event.clipboardData.getData("text");
-        if (!takeCheckinChars(text)) return;
-        event.preventDefault();
-        fill(text);
-      }}>
-        {digits.map((digit, index) => (
-          <input
-            key={index}
-            ref={(node) => {
-              refs.current[index] = node;
-            }}
-            value={digit}
-            inputMode="text"
-            autoCapitalize="characters"
-            autoCorrect="off"
-            autoComplete="off"
-            spellCheck={false}
-            maxLength={4}
-            aria-label={`Code character ${index + 1}`}
-            disabled={pending}
-            className="h-16 w-full min-w-0 rounded-[18px] border border-[#E4DFEE] bg-[#F7F5FC] text-center text-3xl font-extrabold uppercase text-[#1F1640] disabled:opacity-60"
-            onPaste={(event) => {
-              const text = event.clipboardData.getData("text");
-              if (!takeCheckinChars(text)) return;
-              event.preventDefault();
-              fill(text);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Backspace" && !digits[index] && index > 0) {
-                const next = [...digits];
-                next[index - 1] = "";
-                setDigits(next);
-                refs.current[index - 1]?.focus();
-              }
-            }}
-            onChange={(event) => {
-              const chars = takeCheckinChars(event.target.value);
-              if (chars.length > 1) {
-                fill(chars);
-                return;
-              }
-              const next = [...digits];
-              next[index] = chars;
-              setDigits(next);
-              setError(null);
-              if (chars && index < 3) refs.current[index + 1]?.focus();
-              if (next.every(Boolean)) void submit(next);
-            }}
-          />
-        ))}
+      <label htmlFor="community-checkin-code" className="block text-base font-semibold text-[#1F1640]">
+        Enter the code Arsh shows on screen
+      </label>
+      <div className="relative mt-4" onClick={() => inputRef.current?.focus()}>
+        <div className="grid grid-cols-4 gap-2" aria-hidden="true">
+          {[0, 1, 2, 3].map((index) => (
+            <div
+              key={index}
+              className={`flex h-16 items-center justify-center rounded-[18px] border bg-[#F7F5FC] text-3xl font-extrabold uppercase text-[#1F1640] ${
+                focused && index === activeIndex && !pending ? "border-[#5B21B6] ring-2 ring-[#DDD6FE]" : "border-[#E4DFEE]"
+              } ${pending ? "opacity-60" : ""}`}
+            >
+              {code[index] ?? ""}
+            </div>
+          ))}
+        </div>
+        <input
+          id="community-checkin-code"
+          ref={inputRef}
+          value={code}
+          inputMode="text"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          autoComplete="one-time-code"
+          spellCheck={false}
+          maxLength={4}
+          disabled={pending}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onChange={(event) => update(event.target.value)}
+          className="absolute inset-0 h-full w-full cursor-text opacity-0"
+          style={{ fontSize: 16, caretColor: "transparent" }}
+        />
       </div>
       {error ? <p className="mt-3 text-sm font-semibold text-red-700">{error}</p> : null}
     </div>

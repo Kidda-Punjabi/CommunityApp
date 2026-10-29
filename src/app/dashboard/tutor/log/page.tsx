@@ -1,3 +1,4 @@
+import { canAccessAdminPanel } from "@/lib/auth/admin-access";
 import { LogLessonFlow } from "@/components/tutor/log-lesson-flow";
 import type { CoverTutorChoice } from "@/lib/tutoring/cover-lesson";
 import { loadLogLessonCatalog } from "@/lib/tutoring/load-log-lesson-catalog";
@@ -51,11 +52,13 @@ export default async function TutorLogLessonPage({ searchParams }: LogPageProps)
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+  const canOverrideEarlyLog = await canAccessAdminPanel(user, supabase);
 
   return (
     <LogLessonFlow
       catalog={catalog}
       today={today}
+      canOverrideEarlyLog={canOverrideEarlyLog}
       initialCohortId={params.cohort?.trim() || null}
       initialPackageId={params.student?.trim() || null}
       userId={user.id}
