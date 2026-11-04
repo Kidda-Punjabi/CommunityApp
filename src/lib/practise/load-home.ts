@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { cleanTopic, isItemDone, poolFor, rulesAt, skillsForLevel } from "./content";
+import { cleanTopic, isItemDone, type Item, poolFor, rulesAt, skillsForLevel } from "./content";
 import { ITEM_DONE_AT, LEVELS, RULE_CORRECT_PER_STAR } from "./levels";
 import type { CheckPartState, ChecklistRow, PractiseHome, PractiseSkill, SkillSummary } from "./types";
 
@@ -34,6 +34,21 @@ export async function loadProgress(supabase: SupabaseClient, userId: string) {
   return map;
 }
 
+/** Sentences are grouped by what the learner does with them, never by course week. */
+function groupLabel(level: number, skill: PractiseSkill, i: Item) {
+  if (i.k === "w" || level === 0) return cleanTopic(i.t);
+  const question = i.g.trim().endsWith("?") || i.e.trim().endsWith("?");
+  if (skill === "listening") return question ? "Questions you'll hear" : "Things people say";
+  return question ? "Questions to ask" : "Things to say";
+}
+
+const HOW_IT_WORKS: Record<PractiseSkill, string> = {
+  words: "See the English and find the Punjabi. Get a word right twice to tick it off.",
+  grammar: "Build sentences that use each rule. Three stars ticks a rule off.",
+  listening: "Hear a sentence and pick what it means. Get each one right twice to tick it off.",
+  speaking: "See the English and say it in Punjabi. Get each one right twice to tick it off.",
+};
+
 export function summariseSkill(level: number, skill: PractiseSkill, progress: Map<string, number>): SkillSummary {
   const pool = poolFor(level, skill);
   const count = (id: string) => progress.get(`${skill}:${id}`) ?? 0;
@@ -51,7 +66,7 @@ export function summariseSkill(level: number, skill: PractiseSkill, progress: Ma
   } else {
     const groups = new Map<string, ChecklistRow>();
     for (const i of pool) {
-      const label = level === 9 ? `Level ${i.l}` : cleanTopic(i.t);
+      const label = groupLabel(level, skill, i);
       const row = groups.get(label) ?? { label, done: 0, total: 0, practised: 0 };
       row.total += 1;
       if (count(i.id) > 0) row.practised += 1;
@@ -75,6 +90,7 @@ export function summariseSkill(level: number, skill: PractiseSkill, progress: Ma
     done,
     total: pool.length,
     unit,
+    howItWorks: level === 0 ? (skill === "listening" ? "Hear a sound and pick which one it was. Get each one right twice to tick it off." : "Hear the sound, say it out loud, then rate yourself.") : HOW_IT_WORKS[skill],
     passLabel,
     focus: next?.label ?? "Keep it sharp",
     rows,

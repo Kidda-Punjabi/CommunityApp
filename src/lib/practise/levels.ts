@@ -17,8 +17,12 @@ export const LEVELS: LevelMeta[] = [
 /** Turn off to hide every "Drafted, needs check" row from learners until a tutor has checked it. */
 export const INCLUDE_DRAFTED_CONTENT = true;
 
-export const ROUND_SIZE = 8;
+export const ROUND_SIZE = 12;
 /** Correct answers before a word or sentence counts as done on the checklist. */
 export const ITEM_DONE_AT = 2;
 /** Correct answers per star on a grammar rule. Three stars ticks the rule. */
 export const RULE_CORRECT_PER_STAR = 4;
+
+export const XP_PER_CORRECT = 2;
+export const XP_ROUND_BONUS = 5;
+export const DAILY_XP_GOAL = 50;
