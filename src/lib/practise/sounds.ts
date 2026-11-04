@@ -19,6 +19,7 @@ const CUES = {
 export type PractiseCue = keyof typeof CUES;
 
 let context: AudioContext | null = null;
+let chain: Promise<void> = Promise.resolve();
 
 export function usePractiseSound() {
   const { soundEnabled, soundVolume } = useAudioManager();
@@ -28,20 +29,26 @@ export function usePractiseSound() {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctx) return;
       context ??= new Ctx();
-      void context.resume().catch(() => undefined);
-      const now = context.currentTime;
-      for (const [frequency, start, duration, gain, type] of CUES[cue] as Note[]) {
-        const osc = context.createOscillator();
-        const amp = context.createGain();
-        osc.type = type ?? "sine";
-        osc.frequency.setValueAtTime(frequency, now + start);
-        amp.gain.setValueAtTime(0.0001, now + start);
-        amp.gain.exponentialRampToValueAtTime(Math.max(0.001, gain * soundVolume), now + start + 0.012);
-        amp.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
-        osc.connect(amp).connect(context.destination);
-        osc.start(now + start);
-        osc.stop(now + start + duration + 0.02);
-      }
+      const ctx = context;
+      // Resume first. A listen clip can suspend the context, and a cue scheduled before resume is skipped.
+      const ready = ctx.state === "running" ? Promise.resolve() : ctx.resume();
+      chain = chain.then(async () => {
+        await Promise.race([ready, new Promise((resolve) => window.setTimeout(resolve, 400))]);
+        if (ctx.state !== "running") return;
+        const now = ctx.currentTime;
+        for (const [frequency, start, duration, gain, type] of CUES[cue] as Note[]) {
+          const osc = ctx.createOscillator();
+          const amp = ctx.createGain();
+          osc.type = type ?? "sine";
+          osc.frequency.setValueAtTime(frequency, now + start);
+          amp.gain.setValueAtTime(0.0001, now + start);
+          amp.gain.exponentialRampToValueAtTime(Math.max(0.001, gain * soundVolume), now + start + 0.012);
+          amp.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
+          osc.connect(amp).connect(ctx.destination);
+          osc.start(now + start);
+          osc.stop(now + start + duration + 0.02);
+        }
+      }).catch(() => undefined);
     },
     [soundEnabled, soundVolume]
   );

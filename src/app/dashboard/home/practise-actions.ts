@@ -69,15 +69,27 @@ function distractors(item: Item, pool: Item[], n: number, text: (i: Item) => str
   return out;
 }
 
-/** Undone items first, recent misses at the front, with a little review of finished ones. */
-function pickItems(pool: Item[], skill: PractiseSkill, progress: Map<string, number>) {
+/**
+ * Mostly words and sentences the learner has never practised.
+ * One already-started item is mixed in when there are plenty of new ones left.
+ * Finished items are only used once the new ones run out.
+ */
+function pickRoundItems(pool: Item[], skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>) {
   const count = (i: Item) => progress.get(`${skill}:${i.id}`) ?? 0;
-  const open = pool.filter((i) => !isItemDone(skill, count(i)));
-  const done = pool.filter((i) => isItemDone(skill, count(i)));
-  const started = shuffle(open.filter((i) => count(i) > 0));
-  const fresh = open.filter((i) => count(i) === 0).slice(0, ROUND_SIZE * 2);
-  // Finished items top the round up, so it never runs short near the end of a level.
-  return [...started.slice(0, 4), ...shuffle(fresh), ...started.slice(4), ...shuffle(done)].slice(0, ROUND_SIZE);
+  const available = pool.filter((i) => !used.has(i.id));
+  const fresh = shuffle(available.filter((i) => count(i) === 0));
+  const started = shuffle(available.filter((i) => count(i) > 0 && !isItemDone(skill, count(i))));
+  const done = shuffle(available.filter((i) => isItemDone(skill, count(i))));
+  const reviewSlots = fresh.length >= n ? Math.min(started.length, n >= 3 ? 1 : 0) : 0;
+  const picked = [...fresh.slice(0, n - reviewSlots), ...started.slice(0, reviewSlots)];
+  if (picked.length < n) {
+    for (const item of [...fresh.slice(Math.max(0, n - reviewSlots)), ...started.slice(reviewSlots), ...done]) {
+      if (picked.length === n) break;
+      if (!picked.includes(item)) picked.push(item);
+    }
+  }
+  for (const item of picked) used.add(item.id);
+  return shuffle(picked);
 }
 
 function answerOf(i: Item) {
@@ -120,7 +132,7 @@ function savedLabel(skill: PractiseSkill, item: Item) {
   return item.e || item.r || item.g;
 }
 
-function questionsFor(skill: PractiseSkill, level: number, progress: Map<string, number>, n: number): RoundQuestion[] {
+function questionsFor(skill: PractiseSkill, level: number, progress: Map<string, number>, n: number, used: Set<string>): RoundQuestion[] {
   const pool = poolFor(level, skill);
   if (!pool.length || n <= 0) return [];
   if (skill === "grammar") {
@@ -129,9 +141,8 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
     // Next rule first. A rule with few sentences hands over to the one after it.
     const rules = [...open, ...pool.filter((r) => !open.includes(r))].sort((x, y) => Number(isItemDone("grammar", count(x))) - Number(isItemDone("grammar", count(y))) || count(x) - count(y));
     const out: RoundQuestion[] = [];
-    const used = new Set<string>();
     for (const rule of rules) {
-      for (const s of sample(grammarSentencesFor(rule), n)) {
+      for (const s of shuffle(grammarSentencesFor(rule))) {
         if (out.length >= n || used.has(s.id)) continue;
         used.add(s.id);
         out.push({ skill, itemId: rule.id, type: "tiles", heading: rule.e, prompt: s.e, tiles: shuffle(s.r.split(/\s+/)), answer: answerOf(s) });
@@ -164,7 +175,7 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
     answerId: i.id,
     answer: answerOf(i),
   });
-  return pickItems(pool, skill, progress).slice(0, n).map((i): RoundQuestion => {
+  return pickRoundItems(pool, skill, progress, n, used).map((i): RoundQuestion => {
     if (skill === "words") {
       if ((progress.get(`words:${i.id}`) ?? 0) === 0) {
         const others = distractors(i, pool, 3, (p) => p.g);
@@ -222,10 +233,11 @@ export async function startRound(): Promise<RoundQuestion[]> {
   const skills = skillsForLevel(level);
   const base = Math.floor(ROUND_SIZE / skills.length);
   let spare = ROUND_SIZE % skills.length;
+  const used = new Set<string>();
   const questions = skills.flatMap((skill) => {
     const n = base + (spare > 0 ? 1 : 0);
     if (spare > 0) spare -= 1;
-    return questionsFor(skill, level, progress, n);
+    return questionsFor(skill, level, progress, n, used);
   });
   return shuffle(questions);
 }
