@@ -149,6 +149,7 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
     prompt: i.g,
     options: shuffle([i, ...distractors(i, pool, 3, (p) => p.e)]).map((o) => ({ id: o.id, label: o.e })),
     answerId: i.id,
+    audioKey: i.id,
     answer: answerOf(i),
   });
   const pickPunjabi = (i: Item): RoundQuestion => ({
@@ -158,6 +159,7 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
     uncounted: skill !== "words",
     heading: "Pick the Punjabi",
     prompt: i.e,
+    audioKey: i.id,
     options: shuffle([i, ...distractors(i, pool, 3, (p) => p.g)]).map(wordOption),
     answerId: i.id,
     answer: answerOf(i),
@@ -174,6 +176,7 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
           prompt: i.e,
           options: shuffle([i, ...others]).map(wordOption),
           answerId: i.id,
+          audioKey: i.id,
           answer: answerOf(i),
         };
       }

@@ -97,7 +97,7 @@ export function StreakCelebration({ from, to, today, playedDates, onContinue, pl
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const moved = from !== to;
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-110px)] w-full max-w-md flex-col px-4 pb-5 pt-6">
+    <div className="mx-auto flex h-dvh w-full max-w-md flex-col px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
       <StreakStyles />
       <div className="flex flex-1 flex-col items-center justify-center">
         <div className="relative kp-anim" style={{ animation: "kp-bounce 650ms ease-out 700ms both" }}>
@@ -150,7 +150,7 @@ export function XpProgress({ earned, today, goal }: { earned: number; today: num
   const left = Math.max(0, goal - today);
   return (
     <div>
-      <p className="text-center text-[44px] font-extrabold leading-none tracking-tight text-amber-500" aria-label={`Plus ${earned} XP`}>+{shown} XP</p>
+      {earned > 0 ? <p className="text-center text-[44px] font-extrabold leading-none tracking-tight text-amber-500" aria-label={`Plus ${earned} XP`}>+{shown} XP</p> : null}
       <div className="mt-4 flex items-center gap-2">
         <div className="h-5 flex-1 overflow-hidden rounded-full bg-zinc-200" role="progressbar" aria-valuenow={Math.min(today, goal)} aria-valuemax={goal} aria-label="XP towards today's goal">
           <div className="relative h-full rounded-full bg-amber-400 transition-[width] duration-[900ms] ease-out" style={{ width: `${width}%` }}>
