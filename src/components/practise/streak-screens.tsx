@@ -137,20 +137,67 @@ function useCountUp(target: number, delay = 300, duration = 800) {
   return value;
 }
 
-/** XP counts up and today's bar fills towards the daily goal. */
+function useCountBetween(from: number, to: number, run: boolean, duration = 650) {
+  const [value, setValue] = useState(from);
+  useEffect(() => {
+    if (!run) {
+      setValue(from);
+      return;
+    }
+    let frame = 0;
+    const started = performance.now();
+    const tick = (now: number) => {
+      const t = Math.max(0, Math.min(1, (now - started) / duration));
+      setValue(Math.round(from + (to - from) * (1 - (1 - t) ** 3)));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [from, to, run, duration]);
+  return value;
+}
+
+/** This round's XP counts up, then merges into today's total as that number ticks up. */
 export function XpProgress({ earned, today, goal }: { earned: number; today: number; goal: number }) {
-  const shown = useCountUp(earned);
-  const before = Math.min(100, ((today - earned) / goal) * 100);
+  const gain = Math.max(0, earned);
+  const beforeTotal = Math.max(0, today - gain);
+  const [phase, setPhase] = useState<"gain" | "smash" | "total">(gain > 0 ? "gain" : "total");
+  const plus = useCountUp(gain, 150, 700);
+  const merging = phase !== "gain";
+  const totalShown = useCountBetween(beforeTotal, today, merging, 700);
+  useEffect(() => {
+    if (gain <= 0) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      setPhase("total");
+      return;
+    }
+    const smash = window.setTimeout(() => setPhase("smash"), 1000);
+    const done = window.setTimeout(() => setPhase("total"), 1320);
+    return () => {
+      window.clearTimeout(smash);
+      window.clearTimeout(done);
+    };
+  }, [gain]);
+  const before = Math.min(100, (beforeTotal / goal) * 100);
   const after = Math.min(100, (today / goal) * 100);
   const [width, setWidth] = useState(before);
   useEffect(() => {
-    const t = setTimeout(() => setWidth(after), 350);
+    if (!merging) return;
+    const t = setTimeout(() => setWidth(after), 40);
     return () => clearTimeout(t);
-  }, [after]);
+  }, [merging, after]);
   const left = Math.max(0, goal - today);
+  const totalIsHero = phase === "total";
   return (
     <div>
-      {earned > 0 ? <p className="text-center text-[44px] font-extrabold leading-none tracking-tight text-amber-500" aria-label={`Plus ${earned} XP`}>+{shown} XP</p> : null}
+      <style>{`@keyframes xp-smash { to { opacity: 0; transform: translateY(34px) scale(.42); } } @keyframes xp-pop { 0% { transform: scale(.86); } 55% { transform: scale(1.08); } 100% { transform: scale(1); } }`}</style>
+      <div className="relative mx-auto h-[76px]">
+        {gain > 0 && phase !== "total" ? (
+          <p className="absolute inset-x-0 top-0 text-center text-[44px] font-extrabold leading-none tracking-tight text-amber-500" style={phase === "smash" ? { animation: "xp-smash 320ms ease-in forwards" } : undefined} aria-label={`Plus ${gain} XP`}>+{plus} XP</p>
+        ) : null}
+        <p className={`absolute inset-x-0 text-center font-extrabold leading-none tracking-tight ${totalIsHero ? "top-2 text-[40px] text-amber-500" : "top-[50px] text-lg text-zinc-500"}`} style={totalIsHero && gain > 0 ? { animation: "xp-pop 420ms ease-out" } : undefined} aria-label={`${today} XP today`}>{totalIsHero ? totalShown : beforeTotal} today</p>
+      </div>
       <div className="mt-4 flex items-center gap-2">
         <div className="h-5 flex-1 overflow-hidden rounded-full bg-zinc-200" role="progressbar" aria-valuenow={Math.min(today, goal)} aria-valuemax={goal} aria-label="XP towards today's goal">
           <div className="relative h-full rounded-full bg-amber-400 transition-[width] duration-[900ms] ease-out" style={{ width: `${width}%` }}>
