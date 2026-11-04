@@ -89,7 +89,7 @@ function Option({ label, sub, state, onClick }: { label: string; sub?: string; s
 }
 
 /** Press and hold to record, let go to check. Works in every browser that has a microphone. */
-function PushToTalk({ q, onMatch, onMiss }: { q: RoundQuestion; onMatch: () => void; onMiss: (note: string) => void }) {
+function PushToTalk({ q, onMatch, onMiss, onPress }: { q: RoundQuestion; onPress: () => void; onMatch: () => void; onMiss: (note: string, wrong?: boolean) => void }) {
   const recorder = useAudioRecorder({ maxDurationSeconds: 20 });
   const pressed = useRef(false);
   const [checking, setChecking] = useState(false);
@@ -100,6 +100,7 @@ function PushToTalk({ q, onMatch, onMiss }: { q: RoundQuestion; onMatch: () => v
   const press = async () => {
     pressed.current = true;
     setNote(null);
+    onPress();
     await startRecording();
     if (!pressed.current) stopRecording();
   };
@@ -122,7 +123,7 @@ function PushToTalk({ q, onMatch, onMiss }: { q: RoundQuestion; onMatch: () => v
       const data = (await response.json()) as { transcript?: string; error?: string };
       if (data.error || data.transcript == null) onMiss(data.error ?? "We couldn't check that one.");
       else if (similarity(data.transcript, q.answer.gurmukhi) >= 0.6) onMatch();
-      else onMiss(data.transcript.trim() ? `We heard: ${data.transcript.trim()}` : "We didn't catch that.");
+      else onMiss(data.transcript.trim() ? "Not quite. Try again." : "We didn't catch that. Try again.", Boolean(data.transcript.trim()));
     } catch {
       onMiss("We couldn't check that one.");
     } finally {
@@ -297,9 +298,9 @@ export function RoundPlayer({
         <div className="mt-6 flex flex-col items-center gap-3">
           {q.selfRateOnly && q.audioKey ? <AudioButton audioKey={q.audioKey} /> : null}
           {!q.selfRateOnly ? (
-            <PushToTalk key={`${index}-${revealed}`} q={q} onMatch={() => judge(true)} onMiss={(note) => { setMicNote(note); setRevealed(true); }} />
+            <PushToTalk key={index} q={q} onPress={() => setMicNote(null)} onMatch={() => judge(true)} onMiss={(note, wrong) => { setMicNote(note); if (wrong) sound("wrong"); }} />
           ) : null}
-          {micNote ? <p lang="pa" className="text-center text-sm font-semibold text-orange-700">{micNote}</p> : null}
+          {micNote ? <p role="status" className="flex items-center gap-2 text-[15px] font-bold text-red-700"><span aria-hidden="true" className="h-3 w-3 rounded-full bg-red-600" />{micNote}</p> : null}
           {revealed || q.selfRateOnly ? (
             <>
               {!q.selfRateOnly ? (
