@@ -159,6 +159,11 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
     try { await fn(); } catch { setError("That didn't work. Please try again."); } finally { setBusy(false); }
   };
   const mixLabel = skills.map((s) => s.label).join(", ");
+  const offNote = off.speaking || off.listening ? (
+    <button type="button" onClick={() => saveOff({ speaking: false, listening: false })} className="mb-3 w-full rounded-2xl bg-violet-50 px-3 py-3 text-left text-sm font-semibold leading-snug text-zinc-800">
+      {off.speaking && off.listening ? "Speaking and listening are off" : off.speaking ? "Speaking is off" : "Listening is off"} for this visit. Every Play skips {off.speaking && off.listening ? "them" : "it"} until you turn {off.speaking && off.listening ? "them" : "it"} back on, or close the app. <span className="font-extrabold text-violet-700">Turn back on</span>
+    </button>
+  ) : null;
   const play = () => go(async () => {
     sound("tap");
     const questions = await startRound();
@@ -350,7 +355,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
             );
           })}
         </div>
-        {target ? <div className="sticky bottom-28 mx-auto mt-3 lg:static lg:mt-5 lg:max-w-md"><BigButton title="Play" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div> : null}
+        {target ? <div className="sticky bottom-28 mx-auto mt-3 lg:static lg:mt-5 lg:max-w-md">{offNote}<BigButton title="Play" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div> : null}
         {errorNote}
       </div>
     );
@@ -411,15 +416,11 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
           {nextLevel != null ? `See what you need for Level ${nextLevel}` : "See what you need for the final check"} ›
         </button>
         {streak && !streak.lit && streak.count > 0 ? <p className="mb-2 text-center text-sm font-bold text-amber-700">Play today to keep your {streak.count} day streak</p> : null}
+        {offNote}
         {home.ready ? (
           <BigButton gold title="Take the Level Check" sub="All your skills are ready" onClick={() => setView({ name: "check" })} />
         ) : weak ? (
           <BigButton title={busy ? "Loading…" : "Play"} sub={mixLabel} disabled={busy} onClick={() => void play()} />
-        ) : null}
-        {off.speaking || off.listening ? (
-          <button type="button" onClick={() => saveOff({ speaking: false, listening: false })} className="mt-2 min-h-11 w-full text-sm font-bold text-zinc-600">
-            {off.speaking && off.listening ? "Speaking and listening are" : off.speaking ? "Speaking is" : "Listening is"} off for now. <span className="font-extrabold text-violet-700">Turn back on</span>
-          </button>
         ) : null}
         {errorNote}
       </div>

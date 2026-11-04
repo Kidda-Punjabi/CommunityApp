@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { getPractiseAudio } from "@/app/dashboard/home/practise-actions";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { recordingExtensionForBlob, useAudioRecorder } from "@/lib/audio/use-audio-recorder";
@@ -167,6 +167,110 @@ function PushToTalk({ q, onMatch, onMiss, onPress }: { q: RoundQuestion; onPress
   );
 }
 
+function SentenceTiles({ tiles, built, locked, onBuilt, onTap }: { tiles: string[]; built: number[]; locked: boolean; onBuilt: (next: number[]) => void; onTap: () => void }) {
+  const builtRef = useRef<HTMLDivElement>(null);
+  const bankRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ from: "bank" | "built"; index: number; x: number; y: number; moved: boolean } | null>(null);
+  const [drag, setDrag] = useState<{ from: "bank" | "built"; index: number; x: number; y: number; moved: boolean } | null>(null);
+  const [slot, setSlot] = useState<number | "bank" | null>(null);
+
+  const targetAt = (x: number, y: number): number | "bank" | null => {
+    const builtBox = builtRef.current?.getBoundingClientRect();
+    const bankBox = bankRef.current?.getBoundingClientRect();
+    if (builtBox && y >= builtBox.top - 28 && y <= builtBox.bottom + 18) {
+      const kids = [...(builtRef.current?.querySelectorAll<HTMLElement>("[data-pos]") ?? [])];
+      if (!kids.length) return 0;
+      let best = kids.length;
+      let bestDist = Infinity;
+      kids.forEach((el, i) => {
+        const rect = el.getBoundingClientRect();
+        const dist = Math.hypot(x - (rect.left + rect.width / 2), y - (rect.top + rect.height / 2));
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = x < rect.left + rect.width / 2 ? i : i + 1;
+        }
+      });
+      return best;
+    }
+    if (bankBox && y >= bankBox.top - 16) return "bank";
+    return null;
+  };
+
+  const cancel = () => {
+    dragRef.current = null;
+    setDrag(null);
+    setSlot(null);
+  };
+
+  const finish = (x: number, y: number) => {
+    const current = dragRef.current;
+    cancel();
+    if (!current || locked) return;
+    const place = current.moved ? targetAt(x, y) : current.from === "bank" ? built.length : "bank";
+    if (place == null) return;
+    if (current.from === "bank") {
+      if (place === "bank" || built.includes(current.index)) return;
+      const next = [...built];
+      next.splice(place, 0, current.index);
+      onBuilt(next);
+      onTap();
+      return;
+    }
+    if (place === "bank") {
+      onBuilt(built.filter((_, i) => i !== current.index));
+      onTap();
+      return;
+    }
+    const next = built.filter((_, i) => i !== current.index);
+    const at = current.index < place ? place - 1 : place;
+    next.splice(Math.max(0, Math.min(at, next.length)), 0, built[current.index]);
+    if (at !== current.index) onTap();
+    onBuilt(next);
+  };
+
+  const down = (from: "bank" | "built", index: number, event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (locked || (from === "bank" && built.includes(index))) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const next = { from, index, x: event.clientX, y: event.clientY, moved: false };
+    dragRef.current = next;
+    setDrag(next);
+  };
+
+  const move = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const current = dragRef.current;
+    if (!current) return;
+    const moved = current.moved || Math.hypot(event.clientX - current.x, event.clientY - current.y) > 8;
+    dragRef.current = { ...current, moved };
+    setDrag(moved ? { ...current, moved, x: event.clientX, y: event.clientY } : { ...current, moved: false });
+    if (moved) setSlot(targetAt(event.clientX, event.clientY));
+  };
+
+  const word = drag ? (drag.from === "bank" ? tiles[drag.index] : tiles[built[drag.index]]) : "";
+  const tileClass = "min-h-11 touch-none rounded-xl border-2 px-3 text-base font-bold";
+
+  return (
+    <div className="mt-5">
+      <div ref={builtRef} className="flex min-h-[64px] flex-wrap content-start gap-2 border-b-2 border-zinc-200 pb-3">
+        {built.flatMap((tile, position) => [
+          drag?.moved && slot === position ? <span key={`gap-${tile}`} aria-hidden="true" className="w-1 self-stretch rounded-full bg-violet-600" /> : null,
+          <button key={tile} type="button" data-pos="" onPointerDown={(event) => down("built", position, event)} onPointerMove={move} onPointerUp={(event) => finish(event.clientX, event.clientY)} onPointerCancel={cancel} className={`${tileClass} border-violet-300 bg-violet-50 text-zinc-900 ${drag?.from === "built" && drag.index === position ? "opacity-40" : ""}`}>{tiles[tile]}</button>,
+        ])}
+        {drag?.moved && slot === built.length ? <span aria-hidden="true" className="w-1 self-stretch rounded-full bg-violet-600" /> : null}
+      </div>
+      <div ref={bankRef} className="mt-4 flex flex-wrap gap-2">
+        {tiles.map((tile, index) => {
+          const taken = built.includes(index);
+          return (
+            <button key={index} type="button" disabled={taken || locked} onPointerDown={(event) => down("bank", index, event)} onPointerMove={move} onPointerUp={(event) => finish(event.clientX, event.clientY)} onPointerCancel={cancel} className={`${tileClass} ${taken ? "border-zinc-100 bg-zinc-100 text-transparent" : "border-zinc-200 bg-white text-zinc-900"} ${drag?.from === "bank" && drag.index === index ? "opacity-40" : ""}`}>{tile}</button>
+          );
+        })}
+      </div>
+      {drag?.moved && word ? <span className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 rounded-xl border-2 border-violet-400 bg-white px-3 py-2 text-base font-bold text-zinc-900 shadow-lg" style={{ left: drag.x, top: drag.y }}>{word}</span> : null}
+    </div>
+  );
+}
+
 export function applySessionOff(list: RoundQuestion[], off: { speaking: boolean; listening: boolean }) {
   return list.flatMap((q) => {
     if ((off.speaking && q.type === "say") || (off.listening && q.type === "listen")) return q.fallback ? [q.fallback] : [];
@@ -293,20 +397,7 @@ export function RoundPlayer({
         </div>
       ) : null}
 
-      {q.type === "tiles" ? (
-        <div className="mt-5">
-          <div className="flex min-h-[64px] flex-wrap content-start gap-2 border-b-2 border-zinc-200 pb-3">
-            {built.map((t) => (
-              <button key={t} type="button" onClick={() => { if (verdict === null) { sound("tap"); setBuilt(built.filter((b) => b !== t)); } }} className="min-h-11 rounded-xl border-2 border-violet-300 bg-violet-50 px-3 text-base font-bold text-zinc-900">{tiles[t]}</button>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {tiles.map((t, i) => (
-              <button key={i} type="button" disabled={built.includes(i)} onClick={() => { sound("tap"); setBuilt([...built, i]); }} className={`min-h-11 rounded-xl border-2 px-3 text-base font-bold ${built.includes(i) ? "border-zinc-100 bg-zinc-100 text-transparent" : "border-zinc-200 bg-white text-zinc-900"}`}>{t}</button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {q.type === "tiles" ? <SentenceTiles tiles={tiles} built={built} locked={verdict !== null} onBuilt={setBuilt} onTap={() => sound("tap")} /> : null}
 
       {q.type === "say" && verdict === null ? (
         <div className="mt-6 flex flex-col items-center gap-3">
