@@ -56,10 +56,10 @@ function SkillRise({ score }: { score: SkillRoundScore }) {
   const rising = gain > 0 && phase !== "before";
   const ringPct = phase === "before" ? score.creditBefore : score.creditAfter;
   return (
-    <div className="flex h-full min-h-[104px] items-center gap-3 rounded-2xl bg-violet-50 px-3 py-4">
-      <Ring pct={ringPct} skill={score.skill} size={64} tone={rising ? "full" : "normal"} />
-      <div className="min-w-0">
-        <p className="truncate text-base font-extrabold text-zinc-900">{score.label}</p>
+    <div className="flex h-full flex-col items-center justify-center gap-1 rounded-2xl bg-violet-50 px-2 py-3 text-center">
+      <Ring pct={ringPct} skill={score.skill} size={52} tone={rising ? "full" : "normal"} />
+      <div>
+        <p className="text-sm font-extrabold leading-tight text-zinc-900">{score.label}</p>
         <p className="mt-1 text-[22px] font-extrabold leading-none tabular-nums" aria-label={phase === "plus" ? `${score.creditBefore}% plus ${gain}%` : `${phase === "merged" ? score.creditAfter : score.creditBefore}%`}>
           {phase === "plus" ? (
             <span className="flex flex-col gap-1">
