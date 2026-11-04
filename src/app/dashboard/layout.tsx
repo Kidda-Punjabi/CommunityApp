@@ -152,6 +152,7 @@ export default async function DashboardLayout({
                     <ViewAsSlot />
                   </Suspense>
                   <div
+                    data-kidda-page=""
                     className={
                       kidsShellActive
                         ? `relative isolate flex w-full flex-1 flex-col ${ui.navClearance}`

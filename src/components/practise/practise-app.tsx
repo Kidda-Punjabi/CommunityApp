@@ -8,7 +8,7 @@ import { getLevelPreview, startLevelCheck, startRound, submitLevelCheck, submitR
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
 import { LEVELS } from "@/lib/practise/levels";
 import { usePractiseSound } from "@/lib/practise/sounds";
-import type { CheckQuestion, CheckResult, LevelPreview, PractiseHome, PractiseSkill, RoundAnswer, RoundQuestion, RoundResult, SkillSummary } from "@/lib/practise/types";
+import type { CheckQuestion, CheckResult, LevelPreview, PractiseHome, PractiseSkill, RoundAnswer, RoundQuestion, RoundResult, SkillRoundScore, SkillSummary } from "@/lib/practise/types";
 import { ArenaArt } from "./arena-art";
 import { LevelRoad } from "./level-road";
 import { Flame, StreakCelebration, StreakDays, StreakStyles, XpProgress } from "./streak-screens";
@@ -34,9 +34,43 @@ function Ring({ pct, skill, size = 58, tone = "normal" }: { pct: number; skill: 
     <div className="relative shrink-0" style={{ width: size, height: size, color: col }}>
       <svg aria-hidden="true" width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={bg} strokeWidth="7" />
-        {pct > 0 ? <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={col} strokeWidth="7" strokeLinecap="round" strokeDasharray={`${(c * Math.min(pct, 100)) / 100} ${c}`} className="transition-all duration-700" /> : null}
+        {pct > 0 ? <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={col} strokeWidth="7" strokeLinecap="round" strokeDasharray={`${(c * Math.min(pct, 100)) / 100} ${c}`} className="transition-[stroke,stroke-dasharray] duration-700" /> : null}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center"><Icon skill={skill} size={Math.round(size * 0.36)} /></div>
+    </div>
+  );
+}
+
+function SkillRise({ score }: { score: SkillRoundScore }) {
+  const gain = score.creditAfter - score.creditBefore;
+  const [phase, setPhase] = useState<"before" | "plus" | "merged">(gain > 0 ? "before" : "merged");
+  useEffect(() => {
+    if (gain <= 0) return;
+    const plus = window.setTimeout(() => setPhase("plus"), 700);
+    const merged = window.setTimeout(() => setPhase("merged"), 1900);
+    return () => {
+      window.clearTimeout(plus);
+      window.clearTimeout(merged);
+    };
+  }, [gain]);
+  const rising = gain > 0 && phase !== "before";
+  const ringPct = phase === "before" ? score.creditBefore : score.creditAfter;
+  return (
+    <div className="flex h-full min-h-[104px] items-center gap-3 rounded-2xl bg-violet-50 px-3 py-4">
+      <Ring pct={ringPct} skill={score.skill} size={64} tone={rising ? "full" : "normal"} />
+      <div className="min-w-0">
+        <p className="truncate text-base font-extrabold text-zinc-900">{score.label}</p>
+        <p className="mt-1 text-[22px] font-extrabold leading-none tabular-nums" aria-label={phase === "plus" ? `${score.creditBefore}% plus ${gain}%` : `${phase === "merged" ? score.creditAfter : score.creditBefore}%`}>
+          {phase === "plus" ? (
+            <span className="flex flex-col gap-1">
+              <span className="text-zinc-700">{score.creditBefore}%</span>
+              <span className="text-lg text-green-700">+{gain}%</span>
+            </span>
+          ) : (
+            <span className={rising ? "text-green-700" : "text-zinc-700"}>{phase === "merged" ? score.creditAfter : score.creditBefore}%</span>
+          )}
+        </p>
+      </div>
     </div>
   );
 }
@@ -83,7 +117,8 @@ const WIDE = "lg:relative lg:left-1/2 lg:max-w-none lg:-translate-x-1/2";
 type View =
   | { name: "home" } | { name: "checklist" } | { name: "skill"; skill: PractiseSkill } | { name: "road" }
   | { name: "preview"; data: LevelPreview } | { name: "round"; questions: RoundQuestion[] }
-  | { name: "result"; result: RoundResult; streakFrom: number } | { name: "streak"; from: number; to: number } | { name: "check" }
+  | { name: "result"; result: RoundResult; streakFrom: number }
+  | { name: "streak"; from: number; to: number; result: RoundResult } | { name: "check" }
   | { name: "checkRun"; checkId: string; questions: CheckQuestion[] } | { name: "checkResult"; result: CheckResult } | { name: "levelUp" };
 
 export function PractiseApp({ home }: { home: PractiseHome }) {
@@ -92,6 +127,12 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   const { streak, setStreak } = useStreak();
   const [streakOpen, setStreakOpen] = useState(false);
   const [view, setView] = useState<View>(home.levelUpFrom != null ? { name: "levelUp" } : { name: "home" });
+  const practiseFocus = view.name === "round" || view.name === "result" || view.name === "streak";
+  if (typeof document !== "undefined") document.documentElement.toggleAttribute("data-practise-focus", practiseFocus);
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-practise-focus", practiseFocus);
+    return () => document.documentElement.removeAttribute("data-practise-focus");
+  }, [practiseFocus]);
   const [off, setOff] = useState({ speaking: false, listening: false });
   useEffect(() => {
     try {
@@ -126,7 +167,9 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   const finishRound = (answers: RoundAnswer[]) => go(async () => {
     const result = await submitRound(answers, getLocalActivityDate());
     const today = getLocalActivityDate();
-    setView({ name: "result", result, streakFrom: streak?.lit ? streak.count : (streak?.count ?? 0) });
+    const from = streak?.lit ? streak.count : (streak?.count ?? 0);
+    if (result.streakExtended && result.streak != null) setView({ name: "streak", from, to: result.streak, result });
+    else setView({ name: "result", result, streakFrom: from });
     if (result.streak != null) setStreak({ count: result.streak, today, lit: true });
     sound("finish");
     router.refresh();
@@ -138,46 +181,33 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   if (view.name === "round") return <RoundPlayer questions={view.questions} onLeave={() => setView({ name: "home" })} onFinish={(a) => void finishRound(a)} off={off} onTurnOff={(k) => saveOff({ ...off, [k]: true })} />;
 
   if (view.name === "streak") {
-    return <StreakCelebration from={view.from} to={view.to} today={getLocalActivityDate()} playedDates={[...home.playedDates, getLocalActivityDate()]} playSound={() => sound("streak")} onContinue={() => setView({ name: "home" })} />;
+    return (
+      <div className="fixed inset-0 z-40 overflow-hidden bg-white">
+        <StreakCelebration from={view.from} to={view.to} today={getLocalActivityDate()} playedDates={[...home.playedDates, getLocalActivityDate()]} playSound={() => sound("streak")} onContinue={() => setView({ name: "result", result: view.result, streakFrom: view.from })} />
+      </div>
+    );
   }
 
   if (view.name === "result") {
     const r = view.result;
-    const showStreak = r.streakExtended && r.streak != null;
-    const carryOn = () => (showStreak ? setView({ name: "streak", from: view.streakFrom, to: r.streak! }) : setView({ name: "home" }));
     return (
-      <div className={shell}>
-        <div className="mt-2 text-center">
-          <h1 className="text-[28px] font-extrabold tracking-tight text-zinc-900">Round complete!</h1>
-          <p className="text-[15px] font-bold text-zinc-600">{r.correct} of {r.total} right</p>
+      <div className="fixed inset-0 z-40 overflow-hidden bg-zinc-50">
+      <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] lg:max-w-[640px]">
+        <h1 className="text-center text-[28px] font-extrabold tracking-tight text-zinc-900">Round complete!</h1>
+        {r.xpEarned > 0 || r.xpToday > 0 ? <div className="mt-4"><XpProgress earned={r.xpEarned} today={r.xpToday} goal={r.xpGoal} /></div> : null}
+        <div className="mt-4 grid min-h-0 flex-1 grid-cols-2 grid-rows-2 content-stretch gap-3">
+          {r.skills.map((s) => <SkillRise key={s.skill} score={s} />)}
         </div>
-        {r.xpEarned > 0 ? <div className="mt-5"><XpProgress earned={r.xpEarned} today={r.xpToday} goal={r.xpGoal} /></div> : null}
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          {r.skills.map((s) => (
-            <div key={s.skill} className="flex items-center gap-2.5 rounded-2xl bg-violet-50 p-2.5">
-              <Ring pct={s.creditAfter} skill={s.skill} size={44} />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-extrabold text-zinc-900">{s.label}</p>
-                <p className="text-xs font-bold text-zinc-700">{s.creditBefore === s.creditAfter ? `${s.creditAfter}%` : `${s.creditBefore}% to ${s.creditAfter}%`}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        {r.ticked.length ? (
-          <div className="mt-3 rounded-2xl bg-green-50 p-3">
-            <p className="text-xs font-extrabold tracking-wide text-green-800">TICKED OFF YOUR CHECKLIST</p>
-            <p className="mt-1 text-[15px] font-bold text-zinc-900">{r.ticked.slice(0, 4).join(", ")}{r.ticked.length > 4 ? ` and ${r.ticked.length - 4} more` : ""}</p>
-          </div>
-        ) : null}
         {r.saved.length ? (
           <div className="mt-3 rounded-2xl bg-zinc-50 p-3">
             <p className="text-xs font-extrabold tracking-wide text-zinc-600">YOU GOT THESE RIGHT</p>
-            <p className="mt-1 text-sm font-bold text-zinc-900">{r.saved.slice(0, 6).join(", ")}{r.saved.length > 6 ? ` and ${r.saved.length - 6} more` : ""}</p>
+            <p className="mt-1 line-clamp-3 text-sm font-bold text-zinc-900">{r.saved.slice(0, 6).join(", ")}{r.saved.length > 6 ? ` and ${r.saved.length - 6} more` : ""}</p>
           </div>
         ) : null}
-        <div className="mt-5"><BigButton title="Continue" onClick={carryOn} /></div>
-        {!showStreak ? <button type="button" disabled={busy} onClick={() => void play()} className="mt-2 min-h-11 w-full text-[15px] font-extrabold text-violet-700">Play again</button> : null}
+        <div className="mt-4"><BigButton title={busy ? "Loading…" : "Play"} disabled={busy} onClick={() => void play()} /></div>
+        <button type="button" onClick={() => setView({ name: "home" })} className="mt-2 min-h-11 w-full text-sm font-bold text-zinc-500">Done</button>
         {errorNote}
+      </div>
       </div>
     );
   }

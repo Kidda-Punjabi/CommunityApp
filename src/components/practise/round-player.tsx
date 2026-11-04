@@ -56,10 +56,17 @@ function Tortoise({ size }: { size: number }) {
   );
 }
 
-export function AudioButton({ audioKey, large, noSlow }: { audioKey: string; large?: boolean; noSlow?: boolean }) {
+export function AudioButton({ audioKey, large, noSlow, compact }: { audioKey: string; large?: boolean; noSlow?: boolean; compact?: boolean }) {
   const { play, state, playingSlow } = useQuestionAudio();
   const busyNormal = state === "playing" && !playingSlow;
   const busySlow = state === "playing" && playingSlow;
+  if (compact) {
+    return (
+      <button type="button" onClick={() => void play(audioKey, false)} aria-label="Listen" title={state === "failed" ? "Audio didn't load. Tap to try again." : "Listen"} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white ${busyNormal || state === "loading" ? "animate-pulse" : ""}`}>
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" /></svg>
+      </button>
+    );
+  }
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="flex items-center gap-3">
@@ -81,7 +88,7 @@ export function AudioButton({ audioKey, large, noSlow }: { audioKey: string; lar
 function Option({ label, sub, state, onClick }: { label: string; sub?: string; state: "" | "right" | "wrong"; onClick: () => void }) {
   const look = state === "right" ? "border-green-700 bg-green-50" : state === "wrong" ? "border-orange-700 bg-orange-50" : "border-zinc-200 bg-white active:bg-violet-50";
   return (
-    <button type="button" onClick={onClick} className={`flex min-h-[58px] w-full flex-col justify-center rounded-2xl border-2 px-4 py-2 text-left ${look}`}>
+    <button type="button" onClick={onClick} className={`flex min-h-12 w-full flex-col justify-center rounded-2xl border-2 px-4 py-1.5 text-left ${look}`}>
       <span className="text-[17px] font-bold text-zinc-900">{label}</span>
       {sub ? <span className="text-[13px] font-semibold text-zinc-600">{sub}</span> : null}
     </button>
@@ -184,6 +191,7 @@ export function RoundPlayer({
   const { soundEnabled, setSoundEnabled } = useAudioManager();
   const [queue, setQueue] = useState(() => applySessionOff(questions, off));
   const startSize = useRef(queue.length);
+  const totalShown = useRef(queue.length);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<RoundAnswer[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
@@ -218,7 +226,7 @@ export function RoundPlayer({
     setRun(nextRun);
     sound(correct ? (nextRun > 0 && nextRun % 3 === 0 ? "combo" : "correct") : "wrong");
     setAnswers((a) => [...a, { itemId: q.itemId, skill: q.skill, correct, uncounted: q.uncounted }]);
-    // A miss comes back at the end of the round, so it sticks.
+    // A miss is not marked right. It moves to the end for another go, without adding to the count.
     if (!correct && queue.length < startSize.current + 5) setQueue((list) => [...list, q]);
   };
 
@@ -237,26 +245,32 @@ export function RoundPlayer({
     onTurnOff(kind);
     clearQuestion();
     const flags = { speaking: kind === "speaking", listening: kind === "listening" };
-    setQueue([...queue.slice(0, index), ...applySessionOff(queue.slice(index), flags)]);
+    const nextQueue = [...queue.slice(0, index), ...applySessionOff(queue.slice(index), flags)];
+    totalShown.current = Math.min(totalShown.current, nextQueue.length);
+    setQueue(nextQueue);
   };
 
   const tiles = q.tiles ?? [];
-  const pct = Math.round((index / queue.length) * 100);
+  const shownTotal = Math.max(1, totalShown.current);
+  const shownStep = Math.min(index + 1, shownTotal);
+  const pct = Math.round((Math.min(index, shownTotal) / shownTotal) * 100);
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-140px)] w-full max-w-md flex-col px-4 pb-4 pt-2 lg:relative lg:left-1/2 lg:w-[640px] lg:max-w-none lg:-translate-x-1/2 lg:pt-8">
+    <div className="fixed inset-0 z-40 overflow-hidden bg-zinc-50">
+    <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] lg:max-w-[640px]">
       <div className="flex items-center gap-2">
         <button type="button" onClick={onLeave} aria-label="Leave round" className="flex h-11 w-11 items-center justify-center text-zinc-900">
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
         <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-violet-100"><div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${pct}%` }} /></div>
-        <span className="text-[13px] font-extrabold text-zinc-600">{index + 1}/{queue.length}</span>
+        <span className="text-[13px] font-extrabold text-zinc-600">{shownStep}/{shownTotal}</span>
         <button type="button" onClick={() => void setSoundEnabled(!soundEnabled)} aria-label={soundEnabled ? "Turn sound off" : "Turn sound on"} className="flex h-11 w-11 items-center justify-center text-zinc-600">
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" />{soundEnabled ? <path d="M15.5 8.5a5 5 0 0 1 0 7" /> : <path d="m16 9 5 6M21 9l-5 6" />}</svg>
         </button>
       </div>
 
-      <p className="mt-3 text-[13px] font-bold text-violet-700">{q.heading}</p>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <p className="mt-2 text-[13px] font-bold text-violet-700">{q.heading}</p>
 
       {q.type === "listen" ? (
         <div className="mt-4 flex flex-col items-center gap-2">
@@ -270,7 +284,7 @@ export function RoundPlayer({
       {q.promptIsGurmukhi ? <p className="mt-2 text-center text-base font-semibold text-zinc-700">{q.answer.romanised}</p> : null}
 
       {q.options ? (
-        <div className="mt-5 flex flex-col gap-2.5">
+        <div className="mt-3 flex flex-col gap-2">
           {q.options.map((o) => (
             <Option key={o.id} label={o.label} sub={o.sub}
               state={verdict === null ? "" : o.id === q.answerId ? "right" : o.id === picked ? "wrong" : ""}
@@ -306,7 +320,7 @@ export function RoundPlayer({
               {!q.selfRateOnly ? (
                 <div className="flex w-full items-center gap-3 rounded-2xl bg-violet-50 p-4">
                   <div className="flex-1"><p lang="pa" className="text-xl font-bold text-zinc-900">{q.answer.gurmukhi}</p><p className="text-sm font-semibold text-zinc-700">{q.answer.romanised}</p></div>
-                  {q.audioKey ? <AudioButton audioKey={q.audioKey} /> : null}
+                  {q.audioKey ? <AudioButton audioKey={q.audioKey} compact /> : null}
                 </div>
               ) : null}
               <div className="grid w-full grid-cols-2 gap-2">
@@ -320,8 +334,7 @@ export function RoundPlayer({
           <button type="button" onClick={() => turnOff("speaking")} className="min-h-11 text-sm font-extrabold text-violet-700">I can&apos;t speak right now</button>
         </div>
       ) : null}
-
-      <div className="flex-1" />
+      </div>
 
       {q.type === "tiles" && verdict === null ? (
         <button type="button" disabled={built.length !== tiles.length}
@@ -330,14 +343,20 @@ export function RoundPlayer({
       ) : null}
 
       {verdict !== null ? (
-        <div className={`mt-4 rounded-3xl p-4 ${verdict ? "bg-green-50" : "bg-orange-50"}`}>
+        <div className={`mt-2 shrink-0 rounded-3xl p-3 ${verdict ? "bg-green-50" : "bg-orange-50"}`}>
           <p className={`text-[22px] font-extrabold ${verdict ? "text-green-800" : "text-orange-800"}`}>{verdict ? "Sahi!" : "Not quite"}</p>
-          <p lang="pa" className="mt-1 text-lg font-bold text-zinc-900">{q.answer.gurmukhi}</p>
-          <p className="text-sm font-semibold text-zinc-700">{[q.answer.romanised, q.answer.english].filter(Boolean).join(" · ")}</p>
-          {!verdict ? <p className="mt-1 text-[13px] font-semibold text-zinc-600">This one comes back before the round ends.</p> : null}
+          <div className="mt-1 flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p lang="pa" className="text-lg font-bold text-zinc-900">{q.answer.gurmukhi}</p>
+              <p className="text-sm font-semibold text-zinc-700">{[q.answer.romanised, q.answer.english].filter(Boolean).join(" · ")}</p>
+            </div>
+            {q.audioKey && (q.type === "choice" || q.type === "say") ? <AudioButton audioKey={q.audioKey} compact /> : null}
+          </div>
+          {!verdict ? <p className="mt-1 text-[13px] font-semibold text-zinc-600">This one moves to the end. It is not marked right yet.</p> : null}
           <button type="button" onClick={next} className={`mt-3 h-14 w-full rounded-2xl text-lg font-extrabold text-white ${verdict ? "bg-green-700" : "bg-orange-700"}`}>Next</button>
         </div>
       ) : null}
+    </div>
     </div>
   );
 }
