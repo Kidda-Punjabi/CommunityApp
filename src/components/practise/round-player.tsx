@@ -101,8 +101,9 @@ function PushToTalk({ q, onMatch, onMiss, onPress }: { q: RoundQuestion; onPress
   const pressed = useRef(false);
   const [checking, setChecking] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const { blob, discardRecording, error, startRecording, state, stopRecording } = recorder;
+  const { blob, discardRecording, error, inputLevel, startRecording, state, stopRecording } = recorder;
   const recording = state === "recording";
+  const ring = 132 + Math.round(inputLevel * 52);
 
   const press = async () => {
     pressed.current = true;
@@ -145,6 +146,8 @@ function PushToTalk({ q, onMatch, onMiss, onPress }: { q: RoundQuestion; onPress
 
   return (
     <div className="flex flex-col items-center gap-2">
+      <div className="relative flex h-52 w-52 items-center justify-center">
+      {recording ? <span aria-hidden="true" className="pointer-events-none absolute rounded-full border border-orange-600 transition-[width,height] duration-75" style={{ width: ring, height: ring }} /> : null}
       <button
         type="button"
         disabled={checking}
@@ -155,10 +158,11 @@ function PushToTalk({ q, onMatch, onMiss, onPress }: { q: RoundQuestion; onPress
         onKeyDown={(e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); void press(); } }}
         onKeyUp={(e) => { if (e.key === " " || e.key === "Enter") release(); }}
         onContextMenu={(e) => e.preventDefault()}
-        className={`flex h-28 w-28 touch-none select-none items-center justify-center rounded-full text-white shadow-lg transition-transform disabled:opacity-60 ${recording ? "scale-110 bg-orange-700" : "bg-violet-600"}`}
+        className={`relative flex h-28 w-28 touch-none select-none items-center justify-center rounded-full text-white shadow-lg transition-transform disabled:opacity-60 ${recording ? "scale-110 bg-orange-700" : "bg-violet-600"}`}
       >
         <svg aria-hidden="true" width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5" /></svg>
       </button>
+      </div>
       <p className={`text-center text-[15px] font-extrabold ${recording ? "text-orange-700" : "text-zinc-700"}`}>
         {checking ? "Checking…" : recording ? "Listening. Let go when you're done." : "Press and hold to talk. Let go when you're done."}
       </p>
