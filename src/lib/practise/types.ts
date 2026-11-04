@@ -1,11 +1,15 @@
 export type PractiseSkill = "words" | "grammar" | "listening" | "speaking";
 
-export type ChecklistRow = { label: string; done: number; total: number; stars?: number };
+export type ChecklistRow = { label: string; done: number; total: number; practised: number; stars?: number };
 
 export type SkillSummary = {
   skill: PractiseSkill;
   label: string;
+  /** Fully finished items. This is what opens the Level Check. */
   pct: number;
+  /** Moves as soon as an answer is saved, before an item is fully finished. */
+  creditPct: number;
+  practised: number;
   done: number;
   total: number;
   unit: string;
@@ -47,6 +51,7 @@ export type PractiseHome = {
 export type RoundOption = { id: string; label: string; sub?: string };
 
 export type RoundQuestion = {
+  skill: PractiseSkill;
   itemId: string;
   type: "choice" | "tiles" | "say" | "listen";
   heading: string;
@@ -61,14 +66,24 @@ export type RoundQuestion = {
   answer: { gurmukhi: string; romanised: string; english: string };
 };
 
-export type RoundAnswer = { itemId: string; correct: boolean };
+export type RoundAnswer = { itemId: string; skill: PractiseSkill; correct: boolean };
+
+export type SkillRoundScore = {
+  skill: PractiseSkill;
+  label: string;
+  practisedBefore: number;
+  practisedAfter: number;
+  total: number;
+  creditBefore: number;
+  creditAfter: number;
+};
 
 export type RoundResult = {
   correct: number;
   total: number;
   ticked: string[];
-  skillPctBefore: number;
-  skillPctAfter: number;
+  saved: string[];
+  skills: SkillRoundScore[];
   streak: number | null;
   streakExtended: boolean;
 };

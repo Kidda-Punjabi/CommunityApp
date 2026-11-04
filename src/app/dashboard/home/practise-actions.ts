@@ -30,6 +30,7 @@ import type {
   RoundOption,
   RoundQuestion,
   RoundResult,
+  SkillRoundScore,
 } from "@/lib/practise/types";
 
 const AUDIO_BUCKET = "lesson-audio";
@@ -88,6 +89,7 @@ function soundQuestion(i: Item, pool: Item[]): RoundQuestion {
     const letters = i.g.split("/").map((s) => s.trim());
     const which = Math.random() < 0.5 ? 0 : 1;
     return {
+      skill: "listening",
       itemId: i.id,
       type: "listen",
       heading: "Which sound did you hear?",
@@ -100,6 +102,7 @@ function soundQuestion(i: Item, pool: Item[]): RoundQuestion {
   }
   const others = distractors(i, pool.filter((p) => p.k === "v"), 3, (p) => p.g);
   return {
+    skill: "listening",
     itemId: i.id,
     type: "listen",
     heading: "Which sound did you hear?",
@@ -111,17 +114,22 @@ function soundQuestion(i: Item, pool: Item[]): RoundQuestion {
   };
 }
 
-export async function startRound(skill: PractiseSkill): Promise<RoundQuestion[]> {
-  if (!SKILLS.includes(skill)) throw new Error("Unknown skill.");
-  const { supabase, userId, level } = await requireLearner();
-  const progress = await loadProgress(supabase, userId);
-  const pool = poolFor(level, skill);
+function savedLabel(skill: PractiseSkill, item: Item) {
+  if (skill === "grammar") return item.e;
+  if (skill === "words") return [item.r || item.g, item.e].filter(Boolean).join(" · ");
+  return item.e || item.r || item.g;
+}
 
+function questionsFor(skill: PractiseSkill, level: number, progress: Map<string, number>, n: number): RoundQuestion[] {
+  const pool = poolFor(level, skill);
+  if (!pool.length || n <= 0) return [];
   if (skill === "grammar") {
     const count = (i: Item) => progress.get(`grammar:${i.id}`) ?? 0;
     const open = pool.filter((r) => !isItemDone("grammar", count(r)));
     const rule = [...(open.length ? open : pool)].sort((a, b) => count(a) - count(b))[0];
-    return sample(grammarSentencesFor(rule), ROUND_SIZE).map((s) => ({
+    if (!rule) return [];
+    return sample(grammarSentencesFor(rule), n).map((s) => ({
+      skill,
       itemId: rule.id,
       type: "tiles" as const,
       heading: rule.e,
@@ -130,13 +138,12 @@ export async function startRound(skill: PractiseSkill): Promise<RoundQuestion[]>
       answer: answerOf(s),
     }));
   }
-
-  const picks = pickItems(pool, skill, progress);
-  return picks.map((i): RoundQuestion => {
+  return pickItems(pool, skill, progress).slice(0, n).map((i): RoundQuestion => {
     if (skill === "words") {
       if ((progress.get(`words:${i.id}`) ?? 0) === 0) {
         const others = distractors(i, pool, 3, (p) => p.g);
         return {
+          skill,
           itemId: i.id,
           type: "choice",
           heading: "Pick the Punjabi",
@@ -146,12 +153,13 @@ export async function startRound(skill: PractiseSkill): Promise<RoundQuestion[]>
           answer: answerOf(i),
         };
       }
-      return { itemId: i.id, type: "say", heading: "Say it in Punjabi", prompt: i.e, audioKey: i.id, answer: answerOf(i) };
+      return { skill, itemId: i.id, type: "say", heading: "Say it in Punjabi", prompt: i.e, audioKey: i.id, answer: answerOf(i) };
     }
     if (skill === "listening") {
       if (level === 0) return soundQuestion(i, pool);
       const others = distractors(i, pool, 3, (p) => p.e);
       return {
+        skill,
         itemId: i.id,
         type: "listen",
         heading: "What did you hear?",
@@ -164,6 +172,7 @@ export async function startRound(skill: PractiseSkill): Promise<RoundQuestion[]>
     }
     if (level === 0) {
       return {
+        skill,
         itemId: i.id,
         type: "say",
         heading: "Say this sound",
@@ -174,72 +183,105 @@ export async function startRound(skill: PractiseSkill): Promise<RoundQuestion[]>
         answer: { gurmukhi: i.g, romanised: i.r, english: "" },
       };
     }
-    return { itemId: i.id, type: "say", heading: "Say it in Punjabi", prompt: i.e, audioKey: i.id, answer: answerOf(i) };
+    return { skill, itemId: i.id, type: "say", heading: "Say it in Punjabi", prompt: i.e, audioKey: i.id, answer: answerOf(i) };
   });
 }
 
-export async function submitRound(skill: PractiseSkill, answers: RoundAnswer[], localDate: string): Promise<RoundResult> {
-  if (!SKILLS.includes(skill) || !/^\d{4}-\d{2}-\d{2}$/.test(localDate)) throw new Error("Invalid round.");
+/** One round mixes every skill at this level. Play from home or from a skill page. */
+export async function startRound(): Promise<RoundQuestion[]> {
   const { supabase, userId, level } = await requireLearner();
-  const clean = answers.filter((a) => itemById(a.itemId)).slice(0, ROUND_SIZE * 2);
   const progress = await loadProgress(supabase, userId);
-  const before = summariseSkill(level, skill, progress).pct;
-
-  const byItem = new Map<string, { correct: number; attempts: number; last: boolean }>();
-  for (const a of clean) {
-    const row = byItem.get(a.itemId) ?? { correct: 0, attempts: 0, last: false };
-    row.attempts += 1;
-    row.correct += a.correct ? 1 : 0;
-    row.last = a.correct;
-    byItem.set(a.itemId, row);
-  }
-  const { data: existing } = await supabase
-    .from("practise_progress")
-    .select("item_id, attempts")
-    .eq("user_id", userId)
-    .eq("skill", skill)
-    .in("item_id", [...byItem.keys()]);
-  const attemptsById = new Map((existing ?? []).map((r) => [r.item_id as string, r.attempts as number]));
-  const ticked: string[] = [];
-  const now = new Date().toISOString();
-  const rows = [...byItem.entries()].map(([itemId, r]) => {
-    const prev = progress.get(`${skill}:${itemId}`) ?? 0;
-    const next = prev + r.correct;
-    if (!isItemDone(skill, prev) && isItemDone(skill, next)) {
-      const item = itemById(itemId);
-      if (item) ticked.push(skill === "grammar" ? item.e : item.r || item.g);
-    }
-    progress.set(`${skill}:${itemId}`, next);
-    return {
-      user_id: userId,
-      item_id: itemId,
-      skill,
-      correct_count: next,
-      attempts: (attemptsById.get(itemId) ?? 0) + r.attempts,
-      last_correct: r.last,
-      last_seen_at: now,
-    };
+  const skills = skillsForLevel(level);
+  const base = Math.floor(ROUND_SIZE / skills.length);
+  let spare = ROUND_SIZE % skills.length;
+  const questions = skills.flatMap((skill) => {
+    const n = base + (spare > 0 ? 1 : 0);
+    if (spare > 0) spare -= 1;
+    return questionsFor(skill, level, progress, n);
   });
-  if (rows.length) {
-    const { error } = await supabase.from("practise_progress").upsert(rows);
-    if (error) throw error;
+  return shuffle(questions);
+}
+
+export async function submitRound(answers: RoundAnswer[], localDate: string): Promise<RoundResult> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(localDate)) throw new Error("Invalid round.");
+  const { supabase, userId, level } = await requireLearner();
+  const clean = answers
+    .filter((a) => SKILLS.includes(a.skill) && itemById(a.itemId))
+    .slice(0, ROUND_SIZE * 2);
+  const progress = await loadProgress(supabase, userId);
+  const before = new Map(SKILLS.map((skill) => [skill, summariseSkill(level, skill, progress)]));
+  const ticked: string[] = [];
+  const saved: string[] = [];
+  const now = new Date().toISOString();
+
+  for (const skill of SKILLS) {
+    const mine = clean.filter((a) => a.skill === skill);
+    if (!mine.length) continue;
+    const byItem = new Map<string, { correct: number; attempts: number; last: boolean }>();
+    for (const a of mine) {
+      const row = byItem.get(a.itemId) ?? { correct: 0, attempts: 0, last: false };
+      row.attempts += 1;
+      row.correct += a.correct ? 1 : 0;
+      row.last = a.correct;
+      byItem.set(a.itemId, row);
+      if (a.correct) {
+        const item = itemById(a.itemId);
+        const label = item ? savedLabel(skill, item) : "";
+        if (label && !saved.includes(label)) saved.push(label);
+      }
+    }
+    const { data: existing } = await supabase
+      .from("practise_progress")
+      .select("item_id, attempts")
+      .eq("user_id", userId)
+      .eq("skill", skill)
+      .in("item_id", [...byItem.keys()]);
+    const attemptsById = new Map((existing ?? []).map((r) => [r.item_id as string, r.attempts as number]));
+    const rows = [...byItem.entries()].map(([itemId, r]) => {
+      const prev = progress.get(`${skill}:${itemId}`) ?? 0;
+      const next = prev + r.correct;
+      if (!isItemDone(skill, prev) && isItemDone(skill, next)) {
+        const item = itemById(itemId);
+        if (item) ticked.push(savedLabel(skill, item));
+      }
+      progress.set(`${skill}:${itemId}`, next);
+      return {
+        user_id: userId,
+        item_id: itemId,
+        skill,
+        correct_count: next,
+        attempts: (attemptsById.get(itemId) ?? 0) + r.attempts,
+        last_correct: r.last,
+        last_seen_at: now,
+      };
+    });
+    if (rows.length) {
+      const { error } = await supabase.from("practise_progress").upsert(rows);
+      if (error) throw error;
+    }
   }
-  const correct = clean.filter((a) => a.correct).length;
+
   const { data: playedToday } = await supabase
     .from("practise_rounds")
     .select("id")
     .eq("user_id", userId)
     .eq("local_date", localDate)
     .limit(1);
-  const { error: roundError } = await supabase.from("practise_rounds").insert({
-    user_id: userId,
-    level,
-    skill,
-    correct,
-    total: clean.length,
-    local_date: localDate,
+  const roundRows = SKILLS.filter((skill) => clean.some((a) => a.skill === skill)).map((skill) => {
+    const mine = clean.filter((a) => a.skill === skill);
+    return {
+      user_id: userId,
+      level,
+      skill,
+      correct: mine.filter((a) => a.correct).length,
+      total: mine.length,
+      local_date: localDate,
+    };
   });
-  if (roundError) throw roundError;
+  if (roundRows.length) {
+    const { error: roundError } = await supabase.from("practise_rounds").insert(roundRows);
+    if (roundError) throw roundError;
+  }
 
   let streak: number | null = null;
   try {
@@ -249,14 +291,27 @@ export async function submitRound(skill: PractiseSkill, answers: RoundAnswer[], 
     // The round still counts if the streak service is unavailable.
   }
   revalidatePath("/dashboard/home");
+  const skills: SkillRoundScore[] = SKILLS.filter((skill) => clean.some((a) => a.skill === skill)).map((skill) => {
+    const earlier = before.get(skill)!;
+    const later = summariseSkill(level, skill, progress);
+    return {
+      skill,
+      label: later.label,
+      practisedBefore: earlier.practised,
+      practisedAfter: later.practised,
+      total: later.total,
+      creditBefore: earlier.creditPct,
+      creditAfter: later.creditPct,
+    };
+  });
   return {
-    correct,
+    correct: clean.filter((a) => a.correct).length,
     total: clean.length,
     ticked,
-    skillPctBefore: before,
-    skillPctAfter: summariseSkill(level, skill, progress).pct,
+    saved,
+    skills,
     streak,
-    streakExtended: (playedToday ?? []).length === 0,
+    streakExtended: (playedToday ?? []).length === 0 && roundRows.length > 0,
   };
 }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { getStreakPresentation } from "@/app/dashboard/home/streak-actions";
 import { getLevelPreview, startLevelCheck, startRound, submitLevelCheck, submitRound } from "@/app/dashboard/home/practise-actions";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
@@ -102,9 +102,21 @@ function StreakCard({ home, count, today }: { home: PractiseHome; count: number;
 
 type View =
   | { name: "home" } | { name: "checklist" } | { name: "skill"; skill: PractiseSkill } | { name: "road" }
-  | { name: "preview"; data: LevelPreview } | { name: "round"; skill: PractiseSkill; questions: RoundQuestion[] }
-  | { name: "result"; skill: PractiseSkill; result: RoundResult } | { name: "check" }
+  | { name: "preview"; data: LevelPreview } | { name: "round"; questions: RoundQuestion[] }
+  | { name: "result"; result: RoundResult } | { name: "check" }
   | { name: "checkRun"; checkId: string; questions: CheckQuestion[] } | { name: "checkResult"; result: CheckResult } | { name: "levelUp" };
+
+function jumpToBottom(node: HTMLElement) {
+  const targets: HTMLElement[] = [];
+  let parent = node.parentElement;
+  while (parent) {
+    const overflow = getComputedStyle(parent).overflowY;
+    if (overflow === "auto" || overflow === "scroll") targets.push(parent);
+    parent = parent.parentElement;
+  }
+  for (const target of targets) target.scrollTop = target.scrollHeight;
+  window.scrollTo(0, document.documentElement.scrollHeight);
+}
 
 export function PractiseApp({ home }: { home: PractiseHome }) {
   const router = useRouter();
@@ -118,20 +130,34 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   const nextLevel = meta.level < 9 ? meta.level + 1 : null;
 
   useEffect(() => { if (view.name === "levelUp") sound("levelUp"); /* once on arrival */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { window.scrollTo({ top: 0 }); }, [view.name]);
+  useEffect(() => { if (view.name !== "road") window.scrollTo({ top: 0 }); }, [view.name]);
+  useLayoutEffect(() => {
+    if (view.name !== "road") return;
+    let cancelled = false;
+    const start = window.setTimeout(() => {
+      const here = document.getElementById(`practise-level-${meta.level}`);
+      if (!here || cancelled) return;
+      jumpToBottom(here);
+      window.setTimeout(() => {
+        if (!cancelled) here.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 180);
+    }, 30);
+    return () => { cancelled = true; window.clearTimeout(start); };
+  }, [view.name, meta.level]);
 
   const go = async (fn: () => Promise<void>) => {
     setBusy(true); setError(null);
     try { await fn(); } catch { setError("That didn't work. Please try again."); } finally { setBusy(false); }
   };
-  const play = (skill: PractiseSkill) => go(async () => {
+  const mixLabel = skills.map((s) => s.label).join(", ");
+  const play = () => go(async () => {
     sound("tap");
-    const questions = await startRound(skill);
-    setView({ name: "round", skill, questions });
+    const questions = await startRound();
+    setView({ name: "round", questions });
   });
-  const finishRound = (skill: PractiseSkill, answers: RoundAnswer[]) => go(async () => {
-    const result = await submitRound(skill, answers, getLocalActivityDate());
-    setView({ name: "result", skill, result });
+  const finishRound = (answers: RoundAnswer[]) => go(async () => {
+    const result = await submitRound(answers, getLocalActivityDate());
+    setView({ name: "result", result });
     sound("finish");
     if (result.streakExtended) setTimeout(() => sound("streak"), 750);
     router.refresh();
@@ -140,19 +166,31 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   const shell = "mx-auto w-full max-w-md px-4 pb-6 pt-3";
   const errorNote = error ? <p role="alert" className="mt-2 text-center text-sm font-semibold text-orange-800">{error}</p> : null;
 
-  if (view.name === "round") return <RoundPlayer questions={view.questions} onLeave={() => setView({ name: "home" })} onFinish={(a) => void finishRound(view.skill, a)} />;
+  if (view.name === "round") return <RoundPlayer questions={view.questions} onLeave={() => setView({ name: "home" })} onFinish={(a) => void finishRound(a)} />;
 
   if (view.name === "result") {
     const r = view.result;
-    const after = skills.find((s) => s.skill === view.skill);
     return (
       <div className={shell}>
         <div className="h-40 overflow-hidden rounded-3xl"><ArenaArt level={meta.level} /></div>
         <p className="mt-5 text-center text-4xl font-extrabold tracking-tight text-zinc-900">{r.correct} of {r.total}</p>
-        <div className="mt-4 flex items-center gap-3 rounded-2xl bg-violet-50 p-3">
-          <Ring pct={r.skillPctAfter} skill={view.skill} size={50} />
-          <div><p className="text-[15px] font-extrabold text-zinc-900">{after?.label}</p><p className="text-sm font-bold text-zinc-700">{r.skillPctBefore === r.skillPctAfter ? `${r.skillPctAfter}%` : `${r.skillPctBefore}% to ${r.skillPctAfter}%`}</p></div>
+        <div className="mt-4 flex flex-col gap-2">
+          {r.skills.map((s) => (
+            <div key={s.skill} className="flex items-center gap-3 rounded-2xl bg-violet-50 p-3">
+              <Ring pct={s.creditAfter} skill={s.skill} size={50} />
+              <div>
+                <p className="text-[15px] font-extrabold text-zinc-900">{s.label}</p>
+                <p className="text-sm font-bold text-zinc-700">{s.practisedBefore === s.practisedAfter ? `${s.practisedAfter} of ${s.total} saved` : `${s.practisedBefore} to ${s.practisedAfter} of ${s.total} saved`}</p>
+              </div>
+            </div>
+          ))}
         </div>
+        {r.saved.length ? (
+          <div className="mt-3 rounded-2xl bg-violet-50 p-3">
+            <p className="text-xs font-extrabold tracking-wide text-violet-800">SAVED</p>
+            <p className="mt-1 text-[15px] font-bold text-zinc-900">{r.saved.slice(0, 6).join(", ")}{r.saved.length > 6 ? ` and ${r.saved.length - 6} more` : ""}</p>
+          </div>
+        ) : null}
         {r.ticked.length ? (
           <div className="mt-3 rounded-2xl bg-green-50 p-3">
             <p className="text-xs font-extrabold tracking-wide text-green-800">TICKED OFF YOUR CHECKLIST</p>
@@ -165,7 +203,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
             <p className="text-sm font-semibold text-zinc-700">{r.streakExtended ? "Today counts. See you tomorrow." : "Already safe for today."}</p>
           </div>
         ) : null}
-        <div className="mt-5"><BigButton title="Play again" sub={after ? `${after.label}: ${after.focus}` : undefined} disabled={busy} onClick={() => void play(view.skill)} /></div>
+        <div className="mt-5"><BigButton title="Play again" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div>
         <button type="button" onClick={() => setView({ name: "home" })} className="mt-2 min-h-11 w-full text-[15px] font-extrabold text-violet-700">Done for today</button>
         {errorNote}
       </div>
@@ -199,7 +237,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
             return (
               <div key={l.level}>
                 {head ? <p className="mx-1 mb-2 mt-3 text-[13px] font-extrabold uppercase tracking-wide text-violet-900">{head}</p> : null}
-                <button type="button" disabled={busy} onClick={() => you ? setView({ name: "checklist" }) : void go(async () => setView({ name: "preview", data: await getLevelPreview(l.level) }))} className={`block w-full overflow-hidden rounded-[20px] bg-white text-left ${you ? "border-[3px] border-violet-600" : "border border-zinc-200"}`}>
+                <button id={`practise-level-${l.level}`} type="button" disabled={busy} onClick={() => you ? setView({ name: "checklist" }) : void go(async () => setView({ name: "preview", data: await getLevelPreview(l.level) }))} className={`block w-full overflow-hidden rounded-[20px] bg-white text-left ${you ? "border-[3px] border-violet-600" : "border border-zinc-200"}`}>
                   <div className={`relative overflow-hidden ${you ? "h-36" : "h-28"}`}>
                     <div className={`h-full ${!you && !passed ? "opacity-60 grayscale-[.75]" : ""}`}><ArenaArt level={l.level} /></div>
                     <span className="absolute right-2.5 top-2.5">{you ? <span className="rounded-full bg-violet-600 px-2.5 py-1 text-xs font-extrabold text-white">You are here</span> : passed ? <Tick state="done" /> : <span className="rounded-full bg-white/95 px-2.5 py-1 text-xs font-extrabold text-zinc-700">Locked</span>}</span>
@@ -309,8 +347,8 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
             return (
               <section key={s.skill} className={`rounded-[18px] p-3.5 ${isWeak ? "border-2 border-orange-200 bg-orange-50/40" : "border border-zinc-200"}`}>
                 <button type="button" onClick={() => setView({ name: "skill", skill: s.skill })} className="flex w-full items-center gap-3 text-left">
-                  <Ring pct={s.pct} skill={s.skill} size={50} tone={s.pct === 100 ? "full" : isWeak ? "weak" : "normal"} />
-                  <span className="min-w-0"><span className="flex items-center gap-1.5 text-[17px] font-extrabold text-zinc-900">{s.label}{isWeak ? <span className="rounded-full bg-orange-700 px-2 py-0.5 text-[10px] font-extrabold text-white">Weakest</span> : null}</span><span className="text-[13px] font-semibold text-zinc-600">{s.done} of {s.total} {s.unit}</span></span>
+                  <Ring pct={s.creditPct} skill={s.skill} size={50} tone={s.pct === 100 ? "full" : isWeak ? "weak" : "normal"} />
+                  <span className="min-w-0"><span className="flex items-center gap-1.5 text-[17px] font-extrabold text-zinc-900">{s.label}{isWeak ? <span className="rounded-full bg-orange-700 px-2 py-0.5 text-[10px] font-extrabold text-white">Weakest</span> : null}</span><span className="text-[13px] font-semibold text-zinc-600">{s.practised} of {s.total} {s.unit} saved</span></span>
                 </button>
                 <ul className="mt-2 flex flex-col">
                   {s.rows.map((r) => {
@@ -320,7 +358,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
                       <li key={r.label} className="flex items-start gap-2.5 py-1.5">
                         <Tick state={done ? "done" : focus ? "focus" : "todo"} />
                         <span className={`min-w-0 flex-1 text-sm leading-snug text-zinc-900 ${focus ? "font-extrabold" : "font-semibold"}`}>{r.label}{r.stars != null ? <Stars n={r.stars} /> : null}</span>
-                        {r.stars == null ? <span className="shrink-0 text-xs font-bold text-zinc-500">{r.done}/{r.total}</span> : null}
+                        {r.stars == null ? <span className="shrink-0 text-xs font-bold text-zinc-500">{r.practised}/{r.total}</span> : r.practised > 0 && r.done < r.total ? <span className="shrink-0 text-xs font-bold text-zinc-500">{r.practised} correct</span> : null}
                       </li>
                     );
                   })}
@@ -330,7 +368,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
             );
           })}
         </div>
-        {target ? <div className="sticky bottom-20 mt-3"><BigButton title="Play" sub={`${target.label}: ${target.focus}`} disabled={busy} onClick={() => void play(target.skill)} /></div> : null}
+        {target ? <div className="sticky bottom-20 mt-3"><BigButton title="Play" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div> : null}
         {errorNote}
       </div>
     );
@@ -340,28 +378,30 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   return (
     <div className="mx-auto w-full max-w-md">
       <div className="relative h-[250px] overflow-hidden tab:rounded-b-3xl">
-        <ArenaArt level={meta.level} />
-        <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-2">
-          <button type="button" onClick={() => setView({ name: "road" })} className="flex min-h-10 items-center gap-1.5 rounded-full bg-white/95 px-3 text-[13px] font-extrabold text-zinc-900">Levels</button>
-          <Link href="/dashboard/home?view=previous" className="flex min-h-10 items-center rounded-full bg-white/95 px-3 text-[13px] font-extrabold text-zinc-900">Previous practise</Link>
+        <button type="button" onClick={() => setView({ name: "road" })} aria-label={`Level ${meta.level}, ${meta.name}. See all levels`} className="block h-full w-full">
+          <ArenaArt level={meta.level} />
+        </button>
+        <div className="pointer-events-none absolute inset-x-3 top-3 flex items-center justify-between gap-2">
+          <button type="button" onClick={() => setView({ name: "road" })} className="pointer-events-auto flex min-h-10 items-center gap-1.5 rounded-full bg-white/95 px-3 text-[13px] font-extrabold text-zinc-900">Levels</button>
+          <Link href="/dashboard/home?view=previous" className="pointer-events-auto flex min-h-10 items-center rounded-full bg-white/95 px-3 text-[13px] font-extrabold text-zinc-900">Previous practise</Link>
         </div>
       </div>
       <div className="relative -mt-7 rounded-t-[28px] bg-white px-4 pb-5 pt-5">
-        <button type="button" onClick={() => setView({ name: "road" })} className="block text-left">
+        <div className="block text-left">
           <span className="flex items-center gap-2"><span className="rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-extrabold tracking-wide text-white">LEVEL {meta.level}</span><span className="text-[13px] font-bold text-zinc-600">{meta.stage}</span></span>
           <span className="mt-2 block text-[32px] font-extrabold leading-tight tracking-tight text-zinc-900">{meta.name} <span lang="pa" className="text-[22px] font-bold text-violet-700">{meta.gurmukhi}</span></span>
           <span className="mt-0.5 block text-[15px] font-semibold leading-snug text-zinc-700">“{meta.can}”</span>
-        </button>
+        </div>
         {streak ? <StreakCard home={home} count={streak.count} today={streak.today} /> : null}
         <div className="mt-4 flex justify-center gap-1.5">
           {skills.map((s) => {
             const isWeak = s.skill === weakest;
             return (
-              <button key={s.skill} type="button" onClick={() => setView({ name: "skill", skill: s.skill })} aria-label={`${s.label}, ${s.pct} percent`} className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl border-2 pb-2 pt-3 ${isWeak ? "border-orange-200 bg-orange-50" : "border-transparent"}`}>
+              <button key={s.skill} type="button" onClick={() => setView({ name: "skill", skill: s.skill })} aria-label={`${s.label}, ${s.practised} of ${s.total} saved`} className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl border-2 pb-2 pt-3 ${isWeak ? "border-orange-200 bg-orange-50" : "border-transparent"}`}>
                 {isWeak ? <span className="absolute -top-2 rounded-full bg-orange-700 px-1.5 py-0.5 text-[10px] font-extrabold text-white">Weakest</span> : null}
-                <Ring pct={s.pct} skill={s.skill} tone={s.pct === 100 ? "full" : isWeak ? "weak" : "normal"} />
+                <Ring pct={s.creditPct} skill={s.skill} tone={s.pct === 100 ? "full" : isWeak ? "weak" : "normal"} />
                 <span className="text-xs font-extrabold text-zinc-900">{s.label}</span>
-                <span className="text-xs font-bold text-zinc-600">{s.pct}%</span>
+                <span className="text-xs font-bold text-zinc-600">{s.practised}</span>
               </button>
             );
           })}
@@ -372,7 +412,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
         {home.ready ? (
           <BigButton gold title="Take the Level Check" sub="All your skills are ready" onClick={() => setView({ name: "check" })} />
         ) : weak ? (
-          <BigButton title={busy ? "Loading…" : "Play"} sub={`${weak.label}: ${weak.focus}`} disabled={busy} onClick={() => void play(weak.skill)} />
+          <BigButton title={busy ? "Loading…" : "Play"} sub={mixLabel} disabled={busy} onClick={() => void play()} />
         ) : null}
         {errorNote}
       </div>

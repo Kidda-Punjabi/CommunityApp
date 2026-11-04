@@ -90,9 +90,17 @@ export function RoundPlayer({
   const [micNote, setMicNote] = useState<string | null>(null);
   const [run, setRun] = useState(0);
   const session = useRef<{ stop: () => void } | null>(null);
+  const finished = useRef(false);
   const q = queue[index];
 
   useEffect(() => () => session.current?.stop(), []);
+  if (!q) return null;
+
+  const finish = (list: RoundAnswer[]) => {
+    if (finished.current) return;
+    finished.current = true;
+    onFinish(list);
+  };
 
   const judge = (correct: boolean, pick?: string) => {
     setPicked(pick ?? null);
@@ -100,15 +108,33 @@ export function RoundPlayer({
     const nextRun = correct ? run + 1 : 0;
     setRun(nextRun);
     sound(correct ? (nextRun > 0 && nextRun % 3 === 0 ? "combo" : "correct") : "wrong");
-    setAnswers((a) => [...a, { itemId: q.itemId, correct }]);
+    setAnswers((a) => [...a, { itemId: q.itemId, skill: q.skill, correct }]);
     // A miss comes back once at the end of the round, like a second chance.
     if (!correct && queue.length < questions.length + 3) setQueue((list) => [...list, q]);
   };
 
+  const clearQuestion = () => {
+    setPicked(null); setVerdict(null); setBuilt([]); setRevealed(false); setMicNote(null); setListening(false);
+  };
+
   const next = () => {
-    setPicked(null); setVerdict(null); setBuilt([]); setRevealed(false); setMicNote(null);
-    if (index + 1 >= queue.length) { onFinish(answers); return; }
+    clearQuestion();
+    if (index + 1 >= queue.length) { finish(answers); return; }
     setIndex(index + 1);
+  };
+
+  /** Drop this question and every later question of the same kind. The other kind stays. */
+  const skipKind = (kind: "listen" | "say") => {
+    session.current?.stop();
+    const kept = queue.filter((item, i) => i < index || (i > index && item.type !== kind));
+    clearQuestion();
+    if (index >= kept.length) {
+      setQueue(kept);
+      if (answers.length) finish(answers);
+      else onLeave();
+      return;
+    }
+    setQueue(kept);
   };
 
   const listen = () => {
@@ -145,7 +171,13 @@ export function RoundPlayer({
       <p className="mt-3 text-[13px] font-bold text-violet-700">{q.heading}</p>
 
       {q.type === "listen" ? (
-        <div className="mt-4 flex flex-col items-center gap-2"><AudioButton key={`${index}`} audioKey={q.audioKey!} large /><p className="text-[15px] font-semibold text-zinc-700">{q.prompt}</p></div>
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <AudioButton key={`${index}`} audioKey={q.audioKey!} large />
+          <p className="text-[15px] font-semibold text-zinc-700">{q.prompt}</p>
+          {verdict === null ? (
+            <button type="button" onClick={() => skipKind("listen")} className="min-h-11 text-sm font-extrabold text-violet-700">I can&apos;t listen right now</button>
+          ) : null}
+        </div>
       ) : (
         <h1 lang={q.promptIsGurmukhi ? "pa" : undefined} className={`mt-1 font-bold tracking-tight text-zinc-900 ${q.promptIsGurmukhi ? "text-center text-6xl" : "text-[27px] leading-tight"}`}>{q.prompt}</h1>
       )}
@@ -199,8 +231,11 @@ export function RoundPlayer({
               </div>
             </>
           ) : (
-            <button type="button" onClick={() => setRevealed(true)} className="min-h-11 text-sm font-extrabold text-violet-700">{canMic ? "Can't speak right now? Show the answer" : "Say it out loud, then show the answer"}</button>
+            <button type="button" onClick={() => setRevealed(true)} className="min-h-11 text-sm font-extrabold text-violet-700">Say it out loud, then show the answer</button>
           )}
+          {verdict === null ? (
+            <button type="button" onClick={() => skipKind("say")} className="min-h-11 text-sm font-extrabold text-violet-700">I can&apos;t speak right now</button>
+          ) : null}
         </div>
       ) : null}
 

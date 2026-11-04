@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cleanTopic, isItemDone, poolFor, rulesAt, skillsForLevel } from "./content";
-import { LEVELS, RULE_CORRECT_PER_STAR } from "./levels";
+import { ITEM_DONE_AT, LEVELS, RULE_CORRECT_PER_STAR } from "./levels";
 import type { CheckPartState, ChecklistRow, PractiseHome, PractiseSkill, SkillSummary } from "./types";
 
 const PASS: Record<PractiseSkill, string> = {
@@ -38,18 +38,23 @@ export function summariseSkill(level: number, skill: PractiseSkill, progress: Ma
   const pool = poolFor(level, skill);
   const count = (id: string) => progress.get(`${skill}:${id}`) ?? 0;
   const done = pool.filter((i) => isItemDone(skill, count(i.id))).length;
+  const practised = pool.filter((i) => count(i.id) > 0).length;
+  const threshold = skill === "grammar" ? RULE_CORRECT_PER_STAR * 3 : ITEM_DONE_AT;
+  const credit = pool.reduce((sum, i) => sum + Math.min(count(i.id), threshold), 0);
+  const rawCredit = pool.length ? Math.round((credit / (pool.length * threshold)) * 100) : 0;
   let rows: ChecklistRow[];
   if (skill === "grammar") {
     rows = rulesAt(level).map((r) => {
       const stars = Math.min(3, Math.floor(count(r.id) / RULE_CORRECT_PER_STAR));
-      return { label: r.e, done: stars === 3 ? 1 : 0, total: 1, stars };
+      return { label: r.e, done: stars === 3 ? 1 : 0, total: 1, practised: count(r.id), stars };
     });
   } else {
     const groups = new Map<string, ChecklistRow>();
     for (const i of pool) {
       const label = level === 9 ? `Level ${i.l}` : cleanTopic(i.t);
-      const row = groups.get(label) ?? { label, done: 0, total: 0 };
+      const row = groups.get(label) ?? { label, done: 0, total: 0, practised: 0 };
       row.total += 1;
+      if (count(i.id) > 0) row.practised += 1;
       if (isItemDone(skill, count(i.id))) row.done += 1;
       groups.set(label, row);
     }
@@ -65,6 +70,8 @@ export function summariseSkill(level: number, skill: PractiseSkill, progress: Ma
     skill,
     label: skillLabel(level, skill),
     pct: pool.length ? Math.round((done / pool.length) * 100) : 0,
+    creditPct: credit > 0 ? Math.max(1, rawCredit) : 0,
+    practised,
     done,
     total: pool.length,
     unit,
