@@ -1,59 +1,42 @@
-import { FreeLessonsPath } from "@/components/learn/free-lessons-path";
-import { HubCard } from "@/components/ui/hub-primitives";
-import { getHomeTabData } from "@/lib/cache/tab-page-cache";
-import { loadEverydayPunjabiPathItems } from "@/lib/free-lessons/load-path-items";
+import { EverydayPunjabiPractice } from "@/components/practise/previous-practise";
+import { PractiseApp } from "@/components/practise/practise-app";
+import { FindYourLevel } from "@/components/practise/find-your-level";
+import { resolveCourseActor } from "@/lib/kids/course-actor";
+import { loadPractiseHome } from "@/lib/practise/load-home";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { createClient } from "@/lib/supabase/server";
-import { getIsNativeApp } from "@/lib/native/platform-server";
-import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const session = await getCachedAuthSession();
   if (!session) redirect("/login");
+  const { view } = await searchParams;
 
   const supabase = await createClient();
-  const nativeApp = await getIsNativeApp();
-  const [{ dashboard }, pathItems] = await Promise.all([
-    getHomeTabData(session.user.id),
-    loadEverydayPunjabiPathItems(supabase, session.user.id),
-  ]);
+  const actor = await resolveCourseActor(supabase, session.user.id);
 
-  return (
-    <div className={ui.page}>
-      <section className={ui.section}>
-        <div className="mb-5 text-center">
-          <h1 className="font-heading text-2xl font-semibold text-zinc-900 tab:text-3xl">
-            Everyday Punjabi
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Finish each topic to unlock the next.
-          </p>
-        </div>
-        {pathItems.length > 0 ? (
-          <FreeLessonsPath items={pathItems} />
-        ) : (
-          <p className="text-center text-sm text-zinc-500">Topics coming soon.</p>
-        )}
-      </section>
+  // Kid profiles keep the existing page: Kidda Levels are for adult accounts.
+  if (actor.kind === "kid") return <EverydayPunjabiPractice userId={session.user.id} />;
 
-      {dashboard.isFreeTier && !nativeApp ? (
-        <section className={ui.section}>
-          <HubCard>
-            <h2 className="text-lg font-medium text-zinc-900">
-              Unlock the full Foundational course
-            </h2>
-            <p className="mt-2 text-sm text-zinc-500">
-              Go beyond Everyday Punjabi with pronunciation, core vocabulary, and
-              guided lessons at your own pace.
-            </p>
-            <Link href="/courses" className={`mt-4 ${ui.btnPrimary}`}>
-              View courses
-            </Link>
-          </HubCard>
-        </section>
-      ) : null}
-    </div>
-  );
+  if (view === "previous") {
+    return (
+      <EverydayPunjabiPractice
+        userId={session.user.id}
+        backLink={
+          <Link href="/dashboard/home" className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-violet-700">
+            ← Back to Practise
+          </Link>
+        }
+      />
+    );
+  }
+
+  const { data: profile } = await supabase.from("profiles").select("kidda_level").eq("id", session.user.id).maybeSingle();
+  const level = profile?.kidda_level as number | null | undefined;
+  if (level == null) return <FindYourLevel />;
+
+  const home = await loadPractiseHome(supabase, createServiceRoleClient(), session.user.id, level);
+  return <PractiseApp home={home} />;
 }
