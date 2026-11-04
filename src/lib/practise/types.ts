@@ -13,6 +13,7 @@ export type SkillSummary = {
   done: number;
   total: number;
   unit: string;
+  howItWorks: string;
   passLabel: string;
   focus: string;
   rows: ChecklistRow[];
@@ -64,9 +65,13 @@ export type RoundQuestion = {
   /** Sounds cannot be scored by speech recognition, so the learner rates themselves. */
   selfRateOnly?: boolean;
   answer: { gurmukhi: string; romanised: string; english: string };
+  /** Shown instead when the learner has said they can't speak or listen right now. */
+  fallback?: RoundQuestion;
+  /** Practice only: it doesn't tick off listening or speaking. */
+  uncounted?: boolean;
 };
 
-export type RoundAnswer = { itemId: string; skill: PractiseSkill; correct: boolean };
+export type RoundAnswer = { itemId: string; skill: PractiseSkill; correct: boolean; uncounted?: boolean };
 
 export type SkillRoundScore = {
   skill: PractiseSkill;

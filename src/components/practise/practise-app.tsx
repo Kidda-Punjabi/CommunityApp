@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { getStreakPresentation } from "@/app/dashboard/home/streak-actions";
 import { getLevelPreview, startLevelCheck, startRound, submitLevelCheck, submitRound } from "@/app/dashboard/home/practise-actions";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
@@ -10,6 +10,7 @@ import { LEVELS } from "@/lib/practise/levels";
 import { usePractiseSound } from "@/lib/practise/sounds";
 import type { CheckQuestion, CheckResult, LevelPreview, PractiseHome, PractiseSkill, RoundAnswer, RoundQuestion, RoundResult, SkillSummary } from "@/lib/practise/types";
 import { ArenaArt } from "./arena-art";
+import { LevelRoad } from "./level-road";
 import { AudioButton, RoundPlayer } from "./round-player";
 
 const ICONS: Record<PractiseSkill, ReactNode> = {
@@ -26,8 +27,8 @@ function Icon({ skill, size = 22 }: { skill: PractiseSkill; size?: number }) {
 function Ring({ pct, skill, size = 58, tone = "normal" }: { pct: number; skill: PractiseSkill; size?: number; tone?: "normal" | "weak" | "full" }) {
   const r = size / 2 - 4;
   const c = 2 * Math.PI * r;
-  const col = { weak: "#C2410C", full: "#15803D", normal: "#7C3AED" }[tone];
-  const bg = { weak: "#FDE7D8", full: "#DCF3E3", normal: "#EDE5FF" }[tone];
+  const col = { weak: "#6D28D9", full: "#15803D", normal: "#7C3AED" }[tone];
+  const bg = { weak: "#DDD0FB", full: "#DCF3E3", normal: "#EDE5FF" }[tone];
   return (
     <div className="relative shrink-0" style={{ width: size, height: size, color: col }}>
       <svg aria-hidden="true" width={size} height={size} className="-rotate-90">
@@ -58,7 +59,7 @@ function Back({ onClick, label = "Back" }: { onClick: () => void; label?: string
 
 function Tick({ state }: { state: "done" | "focus" | "todo" }) {
   if (state === "done") return <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-700 text-white"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg></span>;
-  if (state === "focus") return <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-700 text-white"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z" /></svg></span>;
+  if (state === "focus") return <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-700 text-white"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z" /></svg></span>;
   return <span className="mx-0.5 h-5 w-5 shrink-0 rounded-full border-2 border-zinc-300" />;
 }
 
@@ -100,29 +101,32 @@ function StreakCard({ home, count, today }: { home: PractiseHome; count: number;
   );
 }
 
+/** The dashboard is a phone-width column on a laptop. These break out of it from the centre. */
+const WIDE = "lg:relative lg:left-1/2 lg:max-w-none lg:-translate-x-1/2";
+
 type View =
   | { name: "home" } | { name: "checklist" } | { name: "skill"; skill: PractiseSkill } | { name: "road" }
   | { name: "preview"; data: LevelPreview } | { name: "round"; questions: RoundQuestion[] }
   | { name: "result"; result: RoundResult } | { name: "check" }
   | { name: "checkRun"; checkId: string; questions: CheckQuestion[] } | { name: "checkResult"; result: CheckResult } | { name: "levelUp" };
 
-function jumpToBottom(node: HTMLElement) {
-  const targets: HTMLElement[] = [];
-  let parent = node.parentElement;
-  while (parent) {
-    const overflow = getComputedStyle(parent).overflowY;
-    if (overflow === "auto" || overflow === "scroll") targets.push(parent);
-    parent = parent.parentElement;
-  }
-  for (const target of targets) target.scrollTop = target.scrollHeight;
-  window.scrollTo(0, document.documentElement.scrollHeight);
-}
-
 export function PractiseApp({ home }: { home: PractiseHome }) {
   const router = useRouter();
   const sound = usePractiseSound();
   const streak = useStreak();
   const [view, setView] = useState<View>(home.levelUpFrom != null ? { name: "levelUp" } : { name: "home" });
+  const [off, setOff] = useState({ speaking: false, listening: false });
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("kidda:practise-off");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved) setOff(JSON.parse(saved));
+    } catch { /* storage can be blocked */ }
+  }, []);
+  const saveOff = (next: typeof off) => {
+    setOff(next);
+    try { sessionStorage.setItem("kidda:practise-off", JSON.stringify(next)); } catch { /* storage can be blocked */ }
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { meta, skills, weakest } = home;
@@ -131,19 +135,6 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
 
   useEffect(() => { if (view.name === "levelUp") sound("levelUp"); /* once on arrival */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view.name !== "road") window.scrollTo({ top: 0 }); }, [view.name]);
-  useLayoutEffect(() => {
-    if (view.name !== "road") return;
-    let cancelled = false;
-    const start = window.setTimeout(() => {
-      const here = document.getElementById(`practise-level-${meta.level}`);
-      if (!here || cancelled) return;
-      jumpToBottom(here);
-      window.setTimeout(() => {
-        if (!cancelled) here.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 180);
-    }, 30);
-    return () => { cancelled = true; window.clearTimeout(start); };
-  }, [view.name, meta.level]);
 
   const go = async (fn: () => Promise<void>) => {
     setBusy(true); setError(null);
@@ -163,10 +154,10 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
     router.refresh();
   });
 
-  const shell = "mx-auto w-full max-w-md px-4 pb-6 pt-3";
+  const shell = `mx-auto w-full max-w-md px-4 pb-6 pt-3 ${WIDE} lg:w-[720px] lg:pt-8`;
   const errorNote = error ? <p role="alert" className="mt-2 text-center text-sm font-semibold text-orange-800">{error}</p> : null;
 
-  if (view.name === "round") return <RoundPlayer questions={view.questions} onLeave={() => setView({ name: "home" })} onFinish={(a) => void finishRound(a)} />;
+  if (view.name === "round") return <RoundPlayer questions={view.questions} onLeave={() => setView({ name: "home" })} onFinish={(a) => void finishRound(a)} off={off} onTurnOff={(k) => saveOff({ ...off, [k]: true })} />;
 
   if (view.name === "result") {
     const r = view.result;
@@ -226,31 +217,10 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   }
 
   if (view.name === "road") {
-    const road = [...LEVELS].reverse();
     return (
-      <div className={shell}>
+      <div className="mx-auto w-full max-w-md px-4 pb-10 pt-3">
         <div className="mb-2 flex items-center gap-1"><Back onClick={() => setView({ name: "home" })} /><h1 className="text-xl font-extrabold text-zinc-900">Your road</h1></div>
-        <div className="flex flex-col gap-2.5">
-          {road.map((l, i) => {
-            const you = l.level === meta.level, passed = l.level < meta.level;
-            const head = l.stage !== road[i - 1]?.stage ? l.stage : null;
-            return (
-              <div key={l.level}>
-                {head ? <p className="mx-1 mb-2 mt-3 text-[13px] font-extrabold uppercase tracking-wide text-violet-900">{head}</p> : null}
-                <button id={`practise-level-${l.level}`} type="button" disabled={busy} onClick={() => you ? setView({ name: "checklist" }) : void go(async () => setView({ name: "preview", data: await getLevelPreview(l.level) }))} className={`block w-full overflow-hidden rounded-[20px] bg-white text-left ${you ? "border-[3px] border-violet-600" : "border border-zinc-200"}`}>
-                  <div className={`relative overflow-hidden ${you ? "h-36" : "h-28"}`}>
-                    <div className={`h-full ${!you && !passed ? "opacity-60 grayscale-[.75]" : ""}`}><ArenaArt level={l.level} /></div>
-                    <span className="absolute right-2.5 top-2.5">{you ? <span className="rounded-full bg-violet-600 px-2.5 py-1 text-xs font-extrabold text-white">You are here</span> : passed ? <Tick state="done" /> : <span className="rounded-full bg-white/95 px-2.5 py-1 text-xs font-extrabold text-zinc-700">Locked</span>}</span>
-                  </div>
-                  <div className="px-3 py-2.5">
-                    <p className="flex items-baseline gap-1.5"><span className="text-[13px] font-extrabold text-zinc-600">Level {l.level}</span><span className="text-lg font-extrabold text-zinc-900">{l.name}</span><span lang="pa" className="text-[15px] font-bold text-violet-700">{l.gurmukhi}</span></p>
-                    <p className="text-[13px] font-semibold text-zinc-700">{l.can}</p>
-                  </div>
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        <LevelRoad current={meta.level} disabled={busy} onPick={(n) => n === meta.level ? setView({ name: "checklist" }) : void go(async () => setView({ name: "preview", data: await getLevelPreview(n) }))} />
         {errorNote}
       </div>
     );
@@ -336,20 +306,21 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
       : [...skills].sort((a, b) => (a.skill === weakest ? -1 : b.skill === weakest ? 1 : 0));
     const target = view.name === "skill" ? list[0] : weak;
     return (
-      <div className={`${shell} pb-2`}>
-        <div className="relative h-24 overflow-hidden rounded-3xl"><ArenaArt level={meta.level} /><div className="absolute left-2 top-2"><Back onClick={() => setView({ name: "home" })} /></div></div>
+      <div className={`mx-auto w-full max-w-md px-4 pb-2 pt-3 ${WIDE} lg:w-[1040px] lg:pt-8`}>
+        <div className="relative h-24 overflow-hidden rounded-3xl lg:h-44"><ArenaArt level={meta.level} /><div className="absolute left-2 top-2"><Back onClick={() => setView({ name: "home" })} /></div></div>
         <p className="mt-3 text-[13px] font-bold text-zinc-600">Level {meta.level} · {meta.name}</p>
         <h1 className="text-[26px] font-extrabold tracking-tight text-zinc-900">{view.name === "skill" ? list[0].label : nextLevel != null ? `To reach Level ${nextLevel}` : "To finish the road"}</h1>
         <p className="mb-3 text-sm font-semibold text-zinc-700">“{meta.can}”</p>
-        <div className="flex flex-col gap-2.5">
+        <div className={`flex flex-col gap-2.5 ${list.length > 1 ? "lg:grid lg:grid-cols-2 lg:items-start lg:gap-4" : ""}`}>
           {list.map((s) => {
             const isWeak = s.skill === weakest;
             return (
-              <section key={s.skill} className={`rounded-[18px] p-3.5 ${isWeak ? "border-2 border-orange-200 bg-orange-50/40" : "border border-zinc-200"}`}>
+              <section key={s.skill} className={`rounded-[18px] p-3.5 ${isWeak ? "border-2 border-violet-300 bg-violet-50/50" : "border border-zinc-200"}`}>
                 <button type="button" onClick={() => setView({ name: "skill", skill: s.skill })} className="flex w-full items-center gap-3 text-left">
                   <Ring pct={s.creditPct} skill={s.skill} size={50} tone={s.pct === 100 ? "full" : isWeak ? "weak" : "normal"} />
-                  <span className="min-w-0"><span className="flex items-center gap-1.5 text-[17px] font-extrabold text-zinc-900">{s.label}{isWeak ? <span className="rounded-full bg-orange-700 px-2 py-0.5 text-[10px] font-extrabold text-white">Weakest</span> : null}</span><span className="text-[13px] font-semibold text-zinc-600">{s.practised} of {s.total} {s.unit} saved</span></span>
+                  <span className="min-w-0"><span className="flex items-center gap-1.5 text-[17px] font-extrabold text-zinc-900">{s.label}{isWeak ? <span className="rounded-full bg-violet-700 px-2 py-0.5 text-[10px] font-extrabold text-white">Focus</span> : null}</span><span className="text-[13px] font-semibold text-zinc-600">{s.practised} of {s.total} {s.unit} saved</span></span>
                 </button>
+                <p className="mt-2 text-[13px] font-semibold leading-snug text-zinc-600">{s.howItWorks}</p>
                 <ul className="mt-2 flex flex-col">
                   {s.rows.map((r) => {
                     const done = r.done >= r.total;
@@ -368,7 +339,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
             );
           })}
         </div>
-        {target ? <div className="sticky bottom-20 mt-3"><BigButton title="Play" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div> : null}
+        {target ? <div className="sticky bottom-20 mx-auto mt-3 lg:static lg:mt-5 lg:max-w-md"><BigButton title="Play" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div> : null}
         {errorNote}
       </div>
     );
@@ -376,17 +347,17 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
 
   // Practise home: one level, four rings, one button.
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="relative h-[250px] overflow-hidden tab:rounded-b-3xl">
+    <div className={`mx-auto w-full max-w-md ${WIDE} lg:grid lg:w-[1040px] lg:grid-cols-[1.1fr_1fr] lg:gap-6 lg:pt-8`}>
+      <div className="relative h-[250px] overflow-hidden tab:rounded-b-3xl lg:h-[600px] lg:rounded-3xl">
         <button type="button" onClick={() => setView({ name: "road" })} aria-label={`Level ${meta.level}, ${meta.name}. See all levels`} className="block h-full w-full">
           <ArenaArt level={meta.level} />
         </button>
         <div className="pointer-events-none absolute inset-x-3 top-3 flex items-center justify-between gap-2">
-          <button type="button" onClick={() => setView({ name: "road" })} className="pointer-events-auto flex min-h-10 items-center gap-1.5 rounded-full bg-white/95 px-3 text-[13px] font-extrabold text-zinc-900">Levels</button>
+          <button type="button" onClick={() => setView({ name: "road" })} aria-label="See your road" className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-zinc-900"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4v-5h4v-5h4V5h4" /></svg></button>
           <Link href="/dashboard/home?view=previous" className="pointer-events-auto flex min-h-10 items-center rounded-full bg-white/95 px-3 text-[13px] font-extrabold text-zinc-900">Previous practise</Link>
         </div>
       </div>
-      <div className="relative -mt-7 rounded-t-[28px] bg-white px-4 pb-5 pt-5">
+      <div className="relative -mt-7 rounded-t-[28px] bg-white px-4 pb-5 pt-5 lg:mt-0 lg:flex lg:flex-col lg:justify-center lg:rounded-3xl lg:border lg:border-zinc-200 lg:px-8">
         <div className="block text-left">
           <span className="flex items-center gap-2"><span className="rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-extrabold tracking-wide text-white">LEVEL {meta.level}</span><span className="text-[13px] font-bold text-zinc-600">{meta.stage}</span></span>
           <span className="mt-2 block text-[32px] font-extrabold leading-tight tracking-tight text-zinc-900">{meta.name} <span lang="pa" className="text-[22px] font-bold text-violet-700">{meta.gurmukhi}</span></span>
@@ -397,11 +368,11 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
           {skills.map((s) => {
             const isWeak = s.skill === weakest;
             return (
-              <button key={s.skill} type="button" onClick={() => setView({ name: "skill", skill: s.skill })} aria-label={`${s.label}, ${s.practised} of ${s.total} saved`} className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl border-2 pb-2 pt-3 ${isWeak ? "border-orange-200 bg-orange-50" : "border-transparent"}`}>
-                {isWeak ? <span className="absolute -top-2 rounded-full bg-orange-700 px-1.5 py-0.5 text-[10px] font-extrabold text-white">Weakest</span> : null}
+              <button key={s.skill} type="button" onClick={() => setView({ name: "skill", skill: s.skill })} aria-label={`${s.label}, ${s.practised} of ${s.total} saved`} className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl border-2 pb-2 pt-3 ${isWeak ? "border-violet-300 bg-violet-50" : "border-transparent"}`}>
+                {isWeak ? <span className="absolute -top-2 rounded-full bg-violet-700 px-1.5 py-0.5 text-[10px] font-extrabold text-white">Focus</span> : null}
                 <Ring pct={s.creditPct} skill={s.skill} tone={s.pct === 100 ? "full" : isWeak ? "weak" : "normal"} />
                 <span className="text-xs font-extrabold text-zinc-900">{s.label}</span>
-                <span className="text-xs font-bold text-zinc-600">{s.practised}</span>
+                <span className="text-xs font-bold text-zinc-600">{s.creditPct}%</span>
               </button>
             );
           })}
@@ -413,6 +384,11 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
           <BigButton gold title="Take the Level Check" sub="All your skills are ready" onClick={() => setView({ name: "check" })} />
         ) : weak ? (
           <BigButton title={busy ? "Loading…" : "Play"} sub={mixLabel} disabled={busy} onClick={() => void play()} />
+        ) : null}
+        {off.speaking || off.listening ? (
+          <button type="button" onClick={() => saveOff({ speaking: false, listening: false })} className="mt-2 min-h-11 w-full text-sm font-bold text-zinc-600">
+            {off.speaking && off.listening ? "Speaking and listening are" : off.speaking ? "Speaking is" : "Listening is"} off for now. <span className="font-extrabold text-violet-700">Turn back on</span>
+          </button>
         ) : null}
         {errorNote}
       </div>
@@ -432,7 +408,7 @@ function CheckRunner({ questions, onDone, onLeave }: { questions: CheckQuestion[
         <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-amber-100"><div className="h-full rounded-full bg-amber-400" style={{ width: `${(picks.length / questions.length) * 100}%` }} /></div>
         <span className="text-[13px] font-extrabold text-zinc-600">{picks.length + 1}/{questions.length}</span>
       </div>
-      {q.audioKey ? <div className="mt-6"><AudioButton key={picks.length} audioKey={q.audioKey} large /></div> : null}
+      {q.audioKey ? <div className="mt-6"><AudioButton key={picks.length} audioKey={q.audioKey} large noSlow /></div> : null}
       <h1 className="mt-4 text-[27px] font-bold leading-tight tracking-tight text-zinc-900">{q.prompt}</h1>
       <div className="mt-5 flex flex-col gap-2.5">
         {q.options.map((o) => (
