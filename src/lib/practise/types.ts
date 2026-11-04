@@ -89,6 +89,9 @@ export type RoundResult = {
   ticked: string[];
   saved: string[];
   skills: SkillRoundScore[];
+  xpEarned: number;
+  xpToday: number;
+  xpGoal: number;
   streak: number | null;
   streakExtended: boolean;
 };

@@ -120,8 +120,8 @@ function ProfileIcon({ active }: { active: boolean }) {
 const navItems: (NavItem & { tourId: string })[] = [
   // Order + labels only: courses stay at /dashboard/learn, practice path at /dashboard/home.
   { href: "/dashboard/learn", label: "Home", tourId: "nav-learn" },
-  { href: "/dashboard/home", label: "Practise", tourId: "nav-home" },
   { href: "/dashboard/community", label: "Community", tourId: "nav-community" },
+  { href: "/dashboard/home", label: "Practise", tourId: "nav-home" },
   { href: "/dashboard/games", label: "Games", tourId: "nav-games" },
   { href: "/dashboard/profile", label: "Profile", tourId: "nav-profile" },
 ];
@@ -192,6 +192,24 @@ export function BottomNav({ forumUnread = 0 }: { forumUnread?: number }) {
           const active =
             activeTab === tabId ||
             (item.href === "/dashboard/profile" && pathname.startsWith("/dashboard/profile/kids"));
+
+          if (item.href === "/dashboard/home") {
+            // Practise is the app's main action: the raised purple block in the middle.
+            return (
+              <NavLink
+                key={item.href}
+                href={href}
+                data-tour={item.tourId}
+                onClick={() => setActiveTab(tabId)}
+                className={`-mb-[max(0.75rem,env(safe-area-inset-bottom))] -mt-5 flex min-w-0 flex-[1.25] flex-col items-center justify-center gap-0.5 rounded-t-2xl px-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-white transition-colors tab:w-20 tab:flex-none ${
+                  active ? "bg-violet-700" : "bg-violet-600"
+                }`}
+              >
+                <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z" /></svg>
+                <span className="text-[11px] font-extrabold tracking-wide">{item.label}</span>
+              </NavLink>
+            );
+          }
 
           return (
             <NavLink

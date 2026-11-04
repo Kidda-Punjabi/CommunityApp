@@ -54,3 +54,4 @@ create policy "own practise rounds" on public.practise_rounds for all to authent
 create policy "own practise state" on public.practise_state for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 -- Level checks and cached audio are written only by the server (service role): the answer key must stay hidden.
 NOTIFY pgrst, 'reload schema';
+alter table public.practise_rounds add column if not exists xp integer not null default 0;

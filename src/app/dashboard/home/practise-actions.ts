@@ -19,7 +19,7 @@ import {
   wordsBelow,
   type Item,
 } from "@/lib/practise/content";
-import { LEVELS, ROUND_SIZE } from "@/lib/practise/levels";
+import { DAILY_XP_GOAL, LEVELS, ROUND_SIZE, XP_PER_CORRECT, XP_ROUND_BONUS } from "@/lib/practise/levels";
 import { cooldownDays, loadCheckParts, loadProgress, summariseSkill } from "@/lib/practise/load-home";
 import type {
   CheckQuestion,
@@ -288,13 +288,22 @@ export async function submitRound(answers: RoundAnswer[], localDate: string): Pr
 
   const { data: playedToday } = await supabase
     .from("practise_rounds")
-    .select("id")
+    .select("id, xp")
     .eq("user_id", userId)
-    .eq("local_date", localDate)
-    .limit(1);
-  const roundRows = SKILLS.filter((skill) => clean.some((a) => a.skill === skill)).map((skill) => {
+    .eq("local_date", localDate);
+  const xpBefore = (playedToday ?? []).reduce((sum, r) => sum + Number(r.xp ?? 0), 0);
+  // Uses the app's XP ledger, so it counts everywhere XP counts, within the daily game cap.
+  let xpEarned = 0;
+  const wanted = clean.filter((a) => a.correct).length * XP_PER_CORRECT + XP_ROUND_BONUS;
+  if (clean.length) {
+    const { data: granted, error: xpError } = await supabase.rpc("grant_profile_xp", { p_xp: wanted, p_source: "game", p_source_id: crypto.randomUUID() });
+    if (xpError) console.error("practise xp failed", xpError.message);
+    else xpEarned = Number(granted ?? 0);
+  }
+  const roundRows = SKILLS.filter((skill) => clean.some((a) => a.skill === skill)).map((skill, i) => {
     const mine = clean.filter((a) => a.skill === skill);
     return {
+      xp: i === 0 ? xpEarned : 0,
       user_id: userId,
       level,
       skill,
@@ -335,6 +344,9 @@ export async function submitRound(answers: RoundAnswer[], localDate: string): Pr
     ticked,
     saved,
     skills,
+    xpEarned,
+    xpToday: xpBefore + xpEarned,
+    xpGoal: DAILY_XP_GOAL,
     streak,
     streakExtended: (playedToday ?? []).length === 0 && roundRows.length > 0,
   };

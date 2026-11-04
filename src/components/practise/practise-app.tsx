@@ -11,6 +11,7 @@ import { usePractiseSound } from "@/lib/practise/sounds";
 import type { CheckQuestion, CheckResult, LevelPreview, PractiseHome, PractiseSkill, RoundAnswer, RoundQuestion, RoundResult, SkillSummary } from "@/lib/practise/types";
 import { ArenaArt } from "./arena-art";
 import { LevelRoad } from "./level-road";
+import { Flame, StreakCelebration, StreakDays, StreakStyles, XpProgress } from "./streak-screens";
 import { AudioButton, RoundPlayer } from "./round-player";
 
 const ICONS: Record<PractiseSkill, ReactNode> = {
@@ -68,37 +69,12 @@ function Stars({ n }: { n: number }) {
 }
 
 function useStreak() {
-  const [streak, setStreak] = useState<{ count: number; today: string } | null>(null);
+  const [streak, setStreak] = useState<{ count: number; today: string; lit: boolean } | null>(null);
   useEffect(() => {
     const today = getLocalActivityDate();
-    void getStreakPresentation(today).then((s) => { if (s && !("error" in s)) setStreak({ count: s.streak, today }); }).catch(() => undefined);
+    void getStreakPresentation(today).then((s) => { if (s && !("error" in s)) setStreak({ count: s.streak, today, lit: s.streak > 0 && s.dayGap === 0 }); }).catch(() => undefined);
   }, []);
-  return streak;
-}
-
-function lastSevenDays(today: string) {
-  const [y, m, d] = today.split("-").map(Number);
-  return Array.from({ length: 7 }, (_, i) => getLocalActivityDate(new Date(y, m - 1, d - 6 + i)));
-}
-
-function StreakCard({ home, count, today }: { home: PractiseHome; count: number; today: string }) {
-  const played = home.playedDates.includes(today);
-  const days = lastSevenDays(today);
-  return (
-    <div className={`mt-3 flex items-center gap-3 rounded-2xl px-3 py-2.5 ${played ? "bg-green-50" : "bg-amber-50"}`}>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-extrabold text-zinc-900">{count > 0 ? `${count} day streak` : "Start a streak"}</p>
-        <p className="text-xs font-semibold text-zinc-600">{played ? "Safe for today. Back tomorrow." : count > 0 ? "Finish one round today to keep it." : "Finish one round today."}</p>
-      </div>
-      <div className="flex gap-1" role="img" aria-label="Rounds played in the last 7 days">
-        {days.map((d) => (
-          <span key={d} className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-extrabold ${home.playedDates.includes(d) ? "bg-amber-400 text-zinc-900" : d === today ? "border-2 border-amber-400 text-zinc-700" : "bg-white text-zinc-500"}`}>
-            {new Date(`${d}T12:00:00`).toLocaleDateString("en-GB", { weekday: "narrow" })}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
+  return { streak, setStreak };
 }
 
 /** The dashboard is a phone-width column on a laptop. These break out of it from the centre. */
@@ -107,13 +83,14 @@ const WIDE = "lg:relative lg:left-1/2 lg:max-w-none lg:-translate-x-1/2";
 type View =
   | { name: "home" } | { name: "checklist" } | { name: "skill"; skill: PractiseSkill } | { name: "road" }
   | { name: "preview"; data: LevelPreview } | { name: "round"; questions: RoundQuestion[] }
-  | { name: "result"; result: RoundResult } | { name: "check" }
+  | { name: "result"; result: RoundResult; streakFrom: number } | { name: "streak"; from: number; to: number } | { name: "check" }
   | { name: "checkRun"; checkId: string; questions: CheckQuestion[] } | { name: "checkResult"; result: CheckResult } | { name: "levelUp" };
 
 export function PractiseApp({ home }: { home: PractiseHome }) {
   const router = useRouter();
   const sound = usePractiseSound();
-  const streak = useStreak();
+  const { streak, setStreak } = useStreak();
+  const [streakOpen, setStreakOpen] = useState(false);
   const [view, setView] = useState<View>(home.levelUpFrom != null ? { name: "levelUp" } : { name: "home" });
   const [off, setOff] = useState({ speaking: false, listening: false });
   useEffect(() => {
@@ -148,9 +125,10 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   });
   const finishRound = (answers: RoundAnswer[]) => go(async () => {
     const result = await submitRound(answers, getLocalActivityDate());
-    setView({ name: "result", result });
+    const today = getLocalActivityDate();
+    setView({ name: "result", result, streakFrom: streak?.lit ? streak.count : (streak?.count ?? 0) });
+    if (result.streak != null) setStreak({ count: result.streak, today, lit: true });
     sound("finish");
-    if (result.streakExtended) setTimeout(() => sound("streak"), 750);
     router.refresh();
   });
 
@@ -159,43 +137,46 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
 
   if (view.name === "round") return <RoundPlayer questions={view.questions} onLeave={() => setView({ name: "home" })} onFinish={(a) => void finishRound(a)} off={off} onTurnOff={(k) => saveOff({ ...off, [k]: true })} />;
 
+  if (view.name === "streak") {
+    return <StreakCelebration from={view.from} to={view.to} today={getLocalActivityDate()} playedDates={[...home.playedDates, getLocalActivityDate()]} playSound={() => sound("streak")} onContinue={() => setView({ name: "home" })} />;
+  }
+
   if (view.name === "result") {
     const r = view.result;
+    const showStreak = r.streakExtended && r.streak != null;
+    const carryOn = () => (showStreak ? setView({ name: "streak", from: view.streakFrom, to: r.streak! }) : setView({ name: "home" }));
     return (
       <div className={shell}>
-        <div className="h-40 overflow-hidden rounded-3xl"><ArenaArt level={meta.level} /></div>
-        <p className="mt-5 text-center text-4xl font-extrabold tracking-tight text-zinc-900">{r.correct} of {r.total}</p>
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="mt-2 text-center">
+          <h1 className="text-[28px] font-extrabold tracking-tight text-zinc-900">Round complete!</h1>
+          <p className="text-[15px] font-bold text-zinc-600">{r.correct} of {r.total} right</p>
+        </div>
+        {r.xpEarned > 0 ? <div className="mt-5"><XpProgress earned={r.xpEarned} today={r.xpToday} goal={r.xpGoal} /></div> : null}
+        <div className="mt-5 grid grid-cols-2 gap-2">
           {r.skills.map((s) => (
-            <div key={s.skill} className="flex items-center gap-3 rounded-2xl bg-violet-50 p-3">
-              <Ring pct={s.creditAfter} skill={s.skill} size={50} />
-              <div>
-                <p className="text-[15px] font-extrabold text-zinc-900">{s.label}</p>
-                <p className="text-sm font-bold text-zinc-700">{s.practisedBefore === s.practisedAfter ? `${s.practisedAfter} of ${s.total} saved` : `${s.practisedBefore} to ${s.practisedAfter} of ${s.total} saved`}</p>
+            <div key={s.skill} className="flex items-center gap-2.5 rounded-2xl bg-violet-50 p-2.5">
+              <Ring pct={s.creditAfter} skill={s.skill} size={44} />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-extrabold text-zinc-900">{s.label}</p>
+                <p className="text-xs font-bold text-zinc-700">{s.creditBefore === s.creditAfter ? `${s.creditAfter}%` : `${s.creditBefore}% to ${s.creditAfter}%`}</p>
               </div>
             </div>
           ))}
         </div>
-        {r.saved.length ? (
-          <div className="mt-3 rounded-2xl bg-violet-50 p-3">
-            <p className="text-xs font-extrabold tracking-wide text-violet-800">SAVED</p>
-            <p className="mt-1 text-[15px] font-bold text-zinc-900">{r.saved.slice(0, 6).join(", ")}{r.saved.length > 6 ? ` and ${r.saved.length - 6} more` : ""}</p>
-          </div>
-        ) : null}
         {r.ticked.length ? (
           <div className="mt-3 rounded-2xl bg-green-50 p-3">
             <p className="text-xs font-extrabold tracking-wide text-green-800">TICKED OFF YOUR CHECKLIST</p>
             <p className="mt-1 text-[15px] font-bold text-zinc-900">{r.ticked.slice(0, 4).join(", ")}{r.ticked.length > 4 ? ` and ${r.ticked.length - 4} more` : ""}</p>
           </div>
         ) : null}
-        {r.streak != null ? (
-          <div className="mt-3 rounded-2xl bg-amber-50 p-3 text-center">
-            <p className="text-lg font-extrabold text-zinc-900">{r.streak} day streak</p>
-            <p className="text-sm font-semibold text-zinc-700">{r.streakExtended ? "Today counts. See you tomorrow." : "Already safe for today."}</p>
+        {r.saved.length ? (
+          <div className="mt-3 rounded-2xl bg-zinc-50 p-3">
+            <p className="text-xs font-extrabold tracking-wide text-zinc-600">YOU GOT THESE RIGHT</p>
+            <p className="mt-1 text-sm font-bold text-zinc-900">{r.saved.slice(0, 6).join(", ")}{r.saved.length > 6 ? ` and ${r.saved.length - 6} more` : ""}</p>
           </div>
         ) : null}
-        <div className="mt-5"><BigButton title="Play again" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div>
-        <button type="button" onClick={() => setView({ name: "home" })} className="mt-2 min-h-11 w-full text-[15px] font-extrabold text-violet-700">Done for today</button>
+        <div className="mt-5"><BigButton title="Continue" onClick={carryOn} /></div>
+        {!showStreak ? <button type="button" disabled={busy} onClick={() => void play()} className="mt-2 min-h-11 w-full text-[15px] font-extrabold text-violet-700">Play again</button> : null}
         {errorNote}
       </div>
     );
@@ -339,7 +320,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
             );
           })}
         </div>
-        {target ? <div className="sticky bottom-20 mx-auto mt-3 lg:static lg:mt-5 lg:max-w-md"><BigButton title="Play" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div> : null}
+        {target ? <div className="sticky bottom-28 mx-auto mt-3 lg:static lg:mt-5 lg:max-w-md"><BigButton title="Play" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div> : null}
         {errorNote}
       </div>
     );
@@ -347,23 +328,42 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
 
   // Practise home: one level, four rings, one button.
   return (
-    <div className={`mx-auto w-full max-w-md ${WIDE} lg:grid lg:w-[1040px] lg:grid-cols-[1.1fr_1fr] lg:gap-6 lg:pt-8`}>
+    <div className={`mx-auto w-full max-w-md relative ${WIDE} lg:grid lg:w-[1040px] lg:grid-cols-[1.1fr_1fr] lg:gap-6 lg:pt-8`}>
+      <StreakStyles />
+      {streakOpen && streak ? (
+        <div className="absolute inset-x-3 top-16 z-20 rounded-3xl border border-zinc-200 bg-white p-4 shadow-xl lg:left-6 lg:right-auto lg:top-24 lg:w-96">
+          <div className="flex items-center gap-3">
+            <span className="relative shrink-0"><Flame lit={streak.lit} size={68} /><span className={`absolute inset-x-0 bottom-1 text-center text-2xl font-extrabold ${streak.lit ? "text-zinc-900" : "text-zinc-500"}`}>{streak.count}</span></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl font-extrabold text-zinc-900">Streak</p>
+              <p className="text-sm font-semibold leading-snug text-zinc-600">{streak.lit ? "Done for today. See you tomorrow." : "Finish one round today to light your flame."}</p>
+            </div>
+            <button type="button" onClick={() => setStreakOpen(false)} aria-label="Close" className="flex h-11 w-11 shrink-0 items-center justify-center text-zinc-500"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+          </div>
+          <div className="mt-3"><StreakDays today={streak.today} streak={streak.count} lit={streak.lit} playedDates={home.playedDates} /></div>
+        </div>
+      ) : null}
       <div className="relative h-[250px] overflow-hidden tab:rounded-b-3xl lg:h-[600px] lg:rounded-3xl">
         <button type="button" onClick={() => setView({ name: "road" })} aria-label={`Level ${meta.level}, ${meta.name}. See all levels`} className="block h-full w-full">
           <ArenaArt level={meta.level} />
         </button>
         <div className="pointer-events-none absolute inset-x-3 top-3 flex items-center justify-between gap-2">
           <button type="button" onClick={() => setView({ name: "road" })} aria-label="See your road" className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-zinc-900"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4v-5h4v-5h4V5h4" /></svg></button>
+          {streak ? (
+            <button type="button" onClick={() => setStreakOpen(!streakOpen)} aria-expanded={streakOpen} aria-label={`${streak.count} day streak. ${streak.lit ? "Done for today" : "Not done yet today"}`} className="pointer-events-auto flex min-h-11 items-center gap-1 rounded-full bg-white/95 px-3">
+              <Flame lit={streak.lit} size={20} />
+              <span className={`text-[15px] font-extrabold ${streak.lit ? "text-amber-600" : "text-zinc-500"}`}>{streak.count}</span>
+            </button>
+          ) : null}
           <Link href="/dashboard/home?view=previous" className="pointer-events-auto flex min-h-10 items-center rounded-full bg-white/95 px-3 text-[13px] font-extrabold text-zinc-900">Previous practise</Link>
         </div>
       </div>
-      <div className="relative -mt-7 rounded-t-[28px] bg-white px-4 pb-5 pt-5 lg:mt-0 lg:flex lg:flex-col lg:justify-center lg:rounded-3xl lg:border lg:border-zinc-200 lg:px-8">
+      <div className="relative -mt-7 rounded-t-[28px] bg-white px-4 pb-12 pt-5 lg:mt-0 lg:flex lg:flex-col lg:justify-center lg:rounded-3xl lg:border lg:border-zinc-200 lg:px-8">
         <div className="block text-left">
           <span className="flex items-center gap-2"><span className="rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-extrabold tracking-wide text-white">LEVEL {meta.level}</span><span className="text-[13px] font-bold text-zinc-600">{meta.stage}</span></span>
           <span className="mt-2 block text-[32px] font-extrabold leading-tight tracking-tight text-zinc-900">{meta.name} <span lang="pa" className="text-[22px] font-bold text-violet-700">{meta.gurmukhi}</span></span>
           <span className="mt-0.5 block text-[15px] font-semibold leading-snug text-zinc-700">“{meta.can}”</span>
         </div>
-        {streak ? <StreakCard home={home} count={streak.count} today={streak.today} /> : null}
         <div className="mt-4 flex justify-center gap-1.5">
           {skills.map((s) => {
             const isWeak = s.skill === weakest;
@@ -380,6 +380,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
         <button type="button" onClick={() => setView({ name: "checklist" })} className="mt-2 flex min-h-11 w-full items-center justify-center text-sm font-extrabold text-violet-700">
           {nextLevel != null ? `See what you need for Level ${nextLevel}` : "See what you need for the final check"} ›
         </button>
+        {streak && !streak.lit && streak.count > 0 ? <p className="mb-2 text-center text-sm font-bold text-amber-700">Play today to keep your {streak.count} day streak</p> : null}
         {home.ready ? (
           <BigButton gold title="Take the Level Check" sub="All your skills are ready" onClick={() => setView({ name: "check" })} />
         ) : weak ? (

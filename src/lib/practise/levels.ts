@@ -22,3 +22,7 @@ export const ROUND_SIZE = 12;
 export const ITEM_DONE_AT = 2;
 /** Correct answers per star on a grammar rule. Three stars ticks the rule. */
 export const RULE_CORRECT_PER_STAR = 4;
+
+export const XP_PER_CORRECT = 2;
+export const XP_ROUND_BONUS = 5;
+export const DAILY_XP_GOAL = 50;
