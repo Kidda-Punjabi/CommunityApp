@@ -17,7 +17,8 @@ export type NotificationType =
   | "lesson_reschedule_requested"
   | "lesson_reschedule_resolved"
   | "certificate_issued"
-  | "community_session_live";
+  | "community_session_live"
+  | "subscription_renewal";
 
 export type FriendRequestStatus = "pending" | "accepted" | "declined";
 

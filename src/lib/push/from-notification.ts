@@ -26,6 +26,7 @@ const PUSH_TYPE: Record<string, string> = {
   friend_game_challenge: "G3",
   friend_game_challenge_result: "G4",
   announcement: "A1",
+  subscription_renewal: "B1",
 };
 
 type NotificationRow = {
@@ -130,6 +131,13 @@ export function contentForNotification(
         title: text(payload, "title") || "Announcement",
         body: text(payload, "body") || "Open Kidda to read it.",
         url: "/dashboard/notifications",
+      };
+    case "B1":
+      return {
+        type,
+        title: "Subscription renewal",
+        body: text(payload, "message") || "Your subscription renews soon.",
+        url: "/dashboard/profile/billing",
       };
     default:
       return null;
