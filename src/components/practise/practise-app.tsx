@@ -56,7 +56,7 @@ function SkillRise({ score }: { score: SkillRoundScore }) {
   const rising = gain > 0 && phase !== "before";
   const ringPct = phase === "before" ? score.creditBefore : score.creditAfter;
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-1 rounded-2xl bg-violet-50 px-2 py-3 text-center">
+    <div className="flex h-full min-h-[148px] flex-col items-center justify-center gap-1 rounded-2xl bg-violet-50 px-2 py-3 text-center">
       <Ring pct={ringPct} skill={score.skill} size={52} tone={rising ? "full" : "normal"} />
       <div>
         <p className="text-sm font-extrabold leading-tight text-zinc-900">{score.label}</p>
@@ -199,9 +199,11 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
     return (
       <div className="fixed inset-0 z-40 overflow-hidden bg-zinc-50">
       <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] lg:max-w-[640px]">
+        {/* Everything above the buttons scrolls, so nothing is squashed or overlaps on a short screen. */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
         <h1 className="text-center text-[28px] font-extrabold tracking-tight text-zinc-900">Round complete!</h1>
         {r.xpEarned > 0 || r.xpToday > 0 ? <div className="mt-4"><XpProgress earned={r.xpEarned} today={r.xpToday} goal={r.xpGoal} /></div> : null}
-        <div className="mt-4 grid min-h-0 flex-1 grid-cols-2 grid-rows-2 content-stretch gap-3">
+        <div className="mt-4 grid grid-cols-2 auto-rows-fr gap-3">
           {r.skills.map((s) => <SkillRise key={s.skill} score={s} />)}
         </div>
         {r.saved.length ? (
@@ -210,8 +212,9 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
             <p className="mt-1 line-clamp-3 text-sm font-bold text-zinc-900">{r.saved.slice(0, 6).join(", ")}{r.saved.length > 6 ? ` and ${r.saved.length - 6} more` : ""}</p>
           </div>
         ) : null}
-        <div className="mt-4"><BigButton title={busy ? "Loading…" : "Play"} disabled={busy} onClick={() => void play()} /></div>
-        <button type="button" onClick={() => setView({ name: "home" })} className="mt-2 min-h-11 w-full text-sm font-bold text-zinc-500">Done</button>
+        </div>
+        <div className="mt-3 shrink-0"><BigButton title={busy ? "Loading…" : "Play"} disabled={busy} onClick={() => void play()} /></div>
+        <button type="button" onClick={() => setView({ name: "home" })} className="mt-2 min-h-11 w-full shrink-0 text-sm font-bold text-zinc-500">Done</button>
         {errorNote}
       </div>
       </div>
