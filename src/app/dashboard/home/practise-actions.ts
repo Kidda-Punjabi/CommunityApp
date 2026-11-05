@@ -7,6 +7,7 @@ import { publicUrlForAudioPath } from "@/lib/audio/storage";
 import { recordStreakActivity } from "@/lib/progress/streak";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
+import { weekCardScript } from "@/lib/practise/week-content";
 import {
   grammarSentencesFor,
   isItemDone,
@@ -374,9 +375,11 @@ export async function getPractiseAudio(key: string): Promise<string | null> {
   if (!user) return null;
   const [id, part] = key.split(":");
   const item = itemById(id);
-  if (!item) return null;
-  let script = item.g;
-  if (item.k === "p") {
+  // Week practice items are flashcards, keyed by the card's id.
+  const weekScript = !item && /^([0-9a-f-]{36}|wk\d+-\d+)$/.test(id) ? await weekCardScript(supabase, id) : null;
+  if (!item && !weekScript) return null;
+  let script = item?.g ?? weekScript!;
+  if (item?.k === "p") {
     const letter = item.g.split("/")[Number(part)]?.trim();
     if (!letter) return null;
     script = `${letter}ਾ`;
