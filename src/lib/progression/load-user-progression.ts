@@ -83,7 +83,7 @@ export async function loadOnboardingProfile(
         selfAssessedStartingTier: fallback.data?.self_assessed_starting_tier ?? null,
         statedGoalMotivation: fallback.data?.stated_goal_motivation ?? null,
         targetTier: fallback.data?.target_tier ?? null,
-        placementCompleted: Boolean(fallback.data?.placement_completed_at),
+        placementCompleted: fallback.data?.kidda_level != null,
         learnerLevel: fallback.data?.kidda_level ?? null,
       };
     }
@@ -96,7 +96,7 @@ export async function loadOnboardingProfile(
     selfAssessedStartingTier: data?.self_assessed_starting_tier ?? null,
     statedGoalMotivation: data?.stated_goal_motivation ?? null,
     targetTier: data?.target_tier ?? null,
-    placementCompleted: Boolean(data?.placement_completed_at),
+    placementCompleted: data?.kidda_level != null,
     learnerLevel: data?.kidda_level ?? null,
   };
 }
@@ -116,7 +116,8 @@ export async function loadUserProgression(
   const learnerLevel = profile?.kidda_level ?? null;
   const totalXp = profile?.total_xp ?? 0;
   const xpAtLevelStart = profile?.xp_at_level_start ?? 0;
-  const placementCompleted = Boolean(profile?.placement_completed_at);
+  // The level is the only thing that counts now, however it was set.
+  const placementCompleted = learnerLevel != null;
   const tier = learnerLevel != null ? getTierByNumber(learnerLevel) : null;
   const nextTier = learnerLevel != null ? getNextTier(learnerLevel) : null;
 

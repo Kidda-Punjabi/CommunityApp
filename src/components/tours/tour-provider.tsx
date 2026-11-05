@@ -282,7 +282,7 @@ export function TourProvider({
         pathname.startsWith("/dashboard/tutor") ||
         pathname.startsWith("/dashboard/kids") ||
         pathname.startsWith("/dashboard/english") ||
-        pathname.startsWith("/dashboard/placement")
+        pathname.startsWith("/dashboard/community/placement")
       ) {
         return;
       }
@@ -350,7 +350,7 @@ export function TourProvider({
   useEffect(() => {
     if (bootstrappedRef.current || kidSessionActive || !toursReady) return;
     if (!hasSeenOnboarding) return;
-    if (pathname.startsWith("/dashboard/placement")) return;
+    if (pathname.startsWith("/dashboard/community/placement")) return;
     // Let the resume effect own Learn when a stored queue exists.
     if (pathname === "/dashboard/learn" && readStoredCourseQueue()) return;
 

@@ -28,9 +28,9 @@ export const APP_ONBOARDING_MILESTONE_COLUMNS: AppOnboardingMilestoneColumn[] = 
   },
   {
     key: "placementDone",
-    label: "Placement test",
-    header: "Placement",
-    description: "Placement test completed (profiles.placement_completed_at)",
+    label: "Level found",
+    header: "Level",
+    description: "Has a Kidda Level (profiles.kidda_level)",
   },
   {
     key: "practiced",
@@ -48,7 +48,7 @@ type ProfileSnapshot = {
   full_name: string | null;
   preferred_name: string | null;
   avatar_url: string | null;
-  placement_completed_at: string | null;
+  kidda_level: number | null;
 };
 
 export function isProfileFilledForAppOnboarding(profile: ProfileSnapshot): boolean {
@@ -67,7 +67,7 @@ export function computeAppOnboardingMilestones(input: {
     signedUp: input.hasAccount,
     emailConfirmed: Boolean(input.emailConfirmedAt),
     profileFilled: isProfileFilledForAppOnboarding(input.profile),
-    placementDone: Boolean(input.profile.placement_completed_at),
+    placementDone: input.profile.kidda_level != null,
     practiced: input.practiced,
   };
 }

@@ -102,14 +102,13 @@ export function ProgressDetail({ progression }: ProgressDetailProps) {
           <EyebrowLabel>Your level</EyebrowLabel>
           <h2 className="mt-1 text-lg font-medium text-zinc-900">Not placed yet</h2>
           <p className="mt-2 text-sm text-zinc-600">
-            Complete the placement assessment to see your level and unlock XP progress toward
-            level-up tests.
+            Answer a few quick questions to see your level and what to work on next.
           </p>
           <Link
-            href="/dashboard/placement"
+            href="/dashboard/community/placement?from=practice"
             className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500"
           >
-            Complete placement
+            Find your level
           </Link>
         </HubCard>
       </div>
@@ -141,7 +140,7 @@ export function ProgressDetail({ progression }: ProgressDetailProps) {
         <div className="mt-3">
           <LevelStepper currentLevel={learnerLevel} targetTier={progression.targetTier} />
         </div>
-        <HubGhostLink href="/dashboard/placement" className="mt-4 inline-block">
+        <HubGhostLink href="/dashboard/community/placement?from=practice" className="mt-4 inline-block">
           View placement details
         </HubGhostLink>
       </HubCard>
