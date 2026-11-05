@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { resolveCourseActor } from "@/lib/kids/course-actor";
 import { shuffle } from "@/lib/practise/content";
+import { knownSlotsBySkill, pickMix, seenAnywhere } from "@/lib/practise/round-mix";
 import { DAILY_XP_GOAL, ITEM_DONE_AT, ROUND_SIZE, XP_PER_CORRECT, XP_ROUND_BONUS } from "@/lib/practise/levels";
 import { loadProgress } from "@/lib/practise/load-home";
 import type { PractiseSkill, RoundAnswer, RoundQuestion } from "@/lib/practise/types";
@@ -38,20 +39,19 @@ function distractors(item: WeekItem, pool: WeekItem[], text: (i: WeekItem) => st
   return out;
 }
 
-/** New items first, then ones in progress, and finished ones only when nothing else is left. */
-function pick(items: WeekItem[], skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>) {
+/** Mostly new items with a review slot. A week is a short list, so review fills in once the new ones run out. */
+function pick(items: WeekItem[], skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>, knownSlots: number) {
   const count = (i: WeekItem) => progress.get(`${skill}:${i.id}`) ?? 0;
   const free = items.filter((i) => !used.has(i.id));
-  const picked = [
-    ...shuffle(free.filter((i) => count(i) === 0)),
-    ...shuffle(free.filter((i) => count(i) > 0 && count(i) < ITEM_DONE_AT)),
-    ...shuffle(free.filter((i) => count(i) >= ITEM_DONE_AT)),
-  ].slice(0, n);
+  const seen = free.filter((i) => seenAnywhere(progress, i.id));
+  const known = [...shuffle(seen.filter((i) => count(i) < ITEM_DONE_AT)), ...shuffle(seen.filter((i) => count(i) >= ITEM_DONE_AT))];
+  const mix = pickMix(shuffle(free.filter((i) => !seenAnywhere(progress, i.id))), known, n, knownSlots);
+  const picked = [...mix.fresh, ...mix.review, ...mix.known.slice(0, mix.shortOfNew)];
   for (const i of picked) used.add(i.id);
   return picked;
 }
 
-function questions(pool: WeekPool, skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>): RoundQuestion[] {
+function questions(pool: WeekPool, skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>, knownSlots: number): RoundQuestion[] {
   const items = poolForSkill(pool, skill);
   const everything = [...pool.words, ...pool.sentences];
   const choosePunjabi = (i: WeekItem, uncounted: boolean): RoundQuestion => ({
@@ -78,7 +78,7 @@ function questions(pool: WeekPool, skill: PractiseSkill, progress: Map<string, n
     answerId: i.id,
     answer: answerOf(i),
   });
-  return pick(items, skill, progress, n, used).map((i): RoundQuestion => {
+  return pick(items, skill, progress, n, used, knownSlots).map((i): RoundQuestion => {
     if (skill === "grammar") {
       return { skill, itemId: i.id, type: "tiles", heading: "Build the sentence", prompt: i.e, tiles: shuffle(i.r.split(/\s+/).filter(Boolean)), answer: answerOf(i) };
     }
@@ -109,13 +109,14 @@ export async function startWeekRound(week: number): Promise<RoundQuestion[]> {
   const base = Math.floor(ROUND_SIZE / skills.length);
   let spare = ROUND_SIZE % skills.length;
   const used: Record<string, Set<string>> = {};
+  const knownSlots = knownSlotsBySkill(skills, ROUND_SIZE);
   const out = skills.flatMap((skill) => {
     const n = base + (spare > 0 ? 1 : 0);
     if (spare > 0) spare -= 1;
     // A sentence can appear once per round across grammar, listening and speaking.
     const key = skill === "words" ? "words" : "sentences";
     used[key] ??= new Set();
-    return questions(pool, skill, progress, n, used[key]);
+    return questions(pool, skill, progress, n, used[key], knownSlots.get(skill) ?? 0);
   });
   return shuffle(out);
 }

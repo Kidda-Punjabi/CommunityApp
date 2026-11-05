@@ -69,9 +69,11 @@ export type RoundQuestion = {
   fallback?: RoundQuestion;
   /** Practice only: it doesn't tick off listening or speaking. */
   uncounted?: boolean;
+  /** The sentence behind a grammar question, whose itemId is the rule. */
+  seenId?: string;
 };
 
-export type RoundAnswer = { itemId: string; skill: PractiseSkill; correct: boolean; uncounted?: boolean };
+export type RoundAnswer = { itemId: string; skill: PractiseSkill; correct: boolean; uncounted?: boolean; seenId?: string };
 
 export type SkillRoundScore = {
   skill: PractiseSkill;

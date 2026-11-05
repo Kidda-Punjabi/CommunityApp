@@ -321,7 +321,7 @@ export function RoundPlayer({
     const nextRun = correct ? run + 1 : 0;
     setRun(nextRun);
     sound(correct ? (nextRun > 0 && nextRun % 3 === 0 ? "combo" : "correct") : "wrong");
-    setAnswers((a) => [...a, { itemId: q.itemId, skill: q.skill, correct, uncounted: q.uncounted }]);
+    setAnswers((a) => [...a, { itemId: q.itemId, skill: q.skill, correct, uncounted: q.uncounted, seenId: q.seenId }]);
     // A miss is not marked right. It moves to the end for another go, without adding to the count.
     if (!correct && queue.length < startSize.current + 5) setQueue((list) => [...list, q]);
   };
