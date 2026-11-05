@@ -14,7 +14,7 @@ export function FindYourLevel() {
       <p className="mt-2 text-base font-medium leading-snug text-zinc-700">
         New practise is here. Answer a few questions and we will show you exactly what to work on.
       </p>
-      <Link href="/dashboard/community/placement" className="mt-6 flex h-[72px] flex-col items-center justify-center rounded-[20px] bg-violet-600 text-white shadow-lg shadow-violet-900/25">
+      <Link href="/dashboard/community/placement?from=practice" className="mt-6 flex h-[72px] flex-col items-center justify-center rounded-[20px] bg-violet-600 text-white shadow-lg shadow-violet-900/25">
         <span className="text-2xl font-extrabold">Start</span>
         <span className="text-[13px] font-bold opacity-90">A few quick questions</span>
       </Link>

@@ -23,7 +23,11 @@ function playClip(url: string | null) {
   void audio.play();
 }
 
-export function PlacementTest({ mode = "placement" }: { mode?: "placement" | "retake" }) {
+export function PlacementTest({ mode = "placement", fromPractice = false }: { mode?: "placement" | "retake"; fromPractice?: boolean }) {
+  const doneHref = mode === "retake" ? "/dashboard/community/level/up" : fromPractice ? "/dashboard/home" : "/dashboard/community/welcome/done";
+  const backHref = mode === "retake" ? "/dashboard/community/level" : fromPractice ? "/dashboard/home" : "/dashboard/community/welcome/levels";
+  // "3 of 3" belongs to the Community welcome steps. From Practice this is the only step.
+  const stepLabel = fromPractice ? undefined : "3 of 3";
   const router = useRouter();
   const [profileStep, setProfileStep] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
@@ -73,7 +77,7 @@ export function PlacementTest({ mode = "placement" }: { mode?: "placement" | "re
       setAttemptId(started.attemptId);
       setDeadline(Date.parse(started.deadline));
       setItem(started.item);
-      if (!started.item) router.push(mode === "retake" ? "/dashboard/community/level/up" : "/dashboard/community/welcome/done");
+      if (!started.item) router.push(doneHref);
     } finally {
       starting.current = false;
       setPending(false);
@@ -98,7 +102,7 @@ export function PlacementTest({ mode = "placement" }: { mode?: "placement" | "re
           router.push("/dashboard/community/level?held=1");
           return;
         }
-        router.push(mode === "retake" ? "/dashboard/community/level/up" : "/dashboard/community/welcome/done");
+        router.push(doneHref);
         return;
       }
       if ("item" in result) setItem(result.item);
@@ -113,8 +117,8 @@ export function PlacementTest({ mode = "placement" }: { mode?: "placement" | "re
     const question = PROFILE[profileStep];
     return (
       <OnboardingFrame
-        step="3 of 3"
-        backHref={mode === "retake" ? "/dashboard/community/level" : "/dashboard/community/welcome/levels"}
+        step={stepLabel}
+        backHref={backHref}
         action={<span className="block h-14" />}
       >
         <div>
@@ -133,7 +137,7 @@ export function PlacementTest({ mode = "placement" }: { mode?: "placement" | "re
   }
 
   return (
-    <OnboardingFrame step="3 of 3" backHref={mode === "retake" ? "/dashboard/community/level" : "/dashboard/community/welcome/levels"} action={<span className="block h-14" />}>
+    <OnboardingFrame step={stepLabel} backHref={backHref} action={<span className="block h-14" />}>
       <div>
         <div className="mb-2 flex items-center justify-between text-sm">
           <span className="font-semibold text-[#6B5F8A]">Level</span>
