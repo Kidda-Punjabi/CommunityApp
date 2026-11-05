@@ -25,7 +25,7 @@ import { isPrefetchRequest, verifiedUserFromCookies } from "@/lib/supabase/local
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const POST_AUTH_PATH = "/dashboard/learn";
+const POST_AUTH_PATH = "/dashboard/home";
 
 function redirectTo(request: NextRequest, pathname: string, issued: { count: number }) {
   const next = planRedirect({

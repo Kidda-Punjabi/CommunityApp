@@ -46,14 +46,13 @@ export function ProgressionCard({ progression, variant = "full" }: ProgressionCa
         <EyebrowLabel>Your level</EyebrowLabel>
         <h2 className="mt-2 font-heading text-xl font-bold text-zinc-900">Not placed yet</h2>
         <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-          Complete the placement assessment to see your level and unlock XP progress toward
-          level-up tests.
+          Answer a few quick questions to see your level and what to work on next.
         </p>
         <Link
-          href="/dashboard/placement"
+          href="/dashboard/community/placement?from=practice"
           className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500"
         >
-          Complete placement
+          Find your level
         </Link>
       </div>
     );

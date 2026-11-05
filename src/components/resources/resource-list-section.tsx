@@ -76,7 +76,7 @@ export function ResourceListSection({
           badge={<StatusBadge variant="live">Live</StatusBadge>}
         />
         <ActionListRow
-          href="/dashboard/community#leaderboard"
+          href="/dashboard/leaderboard"
           icon="🏆"
           eyebrow="Community"
           title="Weekly leaderboard"

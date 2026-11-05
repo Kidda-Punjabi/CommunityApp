@@ -1,11 +1,11 @@
 import type { GameCatalogEntry } from "@/lib/games/catalog";
 import { GameGridTile } from "@/components/games/game-grid-tile";
-import { GamesHorizontalRow } from "@/components/games/games-horizontal-row";
 import { isGameUnlockedForTier } from "@/lib/games/premium-gating";
 import type { ReactNode } from "react";
 
+export const GAMES_LIST_GRID_CLASS = "grid grid-cols-3 gap-x-2 gap-y-4 tab:grid-cols-4 lg:grid-cols-6";
+
 type GamesCategoryGridProps = {
-  title: string;
   games: GameCatalogEntry[];
   personalBests: Record<string, number>;
   isPremium?: boolean;
@@ -14,7 +14,6 @@ type GamesCategoryGridProps = {
 };
 
 export function GamesCategoryGrid({
-  title,
   games,
   personalBests,
   isPremium = false,
@@ -22,7 +21,7 @@ export function GamesCategoryGrid({
   extraTiles = null,
 }: GamesCategoryGridProps) {
   return (
-    <GamesHorizontalRow title={title}>
+    <div className={GAMES_LIST_GRID_CLASS}>
       {games.map((game) => (
         <GameGridTile
           key={game.type}
@@ -32,6 +31,6 @@ export function GamesCategoryGrid({
         />
       ))}
       {extraTiles}
-    </GamesHorizontalRow>
+    </div>
   );
 }

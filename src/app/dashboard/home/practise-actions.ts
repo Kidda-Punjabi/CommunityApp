@@ -16,10 +16,14 @@ import {
   sentencesAt,
   shuffle,
   skillsForLevel,
+  weekNumbers,
   wordsAt,
   wordsBelow,
   type Item,
 } from "@/lib/practise/content";
+import { endingById, endingsForLevel } from "@/lib/practise/endings-bank";
+import { endingRoundQuestion, pickEndings } from "@/lib/practise/endings-round";
+import { knownSlotsBySkill, pickMix, seenAnywhere } from "@/lib/practise/round-mix";
 import { DAILY_XP_GOAL, LEVELS, ROUND_SIZE, XP_PER_CORRECT, XP_ROUND_BONUS } from "@/lib/practise/levels";
 import { cooldownDays, loadCheckParts, loadProgress, summariseSkill } from "@/lib/practise/load-home";
 import type {
@@ -70,27 +74,24 @@ function distractors(item: Item, pool: Item[], n: number, text: (i: Item) => str
   return out;
 }
 
-/**
- * Mostly words and sentences the learner has never practised.
- * One already-started item is mixed in when there are plenty of new ones left.
- * Finished items are only used once the new ones run out.
- */
-function pickRoundItems(pool: Item[], skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>) {
+/** New items, then a review slot. Short of new sentences, it borrows new words so the round stays mostly new. */
+function pickRoundItems(pool: Item[], skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>, knownSlots: number, level: number) {
   const count = (i: Item) => progress.get(`${skill}:${i.id}`) ?? 0;
   const available = pool.filter((i) => !used.has(i.id));
-  const fresh = shuffle(available.filter((i) => count(i) === 0));
-  const started = shuffle(available.filter((i) => count(i) > 0 && !isItemDone(skill, count(i))));
-  const done = shuffle(available.filter((i) => isItemDone(skill, count(i))));
-  const reviewSlots = fresh.length >= n ? Math.min(started.length, n >= 3 ? 1 : 0) : 0;
-  const picked = [...fresh.slice(0, n - reviewSlots), ...started.slice(0, reviewSlots)];
-  if (picked.length < n) {
-    for (const item of [...fresh.slice(Math.max(0, n - reviewSlots)), ...started.slice(reviewSlots), ...done]) {
-      if (picked.length === n) break;
-      if (!picked.includes(item)) picked.push(item);
-    }
-  }
-  for (const item of picked) used.add(item.id);
-  return shuffle(picked);
+  const unseen = shuffle(available.filter((i) => !seenAnywhere(progress, i.id)));
+  const seen = available.filter((i) => seenAnywhere(progress, i.id));
+  const known = [...shuffle(seen.filter((i) => !isItemDone(skill, count(i)))), ...shuffle(seen.filter((i) => isItemDone(skill, count(i))))];
+  const mix = pickMix(unseen, known, n, knownSlots);
+  const borrowed = skill === "words" ? [] : freshWords(level, progress, mix.shortOfNew, used);
+  const stillShort = mix.shortOfNew - borrowed.length;
+  const picked = [...mix.fresh, ...mix.review, ...mix.known.slice(0, stillShort)];
+  for (const item of [...picked, ...borrowed]) used.add(item.id);
+  return { picked: shuffle(picked), borrowed };
+}
+
+function freshWords(level: number, progress: Map<string, number>, n: number, used: Set<string>) {
+  if (n <= 0 || !skillsForLevel(level).includes("words")) return [];
+  return shuffle(wordsAt(level).filter((w) => !used.has(w.id) && !seenAnywhere(progress, w.id))).slice(0, n);
 }
 
 function answerOf(i: Item) {
@@ -133,7 +134,7 @@ function savedLabel(skill: PractiseSkill, item: Item) {
   return item.e || item.r || item.g;
 }
 
-function questionsFor(skill: PractiseSkill, level: number, progress: Map<string, number>, n: number, used: Set<string>): RoundQuestion[] {
+function questionsFor(skill: PractiseSkill, level: number, progress: Map<string, number>, n: number, used: Set<string>, knownSlots: number): RoundQuestion[] {
   const pool = poolFor(level, skill);
   if (!pool.length || n <= 0) return [];
   if (skill === "grammar") {
@@ -141,17 +142,40 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
     const open = pool.filter((r) => !isItemDone("grammar", count(r)));
     // Next rule first. A rule with few sentences hands over to the one after it.
     const rules = [...open, ...pool.filter((r) => !open.includes(r))].sort((x, y) => Number(isItemDone("grammar", count(x))) - Number(isItemDone("grammar", count(y))) || count(x) - count(y));
-    const out: RoundQuestion[] = [];
-    for (const rule of rules) {
-      for (const s of shuffle(grammarSentencesFor(rule))) {
-        if (out.length >= n || used.has(s.id)) continue;
-        used.add(s.id);
-        out.push({ skill, itemId: rule.id, type: "tiles", heading: rule.e, prompt: s.e, tiles: shuffle(s.r.split(/\s+/)), answer: answerOf(s) });
-      }
-      if (out.length >= n) break;
-    }
-    return out;
+    // Ending questions count towards the rule from the same week, or the next rule to finish.
+    const endings = pickEndings(endingsForLevel(level), (id) => seenAnywhere(progress, id), used, n);
+    const endingQuestions = endings.picked.map((q) => {
+      used.add(q.id);
+      const rule = rules.find((r) => weekNumbers(r.t).includes(q.week)) ?? rules[0];
+      return endingRoundQuestion(q, skill, rule.id, q.id);
+    });
+    const tilesN = n - endingQuestions.length;
+    const tileKnownSlots = endings.review ? Math.max(0, knownSlots - 1) : knownSlots;
+    const candidates = rules.flatMap((rule) => shuffle(grammarSentencesFor(rule)).map((sentence) => ({ rule, sentence })));
+    const unique = (list: typeof candidates) => {
+      const seenIds = new Set<string>();
+      return list.filter(({ sentence }) => !used.has(sentence.id) && !seenIds.has(sentence.id) && Boolean(seenIds.add(sentence.id)));
+    };
+    const free = unique(candidates);
+    const mix = pickMix(free.filter((c) => !seenAnywhere(progress, c.sentence.id)), free.filter((c) => seenAnywhere(progress, c.sentence.id)), tilesN, tileKnownSlots);
+    const borrowed = freshWords(level, progress, mix.shortOfNew, used);
+    const chosen = [...mix.fresh, ...mix.review, ...mix.known.slice(0, mix.shortOfNew - borrowed.length)];
+    const out: RoundQuestion[] = chosen.map(({ rule, sentence: s }) => {
+      used.add(s.id);
+      return { skill, itemId: rule.id, seenId: s.id, type: "tiles", heading: rule.e, prompt: s.e, tiles: shuffle(s.r.split(/\s+/)), answer: answerOf(s) };
+    });
+    for (const word of borrowed) used.add(word.id);
+    return [...endingQuestions, ...out, ...borrowed.map((word) => questionsForItem(word, "words", "words", level, progress, wordsAt(level)))];
   }
+  const { picked, borrowed } = pickRoundItems(pool, skill, progress, n, used, knownSlots, level);
+  return [
+    ...picked.map((i) => questionsForItem(i, skill, skill, level, progress, pool)),
+    ...borrowed.map((word) => questionsForItem(word, skill, "words", level, progress, wordsAt(level))),
+  ];
+}
+
+/** `format` is how it is asked, `skill` is what it counts towards. A borrowed word can be heard or said but counts as a word. */
+function questionsForItem(i: Item, format: PractiseSkill, skill: PractiseSkill, level: number, progress: Map<string, number>, pool: Item[]): RoundQuestion {
   const readChoice = (i: Item): RoundQuestion => ({
     skill,
     itemId: i.id,
@@ -176,8 +200,8 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
     answerId: i.id,
     answer: answerOf(i),
   });
-  return pickRoundItems(pool, skill, progress, n, used).map((i): RoundQuestion => {
-    if (skill === "words") {
+  {
+    if (format === "words") {
       if ((progress.get(`words:${i.id}`) ?? 0) === 0) {
         const others = distractors(i, pool, 3, (p) => p.g);
         return {
@@ -194,7 +218,7 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
       }
       return { skill, itemId: i.id, type: "say", heading: "Say it in Punjabi", prompt: i.e, audioKey: i.id, answer: answerOf(i), fallback: pickPunjabi(i) };
     }
-    if (skill === "listening") {
+    if (format === "listening") {
       if (level === 0) return soundQuestion(i, pool);
       const others = distractors(i, pool, 3, (p) => p.e);
       return {
@@ -224,7 +248,7 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
       };
     }
     return { skill, itemId: i.id, type: "say", heading: "Say it in Punjabi", prompt: i.e, audioKey: i.id, answer: answerOf(i), fallback: pickPunjabi(i) };
-  });
+  }
 }
 
 /** One round mixes every skill at this level. Play from home or from a skill page. */
@@ -235,10 +259,11 @@ export async function startRound(): Promise<RoundQuestion[]> {
   const base = Math.floor(ROUND_SIZE / skills.length);
   let spare = ROUND_SIZE % skills.length;
   const used = new Set<string>();
+  const knownSlots = knownSlotsBySkill(skills, ROUND_SIZE);
   const questions = skills.flatMap((skill) => {
     const n = base + (spare > 0 ? 1 : 0);
     if (spare > 0) spare -= 1;
-    return questionsFor(skill, level, progress, n, used);
+    return questionsFor(skill, level, progress, n, used, knownSlots.get(skill) ?? 0);
   });
   return shuffle(questions);
 }
@@ -254,6 +279,14 @@ export async function submitRound(answers: RoundAnswer[], localDate: string): Pr
   const ticked: string[] = [];
   const saved: string[] = [];
   const now = new Date().toISOString();
+
+  // Remember which sentences were built, so they stop counting as new. Rule stars read rule ids only.
+  const builtIds = [...new Set(clean.map((a) => a.seenId).filter((id): id is string => Boolean(id && (itemById(id) || endingById(id)))))].filter((id) => !progress.has(`grammar:${id}`));
+  if (builtIds.length) {
+    await supabase.from("practise_progress").upsert(
+      builtIds.map((id) => ({ user_id: userId, item_id: id, skill: "grammar", correct_count: 0, attempts: 1, last_correct: null, last_seen_at: now }))
+    );
+  }
 
   for (const skill of SKILLS) {
     const mine = clean.filter((a) => a.skill === skill && !a.uncounted);
@@ -375,10 +408,11 @@ export async function getPractiseAudio(key: string): Promise<string | null> {
   if (!user) return null;
   const [id, part] = key.split(":");
   const item = itemById(id);
+  const ending = endingById(id);
   // Week practice items are flashcards, keyed by the card's id.
-  const weekScript = !item && /^([0-9a-f-]{36}|wk\d+-\d+)$/.test(id) ? await weekCardScript(supabase, id) : null;
-  if (!item && !weekScript) return null;
-  let script = item?.g ?? weekScript!;
+  const weekScript = !item && !ending && /^([0-9a-f-]{36}|wk\d+-\d+)$/.test(id) ? await weekCardScript(supabase, id) : null;
+  if (!item && !ending && !weekScript) return null;
+  let script = item?.g ?? ending?.gurmukhi ?? weekScript!;
   if (item?.k === "p") {
     const letter = item.g.split("/")[Number(part)]?.trim();
     if (!letter) return null;

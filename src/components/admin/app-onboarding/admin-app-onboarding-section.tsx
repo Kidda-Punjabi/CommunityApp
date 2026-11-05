@@ -87,7 +87,7 @@ export function AdminAppOnboardingSection() {
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">App onboarding</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Everyone who signed up for the app — milestones are filled in automatically from signup,
-          email verification, profile, placement test, and practice activity. No manual ticks.
+          email verification, profile, level, and practice activity. No manual ticks.
         </p>
         <p className="mt-2 text-xs text-zinc-400">
           Package setup (welcome email, calendar, WhatsApp) lives on{" "}

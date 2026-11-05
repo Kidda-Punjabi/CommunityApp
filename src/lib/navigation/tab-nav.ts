@@ -52,8 +52,6 @@ export function inferTabFromPathname(pathname: string): TabId {
 
   if (
     pathname.startsWith("/dashboard/learn") ||
-    pathname.startsWith("/dashboard/placement") ||
-    pathname.startsWith("/dashboard/level-test") ||
     pathname.startsWith("/dashboard/resources")
   ) {
     return "learn";

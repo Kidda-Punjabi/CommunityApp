@@ -4,23 +4,12 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { getPractiseAudio } from "@/app/dashboard/home/practise-actions";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { recordingExtensionForBlob, useAudioRecorder } from "@/lib/audio/use-audio-recorder";
+import { EndingsQuestion } from "@/components/practise/endings-question";
 import { usePractiseSound } from "@/lib/practise/sounds";
+import { passedSpokenAttempt, scoreSpokenAttempt } from "@/lib/games/spoken-match";
 import type { RoundAnswer, RoundQuestion } from "@/lib/practise/types";
 
 const SLOW_RATE = 0.55;
-
-function similarity(a: string, b: string) {
-  const clean = (s: string) => s.replace(/[\s?.,!।'"]/g, "");
-  const x = clean(a), y = clean(b);
-  if (!x || !y) return 0;
-  let prev = Array.from({ length: y.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= x.length; i++) {
-    const row = [i];
-    for (let j = 1; j <= y.length; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
-    prev = row;
-  }
-  return 1 - prev[y.length] / Math.max(x.length, y.length);
-}
 
 function useQuestionAudio() {
   const ref = useRef<HTMLAudioElement | null>(null);
@@ -130,7 +119,7 @@ function PushToTalk({ q, onMatch, onMiss, onPress }: { q: RoundQuestion; onPress
       const response = await fetch("/api/practise/transcribe", { method: "POST", body: form });
       const data = (await response.json()) as { transcript?: string; error?: string };
       if (data.error || data.transcript == null) onMiss(data.error ?? "We couldn't check that one.");
-      else if (similarity(data.transcript, q.answer.gurmukhi) >= 0.6) onMatch();
+      else if (passedSpokenAttempt(scoreSpokenAttempt(data.transcript, { romanised: q.answer.romanised, punjabi: q.answer.gurmukhi }))) onMatch();
       else onMiss(data.transcript.trim() ? "Not quite. Try again." : "We didn't catch that. Try again.", Boolean(data.transcript.trim()));
     } catch {
       onMiss("We couldn't check that one.");
@@ -305,6 +294,7 @@ export function RoundPlayer({
   const [picked, setPicked] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<boolean | null>(null);
   const [built, setBuilt] = useState<number[]>([]);
+  const [endingPicks, setEndingPicks] = useState<(string | null)[]>([]);
   const [revealed, setRevealed] = useState(false);
   const [micNote, setMicNote] = useState<string | null>(null);
   const [run, setRun] = useState(0);
@@ -333,13 +323,13 @@ export function RoundPlayer({
     const nextRun = correct ? run + 1 : 0;
     setRun(nextRun);
     sound(correct ? (nextRun > 0 && nextRun % 3 === 0 ? "combo" : "correct") : "wrong");
-    setAnswers((a) => [...a, { itemId: q.itemId, skill: q.skill, correct, uncounted: q.uncounted }]);
+    setAnswers((a) => [...a, { itemId: q.itemId, skill: q.skill, correct, uncounted: q.uncounted, seenId: q.seenId }]);
     // A miss is not marked right. It moves to the end for another go, without adding to the count.
     if (!correct && queue.length < startSize.current + 5) setQueue((list) => [...list, q]);
   };
 
   const clearQuestion = () => {
-    setPicked(null); setVerdict(null); setBuilt([]); setRevealed(false); setMicNote(null);
+    setPicked(null); setVerdict(null); setBuilt([]); setEndingPicks([]); setRevealed(false); setMicNote(null);
   };
 
   const next = () => {
@@ -359,8 +349,9 @@ export function RoundPlayer({
   };
 
   const tiles = q.tiles ?? [];
+  const endingGaps = q.endings?.answers.length ?? 0;
+  const picksNow = Array.from({ length: endingGaps }, (_, i) => endingPicks[i] ?? null);
   const shownTotal = Math.max(1, totalShown.current);
-  const shownStep = Math.min(index + 1, shownTotal);
   const pct = Math.round((Math.min(index, shownTotal) / shownTotal) * 100);
 
   return (
@@ -371,13 +362,12 @@ export function RoundPlayer({
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
         <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-violet-100"><div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${pct}%` }} /></div>
-        <span className="text-[13px] font-extrabold text-zinc-600">{shownStep}/{shownTotal}</span>
         <button type="button" onClick={() => void setSoundEnabled(!soundEnabled)} aria-label={soundEnabled ? "Turn sound off" : "Turn sound on"} className="flex h-11 w-11 items-center justify-center text-zinc-600">
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" />{soundEnabled ? <path d="M15.5 8.5a5 5 0 0 1 0 7" /> : <path d="m16 9 5 6M21 9l-5 6" />}</svg>
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className={`min-h-0 flex-1 overflow-y-auto ${q.type === "endings" ? "flex flex-col" : ""}`}>
       <p className="mt-2 text-[13px] font-bold text-violet-700">{q.heading}</p>
 
       {q.type === "listen" ? (
@@ -400,6 +390,8 @@ export function RoundPlayer({
           ))}
         </div>
       ) : null}
+
+      {q.type === "endings" && q.endings ? <EndingsQuestion key={`${index}-${q.itemId}`} data={q.endings} picks={picksNow} locked={verdict !== null} onPicks={setEndingPicks} onTap={() => sound("tap")} /> : null}
 
       {q.type === "tiles" ? <SentenceTiles tiles={tiles} built={built} locked={verdict !== null} onBuilt={setBuilt} onTap={() => sound("tap")} /> : null}
 
@@ -437,15 +429,21 @@ export function RoundPlayer({
           className="mt-4 h-14 rounded-2xl bg-violet-600 text-lg font-extrabold text-white disabled:bg-zinc-200 disabled:text-zinc-500">Check</button>
       ) : null}
 
+      {q.type === "endings" && verdict === null ? (
+        <button type="button" disabled={picksNow.some((p) => p === null)}
+          onClick={() => judge(picksNow.every((p, i) => p === q.endings?.answers[i].g))}
+          className="mt-4 h-14 shrink-0 rounded-2xl bg-violet-600 text-lg font-extrabold text-white disabled:bg-zinc-200 disabled:text-zinc-500">Check</button>
+      ) : null}
+
       {verdict !== null ? (
-        <div className={`mt-2 shrink-0 rounded-3xl p-3 ${verdict ? "bg-green-50" : "bg-orange-50"}`}>
+        <div className={`mt-4 shrink-0 rounded-3xl p-3 ${verdict ? "bg-green-50" : "bg-orange-50"}`}>
           <p className={`text-[22px] font-extrabold ${verdict ? "text-green-800" : "text-orange-800"}`}>{verdict ? "Sahi!" : "Not quite"}</p>
           <div className="mt-1 flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p lang="pa" className="text-lg font-bold text-zinc-900">{q.answer.gurmukhi}</p>
               <p className="text-sm font-semibold text-zinc-700">{[q.answer.romanised, q.answer.english].filter(Boolean).join(" · ")}</p>
             </div>
-            {q.audioKey && (q.type === "choice" || q.type === "say") ? <AudioButton audioKey={q.audioKey} compact /> : null}
+            {q.audioKey && (q.type === "choice" || q.type === "say" || q.type === "endings") ? <AudioButton audioKey={q.audioKey} compact /> : null}
           </div>
           {!verdict ? <p className="mt-1 text-[13px] font-semibold text-zinc-600">This one moves to the end. It is not marked right yet.</p> : null}
           <button type="button" onClick={next} className={`mt-3 h-14 w-full rounded-2xl text-lg font-extrabold text-white ${verdict ? "bg-green-700" : "bg-orange-700"}`}>Next</button>

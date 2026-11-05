@@ -76,6 +76,7 @@ function buildRow(
     preferred_name: null,
     avatar_url: null,
     placement_completed_at: null,
+    kidda_level: null,
   };
 
   const milestones = computeAppOnboardingMilestones({

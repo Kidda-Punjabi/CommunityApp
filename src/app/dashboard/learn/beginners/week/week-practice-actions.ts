@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { resolveCourseActor } from "@/lib/kids/course-actor";
 import { shuffle } from "@/lib/practise/content";
+import { endingById, endingsForWeek } from "@/lib/practise/endings-bank";
+import { endingRoundQuestion, pickEndings } from "@/lib/practise/endings-round";
+import { knownSlotsBySkill, pickMix, seenAnywhere } from "@/lib/practise/round-mix";
 import { DAILY_XP_GOAL, ITEM_DONE_AT, ROUND_SIZE, XP_PER_CORRECT, XP_ROUND_BONUS } from "@/lib/practise/levels";
 import { loadProgress } from "@/lib/practise/load-home";
 import type { PractiseSkill, RoundAnswer, RoundQuestion } from "@/lib/practise/types";
@@ -38,21 +41,25 @@ function distractors(item: WeekItem, pool: WeekItem[], text: (i: WeekItem) => st
   return out;
 }
 
-/** New items first, then ones in progress, and finished ones only when nothing else is left. */
-function pick(items: WeekItem[], skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>) {
+/** Mostly new items with a review slot. A week is a short list, so review fills in once the new ones run out. */
+function pick(items: WeekItem[], skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>, knownSlots: number) {
   const count = (i: WeekItem) => progress.get(`${skill}:${i.id}`) ?? 0;
   const free = items.filter((i) => !used.has(i.id));
-  const picked = [
-    ...shuffle(free.filter((i) => count(i) === 0)),
-    ...shuffle(free.filter((i) => count(i) > 0 && count(i) < ITEM_DONE_AT)),
-    ...shuffle(free.filter((i) => count(i) >= ITEM_DONE_AT)),
-  ].slice(0, n);
+  const seen = free.filter((i) => seenAnywhere(progress, i.id));
+  const known = [...shuffle(seen.filter((i) => count(i) < ITEM_DONE_AT)), ...shuffle(seen.filter((i) => count(i) >= ITEM_DONE_AT))];
+  const mix = pickMix(shuffle(free.filter((i) => !seenAnywhere(progress, i.id))), known, n, knownSlots);
+  const picked = [...mix.fresh, ...mix.review, ...mix.known.slice(0, mix.shortOfNew)];
   for (const i of picked) used.add(i.id);
   return picked;
 }
 
-function questions(pool: WeekPool, skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>): RoundQuestion[] {
+function questions(pool: WeekPool, skill: PractiseSkill, progress: Map<string, number>, n: number, used: Set<string>, knownSlots: number): RoundQuestion[] {
   const items = poolForSkill(pool, skill);
+  const endings = skill === "grammar" ? pickEndings(endingsForWeek(pool.week), (id) => seenAnywhere(progress, id), used, n) : { picked: [], review: false };
+  const endingQuestions = endings.picked.map((q) => {
+    used.add(q.id);
+    return endingRoundQuestion(q, skill, q.id);
+  });
   const everything = [...pool.words, ...pool.sentences];
   const choosePunjabi = (i: WeekItem, uncounted: boolean): RoundQuestion => ({
     skill,
@@ -78,7 +85,9 @@ function questions(pool: WeekPool, skill: PractiseSkill, progress: Map<string, n
     answerId: i.id,
     answer: answerOf(i),
   });
-  return pick(items, skill, progress, n, used).map((i): RoundQuestion => {
+  const rest = n - endingQuestions.length;
+  const restKnown = endings.review ? Math.max(0, knownSlots - 1) : knownSlots;
+  return [...endingQuestions, ...pick(items, skill, progress, rest, used, restKnown).map((i): RoundQuestion => {
     if (skill === "grammar") {
       return { skill, itemId: i.id, type: "tiles", heading: "Build the sentence", prompt: i.e, tiles: shuffle(i.r.split(/\s+/).filter(Boolean)), answer: answerOf(i) };
     }
@@ -98,24 +107,25 @@ function questions(pool: WeekPool, skill: PractiseSkill, progress: Map<string, n
     }
     if (skill === "words" && (progress.get(`words:${i.id}`) ?? 0) === 0) return choosePunjabi(i, false);
     return { skill, itemId: i.id, type: "say", heading: "Say it in Punjabi", prompt: i.e, audioKey: i.id, answer: answerOf(i), fallback: choosePunjabi(i, skill !== "words") };
-  });
+  })];
 }
 
 export async function startWeekRound(week: number): Promise<RoundQuestion[]> {
   const { supabase, userId, pool } = await requireWeek(week);
   const progress = await loadProgress(supabase, userId);
-  const skills = WEEK_SKILLS.filter((s) => poolForSkill(pool, s).length > 0);
+  const skills = WEEK_SKILLS.filter((s) => poolForSkill(pool, s).length > 0 || (s === "grammar" && endingsForWeek(week).length > 0));
   if (!skills.length) throw new Error("No practice for this week yet.");
   const base = Math.floor(ROUND_SIZE / skills.length);
   let spare = ROUND_SIZE % skills.length;
   const used: Record<string, Set<string>> = {};
+  const knownSlots = knownSlotsBySkill(skills, ROUND_SIZE);
   const out = skills.flatMap((skill) => {
     const n = base + (spare > 0 ? 1 : 0);
     if (spare > 0) spare -= 1;
     // A sentence can appear once per round across grammar, listening and speaking.
     const key = skill === "words" ? "words" : "sentences";
     used[key] ??= new Set();
-    return questions(pool, skill, progress, n, used[key]);
+    return questions(pool, skill, progress, n, used[key], knownSlots.get(skill) ?? 0);
   });
   return shuffle(out);
 }
@@ -134,7 +144,7 @@ export async function submitWeekRound(week: number, answers: RoundAnswer[], loca
   if (!/^\d{4}-\d{2}-\d{2}$/.test(localDate)) throw new Error("Invalid round.");
   const { supabase, userId, pool } = await requireWeek(week);
   const clean = answers
-    .filter((a) => WEEK_SKILLS.includes(a.skill) && poolForSkill(pool, a.skill).some((i) => i.id === a.itemId))
+    .filter((a) => WEEK_SKILLS.includes(a.skill) && (poolForSkill(pool, a.skill).some((i) => i.id === a.itemId) || (a.skill === "grammar" && Boolean(endingById(a.itemId)))))
     .slice(0, ROUND_SIZE * 2);
   const progress = await loadProgress(supabase, userId);
   const now = new Date().toISOString();

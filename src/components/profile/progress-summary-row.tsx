@@ -13,7 +13,7 @@ export function ProgressSummaryRow({ progression }: ProgressSummaryRowProps) {
   if (!placementCompleted || learnerLevel == null || tier == null) {
     return (
       <SummaryRow href="/dashboard/profile/progress" title="Progress">
-        <p className="text-sm text-zinc-500">Complete placement to see your level</p>
+        <p className="text-sm text-zinc-500">Find your level to see your progress</p>
       </SummaryRow>
     );
   }

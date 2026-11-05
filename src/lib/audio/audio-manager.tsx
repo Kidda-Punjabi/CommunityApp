@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { XP_EARNED_EVENT } from "@/lib/points/notify-points-earned";
-import { playSynthesizedSound, warmUpAudioContext } from "@/lib/audio/synthesize-sound";
+import { playSynthesizedSound, unlockAudio, warmUpAudioContext } from "@/lib/audio/synthesize-sound";
 import {
   DEFAULT_SOUND_SETTINGS,
   dispatchSoundSettingsChanged,
@@ -84,6 +84,15 @@ export function AudioManagerProvider({
     },
     [applySettings]
   );
+
+  useEffect(() => {
+    // Every tap keeps the audio awake, so a cue can still play after a mic recording or a network call.
+    const events = ["pointerdown", "touchend", "keydown"] as const;
+    for (const name of events) window.addEventListener(name, unlockAudio, { capture: true, passive: true });
+    return () => {
+      for (const name of events) window.removeEventListener(name, unlockAudio, { capture: true });
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

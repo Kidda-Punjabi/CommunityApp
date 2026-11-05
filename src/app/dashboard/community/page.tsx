@@ -8,8 +8,6 @@ import { loadCommunityHome, memberHasCommunity } from "@/lib/community/load-home
 import { loadLevelView } from "@/lib/community/level-view";
 import { loadForumPostPreviews } from "@/lib/forum/load-forum";
 import { loadForumUnread } from "@/lib/forum/unread";
-import { loadLeaderboard } from "@/lib/leaderboard/load-leaderboard";
-import { getCurrentWeekStart } from "@/lib/leaderboard/week";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { isNativeAppRequest } from "@/lib/native/platform";
 import { loadMainRoomFeedback, pendingSessionFeedback } from "@/lib/community/session-feedback";
@@ -113,10 +111,9 @@ async function CommunityHome({
     );
   }
 
-  const [view, unread, board, feedback, posts] = await Promise.all([
+  const [view, unread, feedback, posts] = await Promise.all([
     loadLevelView(admin, userId),
     loadForumUnread(admin, userId),
-    loadLeaderboard(admin, getCurrentWeekStart(), userId),
     pendingSessionFeedback(admin, userId).catch((error) => {
       console.error("[community] feedback prompt failed", error);
       return null;
@@ -154,16 +151,6 @@ async function CommunityHome({
       checkedIntoNext={live.checkedIntoNext}
       openCheckIn={openCheckIn}
       liveIds={live.liveIds}
-      leaderboard={{
-        top: board.entries.slice(0, 3).map((entry) => ({
-          userId: entry.userId,
-          name: entry.displayName,
-          points: entry.points,
-          rank: entry.rank ?? 0,
-        })),
-        youRank: board.viewerRow.rank,
-        youPoints: board.viewerRow.points,
-      }}
     />
     </>
   );

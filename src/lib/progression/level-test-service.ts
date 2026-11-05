@@ -142,10 +142,10 @@ export function whatsNextGuidance(options: {
 }): { headline: string; detail: string; actionHref?: string; actionLabel?: string } {
   if (!options.placementCompleted || options.learnerLevel == null) {
     return {
-      headline: "Complete your placement",
-      detail: "Take a short assessment so we can show your level and recommend the right content.",
-      actionHref: "/dashboard/placement",
-      actionLabel: "Start placement",
+      headline: "Find your level",
+      detail: "Answer a few quick questions so we can show your level and what to work on.",
+      actionHref: "/dashboard/community/placement?from=practice",
+      actionLabel: "Start",
     };
   }
 
