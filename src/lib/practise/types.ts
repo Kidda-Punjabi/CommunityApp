@@ -1,3 +1,4 @@
+import type { EndingCard, EndingPart } from "./endings-bank";
 export type PractiseSkill = "words" | "grammar" | "listening" | "speaking";
 
 export type ChecklistRow = { label: string; done: number; total: number; practised: number; stars?: number };
@@ -51,10 +52,17 @@ export type PractiseHome = {
 
 export type RoundOption = { id: string; label: string; sub?: string };
 
+export type EndingsPayload = {
+  parts: EndingPart[];
+  romanParts: EndingPart[];
+  answers: EndingCard[];
+  cards: EndingCard[];
+};
+
 export type RoundQuestion = {
   skill: PractiseSkill;
   itemId: string;
-  type: "choice" | "tiles" | "say" | "listen";
+  type: "choice" | "tiles" | "say" | "listen" | "endings";
   heading: string;
   prompt: string;
   promptIsGurmukhi?: boolean;
@@ -69,6 +77,7 @@ export type RoundQuestion = {
   fallback?: RoundQuestion;
   /** Practice only: it doesn't tick off listening or speaking. */
   uncounted?: boolean;
+  endings?: EndingsPayload;
   /** The sentence behind a grammar question, whose itemId is the rule. */
   seenId?: string;
 };

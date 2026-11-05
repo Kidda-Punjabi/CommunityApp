@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { getPractiseAudio } from "@/app/dashboard/home/practise-actions";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { recordingExtensionForBlob, useAudioRecorder } from "@/lib/audio/use-audio-recorder";
+import { EndingsQuestion } from "@/components/practise/endings-question";
 import { usePractiseSound } from "@/lib/practise/sounds";
 import { passedSpokenAttempt, scoreSpokenAttempt } from "@/lib/games/spoken-match";
 import type { RoundAnswer, RoundQuestion } from "@/lib/practise/types";
@@ -293,6 +294,7 @@ export function RoundPlayer({
   const [picked, setPicked] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<boolean | null>(null);
   const [built, setBuilt] = useState<number[]>([]);
+  const [endingPicks, setEndingPicks] = useState<(string | null)[]>([]);
   const [revealed, setRevealed] = useState(false);
   const [micNote, setMicNote] = useState<string | null>(null);
   const [run, setRun] = useState(0);
@@ -327,7 +329,7 @@ export function RoundPlayer({
   };
 
   const clearQuestion = () => {
-    setPicked(null); setVerdict(null); setBuilt([]); setRevealed(false); setMicNote(null);
+    setPicked(null); setVerdict(null); setBuilt([]); setEndingPicks([]); setRevealed(false); setMicNote(null);
   };
 
   const next = () => {
@@ -347,6 +349,8 @@ export function RoundPlayer({
   };
 
   const tiles = q.tiles ?? [];
+  const endingGaps = q.endings?.answers.length ?? 0;
+  const picksNow = Array.from({ length: endingGaps }, (_, i) => endingPicks[i] ?? null);
   const shownTotal = Math.max(1, totalShown.current);
   const pct = Math.round((Math.min(index, shownTotal) / shownTotal) * 100);
 
@@ -363,7 +367,7 @@ export function RoundPlayer({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className={`min-h-0 flex-1 overflow-y-auto ${q.type === "endings" ? "flex flex-col" : ""}`}>
       <p className="mt-2 text-[13px] font-bold text-violet-700">{q.heading}</p>
 
       {q.type === "listen" ? (
@@ -386,6 +390,8 @@ export function RoundPlayer({
           ))}
         </div>
       ) : null}
+
+      {q.type === "endings" && q.endings ? <EndingsQuestion key={`${index}-${q.itemId}`} data={q.endings} picks={picksNow} locked={verdict !== null} onPicks={setEndingPicks} onTap={() => sound("tap")} /> : null}
 
       {q.type === "tiles" ? <SentenceTiles tiles={tiles} built={built} locked={verdict !== null} onBuilt={setBuilt} onTap={() => sound("tap")} /> : null}
 
@@ -423,15 +429,21 @@ export function RoundPlayer({
           className="mt-4 h-14 rounded-2xl bg-violet-600 text-lg font-extrabold text-white disabled:bg-zinc-200 disabled:text-zinc-500">Check</button>
       ) : null}
 
+      {q.type === "endings" && verdict === null ? (
+        <button type="button" disabled={picksNow.some((p) => p === null)}
+          onClick={() => judge(picksNow.every((p, i) => p === q.endings?.answers[i].g))}
+          className="mt-4 h-14 shrink-0 rounded-2xl bg-violet-600 text-lg font-extrabold text-white disabled:bg-zinc-200 disabled:text-zinc-500">Check</button>
+      ) : null}
+
       {verdict !== null ? (
-        <div className={`mt-2 shrink-0 rounded-3xl p-3 ${verdict ? "bg-green-50" : "bg-orange-50"}`}>
+        <div className={`mt-4 shrink-0 rounded-3xl p-3 ${verdict ? "bg-green-50" : "bg-orange-50"}`}>
           <p className={`text-[22px] font-extrabold ${verdict ? "text-green-800" : "text-orange-800"}`}>{verdict ? "Sahi!" : "Not quite"}</p>
           <div className="mt-1 flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p lang="pa" className="text-lg font-bold text-zinc-900">{q.answer.gurmukhi}</p>
               <p className="text-sm font-semibold text-zinc-700">{[q.answer.romanised, q.answer.english].filter(Boolean).join(" · ")}</p>
             </div>
-            {q.audioKey && (q.type === "choice" || q.type === "say") ? <AudioButton audioKey={q.audioKey} compact /> : null}
+            {q.audioKey && (q.type === "choice" || q.type === "say" || q.type === "endings") ? <AudioButton audioKey={q.audioKey} compact /> : null}
           </div>
           {!verdict ? <p className="mt-1 text-[13px] font-semibold text-zinc-600">This one moves to the end. It is not marked right yet.</p> : null}
           <button type="button" onClick={next} className={`mt-3 h-14 w-full rounded-2xl text-lg font-extrabold text-white ${verdict ? "bg-green-700" : "bg-orange-700"}`}>Next</button>

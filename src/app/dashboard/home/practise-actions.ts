@@ -16,10 +16,13 @@ import {
   sentencesAt,
   shuffle,
   skillsForLevel,
+  weekNumbers,
   wordsAt,
   wordsBelow,
   type Item,
 } from "@/lib/practise/content";
+import { endingById, endingsForLevel } from "@/lib/practise/endings-bank";
+import { endingRoundQuestion, pickEndings } from "@/lib/practise/endings-round";
 import { knownSlotsBySkill, pickMix, seenAnywhere } from "@/lib/practise/round-mix";
 import { DAILY_XP_GOAL, LEVELS, ROUND_SIZE, XP_PER_CORRECT, XP_ROUND_BONUS } from "@/lib/practise/levels";
 import { cooldownDays, loadCheckParts, loadProgress, summariseSkill } from "@/lib/practise/load-home";
@@ -139,13 +142,22 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
     const open = pool.filter((r) => !isItemDone("grammar", count(r)));
     // Next rule first. A rule with few sentences hands over to the one after it.
     const rules = [...open, ...pool.filter((r) => !open.includes(r))].sort((x, y) => Number(isItemDone("grammar", count(x))) - Number(isItemDone("grammar", count(y))) || count(x) - count(y));
+    // Ending questions count towards the rule from the same week, or the next rule to finish.
+    const endings = pickEndings(endingsForLevel(level), (id) => seenAnywhere(progress, id), used, n);
+    const endingQuestions = endings.picked.map((q) => {
+      used.add(q.id);
+      const rule = rules.find((r) => weekNumbers(r.t).includes(q.week)) ?? rules[0];
+      return endingRoundQuestion(q, skill, rule.id, q.id);
+    });
+    const tilesN = n - endingQuestions.length;
+    const tileKnownSlots = endings.review ? Math.max(0, knownSlots - 1) : knownSlots;
     const candidates = rules.flatMap((rule) => shuffle(grammarSentencesFor(rule)).map((sentence) => ({ rule, sentence })));
     const unique = (list: typeof candidates) => {
       const seenIds = new Set<string>();
       return list.filter(({ sentence }) => !used.has(sentence.id) && !seenIds.has(sentence.id) && Boolean(seenIds.add(sentence.id)));
     };
     const free = unique(candidates);
-    const mix = pickMix(free.filter((c) => !seenAnywhere(progress, c.sentence.id)), free.filter((c) => seenAnywhere(progress, c.sentence.id)), n, knownSlots);
+    const mix = pickMix(free.filter((c) => !seenAnywhere(progress, c.sentence.id)), free.filter((c) => seenAnywhere(progress, c.sentence.id)), tilesN, tileKnownSlots);
     const borrowed = freshWords(level, progress, mix.shortOfNew, used);
     const chosen = [...mix.fresh, ...mix.review, ...mix.known.slice(0, mix.shortOfNew - borrowed.length)];
     const out: RoundQuestion[] = chosen.map(({ rule, sentence: s }) => {
@@ -153,7 +165,7 @@ function questionsFor(skill: PractiseSkill, level: number, progress: Map<string,
       return { skill, itemId: rule.id, seenId: s.id, type: "tiles", heading: rule.e, prompt: s.e, tiles: shuffle(s.r.split(/\s+/)), answer: answerOf(s) };
     });
     for (const word of borrowed) used.add(word.id);
-    return [...out, ...borrowed.map((word) => questionsForItem(word, "words", "words", level, progress, wordsAt(level)))];
+    return [...endingQuestions, ...out, ...borrowed.map((word) => questionsForItem(word, "words", "words", level, progress, wordsAt(level)))];
   }
   const { picked, borrowed } = pickRoundItems(pool, skill, progress, n, used, knownSlots, level);
   return [
@@ -269,7 +281,7 @@ export async function submitRound(answers: RoundAnswer[], localDate: string): Pr
   const now = new Date().toISOString();
 
   // Remember which sentences were built, so they stop counting as new. Rule stars read rule ids only.
-  const builtIds = [...new Set(clean.map((a) => a.seenId).filter((id): id is string => Boolean(id && itemById(id))))].filter((id) => !progress.has(`grammar:${id}`));
+  const builtIds = [...new Set(clean.map((a) => a.seenId).filter((id): id is string => Boolean(id && (itemById(id) || endingById(id)))))].filter((id) => !progress.has(`grammar:${id}`));
   if (builtIds.length) {
     await supabase.from("practise_progress").upsert(
       builtIds.map((id) => ({ user_id: userId, item_id: id, skill: "grammar", correct_count: 0, attempts: 1, last_correct: null, last_seen_at: now }))
@@ -396,10 +408,11 @@ export async function getPractiseAudio(key: string): Promise<string | null> {
   if (!user) return null;
   const [id, part] = key.split(":");
   const item = itemById(id);
+  const ending = endingById(id);
   // Week practice items are flashcards, keyed by the card's id.
-  const weekScript = !item && /^([0-9a-f-]{36}|wk\d+-\d+)$/.test(id) ? await weekCardScript(supabase, id) : null;
-  if (!item && !weekScript) return null;
-  let script = item?.g ?? weekScript!;
+  const weekScript = !item && !ending && /^([0-9a-f-]{36}|wk\d+-\d+)$/.test(id) ? await weekCardScript(supabase, id) : null;
+  if (!item && !ending && !weekScript) return null;
+  let script = item?.g ?? ending?.gurmukhi ?? weekScript!;
   if (item?.k === "p") {
     const letter = item.g.split("/")[Number(part)]?.trim();
     if (!letter) return null;
