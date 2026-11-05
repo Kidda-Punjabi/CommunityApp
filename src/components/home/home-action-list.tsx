@@ -66,9 +66,9 @@ export function HomeActionList({
         badge={<StatusBadge variant="live">Live</StatusBadge>}
       />
       <ActionListRow
-        href="/dashboard/community#leaderboard"
+        href="/dashboard/leaderboard"
         icon="🏆"
-        eyebrow="Community"
+        eyebrow="Games"
         title="Weekly leaderboard"
         subtitle={
           membersStudiedTodayLabel

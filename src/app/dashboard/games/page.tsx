@@ -1,4 +1,8 @@
+import { GamesLeaderboardCard, type GamesLeaderboardPreview } from "@/components/games/games-category-cards";
 import { GamesCategoryList, GamesHub, isGamesCategoryId } from "@/components/games/games-hub";
+import { loadLeaderboard } from "@/lib/leaderboard/load-leaderboard";
+import { getCurrentWeekStart } from "@/lib/leaderboard/week";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { HubLinkTile } from "@/components/games/hub-link-tile";
 import { getGamesTabData } from "@/lib/cache/tab-page-cache";
 import { usesKidsShell } from "@/lib/kids/constants";
@@ -78,9 +82,24 @@ export default async function GamesPage({ searchParams }: { searchParams: Promis
     );
   }
 
+  // Kid profiles don't see the leaderboard. The service client reads the names, as Community did.
+  const showLeaderboard = !kidSession.activeKidProfile;
+  const board = showLeaderboard
+    ? await loadLeaderboard(createServiceRoleClient(), getCurrentWeekStart(), session.user.id).catch((error) => {
+        console.error("[games] leaderboard preview failed", error);
+        return null;
+      })
+    : null;
+  const preview: GamesLeaderboardPreview | null = board && {
+    top: board.entries.slice(0, 3).map((e) => ({ userId: e.userId, name: e.displayName, points: e.points, rank: e.rank ?? 0 })),
+    youRank: board.viewerRow.rank,
+    youPoints: board.viewerRow.points,
+  };
+
   return (
     <div className="flex flex-1 flex-col px-4 pb-4 pt-5">
       <h1 className="mb-3 font-heading text-[28px] font-extrabold leading-8 tracking-tight text-zinc-900">Games</h1>
+      {showLeaderboard ? <GamesLeaderboardCard preview={preview} /> : null}
       <GamesHub hideGrammar={englishMode} />
     </div>
   );

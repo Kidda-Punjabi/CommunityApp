@@ -84,7 +84,7 @@ export function LeaderboardView({ data }: LeaderboardViewProps) {
 
   return (
     <div className={ui.page}>
-      <BackLink fallbackHref="/dashboard/community#leaderboard" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Community</BackLink>
+      <BackLink fallbackHref="/dashboard/games" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Community</BackLink>
 
       <div className="mt-4 mb-8">
         <h1 className="font-heading text-2xl font-bold tracking-tight text-zinc-900">

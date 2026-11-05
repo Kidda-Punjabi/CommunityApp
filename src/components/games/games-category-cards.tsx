@@ -2,6 +2,57 @@ import { ChevronRight } from "lucide-react";
 import { NavLink } from "@/components/ui/nav-link";
 import { cn } from "@/lib/ui/styles";
 
+export type GamesLeaderboardPreview = {
+  top: { userId: string; name: string; points: number; rank: number }[];
+  youRank: number | null;
+  youPoints: number;
+};
+
+const MEDAL: Record<number, string> = { 1: "#FFD84F", 2: "#E1E3E8", 3: "#F2C9A5" };
+
+function ordinal(rank: number): string {
+  const mod100 = rank % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${rank}th`;
+  const mod10 = rank % 10;
+  if (mod10 === 1) return `${rank}st`;
+  if (mod10 === 2) return `${rank}nd`;
+  if (mod10 === 3) return `${rank}rd`;
+  return `${rank}th`;
+}
+
+/** Sits above the four game cards and opens the full leaderboard. */
+export function GamesLeaderboardCard({ preview }: { preview: GamesLeaderboardPreview | null }) {
+  const you = !preview
+    ? "See who's on top this week"
+    : preview.youRank == null
+      ? `You: ${preview.youPoints} pts`
+      : `You: ${ordinal(preview.youRank)}, ${preview.youPoints} pts`;
+  return (
+    <NavLink href="/dashboard/leaderboard" className="mb-2.5 block rounded-3xl bg-[#5B21B6] px-4 py-3 text-white">
+      <span className="flex items-center gap-2">
+        <span className="min-w-0 flex-1">
+          <span className="block font-heading text-lg font-extrabold leading-tight">Leaderboard</span>
+          <span className="block text-[13px] font-semibold">{you}</span>
+        </span>
+        <ChevronRight className="h-[18px] w-[18px] shrink-0" aria-hidden />
+      </span>
+      {preview?.top.length ? (
+        <span className="mt-2 grid grid-cols-3 gap-2">
+          {preview.top.map((person) => (
+            <span key={person.userId} className="flex min-w-0 flex-col items-center">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full border-[3px] bg-white text-sm font-extrabold text-[#5B21B6]" style={{ borderColor: MEDAL[person.rank] ?? "#FFFFFF" }}>
+                {person.name.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="mt-0.5 max-w-full truncate text-[13px] font-extrabold">{person.rank}. {person.name}</span>
+              <span className="text-xs font-semibold">{person.points} pts</span>
+            </span>
+          ))}
+        </span>
+      ) : null}
+    </NavLink>
+  );
+}
+
 export type GamesCategoryCard = {
   id: "vocab" | "grammar" | "group" | "battle";
   title: string;
@@ -39,7 +90,7 @@ const ART: Record<GamesCategoryCard["id"], { back: string; backFill: string; fro
 /** Games tab: one big picture per category, in the same flat style as the streak flame. */
 export function GamesCategoryCards({ cards }: { cards: GamesCategoryCard[] }) {
   return (
-    <div className="grid min-h-[540px] flex-1 auto-rows-fr grid-cols-2 gap-2.5 lg:max-h-[760px]">
+    <div className="grid min-h-[372px] flex-1 auto-rows-fr grid-cols-2 gap-2.5 lg:max-h-[620px]">
       {cards.map((card) => {
         const art = ART[card.id];
         return (
@@ -57,7 +108,7 @@ export function GamesCategoryCards({ cards }: { cards: GamesCategoryCard[] }) {
             <svg
               aria-hidden="true"
               viewBox="0 0 100 100"
-              className={cn("absolute bottom-[22px] left-1/2 -translate-x-1/2", card.wide ? "h-[168px] w-[168px]" : "h-[138px] w-[138px]")}
+              className="absolute bottom-[50px] left-1/2 h-[108px] w-[108px] -translate-x-1/2"
             >
               <path d={art.back} fill={art.backFill} />
               <path d={art.front} fill={art.frontFill} />

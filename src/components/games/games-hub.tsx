@@ -27,10 +27,10 @@ export function isGamesCategoryId(value: string | undefined): value is GamesCate
 export function GamesHub({ hideGrammar = false }: { hideGrammar?: boolean }) {
   const href = (id: GamesCategoryId) => `/dashboard/games?category=${id}`;
   const cards: GamesCategoryCard[] = [
-    { id: "vocab", title: "Vocab", href: href("vocab"), wide: true },
+    { id: "vocab", title: "Vocab", href: href("vocab"), wide: false },
     ...(hideGrammar ? [] : [{ id: "grammar", title: "Grammar", href: href("grammar"), wide: false } as GamesCategoryCard]),
-    { id: "group", title: "Group", href: href("group"), wide: hideGrammar },
-    { id: "battle", title: "Battle", href: href("battle"), wide: true },
+    { id: "group", title: "Group", href: href("group"), wide: false },
+    { id: "battle", title: "Battle", href: href("battle"), wide: hideGrammar },
   ];
   return <GamesCategoryCards cards={cards} />;
 }
