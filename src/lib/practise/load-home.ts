@@ -150,7 +150,7 @@ export async function loadPractiseHome(
   ]);
   const skills = skillsForLevel(level).map((s) => summariseSkill(level, s, progress));
   const open = skills.filter((s) => s.pct < 100);
-  const weakest = open.length ? [...open].sort((a, b) => a.pct - b.pct)[0].skill : null;
+  const weakest = open.length ? [...open].sort((a, b) => a.creditPct - b.creditPct)[0].skill : null;
   const seen = state.data?.seen_level as number | null | undefined;
   if (seen == null || seen !== level) {
     await supabase.from("practise_state").upsert({ user_id: userId, seen_level: level, updated_at: new Date().toISOString() });

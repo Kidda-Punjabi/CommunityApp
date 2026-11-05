@@ -368,7 +368,7 @@ type ScheduleDisplay = {
   cohortOrTutorLine: string;
 };
 
-function getScheduleDisplay(
+export function getScheduleDisplay(
   scheduleSession?: StudentScheduledSession | null
 ): ScheduleDisplay | null {
   if (!scheduleSession) return null;
@@ -422,7 +422,7 @@ function formatCollapsedDate(startsAtIso: string): string {
   });
 }
 
-function getQuizTileState(
+export function getQuizTileState(
   progress: QuizProgressRow | undefined,
   passed: boolean
 ): { statusLabel: string; tone: "accent" | "success" | "neutral" } {
@@ -435,7 +435,7 @@ function getQuizTileState(
   return { statusLabel: "Retry", tone: "accent" };
 }
 
-function getFlashcardsTileState(
+export function getFlashcardsTileState(
   lessonId: string,
   flashcardSets: FlashcardSetInfo[],
   isSetComplete: (cardIds: string[]) => boolean
@@ -451,29 +451,41 @@ function getFlashcardsTileState(
   };
 }
 
-function CollapsedActivityStatus({
+export function CollapsedActivityStatus({
   showHomework,
   homeworkDone,
   showQuiz,
   quizDone,
+  onDark = false,
+  large = false,
 }: {
   showHomework: boolean;
   homeworkDone: boolean;
   showQuiz: boolean;
   quizDone: boolean;
+  onDark?: boolean;
+  large?: boolean;
 }) {
   if (!showHomework && !showQuiz) return null;
 
-  const doneClass = "text-emerald-600";
-  const homeworkPendingClass = "text-violet-600";
-  const quizPendingClass = "text-amber-500";
+  const doneClass = onDark ? "text-emerald-300" : "text-emerald-600";
+  const homeworkPendingClass = onDark ? "text-white" : "text-violet-600";
+  const quizPendingClass = onDark ? "text-amber-300" : "text-amber-500";
+  const iconSize = large ? "[&_svg]:h-5 [&_svg]:w-5" : "[&_svg]:h-3.5 [&_svg]:w-3.5";
 
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5" aria-hidden="true">
+    <span
+      className="inline-flex shrink-0 items-center gap-1.5"
+      role="img"
+      aria-label={[
+        showHomework ? (homeworkDone ? "Homework complete" : "Homework pending") : null,
+        showQuiz ? (quizDone ? "Quiz passed" : "Quiz not passed") : null,
+      ].filter(Boolean).join(", ")}
+    >
       {showHomework ? (
         <span
           className={cn(
-            "[&_svg]:h-3.5 [&_svg]:w-3.5",
+            iconSize,
             homeworkDone ? doneClass : homeworkPendingClass
           )}
           title={homeworkDone ? "Homework complete" : "Homework pending"}
@@ -483,7 +495,7 @@ function CollapsedActivityStatus({
       ) : null}
       {showQuiz ? (
         <span
-          className={cn("[&_svg]:h-3.5 [&_svg]:w-3.5", quizDone ? doneClass : quizPendingClass)}
+          className={cn(iconSize, quizDone ? doneClass : quizPendingClass)}
           title={quizDone ? "Quiz passed" : "Quiz not passed"}
         >
           <LessonQuizIcon />
@@ -493,7 +505,7 @@ function CollapsedActivityStatus({
   );
 }
 
-function LockIcon({ className }: { className?: string }) {
+export function LockIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 20 20"
@@ -531,10 +543,12 @@ function ChevronToggleIcon() {
   );
 }
 
-function LessonScheduleBlock({
+export function LessonScheduleBlock({
   scheduleSession,
+  plain = false,
 }: {
   scheduleSession?: StudentScheduledSession | null;
+  plain?: boolean;
 }) {
   const display = getScheduleDisplay(scheduleSession);
   if (!scheduleSession || !display) return null;
@@ -549,8 +563,9 @@ function LessonScheduleBlock({
   return (
     <div
       className={cn(
-        "mt-1 rounded-2xl px-4 py-3 text-sm",
-        display.isRescheduled ? "bg-teal-50/80" : "bg-violet-50/70"
+        "mt-1 text-sm",
+        !plain && "rounded-2xl px-4 py-3",
+        !plain && (display.isRescheduled ? "bg-teal-50/80" : "bg-violet-50/70")
       )}
     >
       <p className="font-medium text-zinc-900">
@@ -587,7 +602,7 @@ function LessonScheduleBlock({
   );
 }
 
-function LessonScheduleRequestSection({
+export function LessonScheduleRequestSection({
   scheduleSession,
 }: {
   scheduleSession?: StudentScheduledSession | null;

@@ -14,10 +14,10 @@ export const STUDENT_HELP: HelpContent = {
           id: "nav",
           question: "How do I find my way around the app?",
           answer:
-            "Use the bottom navigation: Home for course lessons, Practise for your path and unlockables, Games for practice games, Community for the leaderboard and live sessions, and Profile for account settings.",
+            "Use the bottom navigation: Courses for course lessons, Practice for your path and unlockables, Games for practice games, Community for the leaderboard and live sessions, and Profile for account settings.",
           links: [
             { label: "Go to Home", href: "/dashboard/learn" },
-            { label: "Open Practise", href: "/dashboard/home" },
+            { label: "Open Practice", href: "/dashboard/home" },
           ],
         },
         {
@@ -92,7 +92,7 @@ export const STUDENT_HELP: HelpContent = {
           id: "upcoming-lessons",
           question: "Where do I see my upcoming live lessons?",
           answer:
-            "Open Schedule (from Practise or your course) to see upcoming sessions with your tutor. Join links appear when it's time for class. Add sessions to your own calendar when prompted.",
+            "Open Schedule (from Practice or your course) to see upcoming sessions with your tutor. Join links appear when it's time for class. Add sessions to your own calendar when prompted.",
           links: [{ label: "Upcoming lessons", href: "/dashboard/schedule" }],
         },
         {

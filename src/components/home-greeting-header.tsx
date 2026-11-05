@@ -19,6 +19,8 @@ type HomeGreetingHeaderProps = {
   weeklyPoints: number;
   profileHref?: string;
   className?: string;
+  /** Replaces the avatar and greeting with a page title. */
+  title?: string;
 };
 
 export function HomeGreetingHeader({
@@ -31,7 +33,21 @@ export function HomeGreetingHeader({
   weeklyPoints,
   profileHref = "/dashboard/profile",
   className,
+  title,
 }: HomeGreetingHeaderProps) {
+  if (title) {
+    return (
+      <header className={className ?? "mb-4"}>
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-heading text-[28px] font-extrabold leading-8 tracking-tight text-zinc-900">{title}</h1>
+            <HomeHeaderPills weeklyPoints={weeklyPoints} />
+          </div>
+          <NotificationBell unreadCount={unreadNotificationCount} />
+        </div>
+      </header>
+    );
+  }
   return (
     <header className={className ?? "mb-4"}>
       <div className="flex items-start gap-4">

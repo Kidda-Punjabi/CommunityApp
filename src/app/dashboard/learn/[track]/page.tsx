@@ -418,7 +418,6 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       sessions: upcomingLoad.sessions,
     });
     const metaParts = [
-      studentPackage.tutorName ?? "Tutor being assigned",
       studentPackage.cohortName,
       currentWeek != null && lessons.length > 0
         ? `Week ${currentWeek} of ${lessons.length}`
@@ -427,11 +426,9 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
     headerSection = (
       <CourseMinimalHeader
         title={track.title}
-        statusLabel={packageStatusLabel(studentPackage.status)}
+        statusLabel={studentPackage.status === "active" ? null : packageStatusLabel(studentPackage.status)}
         statusClassName={packageStatusClass(studentPackage.status)}
         metaLine={metaParts.join(" · ")}
-        currentWeek={currentWeek}
-        totalWeeks={lessons.length}
       >
         {groupBoard && groupBoard.entries.length > 0 ? (
           <CohortLeaderboardButton board={groupBoard} viewerId={user!.id} />
@@ -469,6 +466,7 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
       compactHeader={isFoundational}
       collapseLessonsByDefault={isFoundational}
       statusLegendPosition={isFoundational ? "bottom" : "top"}
+      lineLayout={useMinimalHeader}
       courseProgress={
         !isFoundational && shouldShowLearnCourseProgress(track.id)
           ? {

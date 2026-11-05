@@ -8,7 +8,7 @@ import { getIsNativeApp } from "@/lib/native/platform-server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
 
-/** The Practise page as it was before Kidda Levels. Unchanged, now behind "Previous practise". */
+/** The Practice page as it was before Kidda Levels. Unchanged, now behind "Previous practice". */
 export async function EverydayPunjabiPractice({ userId, backLink }: { userId: string; backLink?: ReactNode }) {
   const supabase = await createClient();
   const nativeApp = await getIsNativeApp();

@@ -7,7 +7,7 @@ export function FindYourLevel() {
       <div className="relative h-64 overflow-hidden rounded-3xl">
         <ArenaArt level={0} />
         <Link href="/dashboard/home?view=previous" className="absolute right-3 top-3 flex min-h-10 items-center rounded-full bg-white/95 px-3 text-[13px] font-extrabold text-zinc-900">
-          Previous practise
+          Previous practice
         </Link>
       </div>
       <h1 className="mt-5 font-heading text-3xl font-bold tracking-tight text-zinc-900">Find your level</h1>

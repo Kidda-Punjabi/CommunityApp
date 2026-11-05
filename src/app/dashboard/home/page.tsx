@@ -26,7 +26,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         userId={session.user.id}
         backLink={
           <Link href="/dashboard/home" className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-violet-700">
-            ← Back to Practise
+            ← Back to Practice
           </Link>
         }
       />

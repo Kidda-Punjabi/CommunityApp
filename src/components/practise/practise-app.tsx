@@ -25,11 +25,11 @@ function Icon({ skill, size = 22 }: { skill: PractiseSkill; size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONS[skill]}</svg>;
 }
 
-function Ring({ pct, skill, size = 58, tone = "normal" }: { pct: number; skill: PractiseSkill; size?: number; tone?: "normal" | "weak" | "full" }) {
+function Ring({ pct, skill, size = 58, tone = "normal" }: { pct: number; skill: PractiseSkill; size?: number; tone?: "normal" | "weak" | "full" | "off" }) {
   const r = size / 2 - 4;
   const c = 2 * Math.PI * r;
-  const col = { weak: "#6D28D9", full: "#15803D", normal: "#7C3AED" }[tone];
-  const bg = { weak: "#DDD0FB", full: "#DCF3E3", normal: "#EDE5FF" }[tone];
+  const col = { weak: "#6D28D9", full: "#15803D", normal: "#7C3AED", off: "#71717A" }[tone];
+  const bg = { weak: "#DDD0FB", full: "#DCF3E3", normal: "#EDE5FF", off: "#E4E4E7" }[tone];
   return (
     <div className="relative shrink-0" style={{ width: size, height: size, color: col }}>
       <svg aria-hidden="true" width={size} height={size} className="-rotate-90">
@@ -75,10 +75,10 @@ function SkillRise({ score }: { score: SkillRoundScore }) {
   );
 }
 
-function BigButton({ title, sub, onClick, gold, disabled }: { title: string; sub?: string; onClick: () => void; gold?: boolean; disabled?: boolean }) {
+function BigButton({ title, sub, onClick, gold, disabled, large }: { title: string; sub?: string; onClick: () => void; gold?: boolean; disabled?: boolean; large?: boolean }) {
   return (
-    <button type="button" disabled={disabled} onClick={onClick} className={`flex h-[72px] w-full flex-col items-center justify-center rounded-[20px] px-4 shadow-lg shadow-violet-900/25 transition active:scale-[0.98] disabled:opacity-60 ${gold ? "bg-amber-400 text-zinc-900" : "bg-violet-600 text-white"}`}>
-      <span className="text-2xl font-extrabold leading-tight">{title}</span>
+    <button type="button" disabled={disabled} onClick={onClick} className={`flex w-full flex-col items-center justify-center rounded-[20px] px-4 transition active:scale-[0.98] disabled:opacity-60 ${large ? `h-[76px] lg:h-[92px] lg:rounded-[22px] ${gold ? "shadow-[0_5px_0_#B45309]" : "shadow-[0_5px_0_#5B21B6]"}` : "h-[72px] shadow-lg shadow-violet-900/25"} ${gold ? "bg-amber-400 text-zinc-900" : "bg-violet-600 text-white"}`}>
+      <span className={`font-extrabold leading-tight ${large ? "text-[27px] lg:text-[32px]" : "text-2xl"}`}>{title}</span>
       {sub ? <span className="max-w-full truncate text-[13px] font-bold opacity-90">{sub}</span> : null}
     </button>
   );
@@ -158,11 +158,12 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
     setBusy(true); setError(null);
     try { await fn(); } catch { setError("That didn't work. Please try again."); } finally { setBusy(false); }
   };
-  const mixLabel = skills.map((s) => s.label).join(", ");
+  const mixLabel = skills.filter((s) => !(s.skill in off && off[s.skill as keyof typeof off])).map((s) => s.label).join(", ");
   const offNote = off.speaking || off.listening ? (
-    <button type="button" onClick={() => saveOff({ speaking: false, listening: false })} className="mb-3 w-full rounded-2xl bg-violet-50 px-3 py-3 text-left text-sm font-semibold leading-snug text-zinc-800">
-      {off.speaking && off.listening ? "Speaking and listening are off" : off.speaking ? "Speaking is off" : "Listening is off"} for this visit. Every Play skips {off.speaking && off.listening ? "them" : "it"} until you turn {off.speaking && off.listening ? "them" : "it"} back on, or close the app. <span className="font-extrabold text-violet-700">Turn back on</span>
-    </button>
+    <p className="mt-3 text-center text-[13px] font-semibold text-zinc-700">
+      {off.speaking && off.listening ? "Speaking and listening off" : off.speaking ? "Speaking off" : "Listening off"} this visit ·{" "}
+      <button type="button" onClick={() => saveOff({ speaking: false, listening: false })} className="min-h-6 font-extrabold text-violet-700">Turn on</button>
+    </p>
   ) : null;
   const play = () => go(async () => {
     sound("tap");
@@ -355,18 +356,18 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
             );
           })}
         </div>
-        {target ? <div className="sticky bottom-28 mx-auto mt-3 lg:static lg:mt-5 lg:max-w-md">{offNote}<BigButton title="Play" sub={mixLabel} disabled={busy} onClick={() => void play()} /></div> : null}
+        {target ? <div className="sticky bottom-28 mx-auto mt-3 lg:static lg:mt-5 lg:max-w-md"><BigButton title="Play" sub={mixLabel} disabled={busy} onClick={() => void play()} />{offNote}</div> : null}
         {errorNote}
       </div>
     );
   }
 
-  // Practise home: one level, four rings, one button.
+  // Practice home: the scene is the page, with level, skills and one button on top of it.
   return (
-    <div className={`mx-auto w-full max-w-md relative ${WIDE} lg:grid lg:w-[1040px] lg:grid-cols-[1.1fr_1fr] lg:gap-6 lg:pt-8`}>
+    <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col lg:left-1/2 lg:min-h-[640px] lg:w-screen lg:max-w-none lg:-translate-x-1/2 lg:overflow-hidden lg:p-6">
       <StreakStyles />
       {streakOpen && streak ? (
-        <div className="absolute inset-x-3 top-16 z-20 rounded-3xl border border-zinc-200 bg-white p-4 shadow-xl lg:left-6 lg:right-auto lg:top-24 lg:w-96">
+        <div className="absolute inset-x-3 top-16 z-20 rounded-3xl border border-zinc-200 bg-white p-4 shadow-xl lg:left-1/2 lg:right-auto lg:top-6 lg:w-96 lg:-translate-x-1/2">
           <div className="flex items-center gap-3">
             <span className="relative shrink-0"><Flame lit={streak.lit} size={68} /><span className={`absolute inset-x-0 bottom-1 text-center text-2xl font-extrabold ${streak.lit ? "text-zinc-900" : "text-zinc-500"}`}>{streak.count}</span></span>
             <div className="min-w-0 flex-1">
@@ -378,53 +379,64 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
           <div className="mt-3"><StreakDays today={streak.today} streak={streak.count} lit={streak.lit} playedDates={home.playedDates} /></div>
         </div>
       ) : null}
-      <div className="relative h-[250px] overflow-hidden tab:rounded-b-3xl lg:h-[600px] lg:rounded-3xl">
-        <button type="button" onClick={() => setView({ name: "road" })} aria-label={`Level ${meta.level}, ${meta.name}. See all levels`} className="block h-full w-full">
+      <div className="relative h-[250px] shrink-0 overflow-hidden tab:rounded-b-3xl lg:absolute lg:inset-0 lg:h-auto lg:rounded-none">
+        <button type="button" onClick={() => setView({ name: "road" })} aria-label={`Level ${meta.level}, ${meta.name}. See all levels`} className="block h-full w-full transition lg:hover:brightness-105">
           <ArenaArt level={meta.level} />
         </button>
-        <div className="pointer-events-none absolute inset-x-3 top-3 flex items-center justify-between gap-2">
-          <button type="button" onClick={() => setView({ name: "road" })} aria-label="See your road" className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-zinc-900"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4v-5h4v-5h4V5h4" /></svg></button>
-          {streak ? (
-            <button type="button" onClick={() => setStreakOpen(!streakOpen)} aria-expanded={streakOpen} aria-label={`${streak.count} day streak. ${streak.lit ? "Done for today" : "Not done yet today"}`} className="pointer-events-auto flex min-h-11 items-center gap-1 rounded-full bg-white/95 px-3">
-              <Flame lit={streak.lit} size={20} />
-              <span className={`text-[15px] font-extrabold ${streak.lit ? "text-amber-600" : "text-zinc-500"}`}>{streak.count}</span>
-            </button>
-          ) : null}
-          <Link href="/dashboard/home?view=previous" className="pointer-events-auto flex min-h-10 items-center rounded-full bg-white/95 px-3 text-[13px] font-extrabold text-zinc-900">Previous practise</Link>
-        </div>
+        <Link href="/dashboard/home?view=previous" aria-label="Previous practice" title="Previous practice" className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-zinc-900 lg:right-6 lg:top-6 lg:h-12 lg:w-12">
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l4 2" /></svg>
+        </Link>
       </div>
-      <div className="relative -mt-7 rounded-t-[28px] bg-white px-4 pb-12 pt-5 lg:mt-0 lg:flex lg:flex-col lg:justify-center lg:rounded-3xl lg:border lg:border-zinc-200 lg:px-8">
-        <div className="block text-left">
-          <span className="flex items-center gap-2"><span className="rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-extrabold tracking-wide text-white">LEVEL {meta.level}</span><span className="text-[13px] font-bold text-zinc-600">{meta.stage}</span></span>
-          <span className="mt-2 block text-[32px] font-extrabold leading-tight tracking-tight text-zinc-900">{meta.name} <span lang="pa" className="text-[22px] font-bold text-violet-700">{meta.gurmukhi}</span></span>
-          <span className="mt-0.5 block text-[15px] font-semibold leading-snug text-zinc-700">“{meta.can}”</span>
+      <div className="relative -mt-7 flex flex-1 flex-col rounded-t-[28px] bg-white px-4 pb-4 pt-5 lg:z-10 lg:mx-auto lg:mt-auto lg:grid lg:w-full lg:max-w-[1240px] lg:flex-none lg:grid-cols-[minmax(0,1fr)_280px_minmax(0,1fr)] lg:items-center lg:gap-10 lg:rounded-[28px] lg:px-8 lg:py-6 lg:shadow-[0_16px_48px_rgba(57,41,95,0.22)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 text-left">
+            <span className="flex items-center gap-2"><span className="rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-extrabold tracking-wide text-white">LEVEL {meta.level}</span><span className="text-[13px] font-bold text-zinc-600">{meta.stage}</span></span>
+            <span className="mt-2 block text-[30px] font-extrabold leading-tight tracking-tight text-zinc-900 lg:text-[38px]">{meta.name} <span lang="pa" className="text-[24px] font-bold text-violet-700 lg:text-[30px]">{meta.gurmukhi}</span></span>
+            <span className="mt-0.5 block text-[15px] font-semibold leading-snug text-zinc-700">“{meta.can}”</span>
+          </div>
+          <div className="w-[60px] shrink-0 lg:w-[72px]">
+            {streak ? <StreakBadge count={streak.count} lit={streak.lit} open={streakOpen} onToggle={() => setStreakOpen(!streakOpen)} /> : null}
+          </div>
         </div>
-        <div className="mt-4 flex justify-center gap-1.5">
+        <div className="mt-5 grid grid-cols-2 gap-2.5 lg:order-3 lg:mt-0 lg:grid-cols-4 lg:gap-1">
           {skills.map((s) => {
             const isWeak = s.skill === weakest;
+            const isOff = s.skill in off && off[s.skill as keyof typeof off];
             return (
-              <button key={s.skill} type="button" onClick={() => setView({ name: "skill", skill: s.skill })} aria-label={`${s.label}, ${s.practised} of ${s.total} saved`} className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl border-2 pb-2 pt-3 ${isWeak ? "border-violet-300 bg-violet-50" : "border-transparent"}`}>
-                {isWeak ? <span className="absolute -top-2 rounded-full bg-violet-700 px-1.5 py-0.5 text-[10px] font-extrabold text-white">Focus</span> : null}
-                <Ring pct={s.creditPct} skill={s.skill} tone={s.pct === 100 ? "full" : isWeak ? "weak" : "normal"} />
-                <span className="text-xs font-extrabold text-zinc-900">{s.label}</span>
-                <span className="text-xs font-bold text-zinc-600">{s.creditPct}%</span>
+              <button key={s.skill} type="button" onClick={() => setView({ name: "skill", skill: s.skill })} aria-label={`${s.label}, ${s.creditPct}%${isWeak ? ", focus" : ""}${isOff ? ", off this visit" : ""}`} className={`relative flex min-w-0 items-center gap-2.5 rounded-[18px] px-3 py-4 text-left lg:flex-col lg:gap-1 lg:rounded-2xl lg:px-0.5 lg:pb-2 lg:pt-4 lg:text-center ${isWeak ? "bg-violet-100 lg:bg-violet-50" : "bg-violet-50/60 lg:bg-transparent"}`}>
+                {isWeak ? <span className="absolute -top-2 right-2.5 rounded-full bg-violet-700 px-2 py-0.5 text-[11px] font-extrabold text-white lg:left-1/2 lg:right-auto lg:-translate-x-1/2">Focus</span> : null}
+                <Ring pct={s.creditPct} skill={s.skill} size={60} tone={isOff ? "off" : s.pct === 100 ? "full" : isWeak ? "weak" : "normal"} />
+                <span className="flex min-w-0 flex-col gap-0.5"><span className="truncate text-sm font-extrabold text-zinc-900 lg:text-[13px]">{s.label}</span><span className="text-[13px] font-bold text-zinc-600">{s.creditPct}%</span></span>
               </button>
             );
           })}
         </div>
-        <button type="button" onClick={() => setView({ name: "checklist" })} className="mt-2 flex min-h-11 w-full items-center justify-center text-sm font-extrabold text-violet-700">
-          {nextLevel != null ? `See what you need for Level ${nextLevel}` : "See what you need for the final check"} ›
-        </button>
-        {streak && !streak.lit && streak.count > 0 ? <p className="mb-2 text-center text-sm font-bold text-amber-700">Play today to keep your {streak.count} day streak</p> : null}
-        {offNote}
-        {home.ready ? (
-          <BigButton gold title="Take the Level Check" sub="All your skills are ready" onClick={() => setView({ name: "check" })} />
-        ) : weak ? (
-          <BigButton title={busy ? "Loading…" : "Play"} sub={mixLabel} disabled={busy} onClick={() => void play()} />
-        ) : null}
-        {errorNote}
+        <div className="mt-auto pt-4 lg:order-2 lg:mt-0 lg:pt-0">
+          {home.ready ? (
+            <BigButton large gold title="Take the Level Check" onClick={() => setView({ name: "check" })} />
+          ) : weak ? (
+            <BigButton large title={busy ? "Loading…" : "Play"} disabled={busy} onClick={() => void play()} />
+          ) : null}
+          {offNote}
+          {streak && !streak.lit && streak.count > 0 ? <p className="mt-2 text-center text-[13px] font-bold text-amber-800">Play today to keep your {streak.count} day streak</p> : null}
+          {errorNote}
+        </div>
       </div>
     </div>
+  );
+}
+
+/** The home screen's streak: a big flame with the number inside it. */
+function StreakBadge({ count, lit, open, onToggle }: { count: number; lit: boolean; open: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" onClick={onToggle} aria-expanded={open} aria-label={`${count} day streak. ${lit ? "Done for today" : "Not done yet today"}`} className="flex w-full flex-col items-center gap-0.5">
+      <svg aria-hidden="true" viewBox="0 0 64 76" className="block w-14 lg:w-[68px]">
+        <path d="M33 2c3 13 25 23 25 45a26 26 0 0 1-52 0c0-11 6-20 12-25 0 7 3 11 7 12 3-11 1-22 8-32z" fill={lit ? "#FFA91F" : "#D4D4D8"} />
+        <path d="M32 26c3 9 19 15 19 31a19 19 0 0 1-38 0c0-13 15-19 19-31z" fill={lit ? "#DC4A06" : "#71717A"} />
+        <text x="32" y="67" textAnchor="middle" fontSize={count > 99 ? 19 : 29} fontWeight="900" fill="#FFFFFF" fontFamily="inherit">{count}</text>
+      </svg>
+      <span className={`whitespace-nowrap text-[11px] font-extrabold lg:text-xs ${lit ? "text-[#A84A00]" : "text-zinc-600"}`}>day streak</span>
+    </button>
   );
 }
 

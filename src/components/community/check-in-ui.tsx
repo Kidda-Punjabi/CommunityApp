@@ -281,7 +281,7 @@ export function SessionCheckInButtons({
       <button
         type="button"
         data-testid="check-in-button"
-        className="flex h-14 w-full items-center justify-center rounded-[18px] bg-[#FDE68A] text-base font-bold text-[#3B1A8C]"
+        className="flex h-[72px] w-full items-center justify-center rounded-[20px] bg-violet-600 text-[25px] font-extrabold text-white shadow-[0_5px_0_#5B21B6] transition active:scale-[0.98]"
         onClick={() => setOpen(true)}
       >
         Check in
@@ -291,7 +291,7 @@ export function SessionCheckInButtons({
           href={meetUrl}
           target="_blank"
           rel="noreferrer"
-          className="mt-2 flex h-11 w-full items-center justify-center rounded-[18px] bg-white/15 text-sm font-bold text-white"
+          className="mt-3 flex h-11 w-full items-center justify-center rounded-[18px] bg-violet-50 text-sm font-bold text-violet-700"
           onClick={() => {
             if (!stillNeeded) return;
             joinedAt.current = Date.now();

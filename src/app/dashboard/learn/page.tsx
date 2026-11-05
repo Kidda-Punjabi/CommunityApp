@@ -118,6 +118,7 @@ export default async function LearnPage() {
           actor.kind === "kid" ? (dashboard.displayName?.charAt(0) ?? "K").toUpperCase() : null
         }
         className="mb-2"
+        title={actor.kind === "kid" ? undefined : "Courses"}
         learnerLevel={actor.kind === "kid" ? null : onboarding.learnerLevel}
         unreadNotificationCount={unreadNotificationCount}
         weeklyPoints={dashboard.headerPoints}
@@ -310,10 +311,6 @@ export default async function LearnPage() {
         {greeting}
         <HomeOneScreen
           timeZone={timeZone}
-          communityHref={communityHref}
-          communityStatus={communityStatus}
-          communityLocked={communityLocked}
-          communityLiveCheckIn={communityLiveCheckIn}
           kids={kidProgressSummaries}
           courses={[
             {

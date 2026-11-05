@@ -73,6 +73,11 @@ body {
 }
 
 /* Practise round, streak, and results take the whole screen. The bottom bar is what forced scrolling. */
+/* Gurmukhi always uses the bundled Noto font, never a device fallback. */
+[lang="pa"] {
+  font-family: var(--font-gurmukhi);
+}
+
 html[data-practise-focus] {
   overflow: hidden;
 }
