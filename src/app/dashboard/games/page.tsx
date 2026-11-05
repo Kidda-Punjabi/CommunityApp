@@ -1,4 +1,4 @@
-import { GamesHub } from "@/components/games/games-hub";
+import { GamesCategoryList, GamesHub, isGamesCategoryId } from "@/components/games/games-hub";
 import { HubLinkTile } from "@/components/games/hub-link-tile";
 import { getGamesTabData } from "@/lib/cache/tab-page-cache";
 import { usesKidsShell } from "@/lib/kids/constants";
@@ -18,7 +18,8 @@ import {
 import { getIsNativeApp } from "@/lib/native/platform-server";
 import { redirect } from "next/navigation";
 
-export default async function GamesPage() {
+export default async function GamesPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
+  const { category } = await searchParams;
   const session = await getCachedAuthSession();
   if (!session) redirect("/login");
 
@@ -48,38 +49,39 @@ export default async function GamesPage() {
     ? []
     : GAME_CATALOG.filter((g) => g.section === "grammar");
 
-  return (
-    <div className="flex flex-col px-5 py-7">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 tab:text-3xl">Games</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          {englishMode
-            ? "Play vocabulary games with your Learn English flashcards."
-            : isPremium || nativeApp
-              ? "Play vocabulary and grammar games to reinforce what you've learned."
-              : hasFoundationalAccess
-                ? "Foundational Course includes Sound Match and Vowel Match, plus the first four games. Premium unlocks the full catalogue."
-                : `Free includes the first ${FREE_GAME_UNLOCK_COUNT} games. Premium unlocks the full catalogue.`}
-        </p>
-      </div>
+  const note = englishMode
+    ? "Play vocabulary games with your Learn English flashcards."
+    : isPremium || nativeApp
+      ? null
+      : hasFoundationalAccess
+        ? "Foundational Course includes Sound Match and Vowel Match, plus the first four games. Premium unlocks the full catalogue."
+        : `Free includes the first ${FREE_GAME_UNLOCK_COUNT} games. Premium unlocks the full catalogue.`;
 
-      <GamesHub
-        vocabularyGames={vocabularyGames}
-        grammarGames={grammarGames}
-        personalBests={personalBests}
-        isPremium={isPremium}
-        hasFoundationalAccess={hasFoundationalAccess}
-        hideGrammar={englishMode}
-        extraVocabularyTiles={
-          olderKid ? (
-            <HubLinkTile
-              title="Bedtime Stories"
-              emoji="🌙"
-              href="/dashboard/games/bedtime-stories"
-            />
-          ) : null
-        }
-      />
+  if (isGamesCategoryId(category) && !(category === "grammar" && englishMode)) {
+    return (
+      <div className="flex flex-col px-4 pb-6 pt-5">
+        <GamesCategoryList
+          category={category}
+          vocabularyGames={vocabularyGames}
+          grammarGames={grammarGames}
+          personalBests={personalBests}
+          isPremium={isPremium}
+          hasFoundationalAccess={hasFoundationalAccess}
+          note={category === "vocab" || category === "grammar" ? note : null}
+          extraVocabularyTiles={
+            olderKid ? (
+              <HubLinkTile title="Bedtime Stories" emoji="🌙" href="/dashboard/games/bedtime-stories" />
+            ) : null
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col px-4 pb-4 pt-5">
+      <h1 className="mb-3 font-heading text-[28px] font-extrabold leading-8 tracking-tight text-zinc-900">Games</h1>
+      <GamesHub hideGrammar={englishMode} />
     </div>
   );
 }
