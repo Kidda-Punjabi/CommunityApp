@@ -101,7 +101,7 @@ export async function signup(
 
     await persistLastUser(supabase);
 
-    redirect("/dashboard/learn");
+    redirect("/dashboard/home");
   }
 
   if (referralCode) {

@@ -1,6 +1,6 @@
 export const AUTH_RECOVERY_COOKIE = "auth_recovery_pending";
 
-const POST_AUTH_PATH = "/dashboard/learn";
+const POST_AUTH_PATH = "/dashboard/home";
 
 /** Where to send the user after /auth/callback exchanges a PKCE code. */
 export function authCallbackNextPath(

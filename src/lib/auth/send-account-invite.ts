@@ -21,7 +21,7 @@ export async function sendKiddaAccountInvite(
   }
 
   const supabase = createServiceRoleClient();
-  const redirectTo = `${getPublicAppUrl()}/auth/callback?next=/dashboard/learn`;
+  const redirectTo = `${getPublicAppUrl()}/auth/callback?next=/dashboard/home`;
 
   const { error } = await supabase.auth.admin.inviteUserByEmail(normalized, {
     redirectTo,

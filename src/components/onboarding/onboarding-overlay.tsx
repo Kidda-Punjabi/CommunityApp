@@ -393,7 +393,7 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
                 {selfTierMeta && (
                   <p className="text-sm leading-relaxed text-zinc-700">
                     {selfTierMeta.tier === 1
-                      ? "Next up: the Level 1 → 2 check. Pass with 95%+ and you'll start at Level 2 — otherwise we'll confirm Level 1."
+                      ? "Next up: a few quick questions to find your level."
                       : `Next up: a few quick questions to confirm Level ${selfTierMeta.tier} (${selfTierMeta.name}) is the right starting point.`}
                   </p>
                 )}
