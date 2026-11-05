@@ -13,6 +13,9 @@ export type SpokenTarget = { romanised?: string | null; punjabi?: string | null 
 /** Letters that the same spoken sound often comes back as, including Punjabi's tonal letters. */
 function foldSounds(word: string): string {
   return word
+    // Masculine and feminine past forms: gia, gai and gae are the same word here.
+    .replace(/ia$/, "ai")
+    .replace(/ae$/, "ai")
     .replace(/chh|ch/g, "c")
     .replace(/kh|gh/g, "k")
     .replace(/jh/g, "c")

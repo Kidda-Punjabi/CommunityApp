@@ -26,6 +26,14 @@ describe("spoken marking", () => {
     assert.equal(passes("ਹਫਤਾ", "hafta", "ਹਫ਼ਤਾ"), true);
     assert.equal(passes("paani", "pani", "ਪਾਣੀ"), true);
   });
+  it("passes the other gender's form", () => {
+    assert.equal(passes("ਮੈਂ ਕੰਮ ਕਰਦੀ ਹਾਂ", "main kamm karda haan", "ਮੈਂ ਕੰਮ ਕਰਦਾ ਹਾਂ"), true);
+    assert.equal(passes("ਕਰਦੀ", "karda", "ਕਰਦਾ"), true);
+    assert.equal(passes("ਗਈ", "gia", "ਗਿਆ"), true);
+    assert.equal(passes("ਮੈਂ ਗਈ", "main gia", "ਮੈਂ ਗਿਆ"), true);
+    assert.equal(passes("ਚੰਗੀ", "changa", "ਚੰਗਾ"), true);
+    assert.equal(passes("ਜਾਵਾਂਗੀ", "javanga", "ਜਾਵਾਂਗਾ"), true);
+  });
   it("fails a different word", () => {
     assert.equal(passes("week", "hafta", "ਹਫ਼ਤਾ"), false);
     assert.equal(passes("banana", "hafta", "ਹਫ਼ਤਾ"), false);

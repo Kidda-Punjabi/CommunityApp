@@ -450,7 +450,6 @@ function CheckRunner({ questions, onDone, onLeave }: { questions: CheckQuestion[
       <div className="flex items-center gap-2">
         <Back onClick={onLeave} label="Leave check" />
         <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-amber-100"><div className="h-full rounded-full bg-amber-400" style={{ width: `${(picks.length / questions.length) * 100}%` }} /></div>
-        <span className="text-[13px] font-extrabold text-zinc-600">{picks.length + 1}/{questions.length}</span>
       </div>
       {q.audioKey ? <div className="mt-6"><AudioButton key={picks.length} audioKey={q.audioKey} large noSlow /></div> : null}
       <h1 className="mt-4 text-[27px] font-bold leading-tight tracking-tight text-zinc-900">{q.prompt}</h1>

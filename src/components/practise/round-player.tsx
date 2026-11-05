@@ -348,7 +348,6 @@ export function RoundPlayer({
 
   const tiles = q.tiles ?? [];
   const shownTotal = Math.max(1, totalShown.current);
-  const shownStep = Math.min(index + 1, shownTotal);
   const pct = Math.round((Math.min(index, shownTotal) / shownTotal) * 100);
 
   return (
@@ -359,7 +358,6 @@ export function RoundPlayer({
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
         <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-violet-100"><div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${pct}%` }} /></div>
-        <span className="text-[13px] font-extrabold text-zinc-600">{shownStep}/{shownTotal}</span>
         <button type="button" onClick={() => void setSoundEnabled(!soundEnabled)} aria-label={soundEnabled ? "Turn sound off" : "Turn sound on"} className="flex h-11 w-11 items-center justify-center text-zinc-600">
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" />{soundEnabled ? <path d="M15.5 8.5a5 5 0 0 1 0 7" /> : <path d="m16 9 5 6M21 9l-5 6" />}</svg>
         </button>
