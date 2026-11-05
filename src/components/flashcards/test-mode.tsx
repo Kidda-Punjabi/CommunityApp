@@ -1,5 +1,6 @@
 "use client";
 
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { BackLink } from "@/components/navigation/back-link";
 import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { useMemo, useState } from "react";
@@ -71,6 +72,7 @@ function buildQuestions(deck: FlashcardDeckContext): Question[] {
 }
 
 export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
+  const { playSound } = useAudioManager();
   const deckHubHref =
     deck.deckId != null
       ? deckPracticeHref(deck.lessonId, deck.deckId)
@@ -87,6 +89,7 @@ export function FlashcardTestMode({ deck }: FlashcardTestModeProps) {
   function handleSelect(optionText: string) {
     if (selected) return;
     setSelected(optionText);
+    playSound(optionText === question.correctAnswer ? "correct" : "incorrect");
     if (optionText === question.correctAnswer) {
       setScore((prev) => prev + 1);
       void hapticSuccess();

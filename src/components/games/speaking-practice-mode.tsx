@@ -1,5 +1,6 @@
 "use client";
 
+import { passedSpokenAttempt, scoreSpokenAttempt } from "@/lib/games/spoken-match";
 import { BackLink } from "@/components/navigation/back-link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FloatingSoundToggle } from "@/components/audio/floating-sound-toggle";
@@ -21,9 +22,6 @@ import { saveGameScore } from "@/lib/games/game-scores";
 import { buildGameAccuracyMetadata } from "@/lib/leaderboard/points";
 import {
   buildSpeakingPracticeRound,
-  matchSpeakingTranscript,
-  passedSpeakingAttempt,
-  SPEAKING_PRACTICE_PASS_THRESHOLD,
   type SpeakingPracticeAttempts,
   type SpeakingPracticeCard,
 } from "@/lib/games/speaking-practice";
@@ -249,7 +247,7 @@ export function SpeakingPracticeMode({
 
       const transcript = payload.transcript ?? "";
       const displayTranscript = formatHeardTranscript(transcript) || transcript;
-      const similarity = matchSpeakingTranscript(transcript, {
+      const similarity = scoreSpokenAttempt(transcript, {
         romanised: current.romanised,
         punjabi: current.punjabi,
       });
@@ -260,7 +258,7 @@ export function SpeakingPracticeMode({
       setBestSimilarity(nextBest);
       setLastTranscript(displayTranscript);
 
-      if (passedSpeakingAttempt(similarity)) {
+      if (passedSpokenAttempt(similarity)) {
         playSound("correct");
         setFeedback("pass");
         void persistCorrectAttempt(current, transcript, similarity);
@@ -506,7 +504,7 @@ export function SpeakingPracticeMode({
           <div className="space-y-2">
             <p className="text-lg font-semibold text-amber-700">Try again</p>
             <p className="text-sm text-zinc-600">
-              {bestSimilarity}% similarity — aim for {SPEAKING_PRACTICE_PASS_THRESHOLD}% or higher.
+              Most of it needs to come through.
               {lastTranscript ? (
                 <>
                   {" "}

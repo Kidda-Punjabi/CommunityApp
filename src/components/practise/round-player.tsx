@@ -5,22 +5,10 @@ import { getPractiseAudio } from "@/app/dashboard/home/practise-actions";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { recordingExtensionForBlob, useAudioRecorder } from "@/lib/audio/use-audio-recorder";
 import { usePractiseSound } from "@/lib/practise/sounds";
+import { passedSpokenAttempt, scoreSpokenAttempt } from "@/lib/games/spoken-match";
 import type { RoundAnswer, RoundQuestion } from "@/lib/practise/types";
 
 const SLOW_RATE = 0.55;
-
-function similarity(a: string, b: string) {
-  const clean = (s: string) => s.replace(/[\s?.,!।'"]/g, "");
-  const x = clean(a), y = clean(b);
-  if (!x || !y) return 0;
-  let prev = Array.from({ length: y.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= x.length; i++) {
-    const row = [i];
-    for (let j = 1; j <= y.length; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
-    prev = row;
-  }
-  return 1 - prev[y.length] / Math.max(x.length, y.length);
-}
 
 function useQuestionAudio() {
   const ref = useRef<HTMLAudioElement | null>(null);
@@ -130,7 +118,7 @@ function PushToTalk({ q, onMatch, onMiss, onPress }: { q: RoundQuestion; onPress
       const response = await fetch("/api/practise/transcribe", { method: "POST", body: form });
       const data = (await response.json()) as { transcript?: string; error?: string };
       if (data.error || data.transcript == null) onMiss(data.error ?? "We couldn't check that one.");
-      else if (similarity(data.transcript, q.answer.gurmukhi) >= 0.6) onMatch();
+      else if (passedSpokenAttempt(scoreSpokenAttempt(data.transcript, { romanised: q.answer.romanised, punjabi: q.answer.gurmukhi }))) onMatch();
       else onMiss(data.transcript.trim() ? "Not quite. Try again." : "We didn't catch that. Try again.", Boolean(data.transcript.trim()));
     } catch {
       onMiss("We couldn't check that one.");

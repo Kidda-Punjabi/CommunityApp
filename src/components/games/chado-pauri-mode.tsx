@@ -1,5 +1,6 @@
 "use client";
 
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { FlashcardBilingualLine } from "@/components/flashcards/flashcard-bilingual-line";
 import { BackLink } from "@/components/navigation/back-link";
 import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
@@ -47,6 +48,7 @@ export function ChadoPauriMode({
   loadError,
   initialBestScore = 0,
 }: ChadoPauriModeProps) {
+  const { playSound } = useAudioManager();
   const [phase, setPhase] = useState<Phase>("ready");
   const [rungIndex, setRungIndex] = useState(0);
   const [lockedInScore, setLockedInScore] = useState(0);
@@ -218,6 +220,7 @@ export function ChadoPauriMode({
     advanceTimerRef.current = window.setTimeout(() => {
       setRungResults((prev) => [...prev, rungResult]);
 
+      playSound(isCorrect ? "correct" : "incorrect");
       if (isCorrect) {
         setFeedback("correct");
         advanceTimerRef.current = window.setTimeout(() => {

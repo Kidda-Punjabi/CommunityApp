@@ -1,5 +1,6 @@
 "use client";
 
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LaneRunnerCoin, coinLanesForRound, randomCoinLane } from "@/components/games/lane-runner/lane-runner-coin";
 import { LaneRunnerGateView } from "@/components/games/lane-runner/lane-runner-gate";
@@ -72,6 +73,7 @@ export function LaneRunnerMode({
   initialCoinBalance,
   learnerLevel,
 }: LaneRunnerModeProps) {
+  const { playSound } = useAudioManager();
   const [phase, setPhase] = useState<Phase>("ready");
   const [gateQueue, setGateQueue] = useState<QueuedLaneRunnerGate[]>([]);
   const [headGateFallEnabled, setHeadGateFallEnabled] = useState(false);
@@ -377,6 +379,7 @@ export function LaneRunnerMode({
       const selectedLane = playerLaneRef.current;
       const hit = selectedLane === head.gate.correctLane;
       triggerRoadFlash(hit ? "hit" : "miss");
+      playSound(hit ? "correct" : "incorrect");
 
       const result: LaneRunnerGateResult = {
         flashcard_id: head.gate.flashcard_id,
@@ -387,7 +390,7 @@ export function LaneRunnerMode({
 
       advanceAfterGate(result, gateId);
     },
-    [advanceAfterGate, triggerRoadFlash]
+    [advanceAfterGate, playSound, triggerRoadFlash]
   );
 
   useEffect(() => {

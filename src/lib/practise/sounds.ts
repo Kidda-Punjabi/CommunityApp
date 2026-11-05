@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { useAudioManager } from "@/lib/audio/audio-manager";
+import { getAudioContext, whenAudioReady } from "@/lib/audio/synthesize-sound";
 
 /** Practise-only cues. Short, soft and in one family, and they obey the app's sound setting. */
 type Note = [frequency: number, start: number, duration: number, gain: number, type?: OscillatorType];
@@ -18,23 +19,14 @@ const CUES = {
 
 export type PractiseCue = keyof typeof CUES;
 
-let context: AudioContext | null = null;
-let chain: Promise<void> = Promise.resolve();
-
 export function usePractiseSound() {
   const { soundEnabled, soundVolume } = useAudioManager();
   return useCallback(
     (cue: PractiseCue) => {
       if (!soundEnabled || soundVolume <= 0 || typeof window === "undefined") return;
-      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Ctx) return;
-      context ??= new Ctx();
-      const ctx = context;
-      // Resume first. A listen clip can suspend the context, and a cue scheduled before resume is skipped.
-      const ready = ctx.state === "running" ? Promise.resolve() : ctx.resume();
-      chain = chain.then(async () => {
-        await Promise.race([ready, new Promise((resolve) => window.setTimeout(resolve, 400))]);
-        if (ctx.state !== "running") return;
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      whenAudioReady(ctx, () => {
         const now = ctx.currentTime;
         for (const [frequency, start, duration, gain, type] of CUES[cue] as Note[]) {
           const osc = ctx.createOscillator();
@@ -48,7 +40,7 @@ export function usePractiseSound() {
           osc.start(now + start);
           osc.stop(now + start + duration + 0.02);
         }
-      }).catch(() => undefined);
+      });
     },
     [soundEnabled, soundVolume]
   );

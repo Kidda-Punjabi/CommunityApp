@@ -23,17 +23,15 @@ import {
   buildVoicePracticeRound,
   formatHeardTranscript,
   isPlayableVoiceSentence,
-  passedVoiceAttempt,
   romanisedHint,
   VOICE_PRACTICE_MAX_ATTEMPTS,
-  VOICE_PRACTICE_PASS_THRESHOLD,
   type VoicePracticeQuestionResult,
 } from "@/lib/games/voice-practice";
 import {
   VOICE_PRACTICE_MONTHLY_LIMIT,
   type VoicePracticeAttempts,
 } from "@/lib/games/voice-practice-stt";
-import { matchSpeakingTranscript } from "@/lib/games/speaking-practice";
+import { passedSpokenAttempt, scoreSpokenAttempt } from "@/lib/games/spoken-match";
 import { formatPunjabiForDisplay } from "@/lib/conjugation/format";
 import { createClient } from "@/lib/supabase/client";
 
@@ -258,11 +256,11 @@ export function VoicePracticeMode({
     const displayTranscript = formatHeardTranscript(transcript) || transcript.trim();
     const romanised = romanisedHint(current) ?? "";
     const similarity = Math.max(
-      matchSpeakingTranscript(displayTranscript, {
+      scoreSpokenAttempt(displayTranscript, {
         romanised,
         punjabi: current.punjabi_sentence,
       }),
-      matchSpeakingTranscript(transcript, {
+      scoreSpokenAttempt(transcript, {
         romanised,
         punjabi: current.punjabi_sentence,
       })
@@ -274,7 +272,7 @@ export function VoicePracticeMode({
     setBestSimilarity(nextBest);
     setLastTranscript(displayTranscript);
 
-    if (passedVoiceAttempt(similarity)) {
+    if (passedSpokenAttempt(similarity)) {
       playSound("correct");
       setFeedback("pass");
       scheduleAdvance({
@@ -578,7 +576,7 @@ export function VoicePracticeMode({
           <div className="space-y-2">
             <p className="text-lg font-semibold text-amber-700">Try again</p>
             <p className="text-sm text-zinc-600">
-              {bestSimilarity}% similarity — aim for {VOICE_PRACTICE_PASS_THRESHOLD}% or higher.
+              Most of it needs to come through.
               {lastTranscript ? (
                 <>
                   {" "}

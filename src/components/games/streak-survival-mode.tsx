@@ -1,5 +1,6 @@
 "use client";
 
+import { useAudioManager } from "@/lib/audio/audio-manager";
 import { BackLink } from "@/components/navigation/back-link";
 import { GameTutorialHost } from "@/components/games/tutorial/game-tutorial-host";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -132,6 +133,7 @@ export function StreakSurvivalMode({
   metadataSource,
   challenge = null,
 }: StreakSurvivalModeProps) {
+  const { playSound } = useAudioManager();
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
   const [streak, setStreak] = useState(0);
   const [question, setQuestion] = useState<Question | null>(null);
@@ -223,6 +225,7 @@ export function StreakSurvivalMode({
   function handleAnswer(answer: string) {
     if (phase !== "playing" || !question) return;
 
+    playSound(answer === question.answer ? "correct" : "incorrect");
     if (answer === question.answer) {
       setStreak((s) => s + 1);
       setQuestion(nextQuestion());
