@@ -49,7 +49,7 @@ export const APP_TOUR_STEPS: DriveStep[] = [
   {
     element: '[data-tour="nav-learn"]',
     popover: {
-      title: "Home",
+      title: "Courses",
       description:
         "Courses and weekly lessons. Open a track to work through your resources.",
       side: "top",

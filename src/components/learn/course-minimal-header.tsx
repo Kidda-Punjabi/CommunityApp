@@ -1,62 +1,44 @@
+import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
+import { BackLink } from "@/components/navigation/back-link";
 
 type CourseMinimalHeaderProps = {
   title: string;
-  /** e.g. "Active"; shown as a small chip beside the title. */
+  /** Only shown when it says something unusual, e.g. "Paused". */
   statusLabel?: string | null;
   statusClassName?: string;
-  /** "Tarn · Cohort 44 · Week 9 of 12" */
+  /** "Cohort 44 · Week 9 of 12" */
   metaLine?: string | null;
-  currentWeek?: number | null;
-  totalWeeks?: number;
+  backHref?: string;
+  /** The button in the top right, e.g. the cohort leaderboard. */
   children?: ReactNode;
 };
 
-/**
- * Minimal course page header (Beginners group): title, one meta line and a thin
- * week progress bar. Replaces the package card so the lessons sit near the top.
- */
+/** Course page header: back on the left, title in the centre, one button on the right. */
 export function CourseMinimalHeader({
   title,
   statusLabel = null,
   statusClassName = "bg-emerald-100 text-emerald-800",
   metaLine = null,
-  currentWeek = null,
-  totalWeeks = 0,
+  backHref = "/dashboard/learn",
   children,
 }: CourseMinimalHeaderProps) {
-  const showProgress = currentWeek != null && totalWeeks > 0;
-  const pct = showProgress
-    ? Math.min(100, Math.max(0, Math.round((currentWeek / totalWeeks) * 100)))
-    : 0;
-
   return (
-    <div className="mb-6 mt-4 space-y-2.5">
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
+    <div className="mb-5 grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-2">
+      <BackLink
+        fallbackHref={backHref}
+        className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-900 hover:text-zinc-900"
+      >
+        <ChevronLeft className="h-5 w-5" aria-label="Back" />
+      </BackLink>
+      <div className="min-w-0 text-center">
+        <h1 className="truncate font-heading text-xl font-extrabold leading-tight tracking-tight text-zinc-900">{title}</h1>
+        {metaLine ? <p className="mt-0.5 truncate text-xs font-bold text-zinc-600">{metaLine}</p> : null}
         {statusLabel ? (
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusClassName}`}
-          >
-            {statusLabel}
-          </span>
+          <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusClassName}`}>{statusLabel}</span>
         ) : null}
       </div>
-      {metaLine ? <p className="text-sm text-zinc-500">{metaLine}</p> : null}
-      {showProgress ? (
-        <div
-          role="progressbar"
-          aria-label="Course progress"
-          aria-valuemin={0}
-          aria-valuemax={totalWeeks}
-          aria-valuenow={currentWeek}
-          aria-valuetext={`Week ${currentWeek} of ${totalWeeks}`}
-          className="h-1 overflow-hidden rounded-full bg-zinc-200"
-        >
-          <div className="h-full rounded-full bg-violet-600" style={{ width: `${pct}%` }} />
-        </div>
-      ) : null}
-      {children ? <div className="pt-1.5">{children}</div> : null}
+      <div className="flex justify-end">{children}</div>
     </div>
   );
 }

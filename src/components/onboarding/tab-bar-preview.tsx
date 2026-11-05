@@ -1,5 +1,5 @@
 const TABS = [
-  { label: "Home", description: "Weekly courses and lessons at your own pace" },
+  { label: "Courses", description: "Weekly courses and lessons at your own pace" },
   { label: "Practice", description: "Your path — streak, unlockables, and today's focus" },
   { label: "Games", description: "Vocabulary and grammar practice — tap ? in any game for how to play" },
   { label: "Community", description: "Leaderboard, events, forum, and friends" },
