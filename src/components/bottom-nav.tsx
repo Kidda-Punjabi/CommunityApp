@@ -121,7 +121,7 @@ const navItems: (NavItem & { tourId: string })[] = [
   // Order + labels only: courses stay at /dashboard/learn, practice path at /dashboard/home.
   { href: "/dashboard/learn", label: "Home", tourId: "nav-learn" },
   { href: "/dashboard/community", label: "Community", tourId: "nav-community" },
-  { href: "/dashboard/home", label: "Practise", tourId: "nav-home" },
+  { href: "/dashboard/home", label: "Practice", tourId: "nav-home" },
   { href: "/dashboard/games", label: "Games", tourId: "nav-games" },
   { href: "/dashboard/profile", label: "Profile", tourId: "nav-profile" },
 ];

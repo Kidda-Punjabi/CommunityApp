@@ -59,7 +59,7 @@ export const APP_TOUR_STEPS: DriveStep[] = [
   {
     element: '[data-tour="nav-home"]',
     popover: {
-      title: "Practise",
+      title: "Practice",
       description:
         "Your streak and today’s focus live here — a quick check-in for what to do next.",
       side: "top",
