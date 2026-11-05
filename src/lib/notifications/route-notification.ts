@@ -22,6 +22,7 @@ export const NOTIFICATION_ROUTING = {
   friend_game_challenge: "never_kid",
   friend_game_challenge_result: "never_kid",
   community_session_live: "never_kid",
+  subscription_renewal: "parent_only",
 } as const satisfies Record<NotificationType, NotificationAudience>;
 
 export type NotificationInsertRow = {

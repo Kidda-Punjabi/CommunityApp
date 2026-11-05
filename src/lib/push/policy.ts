@@ -7,8 +7,8 @@ export const DAILY_NON_CLASS_CAP = 3;
 /** C2 and C3 may send during quiet hours. Admin test pushes may too. */
 export const QUIET_HOURS_ALLOWED = new Set(["C2", "C3", "test"]);
 
-/** C1–C5 and homework feedback do not count toward the daily cap. */
-export const CAP_EXEMPT = new Set(["C1", "C2", "C3", "C4", "C5", "H4", "test"]);
+/** C1–C5, homework feedback and renewal notices do not count toward the daily cap. */
+export const CAP_EXEMPT = new Set(["C1", "C2", "C3", "C4", "C5", "H4", "B1", "test"]);
 
 /** Never send forum, social, or community-session pushes about a kid profile. */
 export const KID_BLOCKED_TYPES = new Set([
@@ -69,6 +69,7 @@ export const TYPE_CATEGORY: Record<string, PushCategory> = {
   G3: "game_challenges",
   G4: "game_challenges",
   A1: "announcements",
+  B1: "always",
   test: "always",
 };
 
