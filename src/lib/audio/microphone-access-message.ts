@@ -67,3 +67,39 @@ export function safePracticeMessage(message: string | undefined, fallback: strin
   }
   return trimmed;
 }
+
+export type MicrophoneFailureType =
+  | "permission_denied"
+  | "no_device"
+  | "device_busy"
+  | "unsupported"
+  | "insecure_context"
+  | "recording_failed"
+  | "unknown";
+
+/** Short machine label for logging a recorder failure. Never shown to students. */
+export function microphoneFailureType(error: unknown): MicrophoneFailureType {
+  if (typeof window !== "undefined" && window.isSecureContext === false) return "insecure_context";
+  if (isMicrophoneBlockedError(error)) return "permission_denied";
+  if (!error || typeof error !== "object") return "unknown";
+  const name = "name" in error ? String(error.name) : "";
+  if (name === "NotFoundError" || name === "OverconstrainedError" || name === "DevicesNotFoundError") {
+    return "no_device";
+  }
+  if (name === "NotReadableError" || name === "TrackStartError" || name === "AbortError") {
+    return "device_busy";
+  }
+  if (name === "NotSupportedError" || name === "TypeError") return "unsupported";
+  return "unknown";
+}
+
+export const MICROPHONE_BUSY_FAILURE: MicrophoneFailure = {
+  kind: "message",
+  message:
+    "Your microphone is being used by another app. Close other apps or calls using it, then tap again.",
+};
+
+export const MICROPHONE_NOTHING_CAPTURED_FAILURE: MicrophoneFailure = {
+  kind: "message",
+  message: "No audio was captured. Check your microphone isn't muted, then try again.",
+};

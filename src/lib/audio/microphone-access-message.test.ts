@@ -37,3 +37,14 @@ describe("safePracticeMessage", () => {
     assert.equal(safePracticeMessage("No speech detected", "Try again."), "No speech detected");
   });
 });
+
+describe("microphoneFailureType", () => {
+  it("labels each browser error for logging", async () => {
+    const { microphoneFailureType } = await import("./microphone-access-message");
+    assert.equal(microphoneFailureType({ name: "NotAllowedError" }), "permission_denied");
+    assert.equal(microphoneFailureType({ name: "NotFoundError" }), "no_device");
+    assert.equal(microphoneFailureType({ name: "NotReadableError" }), "device_busy");
+    assert.equal(microphoneFailureType({ name: "NotSupportedError" }), "unsupported");
+    assert.equal(microphoneFailureType({ name: "Weird" }), "unknown");
+  });
+});

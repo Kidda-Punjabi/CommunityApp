@@ -349,3 +349,48 @@ export async function confirmHomeworkRecordingSubmission(input: {
     return { error: HOMEWORK_RECORDING_UPLOAD_ERROR };
   }
 }
+
+const RECORDER_FAILURE_TYPES = new Set([
+  "permission_denied",
+  "no_device",
+  "device_busy",
+  "unsupported",
+  "insecure_context",
+  "recording_failed",
+  "unknown",
+]);
+
+/** Best-effort log of a homework recorder failure. Never throws, never blocks the student. */
+export async function logHomeworkRecorderFailure(input: {
+  lessonId: string;
+  errorType: string;
+  errorName: string | null;
+  errorMessage: string | null;
+  userAgent: string | null;
+  pageUrl: string | null;
+}): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const actor = await resolveCourseActor(supabase, user.id);
+    const errorType = RECORDER_FAILURE_TYPES.has(input.errorType) ? input.errorType : "unknown";
+    const trim = (value: string | null, max: number) => value?.trim().slice(0, max) || null;
+
+    await supabase.from("homework_recorder_failures").insert({
+      user_id: user.id,
+      kid_profile_id: actor.kind === "kid" ? (actor.kidProfileId ?? null) : null,
+      lesson_id: isUuid(input.lessonId) ? input.lessonId : null,
+      error_type: errorType,
+      error_name: trim(input.errorName, 120),
+      error_message: trim(input.errorMessage, 500),
+      user_agent: trim(input.userAgent, 500),
+      page_url: trim(input.pageUrl, 500),
+    });
+  } catch {
+    // Logging is best-effort.
+  }
+}
