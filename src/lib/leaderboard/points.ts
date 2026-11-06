@@ -114,7 +114,14 @@ async function grantProfileXp(
     return { granted: 0, capped: false };
   }
   if (data === -1) return { granted: 0, capped: true };
-  return { granted: Number(data ?? 0), capped: false };
+  const granted = Number(data ?? 0);
+  // points.ts is imported by client games — never import push/send here (node:http2).
+  // Browser awards queue P2 via the API; server awards are covered by the reminders cron.
+  if (granted > 0) {
+    const { queueLevelCheckReadyPush } = await import("@/lib/push/queue-level-check");
+    queueLevelCheckReadyPush();
+  }
+  return { granted, capped: false };
 }
 
 /** Punjabi activity XP (games, quizzes, flashcards). Games and quizzes have diminishing returns per day. */

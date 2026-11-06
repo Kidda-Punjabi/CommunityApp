@@ -3,8 +3,17 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { COMMUNITY_COURSE_ID } from "@/lib/topics/constants";
 import { expandEventOccurrences, type StoredEvent } from "@/lib/events/recurrence";
+import { communityFeedbackSessionIdForEvent } from "@/lib/feedback/community-class";
+import { isCommunityStaffUser } from "@/lib/community/test-sessions";
+import {
+  cooldownUntil,
+  failedRetakeAt,
+  type LevelHistoryRow,
+} from "@/lib/community/level-progress";
+import { ACTIVE_SUBSCRIPTION_STATUSES, isPremiumProfileTier } from "@/lib/membership/profile-tier";
 import { getDisplayName } from "@/lib/profile/display-name";
 import { closeApns, retryDeferredPushes, sendPush } from "@/lib/push/send";
+import { maybeSendLevelCheckReady } from "@/lib/push/level-check-ready";
 import { sweepRecentNotificationPushes } from "@/lib/push/from-notification";
 import {
   formatLocalTime,
@@ -15,6 +24,8 @@ import {
   zonedLocalToUtc,
   zonedParts,
 } from "@/lib/push/policy";
+
+const HEART_STEP_MS = 8 * 60 * 60 * 1000;
 
 type Admin = SupabaseClient;
 
@@ -149,6 +160,9 @@ async function sendScheduled(admin: Admin, now: Date): Promise<number> {
   await Promise.all([
     collectClassAndHomework(admin, now, pending),
     collectCommunity(admin, now, pending),
+    collectSessionFeedback(admin, now, pending),
+    collectHeartsFull(admin, now, pending),
+    collectLevelCheckReady(admin, now),
     collectStreaks(admin, now, pending),
     collectPolls(admin, now, pending),
     collectUnlocks(admin, now, pending),
@@ -429,6 +443,182 @@ async function collectCommunity(admin: Admin, now: Date, pending: Pending[]): Pr
   }
 }
 
+async function loadUnlimitedHeartUsers(admin: Admin, userIds: string[]): Promise<Set<string>> {
+  const unlimited = new Set<string>();
+  if (userIds.length === 0) return unlimited;
+  for (let index = 0; index < userIds.length; index += 200) {
+    const chunk = userIds.slice(index, index + 200);
+    const [{ data: profiles }, { data: memberships }, { data: packages }] = await Promise.all([
+      admin.from("profiles").select("id, membership_tier").in("id", chunk),
+      admin
+        .from("memberships")
+        .select("user_id")
+        .in("user_id", chunk)
+        .in("status", [...ACTIVE_SUBSCRIPTION_STATUSES]),
+      admin
+        .from("student_packages")
+        .select("user_id")
+        .in("user_id", chunk)
+        .eq("course_id", COMMUNITY_COURSE_ID)
+        .eq("status", "confirmed"),
+    ]);
+    for (const row of profiles ?? []) {
+      if (isPremiumProfileTier((row.membership_tier as string) ?? "free")) {
+        unlimited.add(row.id as string);
+      }
+    }
+    for (const row of memberships ?? []) unlimited.add(row.user_id as string);
+    for (const row of packages ?? []) unlimited.add(row.user_id as string);
+  }
+  return unlimited;
+}
+
+/** P1: free users whose practise hearts just finished recharging. */
+async function collectHeartsFull(admin: Admin, now: Date, pending: Pending[]): Promise<void> {
+  const { data } = await admin
+    .from("practise_hearts")
+    .select("user_id, hearts, charging_since")
+    .not("charging_since", "is", null)
+    .lt("hearts", 3);
+  const rows = data ?? [];
+  if (rows.length === 0) return;
+
+  const candidates: Array<{ userId: string; fullAt: Date }> = [];
+  for (const row of rows) {
+    const hearts = Number(row.hearts ?? 0);
+    const chargingSince = row.charging_since ? new Date(row.charging_since as string) : null;
+    if (!chargingSince || hearts >= 3) continue;
+    const fullAt = new Date(chargingSince.getTime() + HEART_STEP_MS * (3 - hearts));
+    // Catch the refill even if the cron lagged a little past the exact minute.
+    if (fullAt.getTime() > now.getTime() || now.getTime() - fullAt.getTime() >= 2 * 60 * 60 * 1000) continue;
+    candidates.push({ userId: row.user_id as string, fullAt });
+  }
+  if (candidates.length === 0) return;
+
+  const userIds = [...new Set(candidates.map((row) => row.userId))];
+  const [settingsOff, unlimited] = await Promise.all([
+    loadSettings(admin, userIds),
+    loadUnlimitedHeartUsers(admin, userIds),
+  ]);
+
+  for (const row of candidates) {
+    if (unlimited.has(row.userId)) continue;
+    if (!allowed(settingsOff, row.userId, "streaks")) continue;
+    pending.push({
+      userId: row.userId,
+      kidProfileId: null,
+      type: "P1",
+      refKey: `${row.userId}:${row.fullAt.toISOString()}`,
+      title: "Your hearts are full",
+      body: "All 3 hearts are back. Jump into today's Practise.",
+      url: "/dashboard/home",
+      expiresAt: new Date(row.fullAt.getTime() + 24 * 60 * 60 * 1000),
+    });
+  }
+}
+
+/** M3: checked-in members, ~45 minutes after a real Community session ends. */
+async function collectSessionFeedback(admin: Admin, now: Date, pending: Pending[]): Promise<void> {
+  const windowStart = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+  const windowEnd = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+  const { data: occurrences } = await admin
+    .from("community_session_occurrences")
+    .select("id, ended_at, google_event_id, community_sessions(title, is_active)")
+    .eq("status", "ended")
+    .gte("ended_at", windowStart)
+    .lte("ended_at", windowEnd);
+  const live = (occurrences ?? []).filter((row) => {
+    const session = Array.isArray(row.community_sessions) ? row.community_sessions[0] : row.community_sessions;
+    return session?.is_active !== false;
+  });
+  if (live.length === 0) return;
+
+  for (const occurrence of live) {
+    const form = await communityFeedbackSessionIdForEvent(admin, occurrence.google_event_id as string | null);
+    if (!form) continue;
+    const { data: checkins } = await admin
+      .from("community_checkins")
+      .select("user_id")
+      .eq("occurrence_id", occurrence.id);
+    const userIds = [...new Set((checkins ?? []).map((row) => row.user_id as string))];
+    if (userIds.length === 0) continue;
+    const [{ data: submissions }, settingsOff] = await Promise.all([
+      admin
+        .from("feedback_submissions")
+        .select("user_id")
+        .in("session_id", form.siblingIds)
+        .in("user_id", userIds),
+      loadSettings(admin, userIds),
+    ]);
+    const submitted = new Set((submissions ?? []).map((row) => row.user_id as string));
+    for (const userId of userIds) {
+      if (submitted.has(userId)) continue;
+      if (!allowed(settingsOff, userId, "community_sessions")) continue;
+      if (await isCommunityStaffUser(admin, userId)) continue;
+      pending.push({
+        userId,
+        kidProfileId: null,
+        type: "M3",
+        refKey: `${userId}:${occurrence.id}`,
+        title: "How was today's Community session?",
+        body: "Tell us in 30 seconds. It helps us plan the next one.",
+        url: "/dashboard/community",
+        expiresAt: new Date(new Date(occurrence.ended_at as string).getTime() + 48 * 60 * 60 * 1000),
+      });
+    }
+  }
+}
+
+/**
+ * P2: after recent XP awards, and when a retake cooldown has just ended with XP
+ * already at the unlock target. maybeSendLevelCheckReady no-ops until ready and
+ * dedupes with refKey, so it is safe to call repeatedly.
+ */
+async function collectLevelCheckReady(admin: Admin, now: Date): Promise<void> {
+  const since = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+  const { data: awards } = await admin.from("xp_awards").select("user_id").gte("created_at", since);
+  const userIds = new Set((awards ?? []).map((row) => row.user_id as string));
+
+  const { data: settings } = await admin
+    .from("community_level_settings")
+    .select("retake_cooldown_days")
+    .eq("id", 1)
+    .maybeSingle();
+  const cooldownDays = (settings?.retake_cooldown_days as number) ?? 28;
+  const lookback = new Date(now.getTime() - (cooldownDays + 2) * 24 * 60 * 60 * 1000).toISOString();
+  const { data: history } = await admin
+    .from("kidda_level_history")
+    .select("user_id, from_level, to_level, source, created_at")
+    .eq("source", "retake")
+    .gte("created_at", lookback);
+  const byUser = new Map<string, LevelHistoryRow[]>();
+  for (const row of history ?? []) {
+    const userId = row.user_id as string;
+    const list = byUser.get(userId) ?? [];
+    list.push({
+      fromLevel: row.from_level as number | null,
+      toLevel: row.to_level as number,
+      source: row.source as LevelHistoryRow["source"],
+      createdAt: row.created_at as string,
+    });
+    byUser.set(userId, list);
+  }
+
+  for (const [userId, rows] of byUser) {
+    const failedAt = failedRetakeAt(rows);
+    if (!failedAt) continue;
+    const until = new Date(Date.parse(failedAt) + cooldownDays * 86_400_000);
+    if (until.getTime() > now.getTime()) continue;
+    if (now.getTime() - until.getTime() >= 2 * 60 * 60 * 1000) continue;
+    if (cooldownUntil(failedAt, cooldownDays, now)) continue;
+    userIds.add(userId);
+  }
+
+  for (const userId of userIds) {
+    await maybeSendLevelCheckReady(admin, userId, { now });
+  }
+}
+
 async function collectStreaks(admin: Admin, now: Date, pending: Pending[]): Promise<void> {
   const { data } = await admin
     .from("user_streaks")
@@ -505,9 +695,11 @@ async function collectStreaks(admin: Admin, now: Date, pending: Pending[]): Prom
 
   if (sundayUsers.length === 0) return;
   const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const [{ data: lessons }, { data: words }] = await Promise.all([
-    admin.from("lesson_progress").select("user_id, lesson_id").in("user_id", sundayUsers.slice(0, 200)).gte("updated_at", since),
-    admin.from("flashcard_progress").select("user_id").in("user_id", sundayUsers.slice(0, 200)).gte("last_reviewed_at", since),
+  const weekUsers = sundayUsers.slice(0, 200);
+  const [{ data: lessons }, { data: words }, { data: awards }] = await Promise.all([
+    admin.from("lesson_progress").select("user_id, lesson_id").in("user_id", weekUsers).gte("updated_at", since),
+    admin.from("flashcard_progress").select("user_id").in("user_id", weekUsers).gte("last_reviewed_at", since),
+    admin.from("xp_awards").select("user_id, xp").in("user_id", weekUsers).gte("created_at", since),
   ]);
   const lessonCount = new Map<string, number>();
   for (const row of lessons ?? []) {
@@ -517,11 +709,18 @@ async function collectStreaks(admin: Admin, now: Date, pending: Pending[]): Prom
   for (const row of words ?? []) {
     wordCount.set(row.user_id as string, (wordCount.get(row.user_id as string) ?? 0) + 1);
   }
+  const xpCount = new Map<string, number>();
+  for (const row of awards ?? []) {
+    xpCount.set(row.user_id as string, (xpCount.get(row.user_id as string) ?? 0) + Number(row.xp ?? 0));
+  }
   for (const row of rows) {
     const userId = row.user_id as string;
     if (!sundayUsers.includes(userId)) continue;
+    const lessonsDone = lessonCount.get(userId) ?? 0;
+    const wordsDone = wordCount.get(userId) ?? 0;
+    const xpDone = xpCount.get(userId) ?? 0;
+    if (lessonsDone === 0 && wordsDone === 0 && xpDone === 0) continue;
     const zone = timezones.get(userId) ?? "Europe/London";
-    const parts = zonedParts(now, zone);
     const week = localDateKey(now, zone);
     pending.push({
       userId,
@@ -529,7 +728,7 @@ async function collectStreaks(admin: Admin, now: Date, pending: Pending[]): Prom
       type: "S4",
       refKey: `${(row.kid_profile_id as string | null) ?? userId}:${week}`,
       title: "Your week in Punjabi",
-      body: `${lessonCount.get(userId) ?? 0} lessons, ${wordCount.get(userId) ?? 0} words practised, ${row.current_streak}-day streak.`,
+      body: `${xpDone} XP, ${lessonsDone} lessons, ${wordsDone} words practised, ${row.current_streak}-day streak.`,
       url: "/dashboard/learn",
     });
   }
