@@ -10,7 +10,7 @@ export const QUIET_HOURS_ALLOWED = new Set(["C2", "C3", "test"]);
 /** C1–C5, homework feedback and renewal notices do not count toward the daily cap. */
 export const CAP_EXEMPT = new Set(["C1", "C2", "C3", "C4", "C5", "H4", "B1", "test"]);
 
-/** Never send forum, social, or community-session pushes about a kid profile. */
+/** Never send forum, social, community-session, or adult practise pushes about a kid profile. */
 export const KID_BLOCKED_TYPES = new Set([
   "F1",
   "F2",
@@ -22,6 +22,8 @@ export const KID_BLOCKED_TYPES = new Set([
   "M1",
   "M2",
   "M3",
+  "P1",
+  "P2",
 ]);
 
 const TERMINAL_LOG_STATUSES = new Set(["sent", "dropped", "failed", "skipped"]);
@@ -61,6 +63,8 @@ export const TYPE_CATEGORY: Record<string, PushCategory> = {
   S2: "streaks",
   S3: "streaks",
   S4: "weekly_recap",
+  P1: "streaks",
+  P2: "streaks",
   R1: "lesson_scheduling",
   R2: "lesson_scheduling",
   R3: "always",

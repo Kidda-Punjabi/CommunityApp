@@ -104,6 +104,17 @@ async function grantProfileXp(
   source: string,
   sourceId: string
 ): Promise<{ granted: number; capped: boolean }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: before } = user
+    ? await supabase
+        .from("profiles")
+        .select("total_xp, xp_at_level_start, kidda_level")
+        .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
+
   const { data, error } = await supabase.rpc("grant_profile_xp", {
     p_xp: xp,
     p_source: source,
@@ -114,7 +125,17 @@ async function grantProfileXp(
     return { granted: 0, capped: false };
   }
   if (data === -1) return { granted: 0, capped: true };
-  return { granted: Number(data ?? 0), capped: false };
+  const granted = Number(data ?? 0);
+  if (granted > 0 && user) {
+    const { notifyLevelCheckAfterXpGrant } = await import("@/lib/push/level-check-ready");
+    await notifyLevelCheckAfterXpGrant(user.id, {
+      beforeTotalXp: Number(before?.total_xp ?? 0),
+      beforeXpAtLevelStart: Number(before?.xp_at_level_start ?? 0),
+      beforeLevel: before?.kidda_level == null ? null : Number(before.kidda_level),
+      granted,
+    });
+  }
+  return { granted, capped: false };
 }
 
 /** Punjabi activity XP (games, quizzes, flashcards). Games and quizzes have diminishing returns per day. */

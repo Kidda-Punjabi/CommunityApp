@@ -389,9 +389,25 @@ export async function submitRound(answers: RoundAnswer[], localDate: string): Pr
   let xpEarned = 0;
   const wanted = clean.filter((a) => a.correct).length * XP_PER_CORRECT + XP_ROUND_BONUS;
   if (clean.length) {
+    const { data: xpProfile } = await supabase
+      .from("profiles")
+      .select("total_xp, xp_at_level_start, kidda_level")
+      .eq("id", userId)
+      .maybeSingle();
     const { data: granted, error: xpError } = await supabase.rpc("grant_profile_xp", { p_xp: wanted, p_source: "game", p_source_id: crypto.randomUUID() });
     if (xpError) console.error("practise xp failed", xpError.message);
-    else xpEarned = Number(granted ?? 0);
+    else {
+      xpEarned = Number(granted ?? 0);
+      if (xpEarned > 0) {
+        const { notifyLevelCheckAfterXpGrant } = await import("@/lib/push/level-check-ready");
+        await notifyLevelCheckAfterXpGrant(userId, {
+          beforeTotalXp: Number(xpProfile?.total_xp ?? 0),
+          beforeXpAtLevelStart: Number(xpProfile?.xp_at_level_start ?? 0),
+          beforeLevel: xpProfile?.kidda_level == null ? null : Number(xpProfile.kidda_level),
+          granted: xpEarned,
+        });
+      }
+    }
   }
   const roundRows = SKILLS.filter((skill) => clean.some((a) => a.skill === skill)).map((skill, i) => {
     const mine = clean.filter((a) => a.skill === skill);

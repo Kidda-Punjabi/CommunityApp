@@ -110,6 +110,21 @@ describe("push delivery policy", () => {
     assert.equal(plan.action, "skip");
   });
 
+  it("does not send hearts-full or level-check pushes about a kid profile", () => {
+    for (const type of ["P1", "P2"] as const) {
+      const plan = planDelivery({
+        type,
+        now: new Date("2026-10-16T17:00:00.000Z"),
+        timeZone: LONDON,
+        categoryEnabled: true,
+        logStatus: null,
+        sentNonClassToday: 0,
+        kidProfileId: "kid-1",
+      });
+      assert.equal(plan.action, "skip");
+    }
+  });
+
   it("converts 6pm London in October to 17:00 UTC", () => {
     const instant = zonedLocalToUtc(2026, 10, 16, 18, 0, LONDON);
     assert.equal(instant.toISOString(), "2026-10-16T17:00:00.000Z");
