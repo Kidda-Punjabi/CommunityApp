@@ -162,7 +162,7 @@ async function sendScheduled(admin: Admin, now: Date): Promise<number> {
     collectCommunity(admin, now, pending),
     collectSessionFeedback(admin, now, pending),
     collectHeartsFull(admin, now, pending),
-    collectLevelCheckCooldown(admin, now),
+    collectLevelCheckReady(admin, now),
     collectStreaks(admin, now, pending),
     collectPolls(admin, now, pending),
     collectUnlocks(admin, now, pending),
@@ -570,10 +570,15 @@ async function collectSessionFeedback(admin: Admin, now: Date, pending: Pending[
 }
 
 /**
- * P2 follow-up: when a retake cooldown ends and XP is already at the unlock target,
- * send the level-check push that was held back during the cooldown.
+ * P2: after recent XP awards, and when a retake cooldown has just ended with XP
+ * already at the unlock target. maybeSendLevelCheckReady no-ops until ready and
+ * dedupes with refKey, so it is safe to call repeatedly.
  */
-async function collectLevelCheckCooldown(admin: Admin, now: Date): Promise<void> {
+async function collectLevelCheckReady(admin: Admin, now: Date): Promise<void> {
+  const since = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+  const { data: awards } = await admin.from("xp_awards").select("user_id").gte("created_at", since);
+  const userIds = new Set((awards ?? []).map((row) => row.user_id as string));
+
   const { data: settings } = await admin
     .from("community_level_settings")
     .select("retake_cooldown_days")
@@ -603,11 +608,13 @@ async function collectLevelCheckCooldown(admin: Admin, now: Date): Promise<void>
     const failedAt = failedRetakeAt(rows);
     if (!failedAt) continue;
     const until = new Date(Date.parse(failedAt) + cooldownDays * 86_400_000);
-    // Once the cooldown has just ended (within a 2-hour catch window), try again.
     if (until.getTime() > now.getTime()) continue;
     if (now.getTime() - until.getTime() >= 2 * 60 * 60 * 1000) continue;
-    // Confirm cooldown is cleared for "now" and XP is ready.
     if (cooldownUntil(failedAt, cooldownDays, now)) continue;
+    userIds.add(userId);
+  }
+
+  for (const userId of userIds) {
     await maybeSendLevelCheckReady(admin, userId, { now });
   }
 }

@@ -104,17 +104,6 @@ async function grantProfileXp(
   source: string,
   sourceId: string
 ): Promise<{ granted: number; capped: boolean }> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: before } = user
-    ? await supabase
-        .from("profiles")
-        .select("total_xp, xp_at_level_start, kidda_level")
-        .eq("id", user.id)
-        .maybeSingle()
-    : { data: null };
-
   const { data, error } = await supabase.rpc("grant_profile_xp", {
     p_xp: xp,
     p_source: source,
@@ -126,14 +115,11 @@ async function grantProfileXp(
   }
   if (data === -1) return { granted: 0, capped: true };
   const granted = Number(data ?? 0);
-  if (granted > 0 && user) {
-    const { notifyLevelCheckAfterXpGrant } = await import("@/lib/push/level-check-ready");
-    await notifyLevelCheckAfterXpGrant(user.id, {
-      beforeTotalXp: Number(before?.total_xp ?? 0),
-      beforeXpAtLevelStart: Number(before?.xp_at_level_start ?? 0),
-      beforeLevel: before?.kidda_level == null ? null : Number(before.kidda_level),
-      granted,
-    });
+  // points.ts is imported by client games — never import push/send here (node:http2).
+  // Browser awards queue P2 via the API; server awards are covered by the reminders cron.
+  if (granted > 0) {
+    const { queueLevelCheckReadyPush } = await import("@/lib/push/queue-level-check");
+    queueLevelCheckReadyPush();
   }
   return { granted, capped: false };
 }
