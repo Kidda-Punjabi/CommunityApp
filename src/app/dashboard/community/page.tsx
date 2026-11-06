@@ -6,9 +6,8 @@ import { loadMemberRoom } from "@/lib/community/breakout";
 import { liveCheckInFlags } from "@/lib/community/check-in-by-code";
 import { loadCommunityHome, memberHasCommunity } from "@/lib/community/load-home";
 import { loadLevelView } from "@/lib/community/level-view";
+import { loadForumPostPreviews } from "@/lib/forum/load-forum";
 import { loadForumUnread } from "@/lib/forum/unread";
-import { loadLeaderboard } from "@/lib/leaderboard/load-leaderboard";
-import { getCurrentWeekStart } from "@/lib/leaderboard/week";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { isNativeAppRequest } from "@/lib/native/platform";
 import { loadMainRoomFeedback, pendingSessionFeedback } from "@/lib/community/session-feedback";
@@ -18,6 +17,10 @@ import Link from "next/link";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { ui } from "@/lib/ui/styles";
 import { headers } from "next/headers";
+
+const heading = (
+  <h1 className="mb-2 shrink-0 font-heading text-[28px] font-bold leading-8 tracking-tight text-zinc-900">Community</h1>
+);
 
 export default async function CommunityPage({
   searchParams,
@@ -40,7 +43,7 @@ export default async function CommunityPage({
 
   return (
     <div className={`${ui.page} community-fit !flex !h-[calc(100dvh-var(--kidda-nav-clearance))] !max-h-[calc(100dvh-var(--kidda-nav-clearance))] !min-h-0 !flex-none !flex-col !overflow-hidden !px-5 !pb-0 !pt-[max(0.25rem,env(safe-area-inset-top,0px))]`}>
-      <h1 className="mb-2 shrink-0 font-heading text-[28px] font-bold leading-8 tracking-tight text-zinc-900">Community</h1>
+      {allowed ? null : heading}
       {allowed ? (
         <CommunityHome
           userId={user.id}
@@ -86,7 +89,7 @@ async function CommunityHome({
             }
           )
         : null;
-    return <LiveRoom view={room} userId={userId} needsOnboarding={!onboarded} feedback={feedback} />;
+    return <>{heading}<LiveRoom view={room} userId={userId} needsOnboarding={!onboarded} feedback={feedback} /></>;
   }
 
   const live = await liveCheckInFlags(admin, userId, home.next?.id ?? null);
@@ -96,22 +99,28 @@ async function CommunityHome({
       redirect("/dashboard/community/welcome");
     }
     return (
+      <>
+      {heading}
       <section className="rounded-[24px] bg-[#5B21B6] p-4 text-white">
         <h2 className="font-heading text-xl font-extrabold">Check in</h2>
         <div className="mt-3 rounded-[20px] bg-white p-4 text-[#1F1640]">
           <CheckInPanel />
         </div>
       </section>
+      </>
     );
   }
 
-  const [view, unread, board, feedback] = await Promise.all([
+  const [view, unread, feedback, posts] = await Promise.all([
     loadLevelView(admin, userId),
     loadForumUnread(admin, userId),
-    loadLeaderboard(admin, getCurrentWeekStart(), userId),
     pendingSessionFeedback(admin, userId).catch((error) => {
       console.error("[community] feedback prompt failed", error);
       return null;
+    }),
+    loadForumPostPreviews(supabase, userId, 3).catch((error) => {
+      console.error("[community] forum preview failed", error);
+      return [];
     }),
   ]);
   return (
@@ -130,6 +139,7 @@ async function CommunityHome({
     ) : null}
     <CommunityTab
       home={home}
+      posts={posts}
       earned={view?.done ?? 0}
       target={view && view.level < 9 ? view.goal : null}
       percent={view?.percent ?? 0}
@@ -141,16 +151,6 @@ async function CommunityHome({
       checkedIntoNext={live.checkedIntoNext}
       openCheckIn={openCheckIn}
       liveIds={live.liveIds}
-      leaderboard={{
-        top: board.entries.slice(0, 3).map((entry) => ({
-          userId: entry.userId,
-          name: entry.displayName,
-          points: entry.points,
-          rank: entry.rank ?? 0,
-        })),
-        youRank: board.viewerRow.rank,
-        youPoints: board.viewerRow.points,
-      }}
     />
     </>
   );

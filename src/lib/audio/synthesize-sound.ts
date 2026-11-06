@@ -43,9 +43,9 @@ const SOUND_PRESETS: Record<SoundName, ToneStep[]> = {
 
 let sharedContext: AudioContext | null = null;
 
-function getAudioContext(): AudioContext | null {
+export function getAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
-  if (!sharedContext) {
+  if (!sharedContext || sharedContext.state === "closed") {
     const Ctx =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -55,12 +55,27 @@ function getAudioContext(): AudioContext | null {
   return sharedContext;
 }
 
+/** Runs once the audio is awake. Scheduling on a sleeping context is what loses cues after the mic. */
+export function whenAudioReady(ctx: AudioContext, run: () => void): void {
+  if (ctx.state === "running") {
+    run();
+    return;
+  }
+  void Promise.race([
+    ctx.resume().catch(() => undefined),
+    new Promise((resolve) => window.setTimeout(resolve, 800)),
+  ]).then(() => {
+    if (ctx.state === "running") run();
+  });
+}
+
 export function playSynthesizedSound(name: SoundName, volume: number): void {
   const ctx = getAudioContext();
   if (!ctx || volume <= 0) return;
+  whenAudioReady(ctx, () => scheduleTones(ctx, name, volume));
+}
 
-  void ctx.resume().catch(() => undefined);
-
+function scheduleTones(ctx: AudioContext, name: SoundName, volume: number): void {
   const now = ctx.currentTime;
   const steps = SOUND_PRESETS[name];
 
@@ -87,4 +102,15 @@ export function warmUpAudioContext(): void {
   const ctx = getAudioContext();
   if (!ctx) return;
   void ctx.resume().catch(() => undefined);
+}
+
+/** Call inside a tap. Phones only let audio start from a tap, and a spoken answer scores long after it. */
+export function unlockAudio(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  void ctx.resume().catch(() => undefined);
+  const source = ctx.createBufferSource();
+  source.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+  source.connect(ctx.destination);
+  source.start();
 }

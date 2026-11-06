@@ -1,4 +1,5 @@
 import { LessonCard, LessonStatusDot, type LessonVisualStatus } from "@/components/lesson-card";
+import { LessonLineCard, type LessonRailState } from "@/components/lesson/lesson-line-card";
 import { CourseProgressBar } from "@/components/course-progress-bar";
 import {
   canAccessLessonInContext,
@@ -61,6 +62,8 @@ type LearnLessonListProps = {
   /** Where to render the in-progress / next-up / locked key. */
   statusLegendPosition?: "top" | "bottom";
   scheduleSessionByLessonId?: Map<string, StudentScheduledSession>;
+  /** Weeks as stops on a numbered line, each opening in a pop-up (Beginners group). */
+  lineLayout?: boolean;
 };
 
 export async function LearnLessonList({
@@ -93,6 +96,7 @@ export async function LearnLessonList({
   collapseLessonsByDefault = false,
   statusLegendPosition = "top",
   scheduleSessionByLessonId,
+  lineLayout = false,
 }: LearnLessonListProps) {
   const nativeApp = await getIsNativeApp();
   const unlockedMap = contentUnlockedMap ?? new Map<string, boolean>();
@@ -193,6 +197,27 @@ export async function LearnLessonList({
     return "available";
   }
 
+  // The lesson the rail marks as "you are here": the next live session, else the next to finish.
+  const currentLessonId =
+    lessons
+      .filter((lesson) => {
+        const session = scheduleSessionByLessonId?.get(lesson.id);
+        return session ? new Date(session.ends_at).getTime() >= Date.now() : false;
+      })
+      .sort(
+        (a, b) =>
+          new Date(scheduleSessionByLessonId!.get(a.id)!.starts_at).getTime() -
+          new Date(scheduleSessionByLessonId!.get(b.id)!.starts_at).getTime()
+      )[0]?.id ??
+    (scheduleSessionByLessonId?.size ? null : defaultExpandedLessonId);
+
+  function railStateFor(lesson: LessonWithCourse): LessonRailState {
+    if (lesson.id === currentLessonId) return "current";
+    const session = scheduleSessionByLessonId?.get(lesson.id);
+    if (session) return new Date(session.ends_at).getTime() < Date.now() ? "done" : "upcoming";
+    return completionMap.get(lesson.id)?.fullyComplete ? "done" : "upcoming";
+  }
+
   const accessibleLessons = lessons.filter((lesson) => {
     const { canBrowse, contentUnlocked } = lessonAccess(lesson);
     return canBrowse && contentUnlocked;
@@ -212,7 +237,7 @@ export async function LearnLessonList({
 
   return (
     <div className={ui.page}>
-      <BackLink fallbackHref={backHref}>← Back</BackLink>
+      {lineLayout ? null : <BackLink fallbackHref={backHref}>← Back</BackLink>}
 
       {headerSection ?? (
         <div className={compactHeader ? "mb-5 mt-2" : "mb-8 mt-4"}>
@@ -244,10 +269,47 @@ export async function LearnLessonList({
         </div>
       ) : (
         <div className={ui.stack}>
-          {statusLegendPosition === "top" ? <LessonStatusLegend /> : null}
-          {lessons.map((lesson) => {
+          {!lineLayout && statusLegendPosition === "top" ? <LessonStatusLegend /> : null}
+          {lessons.map((lesson, index) => {
             const row = progressMap.get(lesson.id);
             const { canBrowse, contentUnlocked } = lessonAccess(lesson);
+
+            if (lineLayout) {
+              return (
+                <LessonLineCard
+                  key={lesson.id}
+                  lesson={lesson}
+                  defaultExpanded={lesson.id === homeworkFocusLessonId}
+                  railState={railStateFor(lesson)}
+                  isFirst={index === 0}
+                  isLast={index === lessons.length - 1}
+                  canBrowse={canBrowse}
+                  contentUnlocked={contentUnlocked}
+                  requiredCourseLabel={tierLabelForCourse(access.courses, lesson.course_id)}
+                  progress={
+                    row
+                      ? {
+                          audioCompleted: row.completed,
+                          lastPosition: row.last_position,
+                          pdfCompleted: row.pdf_completed,
+                          lastPageViewed: row.last_page_viewed,
+                        }
+                      : undefined
+                  }
+                  completion={contentUnlocked ? completionMap.get(lesson.id) : undefined}
+                  quizProgressMap={quizProgressMap}
+                  recording={recordingMap?.get(lesson.id) ?? null}
+                  homework={homeworkMap?.get(lesson.id) ?? null}
+                  homeworkCompleted={cohortHomeworkCompletedMap?.get(lesson.id) === true}
+                  showHomework={showHomework}
+                  hasCatchupSegments={catchupLessonIds?.has(lesson.id) ?? false}
+                  hasSubmittedFeedback={feedbackSubmittedLessonIds?.has(lesson.id) ?? false}
+                  nativeApp={nativeApp}
+                  homeworkCatchupReturn={homeworkFocusLessonId === lesson.id ? (catchupReturn ?? null) : null}
+                  scheduleSession={scheduleSessionByLessonId?.get(lesson.id) ?? null}
+                />
+              );
+            }
 
             return (
               <LessonCard
@@ -297,7 +359,7 @@ export async function LearnLessonList({
               completed that session.
             </p>
           ) : null}
-          {statusLegendPosition === "bottom" ? (
+          {!lineLayout && statusLegendPosition === "bottom" ? (
             <div className="pt-2">
               <LessonStatusLegend />
             </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { passedSpokenAttempt, scoreSpokenAttempt } from "@/lib/games/spoken-match";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MicrophoneAccessNotice } from "@/components/audio/microphone-access-notice";
 import { emojiForIcon } from "@/components/games/PictureMatch/emojiMap";
@@ -11,8 +12,6 @@ import {
 import { startPracticeRecording } from "@/lib/audio/request-microphone";
 import { useKidActivityComplete } from "@/components/kids/use-kid-activity-complete";
 import {
-  matchSpeakingTranscript,
-  passedSpeakingAttempt,
   type SpeakingPracticeCard,
 } from "@/lib/games/speaking-practice";
 import { useRouter } from "next/navigation";
@@ -88,11 +87,11 @@ export function KidSpeakingPractice({ cards }: KidSpeakingPracticeProps) {
           setFeedback("try");
           return;
         }
-        const similarity = matchSpeakingTranscript(data.transcript ?? "", {
+        const similarity = scoreSpokenAttempt(data.transcript ?? "", {
           romanised: card.romanised,
           punjabi: card.punjabi,
         });
-        const passed = passedSpeakingAttempt(similarity);
+        const passed = passedSpokenAttempt(similarity);
         playSound(passed ? "correct" : "incorrect");
         setFeedback(passed ? "great" : "try");
         if (passed) {

@@ -1,6 +1,7 @@
 import { LeaderboardView } from "@/components/leaderboard/leaderboard-view";
 import { requireNoKidCommunityAccess } from "@/lib/kids/guards";
 import { loadLeaderboard } from "@/lib/leaderboard/load-leaderboard";
+import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { getCurrentWeekStart, isFutureWeek } from "@/lib/leaderboard/week";
 
 type LeaderboardPageProps = {
@@ -8,7 +9,7 @@ type LeaderboardPageProps = {
 };
 
 export default async function LeaderboardPage({ searchParams }: LeaderboardPageProps) {
-  const { user, supabase } = await requireNoKidCommunityAccess();
+  const { user } = await requireNoKidCommunityAccess();
 
   const params = await searchParams;
   const currentWeekStart = getCurrentWeekStart();
@@ -19,7 +20,7 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
       : currentWeekStart;
 
   const mode = params.view === "all" ? "all" : "week";
-  const data = await loadLeaderboard(supabase, weekStart, user.id, mode);
+  const data = await loadLeaderboard(createServiceRoleClient(), weekStart, user.id, mode);
 
   return <LeaderboardView data={data} />;
 }

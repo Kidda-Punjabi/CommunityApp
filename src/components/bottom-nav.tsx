@@ -20,7 +20,7 @@ function iconClass(active: boolean) {
   }`;
 }
 
-function HomeIcon({ active }: { active: boolean }) {
+function CoursesIcon({ active }: { active: boolean }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -28,13 +28,11 @@ function HomeIcon({ active }: { active: boolean }) {
       fill="none"
       stroke="currentColor"
       strokeWidth={active ? 2.25 : 1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       className={iconClass(active)}
     >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75"
-      />
+      <path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M9 8h6M9 12h6" />
     </svg>
   );
 }
@@ -119,18 +117,18 @@ function ProfileIcon({ active }: { active: boolean }) {
 
 const navItems: (NavItem & { tourId: string })[] = [
   // Order + labels only: courses stay at /dashboard/learn, practice path at /dashboard/home.
-  { href: "/dashboard/learn", label: "Home", tourId: "nav-learn" },
-  { href: "/dashboard/home", label: "Practise", tourId: "nav-home" },
+  { href: "/dashboard/learn", label: "Courses", tourId: "nav-learn" },
   { href: "/dashboard/community", label: "Community", tourId: "nav-community" },
+  { href: "/dashboard/home", label: "Practice", tourId: "nav-home" },
   { href: "/dashboard/games", label: "Games", tourId: "nav-games" },
   { href: "/dashboard/profile", label: "Profile", tourId: "nav-profile" },
 ];
 
 function NavIcon({ href, active }: { href: string; active: boolean }) {
   switch (href) {
-    // Labels: /learn = Home, /home = Practise — icons match labels, not routes.
+    // Labels: /learn = Courses, /home = Practice — icons match labels, not routes.
     case "/dashboard/learn":
-      return <HomeIcon active={active} />;
+      return <CoursesIcon active={active} />;
     case "/dashboard/home":
       return <LearnIcon active={active} />;
     case "/dashboard/games":
@@ -192,6 +190,24 @@ export function BottomNav({ forumUnread = 0 }: { forumUnread?: number }) {
           const active =
             activeTab === tabId ||
             (item.href === "/dashboard/profile" && pathname.startsWith("/dashboard/profile/kids"));
+
+          if (item.href === "/dashboard/home") {
+            // Practise is the app's main action: the raised purple block in the middle.
+            return (
+              <NavLink
+                key={item.href}
+                href={href}
+                data-tour={item.tourId}
+                onClick={() => setActiveTab(tabId)}
+                className={`-mb-[max(0.75rem,env(safe-area-inset-bottom))] -mt-5 flex min-w-0 flex-[1.25] flex-col items-center justify-center gap-0.5 rounded-t-2xl px-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-white transition-colors tab:w-20 tab:flex-none ${
+                  active ? "bg-violet-700" : "bg-violet-600"
+                }`}
+              >
+                <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z" /></svg>
+                <span className="text-[11px] font-extrabold tracking-wide">{item.label}</span>
+              </NavLink>
+            );
+          }
 
           return (
             <NavLink

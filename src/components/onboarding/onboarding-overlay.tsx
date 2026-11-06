@@ -228,7 +228,7 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
     setSaving(false);
 
     if (!isTestMode && !dismissed && selfTier != null) {
-      window.location.href = "/dashboard/placement";
+      window.location.href = "/dashboard/community/placement?from=practice";
       return;
     }
 
@@ -290,7 +290,7 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
               <div className="space-y-3">
                 <p className="text-sm text-zinc-600">
                   Choose the level that best matches where you are today. We&apos;ll confirm it
-                  with a short placement test next.
+                  with a few quick questions next.
                 </p>
                 <div className="space-y-2">
                   {PROGRESSION_TIERS.map((tier) => (
@@ -337,7 +337,7 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
                 )}
 
                 <p className="text-xs text-zinc-500">
-                  We&apos;ll confirm your starting level with a short placement test next — your
+                  We&apos;ll confirm your starting level with a few quick questions next — your
                   level only changes when you pass a level-up test.
                 </p>
               </div>
@@ -393,8 +393,8 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
                 {selfTierMeta && (
                   <p className="text-sm leading-relaxed text-zinc-700">
                     {selfTierMeta.tier === 1
-                      ? "Next up: the Level 1 → 2 check. Pass with 95%+ and you'll start at Level 2 — otherwise we'll confirm Level 1."
-                      : `Next up: a short placement test to confirm Level ${selfTierMeta.tier} (${selfTierMeta.name}) is the right starting point.`}
+                      ? "Next up: a few quick questions to find your level."
+                      : `Next up: a few quick questions to confirm Level ${selfTierMeta.tier} (${selfTierMeta.name}) is the right starting point.`}
                   </p>
                 )}
                 <p className="text-sm leading-relaxed text-zinc-600">
@@ -413,7 +413,7 @@ export function OnboardingOverlay({ isTestMode, onClose }: OnboardingOverlayProp
             disabled={!canAdvance || saving}
             className="w-full rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
           >
-            {step >= TOTAL_SCREENS - 1 ? "Start placement" : "Next"}
+            {step >= TOTAL_SCREENS - 1 ? "Start" : "Next"}
           </button>
         </div>
       </div>

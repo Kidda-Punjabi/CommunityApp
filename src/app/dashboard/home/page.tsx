@@ -8,11 +8,14 @@ import { getCachedAuthSession } from "@/lib/supabase/cached-session";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const session = await getCachedAuthSession();
   if (!session) redirect("/login");
   const { view } = await searchParams;
+  // Practice is where the app opens now, so recent purchases sync here too, as they do on Courses.
+  if (session.user.email) void syncStripePurchasesForUser(session.user.id, session.user.email).catch(() => undefined);
 
   const supabase = await createClient();
   const actor = await resolveCourseActor(supabase, session.user.id);
@@ -26,7 +29,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         userId={session.user.id}
         backLink={
           <Link href="/dashboard/home" className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-violet-700">
-            ← Back to Practise
+            ← Back to Practice
           </Link>
         }
       />

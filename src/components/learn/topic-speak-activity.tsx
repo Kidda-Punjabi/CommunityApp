@@ -1,5 +1,7 @@
 "use client";
 
+import { useAudioManager } from "@/lib/audio/audio-manager";
+import { passedSpokenAttempt, scoreSpokenAttempt } from "@/lib/games/spoken-match";
 import { useMemo, useRef, useState } from "react";
 import { MicrophoneAccessNotice } from "@/components/audio/microphone-access-notice";
 import type { FlashcardDeckCard } from "@/lib/flashcards/types";
@@ -15,8 +17,6 @@ import {
 } from "@/lib/free-lessons/topic-game-utils";
 import type { SpeakingPracticeCard } from "@/lib/games/speaking-practice";
 import {
-  matchSpeakingTranscript,
-  passedSpeakingAttempt,
 } from "@/lib/games/speaking-practice";
 import {
   formatHeardTranscript,
@@ -40,6 +40,7 @@ export function TopicSpeakActivity({
   subtitle,
   onComplete,
 }: TopicSpeakActivityProps) {
+  const { playSound } = useAudioManager();
   const speakCards = useMemo(() => {
     const mapped = cards
       .map(flashcardToSpeakingCard)
@@ -155,11 +156,12 @@ export function TopicSpeakActivity({
       }
       const rawTranscript = payload.transcript ?? "";
       setTranscript(formatHeardTranscript(rawTranscript) || null);
-      const match = matchSpeakingTranscript(rawTranscript, {
+      const match = scoreSpokenAttempt(rawTranscript, {
         romanised: card.romanised,
         punjabi: card.punjabi,
       });
-      const ok = passedSpeakingAttempt(match);
+      const ok = passedSpokenAttempt(match);
+      playSound(ok ? "correct" : "incorrect");
       if (ok) {
         setFeedback("pass");
         passedCountRef.current += 1;

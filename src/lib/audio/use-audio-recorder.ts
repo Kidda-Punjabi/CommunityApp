@@ -7,6 +7,8 @@ export type AudioRecorderState = "idle" | "recording" | "recorded";
 type UseAudioRecorderResult = {
   state: AudioRecorderState;
   durationSeconds: number;
+  /** 0 when quiet, 1 when the microphone is hearing a loud voice. */
+  inputLevel: number;
   blob: Blob | null;
   previewUrl: string | null;
   error: string | null;
@@ -51,6 +53,7 @@ export function useAudioRecorder(options?: {
   const [blob, setBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [inputLevel, setInputLevel] = useState(0);
 
   const maxDurationRef = useRef(options?.maxDurationSeconds);
   maxDurationRef.current = options?.maxDurationSeconds;
@@ -59,13 +62,24 @@ export function useAudioRecorder(options?: {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef<number | null>(null);
+  const meterRef = useRef<{ raf: number; ctx: AudioContext } | null>(null);
+
+  const stopMeter = useCallback(() => {
+    const meter = meterRef.current;
+    meterRef.current = null;
+    if (!meter) return;
+    cancelAnimationFrame(meter.raf);
+    void meter.ctx.close().catch(() => undefined);
+    setInputLevel(0);
+  }, []);
 
   const stopStream = useCallback(() => {
+    stopMeter();
     for (const track of streamRef.current?.getTracks() ?? []) {
       track.stop();
     }
     streamRef.current = null;
-  }, []);
+  }, [stopMeter]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -113,6 +127,10 @@ export function useAudioRecorder(options?: {
       return;
     }
 
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const meterCtx = Ctx ? new Ctx() : null;
+    if (meterCtx) void meterCtx.resume();
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -151,6 +169,35 @@ export function useAudioRecorder(options?: {
 
       recorder.start(250);
       startedAtRef.current = Date.now();
+      if (meterCtx) {
+        try {
+          const source = meterCtx.createMediaStreamSource(stream);
+          const analyser = meterCtx.createAnalyser();
+          analyser.fftSize = 512;
+          source.connect(analyser);
+          const data = new Uint8Array(analyser.fftSize);
+          let smooth = 0;
+          let lastPaint = 0;
+          const tick = (now: number) => {
+            analyser.getByteTimeDomainData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) {
+              const sample = (data[i] - 128) / 128;
+              sum += sample * sample;
+            }
+            const rms = Math.sqrt(sum / data.length);
+            smooth = smooth * 0.6 + Math.min(1, Math.max(0, (rms - 0.015) / 0.16)) * 0.4;
+            if (now - lastPaint > 50) {
+              lastPaint = now;
+              setInputLevel(smooth);
+            }
+            if (meterRef.current) meterRef.current.raf = requestAnimationFrame(tick);
+          };
+          meterRef.current = { raf: requestAnimationFrame(tick), ctx: meterCtx };
+        } catch {
+          void meterCtx.close().catch(() => undefined);
+        }
+      }
       setState("recording");
       setDurationSeconds(0);
 
@@ -165,11 +212,14 @@ export function useAudioRecorder(options?: {
         clearTimer();
       }, 250);
     } catch {
+      if (meterCtx && meterRef.current?.ctx !== meterCtx) void meterCtx.close().catch(() => undefined);
       stopStream();
       setError("Microphone access is required to record homework.");
       setState("idle");
     }
   }, [clearTimer, discardRecording, stopStream]);
+
+  useEffect(() => stopMeter, [stopMeter]);
 
   useEffect(() => {
     return () => {
@@ -185,6 +235,7 @@ export function useAudioRecorder(options?: {
   return {
     state,
     durationSeconds,
+    inputLevel,
     blob,
     previewUrl,
     error,

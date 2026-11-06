@@ -506,17 +506,17 @@ const COMMUNITY_CONTENT: ProductPageContent = {
   pricingTiers: [
     {
       id: "pro",
-      name: "Pro Plan",
-      price: "£99/yr",
-      priceNote: "~~£199/yr~~ · Use code FOUNDER100 for £100 off",
+      name: "Premium + Community",
+      price: "£75",
+      priceNote: "for your first 3 months, then £25 a month",
       highlight: true,
       features: [
         "Speak Punjabi without freezing",
         "Understand real conversations",
         "Stop translating in your head",
         "Feel confident speaking Punjabi",
-        "Less than £2/hour",
         "Live sessions with tutors",
+        "Everything in Premium, unlocked in the app",
       ],
       checkoutKey: "community",
     },

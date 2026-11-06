@@ -72,6 +72,22 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Practise round, streak, and results take the whole screen. The bottom bar is what forced scrolling. */
+/* Gurmukhi always uses the bundled Noto font, never a device fallback. */
+[lang="pa"] {
+  font-family: var(--font-gurmukhi);
+}
+
+html[data-practise-focus] {
+  overflow: hidden;
+}
+html[data-practise-focus] .kidda-bottom-chrome {
+  display: none;
+}
+html[data-practise-focus] [data-kidda-page] {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Readable labels on pressable controls (avoids dark-mode inherit; scoped — global button rule caused iOS Safari tap issues) */
 .kidda-pressable {
   -webkit-text-fill-color: currentColor;

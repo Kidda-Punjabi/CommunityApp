@@ -1,4 +1,3 @@
-import { CommunityHomeTile } from "@/components/community/check-in-ui";
 import { RegisterInterestButton } from "@/components/learn/register-interest-button";
 import { AppTile } from "@/components/ui/app-tile";
 import { NavLink } from "@/components/ui/nav-link";
@@ -49,17 +48,9 @@ function courseSubtitle(course: CourseTile): string {
 
 export function HomeOneScreen({
   courses,
-  communityHref,
-  communityStatus,
-  communityLocked,
-  communityLiveCheckIn = false,
   kids,
 }: {
   courses: CourseTile[];
-  communityHref: string;
-  communityStatus: string;
-  communityLocked: boolean;
-  communityLiveCheckIn?: boolean;
   kids: ParentKidProgressSummary[];
   timeZone: string;
 }) {
@@ -117,11 +108,6 @@ export function HomeOneScreen({
         })}
       </div>
       <div className="grid grid-cols-2 content-start gap-2 tab:grid-cols-4">
-        <CommunityHomeTile
-          href={communityLocked ? communityHref || undefined : communityHref}
-          status={communityStatus}
-          showLive={!communityLocked && communityLiveCheckIn}
-        />
         {kids.length > 0 ? (
           <AppTile
             href="/dashboard/learn/your-kids"

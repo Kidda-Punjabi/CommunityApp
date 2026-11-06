@@ -363,6 +363,8 @@ export function notificationSummary(item: NotificationItem): string {
     }
     case "community_session_live":
       return String(item.payload.title ?? "Your Community session is live");
+    case "subscription_renewal":
+      return String(item.payload.message ?? "Your subscription renews soon");
     default: {
       const title = item.payload.title;
       if (typeof title === "string" && title.trim()) return title.trim();

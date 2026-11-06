@@ -1,5 +1,7 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { ManageBillingButton } from "@/components/profile/manage-billing-button";
+import { CancelMembership } from "@/components/profile/cancel-membership";
+import { loadCancellableSubscriptions } from "@/lib/stripe/cancel-save";
 import {
   formatUnlockedCourseNames,
   getCourseAccessContext,
@@ -10,6 +12,8 @@ import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
+import { headers } from "next/headers";
+import { isNativeAppRequest } from "@/lib/native/platform";
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
@@ -54,7 +58,10 @@ export default async function ProfileBillingPage() {
 
   const access = await getCourseAccessContext(supabase, user!);
   const billing = await loadUserBilling();
+  // No link to manage a web subscription inside the iOS/Android app (App Store guideline 3.1.1).
+  const nativeApp = isNativeAppRequest(await headers());
   const activeSubscriptions = billing.subscriptions;
+  const cancellable = nativeApp ? [] : await loadCancellableSubscriptions(user!.id, user?.email ?? null);
 
   return (
     <div className={ui.page}>
@@ -130,7 +137,7 @@ export default async function ProfileBillingPage() {
               )}
             </div>
           </div>
-          {billing.hasStripeCustomer && activeSubscriptions.length > 0 && (
+          {!nativeApp && billing.hasStripeCustomer && activeSubscriptions.length > 0 && (
             <div className="mt-4">
               <ManageBillingButton />
               <p className="mt-2 text-xs text-zinc-500">
@@ -139,6 +146,17 @@ export default async function ProfileBillingPage() {
             </div>
           )}
         </div>
+
+        {cancellable.length > 0 && (
+          <div className={ui.card}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Your membership
+            </p>
+            <div className="mt-3">
+              <CancelMembership items={cancellable} />
+            </div>
+          </div>
+        )}
 
         {/* Purchase history */}
         <div className={ui.card}>
