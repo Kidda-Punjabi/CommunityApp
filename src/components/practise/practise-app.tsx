@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getStreakPresentation } from "@/app/dashboard/home/streak-actions";
-import { getLevelPreview, startLevelCheck, startRound, submitLevelCheck, submitRound } from "@/app/dashboard/home/practise-actions";
+import { getHearts, getLevelPreview, startLevelCheck, startRound, submitLevelCheck, submitRound } from "@/app/dashboard/home/practise-actions";
+import { HeartsAfter, HeartsBack, HeartsOut, HeartsPill, HeartsSheet, HeartsStyles } from "./hearts";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
 import { LEVELS } from "@/lib/practise/levels";
 import { usePractiseSound, useStreakSound } from "@/lib/practise/sounds";
-import type { CheckQuestion, CheckResult, LevelPreview, PractiseHome, PractiseSkill, RoundAnswer, RoundQuestion, RoundResult, SkillRoundScore, SkillSummary } from "@/lib/practise/types";
+import type { CheckQuestion, CheckResult, HeartsState, LevelPreview, PractiseHome, PractiseSkill, RoundAnswer, RoundQuestion, RoundResult, SkillRoundScore, SkillSummary } from "@/lib/practise/types";
 import { ArenaArt } from "./arena-art";
 import { LevelRoad } from "./level-road";
 import { Flame, StreakCelebration, StreakDays, StreakStyles, XpProgress } from "./streak-screens";
@@ -119,16 +120,30 @@ type View =
   | { name: "preview"; data: LevelPreview } | { name: "round"; questions: RoundQuestion[] }
   | { name: "result"; result: RoundResult; streakFrom: number }
   | { name: "streak"; from: number; to: number; result: RoundResult } | { name: "check" }
-  | { name: "checkRun"; checkId: string; questions: CheckQuestion[] } | { name: "checkResult"; result: CheckResult } | { name: "levelUp" };
+  | { name: "checkRun"; checkId: string; questions: CheckQuestion[] } | { name: "checkResult"; result: CheckResult } | { name: "levelUp" }
+  | { name: "heartsAfter" } | { name: "heartsOut" } | { name: "heartsBack" };
+
+const HEARTS_SEEN = "kidda:hearts-seen";
+
+/** Hearts for mixed Plays. Loaded on arrival; Premium and Community members are unlimited. */
+function useHearts() {
+  const [hearts, setHearts] = useState<HeartsState | null>(null);
+  useEffect(() => {
+    void getHearts().then(setHearts).catch(() => undefined);
+  }, []);
+  return { hearts, setHearts };
+}
 
 export function PractiseApp({ home }: { home: PractiseHome }) {
   const router = useRouter();
   const sound = usePractiseSound();
   const streakSound = useStreakSound();
   const { streak, setStreak } = useStreak();
+  const { hearts, setHearts } = useHearts();
+  const [heartsOpen, setHeartsOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
   const [view, setView] = useState<View>(home.levelUpFrom != null ? { name: "levelUp" } : { name: "home" });
-  const practiseFocus = view.name === "round" || view.name === "result" || view.name === "streak";
+  const practiseFocus = view.name === "round" || view.name === "result" || view.name === "streak" || view.name === "heartsAfter" || view.name === "heartsOut" || view.name === "heartsBack";
   if (typeof document !== "undefined") document.documentElement.toggleAttribute("data-practise-focus", practiseFocus);
   useEffect(() => {
     document.documentElement.toggleAttribute("data-practise-focus", practiseFocus);
@@ -154,6 +169,15 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
 
   useEffect(() => { if (view.name === "levelUp") sound("levelUp"); /* once on arrival */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view.name !== "road") window.scrollTo({ top: 0 }); }, [view.name]);
+  // Once a learner is back to 3 hearts after running low, celebrate it the first time they open Practice.
+  useEffect(() => {
+    if (!hearts || hearts.unlimited) return;
+    try {
+      const seen = Number(localStorage.getItem(HEARTS_SEEN) ?? "3");
+      if (hearts.hearts === 3 && seen < 3 && view.name === "home") setView({ name: "heartsBack" }); // eslint-disable-line react-hooks/set-state-in-effect
+      localStorage.setItem(HEARTS_SEEN, String(hearts.hearts));
+    } catch { /* storage can be blocked */ }
+  }, [hearts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const go = async (fn: () => Promise<void>) => {
     setBusy(true); setError(null);
@@ -168,8 +192,10 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   ) : null;
   const play = () => go(async () => {
     sound("tap");
-    const questions = await startRound();
-    setView({ name: "round", questions });
+    const started = await startRound();
+    setHearts(started.hearts);
+    if (!started.ok) { setView({ name: "heartsOut" }); return; }
+    setView({ name: "round", questions: started.questions });
   });
   const finishRound = (answers: RoundAnswer[]) => go(async () => {
     const result = await submitRound(answers, getLocalActivityDate());
@@ -215,12 +241,16 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
         ) : null}
         </div>
         <div className="mt-3 shrink-0"><BigButton title={busy ? "Loading…" : "Play"} disabled={busy} onClick={() => void play()} /></div>
-        <button type="button" onClick={() => setView({ name: "home" })} className="mt-2 min-h-11 w-full shrink-0 text-sm font-bold text-zinc-500">Done</button>
+        <button type="button" onClick={() => setView(hearts && !hearts.unlimited ? (hearts.hearts > 0 ? { name: "heartsAfter" } : { name: "heartsOut" }) : { name: "home" })} className="mt-2 min-h-11 w-full shrink-0 text-sm font-bold text-zinc-500">Done</button>
         {errorNote}
       </div>
       </div>
     );
   }
+
+  if (view.name === "heartsAfter" && hearts) return <><HeartsStyles /><HeartsAfter state={hearts} busy={busy} onPlay={() => void play()} onLater={() => setView({ name: "home" })} /></>;
+  if (view.name === "heartsOut" && hearts) return <><HeartsStyles /><HeartsOut state={hearts} onClose={() => setView({ name: "home" })} /></>;
+  if (view.name === "heartsBack") return <><HeartsStyles /><HeartsBack onPlay={() => void play()} onClose={() => setView({ name: "home" })} /></>;
 
   if (view.name === "levelUp") {
     return (
@@ -370,6 +400,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   return (
     <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col lg:left-1/2 lg:min-h-[640px] lg:w-screen lg:max-w-none lg:-translate-x-1/2 lg:overflow-hidden lg:p-6">
       <StreakStyles />
+      {heartsOpen && hearts ? <HeartsSheet state={hearts} onClose={() => setHeartsOpen(false)} /> : null}
       {streakOpen && streak ? (
         <div className="absolute inset-x-3 top-16 z-20 rounded-3xl border border-zinc-200 bg-white p-4 shadow-xl lg:left-1/2 lg:right-auto lg:top-6 lg:w-96 lg:-translate-x-1/2">
           <div className="flex items-center gap-3">
@@ -387,6 +418,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
         <button type="button" onClick={() => setView({ name: "road" })} aria-label={`Level ${meta.level}, ${meta.name}. See all levels`} className="block h-full w-full transition lg:hover:brightness-105">
           <ArenaArt level={meta.level} />
         </button>
+        {hearts && !hearts.unlimited ? <div className="absolute left-3 top-3 lg:left-6 lg:top-6"><HeartsStyles /><HeartsPill state={hearts} onOpen={() => setHeartsOpen(true)} /></div> : null}
         <Link href="/dashboard/home?view=previous" aria-label="Previous practice" title="Previous practice" className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-zinc-900 lg:right-6 lg:top-6 lg:h-12 lg:w-12">
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l4 2" /></svg>
         </Link>

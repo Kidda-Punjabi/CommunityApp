@@ -40,6 +40,9 @@ export type CheckPartState = {
   lockedUntil: string | null;
 };
 
+/** Hearts for mixed Plays. `unlimited` is true for Premium and Community members. */
+export type HeartsState = { hearts: number; nextHeartAt: string | null; fullAt: string | null; unlimited: boolean };
+
 export type PractiseHome = {
   meta: LevelMeta;
   skills: SkillSummary[];
