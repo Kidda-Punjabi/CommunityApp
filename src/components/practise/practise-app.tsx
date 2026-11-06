@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getStreakPresentation } from "@/app/dashboard/home/streak-actions";
 import { getHearts, getLevelPreview, startLevelCheck, startRound, submitLevelCheck, submitRound } from "@/app/dashboard/home/practise-actions";
-import { HeartsAfter, HeartsBack, HeartsOut, HeartsPill, HeartsSheet, HeartsStyles, UnlimitedHeartsPill } from "./hearts";
+import { HeartsAfter, HeartsBack, HeartsOut, HeartsPill, HeartsSheet, HeartsStyles, UnlimitedHeartsPill, UnlimitedHeartsSheet } from "./hearts";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
 import { LEVELS } from "@/lib/practise/levels";
 import { usePractiseSound, useStreakSound } from "@/lib/practise/sounds";
@@ -400,7 +400,13 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   return (
     <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col lg:left-1/2 lg:min-h-[640px] lg:w-screen lg:max-w-none lg:-translate-x-1/2 lg:overflow-hidden lg:p-6">
       <StreakStyles />
-      {heartsOpen && hearts ? <HeartsSheet state={hearts} onClose={() => setHeartsOpen(false)} /> : null}
+      {heartsOpen && hearts ? (
+        hearts.unlimited ? (
+          <UnlimitedHeartsSheet onClose={() => setHeartsOpen(false)} />
+        ) : (
+          <HeartsSheet state={hearts} onClose={() => setHeartsOpen(false)} />
+        )
+      ) : null}
       {streakOpen && streak ? (
         <div className="absolute inset-x-3 top-16 z-20 rounded-3xl border border-zinc-200 bg-white p-4 shadow-xl lg:left-1/2 lg:right-auto lg:top-6 lg:w-96 lg:-translate-x-1/2">
           <div className="flex items-center gap-3">
@@ -418,7 +424,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
         <button type="button" onClick={() => setView({ name: "road" })} aria-label={`Level ${meta.level}, ${meta.name}. See all levels`} className="block h-full w-full transition lg:hover:brightness-105">
           <ArenaArt level={meta.level} />
         </button>
-        {hearts ? <div className="absolute left-3 top-3 lg:left-6 lg:top-6"><HeartsStyles />{hearts.unlimited ? <UnlimitedHeartsPill /> : <HeartsPill state={hearts} onOpen={() => setHeartsOpen(true)} />}</div> : null}
+        {hearts ? <div className="absolute left-3 top-3 lg:left-6 lg:top-6"><HeartsStyles />{hearts.unlimited ? <UnlimitedHeartsPill onOpen={() => setHeartsOpen(true)} /> : <HeartsPill state={hearts} onOpen={() => setHeartsOpen(true)} />}</div> : null}
         <Link href="/dashboard/home?view=previous" aria-label="Previous practice" title="Previous practice" className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-zinc-900 lg:right-6 lg:top-6 lg:h-12 lg:w-12">
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l4 2" /></svg>
         </Link>
