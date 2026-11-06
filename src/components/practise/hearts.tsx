@@ -102,19 +102,47 @@ export function HeartsPill({ state, onOpen }: { state: HeartsState; onOpen: () =
 }
 
 /** Premium and Community members: unlimited hearts, shown as a heart and an infinity sign. */
-export function UnlimitedHeartsPill() {
+export function UnlimitedHeartsPill({ onOpen }: { onOpen: () => void }) {
   return (
-    <span
-      role="img"
-      aria-label="Unlimited hearts with Premium"
-      title="Unlimited hearts with Premium"
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Unlimited hearts. How it works"
       className="flex h-11 items-center gap-1.5 rounded-full bg-white/95 px-3 lg:h-12"
     >
       <span className="kh-beat">
         <Heart size={22} />
       </span>
       <span className="text-xl font-extrabold leading-none text-zinc-900">∞</span>
-    </span>
+    </button>
+  );
+}
+
+/** Bottom sheet for Premium and Community members, opened from the unlimited pill. */
+export function UnlimitedHeartsSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50">
+      <button type="button" aria-label="Close" onClick={onClose} className="kh-fade absolute inset-0 h-full w-full bg-zinc-900/45" />
+      <div role="dialog" aria-label="Unlimited hearts" className="kh-up absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col gap-[18px] rounded-t-[28px] bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3">
+        <span className="h-[5px] w-11 self-center rounded-full bg-zinc-200" />
+        <div className="text-center">
+          <h2 className="text-2xl font-extrabold text-zinc-900">Unlimited hearts</h2>
+          <p className="mt-1 text-base text-zinc-600">Your membership includes unlimited hearts.</p>
+        </div>
+        <div className="flex items-center justify-center gap-3">
+          <span className="kh-beat">
+            <Heart size={64} />
+          </span>
+          <span className="text-5xl font-extrabold leading-none text-zinc-900">∞</span>
+        </div>
+        <div className="flex flex-col gap-3 rounded-[20px] bg-violet-50/70 p-4 text-[15px] leading-snug text-zinc-800">
+          <span><b>Play as many rounds as you like.</b> Plays never use a heart.</span>
+          <span><b>No waiting</b> for hearts to come back.</span>
+          <span><b>Keep your streak going</b> and earn XP every round.</span>
+        </div>
+        <button type="button" onClick={onClose} className="h-14 rounded-[18px] bg-violet-600 text-lg font-extrabold text-white shadow-[0_4px_0_#5B21B6]">Keep playing</button>
+      </div>
+    </div>
   );
 }
 
