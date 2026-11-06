@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getStreakPresentation } from "@/app/dashboard/home/streak-actions";
 import { getHearts, getLevelPreview, startLevelCheck, startRound, submitLevelCheck, submitRound } from "@/app/dashboard/home/practise-actions";
-import { HeartsAfter, HeartsBack, HeartsOut, HeartsPill, HeartsSheet, HeartsStyles } from "./hearts";
+import { HeartsAfter, HeartsBack, HeartsOut, HeartsPill, HeartsSheet, HeartsStyles, UnlimitedHeartsPill } from "./hearts";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
 import { LEVELS } from "@/lib/practise/levels";
 import { usePractiseSound, useStreakSound } from "@/lib/practise/sounds";
@@ -418,7 +418,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
         <button type="button" onClick={() => setView({ name: "road" })} aria-label={`Level ${meta.level}, ${meta.name}. See all levels`} className="block h-full w-full transition lg:hover:brightness-105">
           <ArenaArt level={meta.level} />
         </button>
-        {hearts && !hearts.unlimited ? <div className="absolute left-3 top-3 lg:left-6 lg:top-6"><HeartsStyles /><HeartsPill state={hearts} onOpen={() => setHeartsOpen(true)} /></div> : null}
+        {hearts ? <div className="absolute left-3 top-3 lg:left-6 lg:top-6"><HeartsStyles />{hearts.unlimited ? <UnlimitedHeartsPill /> : <HeartsPill state={hearts} onOpen={() => setHeartsOpen(true)} />}</div> : null}
         <Link href="/dashboard/home?view=previous" aria-label="Previous practice" title="Previous practice" className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-zinc-900 lg:right-6 lg:top-6 lg:h-12 lg:w-12">
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l4 2" /></svg>
         </Link>

@@ -101,6 +101,23 @@ export function HeartsPill({ state, onOpen }: { state: HeartsState; onOpen: () =
   );
 }
 
+/** Premium and Community members: unlimited hearts, shown as a heart and an infinity sign. */
+export function UnlimitedHeartsPill() {
+  return (
+    <span
+      role="img"
+      aria-label="Unlimited hearts with Premium"
+      title="Unlimited hearts with Premium"
+      className="flex h-11 items-center gap-1.5 rounded-full bg-white/95 px-3 lg:h-12"
+    >
+      <span className="kh-beat">
+        <Heart size={22} />
+      </span>
+      <span className="text-xl font-extrabold leading-none text-zinc-900">∞</span>
+    </span>
+  );
+}
+
 /** Bottom sheet that explains hearts, opened from the pill. */
 export function HeartsSheet({ state, onClose }: { state: HeartsState; onClose: () => void }) {
   const now = useNow(state.hearts < 3);
