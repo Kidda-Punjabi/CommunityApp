@@ -22,6 +22,19 @@ import type Stripe from "stripe";
 
 export { syncStripePurchasesForUser };
 
+/**
+ * The Community payment link (£75 for 3 months, then £25) marks its sessions and subscriptions
+ * with metadata.product = "community_membership" rather than a checkout_key.
+ */
+function isCommunityMembershipMetadata(metadata: Stripe.Metadata | null | undefined): boolean {
+  return metadata?.product === "community_membership";
+}
+
+function checkoutKeyOf(metadata: Stripe.Metadata | null | undefined): string | null {
+  if (metadata?.checkout_key) return metadata.checkout_key;
+  return isCommunityMembershipMetadata(metadata) ? "community" : null;
+}
+
 async function resolveUserIdFromSession(
   session: Stripe.Checkout.Session,
   isKidsPurchase: boolean
@@ -47,7 +60,7 @@ function purchasesForSession(
   session: Stripe.Checkout.Session,
   purchasedTiers: PaidCourseTier[]
 ): PurchaseForStudentPackage[] {
-  const checkoutKey = session.metadata?.checkout_key ?? null;
+  const checkoutKey = checkoutKeyOf(session.metadata);
   const purchasedAt = new Date(session.created * 1000).toISOString();
   const mode = session.mode === "subscription" ? "subscription" : "payment";
 
@@ -182,6 +195,7 @@ export async function syncMembershipFromStripeEvent(event: Stripe.Event) {
     if (full.status !== "active" && full.status !== "trialing") {
       const endedCommunity =
         full.metadata?.checkout_key === "community" ||
+        isCommunityMembershipMetadata(full.metadata) ||
         full.items.data.some((item) => {
           const price = item.price;
           const product = price.product;
@@ -205,6 +219,9 @@ export async function syncMembershipFromStripeEvent(event: Stripe.Event) {
         return tier && tier !== "free" ? tier : null;
       })
       .filter((tier): tier is PaidCourseTier => tier !== null);
+    if (isCommunityMembershipMetadata(full.metadata) && !purchasedTiers.includes("community")) {
+      purchasedTiers.push("community");
+    }
 
     const customerId =
       typeof full.customer === "string" ? full.customer : full.customer?.id ?? null;

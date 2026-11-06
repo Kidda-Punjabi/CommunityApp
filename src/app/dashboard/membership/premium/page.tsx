@@ -46,7 +46,7 @@ export default async function PremiumMembershipPage({
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-600">
           {nativeApp
             ? "See exactly what Free and Premium include."
-            : "See exactly what Free includes — then upgrade for the full catalogue, higher translate allowances, and all Kids bedtime stories."}
+            : "One membership for the whole app and live practice with real Punjabi speakers. See exactly what Free includes, then upgrade."}
         </p>
       </div>
 
@@ -66,9 +66,9 @@ export default async function PremiumMembershipPage({
       {nativeApp && !premium.isPremium ? null : (
       <div className={`mt-8 ${ui.cardBordered}`}>
         <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wider text-zinc-400">
-          Choose your plan
+          Join Premium
         </h2>
-        <PremiumCheckoutPanel isPremium={premium.isPremium} userId={user.id} />
+        <PremiumCheckoutPanel isPremium={premium.isPremium} userId={user.id} email={user.email} />
       </div>
       )}
 

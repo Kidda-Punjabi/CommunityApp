@@ -4,6 +4,8 @@ import { useNativeApp } from "@/lib/native/native-app-context";
 import { NotSoldInApp } from "@/components/native/not-sold-in-app";
 
 import { useState } from "react";
+import Link from "next/link";
+import { PREMIUM_UNLOCK_PATH } from "@/lib/products/premium-checkout";
 
 type BuyButtonProps = {
   checkoutKey: string;
@@ -73,5 +75,20 @@ function BuyButtonInApp({
 /** In the iOS and Android apps, purchases are not offered (App Store guideline 3.1.1). */
 export function BuyButton(props: BuyButtonProps) {
   const native = useNativeApp();
-  return native ? <NotSoldInApp /> : <BuyButtonInApp {...props} />;
+  if (native) return <NotSoldInApp />;
+  // Community has one plan, sold on the Premium page with the member's account attached.
+  if (props.checkoutKey === "community") {
+    return (
+      <Link
+        href={PREMIUM_UNLOCK_PATH}
+        className={
+          props.className ??
+          "inline-flex w-full items-center justify-center rounded-full bg-violet-600 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_4px_14px_-4px_rgba(124,58,237,0.5)] transition-colors hover:bg-violet-500"
+        }
+      >
+        {props.label ?? "Join"}
+      </Link>
+    );
+  }
+  return <BuyButtonInApp {...props} />;
 }

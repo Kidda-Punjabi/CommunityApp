@@ -1,5 +1,7 @@
 import { BackLink } from "@/components/navigation/back-link";
 import { ManageBillingButton } from "@/components/profile/manage-billing-button";
+import { CancelMembership } from "@/components/profile/cancel-membership";
+import { loadCancellableSubscriptions } from "@/lib/stripe/cancel-save";
 import {
   formatUnlockedCourseNames,
   getCourseAccessContext,
@@ -59,6 +61,7 @@ export default async function ProfileBillingPage() {
   // No link to manage a web subscription inside the iOS/Android app (App Store guideline 3.1.1).
   const nativeApp = isNativeAppRequest(await headers());
   const activeSubscriptions = billing.subscriptions;
+  const cancellable = nativeApp ? [] : await loadCancellableSubscriptions(user!.id, user?.email ?? null);
 
   return (
     <div className={ui.page}>
@@ -143,6 +146,17 @@ export default async function ProfileBillingPage() {
             </div>
           )}
         </div>
+
+        {cancellable.length > 0 && (
+          <div className={ui.card}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Your membership
+            </p>
+            <div className="mt-3">
+              <CancelMembership items={cancellable} />
+            </div>
+          </div>
+        )}
 
         {/* Purchase history */}
         <div className={ui.card}>

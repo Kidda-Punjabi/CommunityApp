@@ -2,42 +2,17 @@
 
 import { useNativeApp } from "@/lib/native/native-app-context";
 import { NotSoldInApp } from "@/components/native/not-sold-in-app";
-
-import { useState } from "react";
-import {
-  premiumPaymentLinkUrl,
-  type PremiumCheckoutKey,
-} from "@/lib/products/premium-checkout";
+import { membershipPaymentLinkUrl } from "@/lib/products/premium-checkout";
 import { ui } from "@/lib/ui/styles";
 
 type PremiumCheckoutPanelProps = {
   isPremium: boolean;
   userId: string;
+  email?: string | null;
 };
 
-const PLANS: Record<
-  PremiumCheckoutKey,
-  { label: string; price: string; detail: string; badge?: string }
-> = {
-  "premium-annual": {
-    label: "Annual",
-    price: "£99 / year",
-    detail: "Best value",
-    badge: "Best value",
-  },
-  "premium-quarterly": {
-    label: "Quarterly",
-    price: "£30 / quarter",
-    detail: "Billed every 3 months",
-  },
-};
-
-function PremiumCheckoutPanelInApp({
-  isPremium,
-  userId,
-}: PremiumCheckoutPanelProps) {
-  const [plan, setPlan] = useState<PremiumCheckoutKey>("premium-annual");
-
+/** One plan only: Community with Premium included. £75 for the first 3 months, then £25 a month. */
+function PremiumCheckoutPanelInApp({ isPremium, userId, email }: PremiumCheckoutPanelProps) {
   if (isPremium) {
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">
@@ -47,66 +22,27 @@ function PremiumCheckoutPanelInApp({
     );
   }
 
-  const selected = PLANS[plan];
-  const checkoutUrl = premiumPaymentLinkUrl(plan, userId);
-
   return (
     <div className="space-y-5">
-      <div
-        role="tablist"
-        aria-label="Billing period"
-        className="mx-auto flex w-full max-w-sm rounded-full border border-zinc-200 bg-zinc-100 p-1"
-      >
-        {(
-          [
-            ["premium-annual", "Annual"],
-            ["premium-quarterly", "Quarterly"],
-          ] as const
-        ).map(([key, label]) => {
-          const active = plan === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setPlan(key)}
-              className={`relative flex-1 rounded-full px-3 py-2 text-sm font-semibold transition ${
-                active
-                  ? "bg-white text-violet-700 shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-800"
-              }`}
-            >
-              {label}
-              {key === "premium-annual" ? (
-                <span className="ml-1 hidden text-[10px] font-bold uppercase tracking-wide text-violet-500 sm:inline">
-                  Best
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="rounded-2xl border border-violet-200 bg-violet-50/60 px-5 py-5 text-center">
-        {selected.badge ? (
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">
-            {selected.badge}
-          </p>
-        ) : (
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            {selected.label}
-          </p>
-        )}
-        <p className="mt-1 font-heading text-3xl font-bold text-zinc-900">
-          {selected.price}
+      <div className="rounded-2xl border-2 border-violet-500 bg-violet-50/60 px-5 py-5 text-center">
+        <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">
+          Premium + Community
         </p>
-        <p className="mt-1 text-sm text-zinc-600">{selected.detail}</p>
+        <p className="mt-1 font-heading text-3xl font-bold text-zinc-900">£75</p>
+        <p className="mt-1 text-sm font-medium text-zinc-700">for your first 3 months</p>
+        <p className="mt-1 text-sm text-zinc-600">then £25 a month. Cancel any time.</p>
       </div>
 
-      <a href={checkoutUrl} className={ui.btnPrimaryBlock}>
-        Continue to Stripe
+      <ul className="space-y-2 text-sm text-zinc-700">
+        <li>Everything in Premium, unlocked in the app</li>
+        <li>A live practice session every week with real Punjabi speakers</li>
+        <li>A pod of learners at your level</li>
+      </ul>
+
+      <a href={membershipPaymentLinkUrl(userId, email)} className={ui.btnPrimaryBlock}>
+        Join Premium
       </a>
+      <p className="text-center text-xs text-zinc-500">Secure checkout with Stripe.</p>
     </div>
   );
 }
