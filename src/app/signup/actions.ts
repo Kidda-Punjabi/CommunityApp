@@ -85,6 +85,17 @@ export async function signup(
           claimError instanceof Error ? claimError.message : claimError
         );
       }
+
+      // Anyone who paid before making an account (e.g. Community on the website) gets access now.
+      try {
+        const { syncStripePurchasesForUser } = await import("@/lib/stripe/sync-purchases");
+        await syncStripePurchasesForUser(data.user.id, data.user.email);
+      } catch (purchaseError) {
+        console.error(
+          "[signup] purchase sync failed:",
+          purchaseError instanceof Error ? purchaseError.message : purchaseError
+        );
+      }
     }
   }
 
