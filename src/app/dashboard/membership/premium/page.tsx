@@ -5,6 +5,8 @@ import { loadPremiumAccess } from "@/lib/membership/premium-access";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { isNativeAppRequest } from "@/lib/native/platform";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -27,6 +29,8 @@ export default async function PremiumMembershipPage({
 
   const params = await searchParams;
   const premium = await loadPremiumAccess(supabase, user.id);
+  // Inside the iOS/Android app nothing is sold (App Store guideline 3.1.1): no plans, prices or links to buy.
+  const nativeApp = isNativeAppRequest(await headers());
 
   return (
     <div className={ui.page}>
@@ -40,8 +44,9 @@ export default async function PremiumMembershipPage({
         </p>
         <h1 className="mt-1 font-heading text-2xl font-bold text-zinc-900">Kidda Premium</h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-600">
-          See exactly what Free includes — then upgrade for the full catalogue, higher
-          translate allowances, and all Kids bedtime stories.
+          {nativeApp
+            ? "See exactly what Free and Premium include."
+            : "See exactly what Free includes — then upgrade for the full catalogue, higher translate allowances, and all Kids bedtime stories."}
         </p>
       </div>
 
@@ -58,19 +63,23 @@ export default async function PremiumMembershipPage({
         <PremiumComparisonTable />
       </div>
 
+      {nativeApp && !premium.isPremium ? null : (
       <div className={`mt-8 ${ui.cardBordered}`}>
         <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wider text-zinc-400">
           Choose your plan
         </h2>
         <PremiumCheckoutPanel isPremium={premium.isPremium} userId={user.id} />
       </div>
+      )}
 
+      {nativeApp ? null : (
       <p className="mt-8 text-center text-sm text-zinc-500">
         Looking for tutor-led courses instead?{" "}
         <Link href="/courses" className="font-semibold text-violet-600 hover:text-violet-500">
           Browse Foundational, Beginners &amp; Community
         </Link>
       </p>
+      )}
     </div>
   );
 }

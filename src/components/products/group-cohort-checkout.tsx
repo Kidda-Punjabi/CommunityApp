@@ -1,5 +1,8 @@
 "use client";
 
+import { useNativeApp } from "@/lib/native/native-app-context";
+import { NotSoldInApp } from "@/components/native/not-sold-in-app";
+
 import { BuyButton } from "@/components/products/buy-button";
 import { ui } from "@/lib/ui/styles";
 import { useEffect, useState } from "react";
@@ -38,7 +41,7 @@ function formatStartDate(value: string | null): string | null {
   }).format(new Date(`${value.slice(0, 10)}T12:00:00Z`));
 }
 
-export function GroupCohortCheckout({
+function GroupCohortCheckoutInApp({
   checkoutKey,
   configured,
   label = "Buy Now",
@@ -276,4 +279,10 @@ export function GroupCohortCheckout({
       ) : null}
     </div>
   );
+}
+
+/** In the iOS and Android apps, purchases are not offered (App Store guideline 3.1.1). */
+export function GroupCohortCheckout(props: GroupCohortCheckoutProps) {
+  const native = useNativeApp();
+  return native ? <NotSoldInApp /> : <GroupCohortCheckoutInApp {...props} />;
 }

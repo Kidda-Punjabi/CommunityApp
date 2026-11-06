@@ -10,6 +10,8 @@ import { syncStripePurchasesForUser } from "@/lib/stripe/sync-purchases";
 import { createClient } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui/styles";
 import Link from "next/link";
+import { headers } from "next/headers";
+import { isNativeAppRequest } from "@/lib/native/platform";
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
@@ -54,6 +56,8 @@ export default async function ProfileBillingPage() {
 
   const access = await getCourseAccessContext(supabase, user!);
   const billing = await loadUserBilling();
+  // No link to manage a web subscription inside the iOS/Android app (App Store guideline 3.1.1).
+  const nativeApp = isNativeAppRequest(await headers());
   const activeSubscriptions = billing.subscriptions;
 
   return (
@@ -130,7 +134,7 @@ export default async function ProfileBillingPage() {
               )}
             </div>
           </div>
-          {billing.hasStripeCustomer && activeSubscriptions.length > 0 && (
+          {!nativeApp && billing.hasStripeCustomer && activeSubscriptions.length > 0 && (
             <div className="mt-4">
               <ManageBillingButton />
               <p className="mt-2 text-xs text-zinc-500">

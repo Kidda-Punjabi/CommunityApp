@@ -1,5 +1,8 @@
 "use client";
 
+import { useNativeApp } from "@/lib/native/native-app-context";
+import { NotSoldInApp } from "@/components/native/not-sold-in-app";
+
 import { useState } from "react";
 import {
   premiumPaymentLinkUrl,
@@ -29,7 +32,7 @@ const PLANS: Record<
   },
 };
 
-export function PremiumCheckoutPanel({
+function PremiumCheckoutPanelInApp({
   isPremium,
   userId,
 }: PremiumCheckoutPanelProps) {
@@ -106,4 +109,10 @@ export function PremiumCheckoutPanel({
       </a>
     </div>
   );
+}
+
+/** In the iOS and Android apps, purchases are not offered (App Store guideline 3.1.1). */
+export function PremiumCheckoutPanel(props: PremiumCheckoutPanelProps) {
+  const native = useNativeApp();
+  return native && !props.isPremium ? <NotSoldInApp /> : <PremiumCheckoutPanelInApp {...props} />;
 }

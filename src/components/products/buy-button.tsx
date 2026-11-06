@@ -1,5 +1,8 @@
 "use client";
 
+import { useNativeApp } from "@/lib/native/native-app-context";
+import { NotSoldInApp } from "@/components/native/not-sold-in-app";
+
 import { useState } from "react";
 
 type BuyButtonProps = {
@@ -9,7 +12,7 @@ type BuyButtonProps = {
   configured: boolean;
 };
 
-export function BuyButton({
+function BuyButtonInApp({
   checkoutKey,
   label = "Buy Now",
   className,
@@ -65,4 +68,10 @@ export function BuyButton({
       {error && <p className="mt-2 text-center text-sm text-red-600">{error}</p>}
     </div>
   );
+}
+
+/** In the iOS and Android apps, purchases are not offered (App Store guideline 3.1.1). */
+export function BuyButton(props: BuyButtonProps) {
+  const native = useNativeApp();
+  return native ? <NotSoldInApp /> : <BuyButtonInApp {...props} />;
 }
