@@ -152,6 +152,13 @@ export async function collectPurchasesForCustomer(
     const purchasedAt = new Date(subscription.created * 1000).toISOString();
     const checkoutKey = subscription.metadata?.checkout_key ?? null;
 
+    // The Community payment link (£75 for 3 months, then £25) marks its subscriptions with
+    // metadata.product = "community_membership"; its Stripe product may not be in the tier map.
+    if (subscription.metadata?.product === "community_membership") {
+      purchases.push({ tier: "community", checkoutKey: "community", purchasedAt });
+      continue;
+    }
+
     for (const item of subscription.items.data) {
       const price = item.price;
       const product = price.product;
@@ -265,6 +272,7 @@ export async function syncStripePurchasesForUser(userId: string, email: string) 
     purchases.push(...(await collectPurchasesForCustomer(stripe, customerId)));
   }
 
+  if (purchases.some((purchase) => purchase.tier === "community")) tiers.add("community");
   const unlockedTiers = [...tiers];
   const { drainKidsCoursePurchaseGrantQueue } = await import(
     "@/lib/kids/grant-kids-course-purchase"
