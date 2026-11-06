@@ -25,8 +25,8 @@ export function GamesLeaderboardCard({ preview }: { preview: GamesLeaderboardPre
   const you = !preview
     ? "See who's on top this week"
     : preview.youRank == null
-      ? `You: ${preview.youPoints} pts`
-      : `You: ${ordinal(preview.youRank)}, ${preview.youPoints} pts`;
+      ? `You: ${preview.youPoints} XP`
+      : `You: ${ordinal(preview.youRank)}, ${preview.youPoints} XP`;
   return (
     <NavLink href="/dashboard/leaderboard" className="mb-2.5 block rounded-3xl bg-[#5B21B6] px-4 py-3 text-white">
       <span className="flex items-center gap-2">
@@ -44,7 +44,7 @@ export function GamesLeaderboardCard({ preview }: { preview: GamesLeaderboardPre
                 {person.name.slice(0, 1).toUpperCase()}
               </span>
               <span className="mt-0.5 max-w-full truncate text-[13px] font-extrabold">{person.rank}. {person.name}</span>
-              <span className="text-xs font-semibold">{person.points} pts</span>
+              <span className="text-xs font-semibold">{person.points} XP</span>
             </span>
           ))}
         </span>
