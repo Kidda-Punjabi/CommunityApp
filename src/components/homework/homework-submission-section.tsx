@@ -1,23 +1,33 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   confirmHomeworkRecordingSubmission,
   createHomeworkRecordingUploadUrl,
   getHomeworkNearLessonWarning,
   getHomeworkPlaybackUrl,
+  logHomeworkRecorderFailure,
   submitHomeworkRecording,
   type HomeworkActionResult,
 } from "@/app/dashboard/learn/homework-actions";
+import { MicrophoneAccessNotice } from "@/components/audio/microphone-access-notice";
+import { isUsableDuration, repairMediaDuration } from "@/lib/audio/media-duration";
 import { HomeworkAudioPlayer } from "@/components/homework/homework-audio-player";
 import { TutorFeedbackPlayer } from "@/components/homework/tutor-feedback-player";
-import { HOMEWORK_RECORDING_UPLOAD_ERROR } from "@/lib/tutoring/homework-recording-upload";
+import {
+  HOMEWORK_RECORDING_UPLOAD_ERROR,
+  HOMEWORK_VOICE_NOTE_ACCEPT,
+  HOMEWORK_VOICE_NOTE_MAX_BYTES,
+  homeworkVoiceNoteMime,
+} from "@/lib/tutoring/homework-recording-upload";
 import { uploadHomeworkRecordingToSignedUrl } from "@/lib/tutoring/upload-homework-recording";
 import {
   formatRecordingDuration,
   recordingExtensionForBlob,
   useAudioRecorder,
+  type AudioRecorderFailure,
 } from "@/lib/audio/use-audio-recorder";
 import { CatchupReturnButton } from "@/components/catchup/catchup-return-button";
 import type { HomeworkSubmissionView } from "@/lib/tutoring/homework-submissions";
@@ -74,6 +84,42 @@ function NearLessonWarningBanner({
   );
 }
 
+type PickedVoiceNote = {
+  file: File;
+  mimeType: string;
+  previewUrl: string;
+  durationSeconds: number | null;
+};
+
+/** Read a picked file's length. Returns null rather than blocking the upload. */
+function readAudioDurationSeconds(url: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const audio = new Audio();
+    let done = false;
+    const finish = (value: number | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timeout);
+      audio.removeAttribute("src");
+      resolve(value != null && isUsableDuration(value) ? Math.round(value) : null);
+    };
+    const timeout = setTimeout(() => finish(null), 6000);
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      void repairMediaDuration(audio).then(finish, () => finish(null));
+    };
+    audio.onerror = () => finish(null);
+    audio.src = url;
+  });
+}
+
+function reportIssueHref(lessonId: string, failureType: string | null): string {
+  const description = `I couldn't record my homework in the app. Error: ${
+    failureType ?? "unknown"
+  }. Lesson: ${lessonId}.`;
+  return `/dashboard/profile/report-issue?area=homework&description=${encodeURIComponent(description)}`;
+}
+
 function HomeworkRecorderBody({
   lessonId,
   localSubmission,
@@ -94,7 +140,29 @@ function HomeworkRecorderBody({
   loadNearLessonWarning: (lessonId: string) => Promise<HomeworkActionResult>;
 }) {
   const router = useRouter();
-  const recorder = useAudioRecorder();
+  const loggedFailuresRef = useRef(new Set<string>());
+  const [lastFailureType, setLastFailureType] = useState<string | null>(null);
+  const recorder = useAudioRecorder({
+    onFailure: (failure: AudioRecorderFailure) => {
+      setLastFailureType(failure.type);
+      // Admin test mode (directUpload false) is not a real student, so skip logging.
+      if (!directUpload) return;
+      // One row per error type per page load, so "Try again" taps don't flood the log.
+      if (loggedFailuresRef.current.has(failure.type)) return;
+      loggedFailuresRef.current.add(failure.type);
+      void logHomeworkRecorderFailure({
+        lessonId,
+        errorType: failure.type,
+        errorName: failure.errorName,
+        errorMessage: failure.errorMessage,
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+        pageUrl: typeof window !== "undefined" ? window.location.href : null,
+      }).catch(() => undefined);
+    },
+  });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [voiceNote, setVoiceNote] = useState<PickedVoiceNote | null>(null);
+  const [pickError, setPickError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const submitLockRef = useRef(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -121,8 +189,58 @@ function HomeworkRecorderBody({
     };
   }, [lessonId, loadNearLessonWarning, localSubmission]);
 
+  useEffect(() => {
+    return () => {
+      if (voiceNote) URL.revokeObjectURL(voiceNote.previewUrl);
+    };
+  }, [voiceNote]);
+
+  function clearVoiceNote() {
+    setVoiceNote(null);
+    setPickError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function openVoiceNotePicker() {
+    setPickError(null);
+    setActionError(null);
+    fileInputRef.current?.click();
+  }
+
+  async function handleVoiceNotePicked(event: ChangeEvent<HTMLInputElement>) {
+    const picked = event.target.files?.[0];
+    if (!picked) return;
+    setActionError(null);
+    setActionSuccess(null);
+
+    const mimeType = homeworkVoiceNoteMime(picked.name, picked.type);
+    if (!mimeType) {
+      setPickError("That file isn't a voice note. Choose an audio file, for example from WhatsApp or your voice recorder.");
+      event.target.value = "";
+      return;
+    }
+    if (picked.size === 0) {
+      setPickError("That file is empty. Choose another voice note.");
+      event.target.value = "";
+      return;
+    }
+    if (picked.size > HOMEWORK_VOICE_NOTE_MAX_BYTES) {
+      setPickError("That voice note is too big (over 25 MB). Try a shorter one.");
+      event.target.value = "";
+      return;
+    }
+
+    recorder.discardRecording();
+    setPickError(null);
+    const extension = mimeType === "audio/mp4" ? "m4a" : mimeType === "audio/mpeg" ? "mp3" : mimeType.split("/")[1];
+    const file = new File([picked], `homework.${extension}`, { type: mimeType });
+    const previewUrl = URL.createObjectURL(file);
+    const durationSeconds = await readAudioDurationSeconds(previewUrl);
+    setVoiceNote({ file, mimeType, previewUrl, durationSeconds });
+  }
+
   function handleSubmit() {
-    if (!recorder.blob) {
+    if (!recorder.blob && !voiceNote) {
       setActionError("Please record your homework first.");
       return;
     }
@@ -133,11 +251,20 @@ function HomeworkRecorderBody({
     setActionError(null);
     setActionSuccess(null);
 
-    const blob = recorder.blob;
-    const extension = recordingExtensionForBlob(blob);
-    const mimeType = blob.type || "audio/webm";
-    const file = new File([blob], `homework.${extension}`, { type: mimeType });
-    const durationSeconds = recorder.durationSeconds;
+    let file: File;
+    let mimeType: string;
+    let durationSeconds: number | null;
+    if (voiceNote) {
+      file = voiceNote.file;
+      mimeType = voiceNote.mimeType;
+      durationSeconds = voiceNote.durationSeconds;
+    } else {
+      const blob = recorder.blob!;
+      const extension = recordingExtensionForBlob(blob);
+      mimeType = blob.type || "audio/webm";
+      file = new File([blob], `homework.${extension}`, { type: mimeType });
+      durationSeconds = recorder.durationSeconds;
+    }
 
     startTransition(async () => {
       try {
@@ -175,13 +302,16 @@ function HomeworkRecorderBody({
           setActionSuccess(result.success ?? "Homework submitted!");
           void hapticSuccess();
           recorder.discardRecording();
+          clearVoiceNote();
           router.refresh();
           return;
         }
 
         const formData = new FormData();
         formData.append("audio", file);
-        formData.append("duration_seconds", String(durationSeconds));
+        if (durationSeconds != null) {
+          formData.append("duration_seconds", String(durationSeconds));
+        }
         const result = await submitRecording(lessonId, formData);
         if (result.error) {
           setActionError(result.error);
@@ -192,6 +322,7 @@ function HomeworkRecorderBody({
         setActionSuccess(result.success ?? "Homework submitted!");
         void hapticSuccess();
         recorder.discardRecording();
+        clearVoiceNote();
         router.refresh();
       } catch {
         setActionError(HOMEWORK_RECORDING_UPLOAD_ERROR);
@@ -292,18 +423,99 @@ function HomeworkRecorderBody({
     <div className={variant === "standalone" ? "mt-3" : "pt-2"}>
       {intro ? <p className="text-sm text-zinc-600">{intro}</p> : null}
 
-      {recorder.state === "idle" ? (
-        <button
-          type="button"
-          onClick={() => void recorder.startRecording()}
-          className={
-            variant === "standalone" || intro
-              ? `mt-3 ${ui.btnSecondary}`
-              : ui.btnSecondary
-          }
-        >
-          Record homework
-        </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={HOMEWORK_VOICE_NOTE_ACCEPT}
+        className="hidden"
+        onChange={(event) => void handleVoiceNotePicked(event)}
+      />
+
+      {recorder.state === "idle" && !voiceNote ? (
+        <div className={variant === "standalone" || intro ? "mt-3" : undefined}>
+          <button
+            type="button"
+            onClick={() => void recorder.startRecording()}
+            className={ui.btnSecondary}
+          >
+            {recorder.micFailure ? "Try again" : "Record homework"}
+          </button>
+
+          {recorder.micFailure ? (
+            <>
+              <MicrophoneAccessNotice failure={recorder.micFailure} />
+              <div className="mt-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+                <p className="text-sm text-zinc-700">
+                  Mic still not working? Record a voice note on your phone (voice recorder or WhatsApp) and upload it here.
+                </p>
+                <button type="button" onClick={openVoiceNotePicker} className={`mt-2 ${ui.btnPrimary}`}>
+                  Upload a voice note instead
+                </button>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Still stuck?{" "}
+                  <Link
+                    href={reportIssueHref(lessonId, lastFailureType)}
+                    className="font-medium text-violet-700 underline"
+                  >
+                    Report an issue
+                  </Link>
+                </p>
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={openVoiceNotePicker}
+              className="mt-2 block text-sm font-medium text-violet-700 underline"
+            >
+              Upload a voice note instead
+            </button>
+          )}
+        </div>
+      ) : null}
+
+      {voiceNote ? (
+        <div className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+          <p className="truncate text-sm text-zinc-700">Voice note ready to send</p>
+          <audio controls src={voiceNote.previewUrl} className="w-full" preload="metadata" />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={clearVoiceNote}
+              disabled={pending}
+              className={ui.btnSecondary}
+            >
+              Choose another
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={pending}
+              className={ui.btnPrimary}
+            >
+              {pending
+                ? uploadPercent != null && uploadPercent < 100
+                  ? `Uploading ${uploadPercent}%`
+                  : "Submitting…"
+                : "Submit homework"}
+            </button>
+          </div>
+          {pending && uploadPercent != null ? (
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-zinc-200"
+              role="progressbar"
+              aria-valuenow={uploadPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Upload progress"
+            >
+              <div
+                className="h-full rounded-full bg-violet-600 transition-[width]"
+                style={{ width: `${uploadPercent}%` }}
+              />
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {recorder.state === "recording" ? (
@@ -373,9 +585,10 @@ function HomeworkRecorderBody({
         </div>
       ) : null}
 
-      {(recorder.error || actionError) && (
-        <p className="mt-3 text-sm text-red-600">{recorder.error ?? actionError}</p>
-      )}
+      {pickError ? <p className="mt-3 text-sm text-red-600">{pickError}</p> : null}
+      {actionError || (recorder.error && !recorder.micFailure) ? (
+        <p className="mt-3 text-sm text-red-600">{actionError ?? recorder.error}</p>
+      ) : null}
       {actionSuccess ? <p className="mt-3 text-sm text-green-700">{actionSuccess}</p> : null}
     </div>
   );

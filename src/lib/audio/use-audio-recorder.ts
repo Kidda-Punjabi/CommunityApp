@@ -1,8 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  MICROPHONE_BUSY_FAILURE,
+  MICROPHONE_NOTHING_CAPTURED_FAILURE,
+  messageForMicrophoneFailure,
+  microphoneFailureType,
+  microphoneUnavailableFailure,
+  type MicrophoneFailure,
+  type MicrophoneFailureType,
+} from "@/lib/audio/microphone-access-message";
 
 export type AudioRecorderState = "idle" | "recording" | "recorded";
+
+export type AudioRecorderFailure = {
+  type: MicrophoneFailureType;
+  errorName: string | null;
+  errorMessage: string | null;
+};
 
 type UseAudioRecorderResult = {
   state: AudioRecorderState;
@@ -12,6 +27,8 @@ type UseAudioRecorderResult = {
   blob: Blob | null;
   previewUrl: string | null;
   error: string | null;
+  /** Student-facing mic failure with step-by-step fixes. Null when the last attempt worked. */
+  micFailure: MicrophoneFailure | null;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
   discardRecording: () => void;
@@ -45,18 +62,39 @@ export function recordingExtensionForBlob(blob: Blob): string {
   return extensionForMime(blob.type || getPreferredRecordingMimeType());
 }
 
+function describeError(error: unknown): { errorName: string | null; errorMessage: string | null } {
+  if (!error || typeof error !== "object") return { errorName: null, errorMessage: null };
+  const errorName = "name" in error ? String(error.name).slice(0, 120) : null;
+  const errorMessage = "message" in error ? String(error.message).slice(0, 500) : null;
+  return { errorName, errorMessage };
+}
+
 export function useAudioRecorder(options?: {
   maxDurationSeconds?: number;
+  /** Called once per failed attempt so callers can log it. Must not throw. */
+  onFailure?: (failure: AudioRecorderFailure) => void;
 }): UseAudioRecorderResult {
   const [state, setState] = useState<AudioRecorderState>("idle");
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [micFailure, setMicFailure] = useState<MicrophoneFailure | null>(null);
   const [inputLevel, setInputLevel] = useState(0);
 
   const maxDurationRef = useRef(options?.maxDurationSeconds);
   maxDurationRef.current = options?.maxDurationSeconds;
+  const onFailureRef = useRef(options?.onFailure);
+  useEffect(() => {
+    onFailureRef.current = options?.onFailure;
+  });
+  const reportFailure = useCallback((failure: AudioRecorderFailure) => {
+    try {
+      onFailureRef.current?.(failure);
+    } catch {
+      // Logging must never break recording.
+    }
+  }, []);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -109,6 +147,7 @@ export function useAudioRecorder(options?: {
     });
     setState("idle");
     setError(null);
+    setMicFailure(null);
   }, [clearTimer, revokePreview, stopStream]);
 
   const stopRecording = useCallback(() => {
@@ -122,8 +161,21 @@ export function useAudioRecorder(options?: {
     setError(null);
     discardRecording();
 
-    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    if (
+      typeof window === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === "undefined"
+    ) {
       setError("Recording is not supported in this browser.");
+      setMicFailure(microphoneUnavailableFailure());
+      reportFailure({
+        type:
+          typeof window !== "undefined" && window.isSecureContext === false
+            ? "insecure_context"
+            : "unsupported",
+        errorName: null,
+        errorMessage: null,
+      });
       return;
     }
 
@@ -146,6 +198,11 @@ export function useAudioRecorder(options?: {
         }
       };
 
+      recorder.onerror = (event: Event) => {
+        const detail = (event as Event & { error?: unknown }).error;
+        reportFailure({ type: "recording_failed", ...describeError(detail ?? event) });
+      };
+
       recorder.onstop = () => {
         stopStream();
         const recorded = new Blob(chunksRef.current, {
@@ -156,6 +213,8 @@ export function useAudioRecorder(options?: {
 
         if (recorded.size === 0) {
           setError("No audio was captured. Please try again.");
+          setMicFailure(MICROPHONE_NOTHING_CAPTURED_FAILURE);
+          reportFailure({ type: "recording_failed", errorName: "EmptyRecording", errorMessage: null });
           setState("idle");
           setDurationSeconds(0);
           return;
@@ -211,13 +270,17 @@ export function useAudioRecorder(options?: {
         if (active && active.state === "recording") active.stop();
         clearTimer();
       }, 250);
-    } catch {
+    } catch (caught: unknown) {
       if (meterCtx && meterRef.current?.ctx !== meterCtx) void meterCtx.close().catch(() => undefined);
       stopStream();
+      mediaRecorderRef.current = null;
       setError("Microphone access is required to record homework.");
+      const type = microphoneFailureType(caught);
+      setMicFailure(type === "device_busy" ? MICROPHONE_BUSY_FAILURE : messageForMicrophoneFailure(caught));
+      reportFailure({ type, ...describeError(caught) });
       setState("idle");
     }
-  }, [clearTimer, discardRecording, stopStream]);
+  }, [clearTimer, discardRecording, reportFailure, stopStream]);
 
   useEffect(() => stopMeter, [stopMeter]);
 
@@ -239,6 +302,7 @@ export function useAudioRecorder(options?: {
     blob,
     previewUrl,
     error,
+    micFailure,
     startRecording,
     stopRecording,
     discardRecording,

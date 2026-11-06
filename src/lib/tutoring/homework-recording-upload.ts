@@ -19,7 +19,7 @@ export function extensionForHomeworkMime(mimeType: string): string | null {
   const mime = mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
   if (mime === "audio/webm") return "webm";
   if (mime === "audio/mp4" || mime === "audio/m4a" || mime === "audio/x-m4a") return "m4a";
-  if (mime === "audio/ogg") return "ogg";
+  if (mime === "audio/ogg" || mime === "audio/opus") return "ogg";
   if (mime === "audio/mpeg" || mime === "audio/mp3") return "mp3";
   if (mime === "audio/wav" || mime === "audio/wave" || mime === "audio/x-wav") return "wav";
   return null;
@@ -68,4 +68,46 @@ export function mimeMatchesHomeworkRecordingPath(mimeType: string, storagePath: 
   const extension = extensionForHomeworkMime(mimeType);
   if (!extension) return false;
   return storagePath.toLowerCase().endsWith(`.${extension}`);
+}
+
+/** Largest voice note a student can upload from their phone instead of recording. */
+export const HOMEWORK_VOICE_NOTE_MAX_BYTES = 25 * 1024 * 1024;
+
+/** File picker filter for "Upload a voice note instead". */
+export const HOMEWORK_VOICE_NOTE_ACCEPT =
+  "audio/*,.ogg,.opus,.oga,.m4a,.mp4,.mp3,.wav,.webm";
+
+const CANONICAL_MIME_FOR_EXTENSION: Record<string, string> = {
+  webm: "audio/webm",
+  m4a: "audio/mp4",
+  ogg: "audio/ogg",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+};
+
+const EXTENSION_ALIASES: Record<string, string> = {
+  webm: "webm",
+  weba: "webm",
+  m4a: "m4a",
+  mp4: "m4a",
+  ogg: "ogg",
+  oga: "ogg",
+  opus: "ogg",
+  mp3: "mp3",
+  wav: "wav",
+};
+
+/**
+ * Pick the stored MIME type for a voice note chosen from the phone.
+ * WhatsApp `.opus` exports often arrive with an empty or generic type, so the
+ * file extension is used when the browser type is missing or not audio.
+ * Returns null when the file is not a supported audio format.
+ */
+export function homeworkVoiceNoteMime(fileName: string, browserType: string): string | null {
+  const fromType = extensionForHomeworkMime(browserType || "");
+  if (fromType) return CANONICAL_MIME_FOR_EXTENSION[fromType] ?? null;
+  const rawExtension = fileName.toLowerCase().split(".").pop() ?? "";
+  const extension = EXTENSION_ALIASES[rawExtension];
+  if (!extension) return null;
+  return CANONICAL_MIME_FOR_EXTENSION[extension] ?? null;
 }

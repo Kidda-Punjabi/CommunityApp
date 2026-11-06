@@ -42,15 +42,27 @@ type DraftFile = {
 type ReportIssueFormProps = {
   fullName: string;
   email: string;
+  /** Pre-select an area, e.g. from the homework recorder's "Report an issue" link. */
+  initialArea?: string | null;
+  initialDescription?: string | null;
 };
 
-export function ReportIssueForm({ fullName, email }: ReportIssueFormProps) {
+export function ReportIssueForm({
+  fullName,
+  email,
+  initialArea = null,
+  initialDescription = null,
+}: ReportIssueFormProps) {
   const supabase = useMemo(() => createClient(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<DraftFile[]>([]);
 
-  const [area, setArea] = useState("");
-  const [description, setDescription] = useState("");
+  const [area, setArea] = useState(() =>
+    initialArea && (ISSUE_AREAS as readonly string[]).includes(initialArea) ? initialArea : ""
+  );
+  const [description, setDescription] = useState(() =>
+    (initialDescription ?? "").slice(0, ISSUE_DESCRIPTION_MAX)
+  );
   const [files, setFiles] = useState<DraftFile[]>([]);
   const [areaTouched, setAreaTouched] = useState(false);
   const [descriptionTouched, setDescriptionTouched] = useState(false);
