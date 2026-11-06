@@ -1,5 +1,8 @@
 "use client";
 
+import { useNativeApp } from "@/lib/native/native-app-context";
+import { NotSoldInApp } from "@/components/native/not-sold-in-app";
+
 import { getStripePublishableKey } from "@/lib/products/checkout";
 import {
   EmbeddedCheckout,
@@ -25,7 +28,7 @@ type EmbeddedCheckoutBlockProps = {
   cohortSeatHoldId?: string;
 };
 
-export function EmbeddedCheckoutBlock({
+function EmbeddedCheckoutBlockInApp({
   checkoutKey,
   className,
   cohortId,
@@ -90,4 +93,10 @@ export function EmbeddedCheckoutBlock({
       </div>
     </div>
   );
+}
+
+/** In the iOS and Android apps, purchases are not offered (App Store guideline 3.1.1). */
+export function EmbeddedCheckoutBlock(props: EmbeddedCheckoutBlockProps) {
+  const native = useNativeApp();
+  return native ? <NotSoldInApp /> : <EmbeddedCheckoutBlockInApp {...props} />;
 }

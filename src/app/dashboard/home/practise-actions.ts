@@ -7,6 +7,7 @@ import { publicUrlForAudioPath } from "@/lib/audio/storage";
 import { recordStreakActivity } from "@/lib/progress/streak";
 import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { createClient } from "@/lib/supabase/server";
+import { hasPremiumAccess } from "@/lib/membership/premium-access";
 import { weekCardScript } from "@/lib/practise/week-content";
 import {
   grammarSentencesFor,
@@ -29,6 +30,7 @@ import { cooldownDays, loadCheckParts, loadProgress, summariseSkill } from "@/li
 import type {
   CheckQuestion,
   CheckResult,
+  HeartsState,
   LevelPreview,
   PractiseSkill,
   RoundAnswer,
@@ -252,8 +254,50 @@ function questionsForItem(i: Item, format: PractiseSkill, skill: PractiseSkill, 
 }
 
 /** One round mixes every skill at this level. Play from home or from a skill page. */
-export async function startRound(): Promise<RoundQuestion[]> {
+type HeartsRow = { hearts: number; next_heart_at: string | null; full_at: string | null };
+type Supa = Awaited<ReturnType<typeof createClient>>;
+
+function heartsFrom(row: HeartsRow | null | undefined): HeartsState {
+  return { hearts: row?.hearts ?? 3, nextHeartAt: row?.next_heart_at ?? null, fullAt: row?.full_at ?? null, unlimited: false };
+}
+
+const UNLIMITED: HeartsState = { hearts: 3, nextHeartAt: null, fullAt: null, unlimited: true };
+
+/** Mixed Plays use hearts: 3, one back every 8 hours. Premium (and Community) members have unlimited. */
+async function heartsFor(supabase: Supa, userId: string): Promise<HeartsState> {
+  if (await hasPremiumAccess(supabase, userId)) return UNLIMITED;
+  const { data, error } = await supabase.rpc("practise_hearts_state");
+  if (error) throw new Error("Could not load hearts.");
+  return heartsFrom((data as HeartsRow[] | null)?.[0]);
+}
+
+export async function getHearts(): Promise<HeartsState> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+  return heartsFor(supabase, user.id);
+}
+
+export type StartRoundResult =
+  | { ok: true; questions: RoundQuestion[]; hearts: HeartsState }
+  | { ok: false; reason: "no_hearts"; hearts: HeartsState };
+
+/** Starts a mixed Play. Uses one heart unless the learner has Premium. Course practice does not come through here. */
+export async function startRound(): Promise<StartRoundResult> {
   const { supabase, userId, level } = await requireLearner();
+  let hearts = UNLIMITED;
+  if (!(await hasPremiumAccess(supabase, userId))) {
+    const { data, error } = await supabase.rpc("practise_hearts_spend");
+    if (error) {
+      if (error.message.includes("no_hearts")) return { ok: false, reason: "no_hearts", hearts: await heartsFor(supabase, userId) };
+      throw new Error("Could not start the round.");
+    }
+    hearts = heartsFrom((data as HeartsRow[] | null)?.[0]);
+  }
+  return { ok: true, questions: await buildRound(supabase, userId, level), hearts };
+}
+
+async function buildRound(supabase: Supa, userId: string, level: number): Promise<RoundQuestion[]> {
   const progress = await loadProgress(supabase, userId);
   const skills = skillsForLevel(level);
   const base = Math.floor(ROUND_SIZE / skills.length);

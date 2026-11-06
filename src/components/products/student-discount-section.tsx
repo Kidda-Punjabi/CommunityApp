@@ -1,5 +1,7 @@
 "use client";
 
+import { useNativeApp } from "@/lib/native/native-app-context";
+
 import { submitStudentDiscountRequest } from "@/app/courses/student-discount-actions";
 import {
   STUDENT_DISCOUNT_FORMAT_LABELS,
@@ -116,7 +118,7 @@ function StatusCard({ request }: { request: StudentDiscountRequestView }) {
   return null;
 }
 
-export function StudentDiscountSection({
+function StudentDiscountSectionInApp({
   isLoggedIn,
   requests,
   requestsLoadFailed = false,
@@ -332,4 +334,10 @@ export function StudentDiscountSection({
       </div>
     </section>
   );
+}
+
+/** In the iOS and Android apps, purchases are not offered (App Store guideline 3.1.1). */
+export function StudentDiscountSection(props: StudentDiscountSectionProps) {
+  const native = useNativeApp();
+  return native ? null : <StudentDiscountSectionInApp {...props} />;
 }

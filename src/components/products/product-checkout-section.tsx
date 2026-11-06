@@ -1,5 +1,8 @@
 "use client";
 
+import { useNativeApp } from "@/lib/native/native-app-context";
+import { NotSoldInApp } from "@/components/native/not-sold-in-app";
+
 import { EmbeddedCheckoutBlock } from "@/components/products/embedded-checkout-block";
 import { checkoutKeyRequiresCohortSelection } from "@/lib/group-purchase/client-keys";
 import { isEmbeddedCheckoutConfigured } from "@/lib/products/checkout";
@@ -122,7 +125,7 @@ type ProductCheckoutSectionProps = {
   defaultKey?: string;
 };
 
-export function ProductCheckoutSection({ options, defaultKey }: ProductCheckoutSectionProps) {
+function ProductCheckoutSectionInApp({ options, defaultKey }: ProductCheckoutSectionProps) {
   const available = options.filter((option) => isEmbeddedCheckoutConfigured(option.key));
 
   if (available.length === 0) {
@@ -180,4 +183,10 @@ function ProductCheckoutSectionInner({
       )}
     </section>
   );
+}
+
+/** In the iOS and Android apps, purchases are not offered (App Store guideline 3.1.1). */
+export function ProductCheckoutSection(props: ProductCheckoutSectionProps) {
+  const native = useNativeApp();
+  return native ? <NotSoldInApp /> : <ProductCheckoutSectionInApp {...props} />;
 }

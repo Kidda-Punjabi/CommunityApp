@@ -6,13 +6,28 @@ import type { EndingsPayload } from "@/lib/practise/types";
 
 const STATE_COLOUR = { set: "#7F22FE", right: "#008236", wrong: "#CA3500" };
 
+const LAST_LETTER = /[ਅ-ਹਖ਼-ਫ਼ੲ-ੴ][ਁ-ਃ਼-ੑੰੱ]*$/;
+
 /** The letter a bindi, tippi or vowel sign sits on, taken from the text just before the gap. */
 function letterBeforeGap(parts: EndingPart[], gap: number): string {
   const at = parts.findIndex((p) => "gap" in p && p.gap === gap);
   const before = at > 0 ? parts[at - 1] : null;
   if (!before || !("text" in before)) return "";
-  const clusters = before.text.trim().match(/[ਅ-ਹਖ਼-ਫ਼ੲ-ੴ][ਁ-ਃ਼-ੑੰੱ]*/g);
-  return clusters?.[clusters.length - 1] ?? "";
+  return before.text.match(LAST_LETTER)?.[0] ?? "";
+}
+
+/**
+ * A vowel sign, bindi or tippi must never sit in a different element (or colour) from the letter it
+ * belongs to: iOS shapes each styled run on its own, so a lone sign shows a dotted circle.
+ * When a filled gap starts with an attached sign, the letter before it moves into the gap's span,
+ * so the coloured run is a whole syllable and the word still reads as one joined word.
+ */
+function borrowsLetter(parts: EndingPart[], i: number, picks: (string | null)[]): boolean {
+  const part = parts[i];
+  if (!part || !("gap" in part)) return false;
+  const picked = picks[part.gap];
+  const before = parts[i - 1];
+  return !!picked && startsWithAttachedSign(picked) && !!before && "text" in before && LAST_LETTER.test(before.text);
 }
 
 function gapState(locked: boolean, picked: string | null, answer: EndingCard): keyof typeof STATE_COLOUR {
@@ -25,7 +40,10 @@ function Sentence({ data, picks, locked, onClear }: { data: EndingsPayload; pick
   return (
     <p lang="pa" className="mt-5 text-center font-[family-name:var(--font-noto-gurmukhi)] text-[32px] font-bold leading-[60px] text-zinc-900">
       {data.parts.map((part, i) => {
-        if ("text" in part) return <span key={i}>{part.text}</span>;
+        if ("text" in part) {
+          const text = borrowsLetter(data.parts, i + 1, picks) ? part.text.replace(LAST_LETTER, "") : part.text;
+          return <span key={i}>{text}</span>;
+        }
         const picked = picks[part.gap];
         if (!picked) {
           return (
@@ -52,6 +70,7 @@ function Sentence({ data, picks, locked, onClear }: { data: EndingsPayload; pick
             className={locked ? undefined : "cursor-pointer"}
             style={{ color: colour, textDecoration: `underline wavy ${colour} 2px`, textUnderlineOffset: 7, textDecorationSkipInk: "none" }}
           >
+            {borrowsLetter(data.parts, i, picks) ? letterBeforeGap(data.parts, part.gap) : null}
             {picked}
           </span>
         );
@@ -153,8 +172,8 @@ export function EndingsQuestion({ data, picks, locked, onPicks, onTap }: { data:
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); place(card, activeGap()); } }}
             >
               <span lang="pa" className="font-[family-name:var(--font-noto-gurmukhi)] text-[26px] font-bold leading-tight">
-                {startsWithAttachedSign(card.g) ? <span className="text-zinc-400">{ghostLetter}</span> : null}
-                {card.g}
+                {/* One run of text: a separately coloured letter would strand the sign as ◌ਾ on iOS. */}
+                {startsWithAttachedSign(card.g) ? ghostLetter + card.g : card.g}
               </span>
               <span className="text-[13px] font-semibold text-zinc-600">{card.r}</span>
             </button>
@@ -168,7 +187,7 @@ export function EndingsQuestion({ data, picks, locked, onPicks, onTap }: { data:
           className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 rounded-2xl border-2 border-violet-600 bg-white px-4 py-2 font-[family-name:var(--font-noto-gurmukhi)] text-[26px] font-bold text-zinc-900 shadow-lg"
           style={{ left: drag.x, top: drag.y }}
         >
-          {drag.card.g}
+          {startsWithAttachedSign(drag.card.g) ? ghostLetter + drag.card.g : drag.card.g}
         </span>
       ) : null}
     </div>

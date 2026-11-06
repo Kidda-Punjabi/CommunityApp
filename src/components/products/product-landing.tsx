@@ -59,8 +59,9 @@ export function ProductLanding({
   studentDiscountRequestsLoadFailed = false,
 }: ProductLandingProps) {
   const checkoutOptions = checkoutOptionsForContent(content);
-  const showEmbeddedCheckout = checkoutOptions.some((option) =>
-    isEmbeddedCheckoutConfigured(option.key)
+  // Community is bought on the Premium page (one plan: £75 for 3 months, then £25 a month).
+  const showEmbeddedCheckout = checkoutOptions.some(
+    (option) => option.key !== "community" && isEmbeddedCheckoutConfigured(option.key)
   );
   const primaryKey = primaryCheckoutKey(content);
 

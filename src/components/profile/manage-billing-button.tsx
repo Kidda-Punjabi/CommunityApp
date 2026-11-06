@@ -1,12 +1,14 @@
 "use client";
 
+import { useNativeApp } from "@/lib/native/native-app-context";
+
 import { useState } from "react";
 
 type ManageBillingButtonProps = {
   className?: string;
 };
 
-export function ManageBillingButton({ className }: ManageBillingButtonProps) {
+function ManageBillingButtonInApp({ className }: ManageBillingButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,4 +47,10 @@ export function ManageBillingButton({ className }: ManageBillingButtonProps) {
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>
   );
+}
+
+/** In the iOS and Android apps, purchases are not offered (App Store guideline 3.1.1). */
+export function ManageBillingButton(props: ManageBillingButtonProps) {
+  const native = useNativeApp();
+  return native ? null : <ManageBillingButtonInApp {...props} />;
 }
