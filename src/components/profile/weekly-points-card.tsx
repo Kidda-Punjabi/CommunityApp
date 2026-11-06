@@ -13,7 +13,7 @@ export function WeeklyPointsCard({ points, weekStart }: WeeklyPointsCardProps) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
-            Weekly points
+            XP this week
           </p>
           <p className="mt-1 font-heading text-3xl font-bold tabular-nums text-zinc-900">
             {points}

@@ -16,7 +16,11 @@ export type LeaderboardEntry = {
   isViewer?: boolean;
 };
 
+/** "week" = XP earned that week. "all" = lifetime XP. */
+export type LeaderboardMode = "week" | "all";
+
 export type LeaderboardData = {
+  mode: LeaderboardMode;
   weekStart: string;
   currentWeekStart: string;
   viewerUserId: string;
@@ -25,27 +29,15 @@ export type LeaderboardData = {
   availableWeeks: string[];
 };
 
-type WeeklyPointsRow = {
-  user_id: string;
-  points: number;
-  profiles:
-    | (ProfileNameFields & { avatar_url?: string | null; kidda_level?: number | null })
-    | (ProfileNameFields & { avatar_url?: string | null; kidda_level?: number | null })[]
-    | null;
-};
+type LeaderboardProfile = ProfileNameFields & { avatar_url?: string | null; kidda_level?: number | null };
 
-function unwrapProfile(
-  profile: WeeklyPointsRow["profiles"]
-): (ProfileNameFields & { avatar_url?: string | null; kidda_level?: number | null }) | null {
-  if (!profile) return null;
-  return Array.isArray(profile) ? (profile[0] ?? null) : profile;
-}
+type RankedRow = { user_id: string; xp: number | string; rank: number | string };
 
 function buildEntry(
   userId: string,
   points: number,
   rank: number | null,
-  profile: (ProfileNameFields & { avatar_url?: string | null; kidda_level?: number | null }) | null,
+  profile: LeaderboardProfile | null,
   isViewer = false
 ): LeaderboardEntry {
   return {
@@ -61,70 +53,82 @@ function buildEntry(
   };
 }
 
-// TODO: gate this query to community members only once Stripe purchase
-// data is reliably available (see `memberships` table). For now, all users
-// are included — no membership check applied.
-
+/**
+ * One XP leaderboard. Ranks come from the XP log (xp_leaderboard): this week's XP for
+ * "week", lifetime XP for "all". People who hide from the leaderboard are left out.
+ */
 export async function loadLeaderboard(
   supabase: SupabaseClient,
   weekStart: string,
-  viewerUserId: string
+  viewerUserId: string,
+  mode: LeaderboardMode = "week"
 ): Promise<LeaderboardData> {
   const currentWeekStart = getCurrentWeekStart();
 
-  const [{ data: weekRows }, { data: historyRows }, viewerProfile, viewerPoints] =
-    await Promise.all([
-      supabase
-        .from("weekly_points")
-        .select("user_id, points, profiles(full_name, preferred_name, avatar_url, kidda_level)")
-        .eq("week_start", weekStart)
-        .gt("points", 0)
-        .order("points", { ascending: false })
-        .order("updated_at", { ascending: true }),
-      supabase
-        .from("weekly_points")
-        .select("week_start")
-        .gt("points", 0)
-        .order("week_start", { ascending: false }),
-      loadEditableProfile(supabase, viewerUserId),
-      loadViewerWeeklyPoints(supabase, viewerUserId, weekStart),
-    ]);
+  const [{ data: rankedRows, error }, { data: weekRows }, viewerProfile] = await Promise.all([
+    supabase.rpc("xp_leaderboard", { p_week: mode === "all" ? null : weekStart }),
+    supabase.rpc("xp_leaderboard_weeks"),
+    loadEditableProfile(supabase, viewerUserId),
+  ]);
+  if (error) console.error("[leaderboard] xp_leaderboard failed:", error.message);
 
-  const ranked = (weekRows ?? []) as WeeklyPointsRow[];
-  const allEntries: LeaderboardEntry[] = ranked.map((row, index) => {
-    const profile = unwrapProfile(row.profiles);
-    return buildEntry(row.user_id, row.points, index + 1, profile);
-  });
+  const ranked = ((rankedRows ?? []) as RankedRow[]).map((row) => ({
+    userId: row.user_id,
+    xp: Number(row.xp),
+    rank: Number(row.rank),
+  }));
+  const top10 = ranked.slice(0, 10);
+  const viewerRanked = ranked.find((row) => row.userId === viewerUserId) ?? null;
+  const viewerXp = viewerRanked?.xp ?? (await loadViewerXp(supabase, viewerUserId, mode, weekStart));
 
-  const top10 = allEntries.slice(0, 10);
-  const viewerInTop10 = top10.some((entry) => entry.userId === viewerUserId);
-  const viewerRankEntry = allEntries.find((entry) => entry.userId === viewerUserId);
+  const { data: profileRows } = top10.length
+    ? await supabase
+        .from("profiles")
+        .select("id, full_name, preferred_name, avatar_url, kidda_level")
+        .in("id", top10.map((row) => row.userId))
+    : { data: [] };
+  const profiles = new Map(
+    ((profileRows ?? []) as (LeaderboardProfile & { id: string })[]).map((row) => [row.id, row])
+  );
+
+  const entries = top10.map((row) =>
+    buildEntry(row.userId, row.xp, row.rank, profiles.get(row.userId) ?? null, row.userId === viewerUserId)
+  );
 
   const viewerRow = buildEntry(
     viewerUserId,
-    viewerRankEntry?.points ?? viewerPoints,
-    viewerRankEntry?.rank ??
-      (viewerPoints > 0 ? allEntries.filter((entry) => entry.points > viewerPoints).length + 1 : null),
+    viewerXp,
+    viewerRanked?.rank ?? (viewerXp > 0 ? ranked.filter((row) => row.xp > viewerXp).length + 1 : null),
     viewerProfile,
     true
   );
 
-  const weekSet = new Set<string>([currentWeekStart]);
-  for (const row of historyRows ?? []) {
-    if (row.week_start) weekSet.add(row.week_start as string);
+  const weekSet = new Set<string>([currentWeekStart, weekStart]);
+  for (const row of (weekRows ?? []) as { week_start: string }[]) {
+    if (row.week_start) weekSet.add(row.week_start);
   }
-  weekSet.add(weekStart);
-
-  const availableWeeks = [...weekSet].sort((a, b) => b.localeCompare(a));
 
   return {
+    mode,
     weekStart,
     currentWeekStart,
     viewerUserId,
-    entries: top10.map((entry) =>
-      entry.userId === viewerUserId ? { ...entry, isViewer: true } : entry
-    ),
-    viewerRow: viewerInTop10 ? { ...viewerRow, rank: viewerRankEntry?.rank ?? viewerRow.rank } : viewerRow,
-    availableWeeks,
+    entries,
+    viewerRow,
+    availableWeeks: [...weekSet].sort((a, b) => b.localeCompare(a)),
   };
+}
+
+/** The viewer's XP when they aren't in the ranked list (for example hidden from the leaderboard). */
+async function loadViewerXp(
+  supabase: SupabaseClient,
+  userId: string,
+  mode: LeaderboardMode,
+  weekStart: string
+): Promise<number> {
+  if (mode === "all") {
+    const { data } = await supabase.from("profiles").select("total_xp").eq("id", userId).maybeSingle();
+    return Number(data?.total_xp ?? 0);
+  }
+  return loadViewerWeeklyPoints(supabase, userId, weekStart);
 }

@@ -5,7 +5,7 @@ import { createServiceRoleClient } from "@/lib/supabase/admin-server";
 import { getCurrentWeekStart, isFutureWeek } from "@/lib/leaderboard/week";
 
 type LeaderboardPageProps = {
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ week?: string; view?: string }>;
 };
 
 export default async function LeaderboardPage({ searchParams }: LeaderboardPageProps) {
@@ -19,7 +19,8 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
       ? requestedWeek
       : currentWeekStart;
 
-  const data = await loadLeaderboard(createServiceRoleClient(), weekStart, user.id);
+  const mode = params.view === "all" ? "all" : "week";
+  const data = await loadLeaderboard(createServiceRoleClient(), weekStart, user.id, mode);
 
   return <LeaderboardView data={data} />;
 }

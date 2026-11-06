@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCurrentWeekStart } from "./week";
 
+/** XP the user earned in the given week (Monday start). Name kept from the old weekly points. */
 export async function loadViewerWeeklyPoints(
   supabase: SupabaseClient,
   userId: string,
@@ -9,11 +10,11 @@ export async function loadViewerWeeklyPoints(
   const targetWeek = weekStart ?? getCurrentWeekStart();
 
   const { data } = await supabase
-    .from("weekly_points")
-    .select("points")
+    .from("xp_awards")
+    .select("xp")
     .eq("user_id", userId)
-    .eq("week_start", targetWeek)
-    .maybeSingle();
+    .eq("activity_week", targetWeek)
+    .neq("source", "opening_balance");
 
-  return data?.points ?? 0;
+  return ((data ?? []) as { xp: number }[]).reduce((sum, row) => sum + Number(row.xp ?? 0), 0);
 }

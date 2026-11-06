@@ -276,14 +276,16 @@ export default async function LearnTrackPage({ params, searchParams }: LearnTrac
   const contentGate = await resolveGroupCohortContentGate(supabase, user!.id, courseIds);
   const lessons = filterLessonsForTrack(allLessons, access.courses, track.tier);
 
-  // Beginners group: who's in my class and where they stand this week.
+  // Beginners group: who's in my class and where they stand over the last 7 days.
   const groupBoard =
     track.id === "beginners"
       ? await (async () => {
           try {
             const admin = createServiceRoleClient();
             const cohortId = await findViewerGroupCohortId(admin, user!.id, courseIds);
-            return cohortId ? await loadCohortLeaderboard(admin, cohortId) : null;
+            return cohortId
+              ? await loadCohortLeaderboard(admin, cohortId, { pointsWindow: "rolling7" })
+              : null;
           } catch (error) {
             console.error("[learn] group leaderboard failed", error);
             return null;

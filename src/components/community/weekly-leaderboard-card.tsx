@@ -45,7 +45,7 @@ function LeaderboardPreviewRow({ entry }: { entry: LeaderboardEntry }) {
       />
       <p className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-900">{displayName}</p>
       <span className="shrink-0 text-sm font-medium tabular-nums text-zinc-900">
-        {entry.points} pts
+        {entry.points} XP
       </span>
     </div>
   );
@@ -74,7 +74,7 @@ export function WeeklyLeaderboardCard({ data }: WeeklyLeaderboardCardProps) {
         </div>
       ) : (
         <p className="mt-4 text-sm text-zinc-500">
-          No points yet this week — practise to climb the board.
+          No XP yet this week. Practise to climb the board.
         </p>
       )}
 

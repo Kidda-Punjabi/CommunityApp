@@ -57,7 +57,7 @@ export function CommunityFriendsLeaderboardCard({
             <EyebrowLabel>Weekly leaderboard</EyebrowLabel>
             <p className="mt-1 text-sm text-zinc-500">{formatWeekRangeLabel(leaderboard.weekStart)}</p>
             <p className="mt-1 text-sm font-medium text-zinc-900">
-              {viewer.rank != null ? `#${viewer.rank}` : "Unranked"} · {viewer.points} pts
+              {viewer.rank != null ? `#${viewer.rank}` : "Unranked"} · {viewer.points} XP
             </p>
           </div>
           <HubGhostLink href="/dashboard/leaderboard" className="shrink-0">

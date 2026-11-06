@@ -24,9 +24,12 @@ export function HomeHeaderPills({ weeklyPoints }: HomeHeaderPillsProps) {
         <Flame className="h-3.5 w-3.5 shrink-0" aria-hidden />
         {streakStats.streak}
       </span>
-      <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium tabular-nums text-violet-800">
+      <span
+        className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium tabular-nums text-violet-800"
+        title="XP this week"
+      >
         <Star className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        {weeklyPoints}
+        {weeklyPoints} XP
       </span>
     </div>
   );

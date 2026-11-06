@@ -113,6 +113,13 @@ export async function loadUserProgression(
     .eq("id", userId)
     .single();
 
+  const { data: levelSettings } = await supabase
+    .from("community_level_settings")
+    .select("xp_to_unlock")
+    .eq("id", 1)
+    .maybeSingle();
+  const xpTable = (levelSettings?.xp_to_unlock as Record<string, number> | null) ?? null;
+
   const learnerLevel = profile?.kidda_level ?? null;
   const totalXp = profile?.total_xp ?? 0;
   const xpAtLevelStart = profile?.xp_at_level_start ?? 0;
@@ -130,7 +137,7 @@ export async function loadUserProgression(
 
   const xpProgress =
     learnerLevel != null
-      ? xpProgressToNextTest(learnerLevel, totalXp, xpAtLevelStart)
+      ? xpProgressToNextTest(learnerLevel, totalXp, xpAtLevelStart, xpTable)
       : null;
 
   const targetTier = profile?.target_tier ?? null;
@@ -144,7 +151,7 @@ export async function loadUserProgression(
     xpProgress,
     testUnlocked,
     xpRequiredForNextTest:
-      learnerLevel != null ? xpRequiredForTest(learnerLevel) : null,
+      learnerLevel != null ? xpRequiredForTest(learnerLevel, xpTable) : null,
     latestTestAttempt,
     whatsNext: whatsNextGuidance({
       learnerLevel,
@@ -153,6 +160,7 @@ export async function loadUserProgression(
       xpAtLevelStart,
       testUnlocked,
       latestAttempt: latestTestAttempt,
+      xpTable,
     }),
     selfAssessedTier: profile?.self_assessed_starting_tier ?? null,
     targetTier,

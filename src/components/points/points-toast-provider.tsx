@@ -25,7 +25,7 @@ export function PointsToastProvider() {
     function handlePointsEarned(event: Event) {
       const points = (event as CustomEvent<number>).detail;
       if (!points || points <= 0) return;
-      pushToast(points, "pts");
+      pushToast(points, "XP");
     }
 
     function handleXpEarned(event: Event) {
