@@ -92,8 +92,8 @@ function NextButton({ title, onClick }: { title: string; onClick: () => void }) 
 /** Shown after the first round of the day. The flame lights and the number ticks over. */
 export function StreakCelebration({ from, to, today, playedDates, onContinue, playSound }: { from: number; to: number; today: string; playedDates: string[]; onContinue: () => void; playSound: () => void }) {
   useEffect(() => {
-    const t = setTimeout(playSound, 450);
-    return () => clearTimeout(t);
+    // The sound schedules itself to the animation's beats, so it starts with the screen.
+    playSound();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const moved = from !== to;
   return (

@@ -7,7 +7,7 @@ import { getStreakPresentation } from "@/app/dashboard/home/streak-actions";
 import { getLevelPreview, startLevelCheck, startRound, submitLevelCheck, submitRound } from "@/app/dashboard/home/practise-actions";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
 import { LEVELS } from "@/lib/practise/levels";
-import { usePractiseSound } from "@/lib/practise/sounds";
+import { usePractiseSound, useStreakSound } from "@/lib/practise/sounds";
 import type { CheckQuestion, CheckResult, LevelPreview, PractiseHome, PractiseSkill, RoundAnswer, RoundQuestion, RoundResult, SkillRoundScore, SkillSummary } from "@/lib/practise/types";
 import { ArenaArt } from "./arena-art";
 import { LevelRoad } from "./level-road";
@@ -124,6 +124,7 @@ type View =
 export function PractiseApp({ home }: { home: PractiseHome }) {
   const router = useRouter();
   const sound = usePractiseSound();
+  const streakSound = useStreakSound();
   const { streak, setStreak } = useStreak();
   const [streakOpen, setStreakOpen] = useState(false);
   const [view, setView] = useState<View>(home.levelUpFrom != null ? { name: "levelUp" } : { name: "home" });
@@ -189,7 +190,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   if (view.name === "streak") {
     return (
       <div className="fixed inset-0 z-40 overflow-hidden bg-white">
-        <StreakCelebration from={view.from} to={view.to} today={getLocalActivityDate()} playedDates={[...home.playedDates, getLocalActivityDate()]} playSound={() => sound("streak")} onContinue={() => setView({ name: "result", result: view.result, streakFrom: view.from })} />
+        <StreakCelebration from={view.from} to={view.to} today={getLocalActivityDate()} playedDates={[...home.playedDates, getLocalActivityDate()]} playSound={streakSound} onContinue={() => setView({ name: "result", result: view.result, streakFrom: view.from })} />
       </div>
     );
   }
