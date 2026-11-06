@@ -66,7 +66,7 @@ function LeaderboardRow({
         </p>
       </div>
       <span className="shrink-0 text-sm font-semibold tabular-nums text-violet-600">
-        {entry.points}
+        {entry.points.toLocaleString("en-GB")} XP
       </span>
     </li>
   );
@@ -74,6 +74,7 @@ function LeaderboardRow({
 
 export function LeaderboardView({ data }: LeaderboardViewProps) {
   const router = useRouter();
+  const allTime = data.mode === "all";
   const isCurrentWeek = data.weekStart === data.currentWeekStart;
   const canGoNewer = !isCurrentWeek;
   const viewerInList = data.entries.some((entry) => entry.userId === data.viewerUserId);
@@ -86,15 +87,40 @@ export function LeaderboardView({ data }: LeaderboardViewProps) {
     <div className={ui.page}>
       <BackLink fallbackHref="/dashboard/community#leaderboard" className="text-sm font-medium text-violet-600 hover:text-violet-500">← Back to Community</BackLink>
 
-      <div className="mt-4 mb-8">
-        <h1 className="font-heading text-2xl font-bold tracking-tight text-zinc-900">
-          Weekly leaderboard
-        </h1>
+      <div className="mt-4 mb-6">
+        <h1 className="font-heading text-2xl font-bold tracking-tight text-zinc-900">Leaderboard</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          The top 10 members with the most practice points this week.
+          {allTime
+            ? "The top 10 members by all the XP they've ever earned."
+            : "The top 10 members by XP earned this week. Every bit of XP adds to your all-time total too."}
         </p>
       </div>
 
+      <div role="tablist" aria-label="Leaderboard period" className="mb-4 flex rounded-full border border-zinc-200 bg-zinc-100 p-1">
+        {(
+          [
+            ["week", "This week", "/dashboard/leaderboard"],
+            ["all", "All time", "/dashboard/leaderboard?view=all"],
+          ] as const
+        ).map(([key, label, href]) => {
+          const active = data.mode === key;
+          return (
+            <Link
+              key={key}
+              href={href}
+              role="tab"
+              aria-selected={active}
+              className={`flex-1 rounded-full px-3 py-2 text-center text-sm font-semibold transition ${
+                active ? "bg-white text-violet-700 shadow-sm" : "text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </div>
+
+      {allTime ? null : (
       <div className={`mb-6 ${ui.card}`}>
         <div className="flex items-center justify-between gap-3">
           <button
@@ -129,6 +155,7 @@ export function LeaderboardView({ data }: LeaderboardViewProps) {
           </button>
         </div>
       </div>
+      )}
 
       <div className={ui.card}>
         {data.entries.length > 0 ? (
@@ -144,7 +171,7 @@ export function LeaderboardView({ data }: LeaderboardViewProps) {
           </ol>
         ) : (
           <p className="py-4 text-center text-sm text-zinc-500">
-            No one has points yet this week — be the first!
+            {allTime ? "No one has XP yet." : "No one has earned XP yet this week. Be the first!"}
           </p>
         )}
 

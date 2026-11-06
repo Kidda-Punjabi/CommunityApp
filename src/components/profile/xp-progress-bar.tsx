@@ -23,11 +23,11 @@ export function XpProgressBar({
       ? `${totalXp.toLocaleString()} XP earned so far`
       : `${totalXp} XP lifetime`;
 
-  if (!nextTier || !xpProgress || learnerLevel == null || learnerLevel >= 8) {
+  if (!nextTier || !xpProgress || learnerLevel == null || learnerLevel >= 9) {
     return (
       <p className={`${footnoteClass} ${compact ? "mt-2" : "mt-3"}`}>
         {lifetimeLabel}
-        {learnerLevel != null && learnerLevel >= 8 ? " · Max level reached" : ""}
+        {learnerLevel != null && learnerLevel >= 9 ? " · Max level reached" : ""}
       </p>
     );
   }

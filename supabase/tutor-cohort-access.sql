@@ -453,9 +453,11 @@ CREATE TRIGGER trg_course_enrollment_rules
 CREATE OR REPLACE FUNCTION public.enforce_lesson_recording_scope()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path TO ''
 AS $$
 DECLARE
   v_tier TEXT;
+  v_track TEXT;
 BEGIN
   IF NEW.student_id IS NOT NULL THEN
     IF NOT EXISTS (
@@ -472,13 +474,14 @@ BEGIN
   END IF;
 
   IF NEW.cohort_id IS NOT NULL THEN
-    SELECT c.required_tier INTO v_tier
+    SELECT c.required_tier, c.content_track INTO v_tier, v_track
     FROM public.cohorts co
     JOIN public.courses c ON c.id = co.course_id
     WHERE co.id = NEW.cohort_id;
 
-    IF COALESCE(v_tier, '') <> 'beginners' THEN
-      RAISE EXCEPTION 'cohort_id recordings are only for Beginners group cohorts.';
+    IF COALESCE(v_track, '') <> 'kids'
+      AND COALESCE(v_tier, '') NOT IN ('beginners', 'foundational') THEN
+      RAISE EXCEPTION 'cohort_id recordings are only for Beginners, Foundational and Kids group cohorts.';
     END IF;
 
     IF NOT EXISTS (

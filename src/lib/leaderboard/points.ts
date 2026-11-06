@@ -5,7 +5,7 @@ import {
 } from "@/lib/learning/learning-product";
 import { getLocalActivityDate } from "@/lib/progress/activity-date";
 import { fetchLessonCompletionMap } from "@/lib/progress/lesson-completion";
-import { notifyActivityRewards, notifyDailyGameCap, notifyXpEarned } from "@/lib/points/notify-points-earned";
+import { notifyXpEarned } from "@/lib/points/notify-points-earned";
 import { randomUUID } from "node:crypto";
 import { getCurrentWeekStart } from "./week";
 
@@ -64,33 +64,6 @@ export function buildGameAccuracyMetadata(
   return { correct: Math.max(0, correct), total: safeTotal, accuracy };
 }
 
-/** Best-effort weekly points award — never throws to callers. Returns points granted. */
-export async function awardWeeklyPoints(
-  supabase: SupabaseClient,
-  points: number,
-  activityDate?: string
-): Promise<number> {
-  if (points <= 0) return 0;
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user && (await activeKidProfileId(supabase, user.id))) return 0;
-
-  const date = activityDate ?? getLocalActivityDate();
-  const { error } = await supabase.rpc("award_weekly_points", {
-    p_points: points,
-    p_activity_date: date,
-  });
-
-  if (error) {
-    console.error("Failed to award weekly points:", error.message);
-    return 0;
-  }
-
-  return points;
-}
-
 /** Best-effort Punjabi lifetime XP award — never throws. Returns XP granted. */
 export async function awardXp(
   supabase: SupabaseClient,
@@ -144,20 +117,16 @@ async function grantProfileXp(
   return { granted: Number(data ?? 0), capped: false };
 }
 
-async function awardBoth(
+/** Punjabi activity XP (games, quizzes, flashcards). Games and quizzes have diminishing returns per day. */
+async function awardActivityXp(
   supabase: SupabaseClient,
   points: number,
   source: "game" | "quiz" | "flashcard",
-  sourceId: string,
-  activityDate?: string
-): Promise<{ weekly: number; xp: number }> {
-  const [weekly, grant] = await Promise.all([
-    awardWeeklyPoints(supabase, points, activityDate),
-    grantProfileXp(supabase, points, source, sourceId),
-  ]);
-  if (grant.capped) notifyDailyGameCap();
-  else notifyActivityRewards(weekly, grant.granted);
-  return { weekly, xp: grant.granted };
+  sourceId: string
+): Promise<number> {
+  const grant = await grantProfileXp(supabase, points, source, sourceId);
+  notifyXpEarned(grant.granted);
+  return grant.granted;
 }
 
 /** English activity: English XP only — no Punjabi weekly points / total_xp. */
@@ -260,10 +229,9 @@ export async function tryAwardLessonCompletionPoints(
   }
 
   if (data) {
-    const pts = lessonCompletedPoints();
-    const grant = await grantProfileXp(supabase, pts, "lesson", lessonId);
-    notifyActivityRewards(pts, grant.granted);
-    return pts;
+    const grant = await grantProfileXp(supabase, lessonCompletedPoints(), "lesson", lessonId);
+    notifyXpEarned(grant.granted);
+    return grant.granted;
   }
 
   return 0;
@@ -279,8 +247,7 @@ export async function awardQuizAttemptPoints(
   if (product === "english") {
     return awardEnglishActivityXp(supabase, points);
   }
-  const { weekly } = await awardBoth(supabase, points, "quiz", randomUUID(), activityDate);
-  return weekly;
+  return awardActivityXp(supabase, points, "quiz", randomUUID());
 }
 
 export async function awardGameSessionPoints(
@@ -295,8 +262,7 @@ export async function awardGameSessionPoints(
   if (product === "english") {
     return awardEnglishActivityXp(supabase, points);
   }
-  const { weekly } = await awardBoth(supabase, points, "game", randomUUID(), activityDate);
-  return weekly;
+  return awardActivityXp(supabase, points, "game", randomUUID());
 }
 
 export async function awardFlashcardConfidentPoints(
@@ -308,8 +274,7 @@ export async function awardFlashcardConfidentPoints(
   if (product === "english") {
     return awardEnglishActivityXp(supabase, points);
   }
-  const { weekly } = await awardBoth(supabase, points, "flashcard", randomUUID(), activityDate);
-  return weekly;
+  return awardActivityXp(supabase, points, "flashcard", randomUUID());
 }
 
 export { getCurrentWeekStart };

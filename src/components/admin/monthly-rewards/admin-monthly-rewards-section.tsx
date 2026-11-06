@@ -91,7 +91,7 @@ export function AdminMonthlyRewardsSection() {
         setPreview(result.preview);
         if (result.preview.length === 0) {
           setSuccess(null);
-          setError(`No weekly points found for ${formatMonthLabel(monthStart)}.`);
+          setError(`No XP found for ${formatMonthLabel(monthStart)}.`);
         }
       });
     });
@@ -145,7 +145,7 @@ export function AdminMonthlyRewardsSection() {
           Monthly Rewards
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Calculate top 3 from weekly points, save winners, then mark Prezzee gift cards as
+          Calculate top 3 by XP earned that month, save winners, then mark Prezzee gift cards as
           sent.
         </p>
       </div>
@@ -254,7 +254,7 @@ export function AdminMonthlyRewardsSection() {
                       #{row.rank} · {row.displayName}
                     </p>
                     <p className="mt-0.5 text-sm text-zinc-500">
-                      {row.pointsTotal} pts · {giftLabel(row.giftCardAmount)} ·{" "}
+                      {row.pointsTotal} XP · {giftLabel(row.giftCardAmount)} ·{" "}
                       <span
                         className={
                           row.status === "sent" ? "text-emerald-700" : "text-amber-700"

@@ -14,10 +14,6 @@ import {
 } from "@/lib/admin/monthly-rewards/types";
 import { getDisplayName } from "@/lib/profile/display-name";
 
-type WeeklyPointsRow = {
-  user_id: string;
-  points: number;
-};
 
 type ProfileRow = {
   id: string;
@@ -68,20 +64,19 @@ export async function calculateMonthlyWinners(
 ): Promise<{ preview: MonthlyWinnerPreview[]; error?: string }> {
   const rangeEnd = getNextMonthStart(monthStart);
 
-  const { data, error } = await supabase
-    .from("weekly_points")
-    .select("user_id, points")
-    .gte("week_start", monthStart)
-    .lt("week_start", rangeEnd)
-    .gt("points", 0);
+  // XP earned in weeks starting this month (One XP, Nov 2026; was weekly points).
+  const { data, error } = await supabase.rpc("xp_totals_between", {
+    p_from: monthStart,
+    p_to: rangeEnd,
+  });
 
   if (error) {
     return { preview: [], error: error.message };
   }
 
   const totals = new Map<string, number>();
-  for (const row of (data ?? []) as WeeklyPointsRow[]) {
-    totals.set(row.user_id, (totals.get(row.user_id) ?? 0) + row.points);
+  for (const row of (data ?? []) as { user_id: string; xp: number | string }[]) {
+    totals.set(row.user_id, Number(row.xp));
   }
 
   const ranked = [...totals.entries()]

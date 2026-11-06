@@ -139,6 +139,7 @@ export function whatsNextGuidance(options: {
   xpAtLevelStart: number;
   testUnlocked: boolean;
   latestAttempt: LevelTestAttemptSummary | null;
+  xpTable?: Record<string, number> | null;
 }): { headline: string; detail: string; actionHref?: string; actionLabel?: string } {
   if (!options.placementCompleted || options.learnerLevel == null) {
     return {
@@ -149,7 +150,7 @@ export function whatsNextGuidance(options: {
     };
   }
 
-  if (options.learnerLevel >= 8) {
+  if (options.learnerLevel >= 9) {
     return {
       headline: "You've reached the top level",
       detail: "Keep practicing in the app and join Community sessions to stay fluent.",
@@ -159,7 +160,8 @@ export function whatsNextGuidance(options: {
   const remaining = xpRemainingForTest(
     options.learnerLevel,
     options.totalXp,
-    options.xpAtLevelStart
+    options.xpAtLevelStart,
+    options.xpTable
   );
   return {
     headline: `Earn XP toward your next Kidda Level check`,

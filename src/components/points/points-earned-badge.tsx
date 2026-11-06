@@ -11,7 +11,7 @@ export function PointsEarnedBadge({ points, className = "" }: PointsEarnedBadgeP
       className={`inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-sm font-semibold text-violet-700 ${className}`}
     >
       <span aria-hidden="true">+</span>
-      {points} points
+      {points} XP
     </p>
   );
 }

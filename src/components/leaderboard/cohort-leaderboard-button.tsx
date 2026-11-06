@@ -8,7 +8,7 @@ type Tab = "week" | "all";
 
 /**
  * "View cohort leaderboard" pill for the course page. Opens a sheet with the
- * group ranked by this week's points or by all-time XP.
+ * group ranked by the last 7 days of points or by all-time XP.
  */
 export function CohortLeaderboardButton({
   board,
@@ -100,7 +100,7 @@ export function CohortLeaderboardButton({
             <div role="tablist" className="flex gap-1 rounded-xl bg-zinc-100 p-1">
               {(
                 [
-                  ["week", "This week"],
+                  ["week", "Last 7 days"],
                   ["all", "All time"],
                 ] as const
               ).map(([value, label]) => (
@@ -151,7 +151,7 @@ export function CohortLeaderboardButton({
                       <span className="block text-xs tabular-nums text-zinc-500">
                         {tab === "week"
                           ? `${entry.totalXp.toLocaleString("en-GB")} XP total`
-                          : `${entry.weeklyPoints} pts this week`}
+                          : `${entry.weeklyPoints} pts in 7 days`}
                       </span>
                     </span>
                   </li>

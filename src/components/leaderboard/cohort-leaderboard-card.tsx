@@ -2,7 +2,7 @@ import type { CohortLeaderboard } from "@/lib/leaderboard/load-cohort-leaderboar
 
 /**
  * "Your group" leaderboard for a beginners cohort: shown to students in the course
- * and to tutors on the class page, so the class can shout out this week's top learners.
+ * and to tutors on the class page. Students see the last 7 days; tutors see this week.
  */
 export function CohortLeaderboardCard({
   board,
@@ -14,13 +14,16 @@ export function CohortLeaderboardCard({
   audience: "student" | "tutor";
 }) {
   const leaderPoints = board.entries[0]?.weeklyPoints ?? 0;
+  const recent = board.pointsWindow === "rolling7";
   return (
     <section className="rounded-3xl bg-white p-4 shadow-sm">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-heading text-lg font-bold text-zinc-900">
           {audience === "student" ? "Your group" : "Group leaderboard"}
         </h2>
-        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">This week</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          {recent ? "Last 7 days" : "This week"}
+        </span>
       </div>
       {board.cohortName ? <p className="mt-0.5 text-sm text-zinc-500">{board.cohortName}</p> : null}
       <ol className="mt-3 divide-y divide-zinc-100">
@@ -44,7 +47,7 @@ export function CohortLeaderboardCard({
                 {isViewer ? <span className="font-normal text-zinc-500"> (you)</span> : null}
               </span>
               <span className="text-right">
-                <span className="block text-sm font-bold tabular-nums text-violet-700">{entry.weeklyPoints} pts</span>
+                <span className="block text-sm font-bold tabular-nums text-violet-700">{entry.weeklyPoints} XP</span>
                 <span className="block text-xs tabular-nums text-zinc-500">{entry.totalXp} XP total</span>
               </span>
             </li>
@@ -54,9 +57,15 @@ export function CohortLeaderboardCard({
       <p className="mt-3 text-xs text-zinc-500">
         {audience === "tutor"
           ? leaderPoints > 0
-            ? "Give this week's top learner a shout-out in class."
-            : "No points yet this week. Nudge the group to play a few games."
-          : "Points come from games and practice. Play a few to climb the board."}
+            ? recent
+              ? "Give the last 7 days' top learner a shout-out in class."
+              : "Give this week's top learner a shout-out in class."
+            : recent
+              ? "No XP in the last 7 days. Nudge the group to play a few games."
+              : "No XP yet this week. Nudge the group to play a few games."
+          : recent
+            ? "XP from games, Practice, lessons and live sessions over the last 7 days. Earn some to climb the board."
+            : "XP comes from games, Practice, lessons and live sessions. Earn some to climb the board."}
       </p>
     </section>
   );
