@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BodyPortal } from "@/components/ui/body-portal";
+import { PractiseClose, PractiseStage } from "@/components/practise/practise-stage";
 import { useNativeApp } from "@/lib/native/native-app-context";
 import type { HeartsState } from "@/lib/practise/types";
 
@@ -182,9 +183,10 @@ export function HeartsSheet({ state, onClose }: { state: HeartsState; onClose: (
 export function HeartsAfter({ state, onPlay, onLater, busy }: { state: HeartsState; onPlay: () => void; onLater: () => void; busy: boolean }) {
   const left = state.hearts;
   return (
-    <div className="kidda-edge fixed inset-0 z-40 bg-white">
-      <div className="mx-auto flex h-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(4rem,var(--kidda-inset-top))]">
-        <div className="flex flex-1 flex-col items-center justify-center gap-7 text-center">
+    <PractiseStage className="bg-white">
+      <PractiseClose label="Save it for later" onClick={onLater} />
+      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(4rem,var(--kidda-inset-top))]">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-7 overflow-y-auto text-center">
           <p className="kh-pop text-[15px] font-extrabold uppercase tracking-wider text-violet-700">Play complete</p>
           <div className="flex items-center gap-4">
             {[0, 1, 2].map((i) => {
@@ -203,12 +205,12 @@ export function HeartsAfter({ state, onPlay, onLater, busy }: { state: HeartsSta
             <p className="mt-1 text-base text-zinc-600">{left === 1 ? "Your last Play for now. Make it count." : "Keep the run going."}</p>
           </div>
         </div>
-        <button type="button" disabled={busy} onClick={onPlay} className="flex h-[58px] items-center justify-center gap-2 rounded-[18px] bg-violet-600 text-lg font-extrabold text-white shadow-[0_4px_0_#5B21B6] disabled:opacity-60">
+        <button type="button" disabled={busy} onClick={onPlay} className="flex h-[58px] shrink-0 items-center justify-center gap-2 rounded-[18px] bg-violet-600 text-lg font-extrabold text-white shadow-[0_4px_0_#5B21B6] disabled:opacity-60">
           {busy ? "Loading…" : <>Play again <Heart size={18} fill="#FFFFFF" /> 1</>}
         </button>
-        <button type="button" onClick={onLater} className="mt-1.5 h-12 text-base font-bold text-violet-700">Save it for later</button>
+        <button type="button" onClick={onLater} className="mt-1.5 h-12 shrink-0 text-base font-bold text-violet-700">Save it for later</button>
       </div>
-    </div>
+    </PractiseStage>
   );
 }
 
@@ -218,9 +220,10 @@ export function HeartsOut({ state, onClose }: { state: HeartsState; onClose: () 
   const now = useNow(true);
   const left = msUntil(state.nextHeartAt, now);
   return (
-    <div className="kidda-edge fixed inset-0 z-40 bg-violet-50">
-      <div className="mx-auto flex h-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,var(--kidda-inset-top))]">
-        <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
+    <PractiseStage className="bg-violet-50">
+      <PractiseClose label="Back to Practice" onClick={onClose} />
+      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,var(--kidda-inset-top))]">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 overflow-y-auto text-center">
           <div className="relative w-[150px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="kh-sway block h-auto w-[150px]" src={CHARACTERS.haathi} alt="Haathi the elephant" />
@@ -238,15 +241,15 @@ export function HeartsOut({ state, onClose }: { state: HeartsState; onClose: () 
             {state.fullAt ? <span className="text-sm text-zinc-600">All 3 back by {timeOfDay(state.fullAt)}</span> : null}
           </div>
         </div>
-        <Link href="/dashboard/learn" className="flex h-[58px] items-center justify-center rounded-[18px] bg-green-700 text-[17px] font-extrabold text-white shadow-[0_4px_0_#14532D]">Keep going with course practice</Link>
+        <Link href="/dashboard/learn" className="flex h-[58px] shrink-0 items-center justify-center rounded-[18px] bg-green-700 text-[17px] font-extrabold text-white shadow-[0_4px_0_#14532D]">Keep going with course practice</Link>
         {native ? null : (
-          <Link href="/dashboard/membership/premium" className="mt-2 flex h-[52px] items-center justify-center gap-2 rounded-[18px] border-2 border-violet-200 bg-white text-base font-extrabold text-violet-700">
+          <Link href="/dashboard/membership/premium" className="mt-2 flex h-[52px] shrink-0 items-center justify-center gap-2 rounded-[18px] border-2 border-violet-200 bg-white text-base font-extrabold text-violet-700">
             <Heart size={18} fill="#7C3AED" />Unlimited hearts with Premium
           </Link>
         )}
-        <button type="button" onClick={onClose} className="mt-1 h-11 text-sm font-bold text-zinc-500">Back to Practice</button>
+        <button type="button" onClick={onClose} className="mt-1 h-11 shrink-0 text-sm font-bold text-zinc-500">Back to Practice</button>
       </div>
-    </div>
+    </PractiseStage>
   );
 }
 
@@ -255,9 +258,10 @@ const SPARKS: [string, string, string][] = [["#FFCD40", "-34px", "-30px"], ["#E8
 /** Shown once when the learner comes back to full hearts. */
 export function HeartsBack({ onPlay, onClose }: { onPlay: () => void; onClose: () => void }) {
   return (
-    <div className="kidda-edge fixed inset-0 z-40 bg-[#FFF7F9]">
-      <div className="mx-auto flex h-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,var(--kidda-inset-top))]">
-        <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+    <PractiseStage className="bg-[#FFF7F9]">
+      <PractiseClose label="Not now" onClick={onClose} />
+      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,var(--kidda-inset-top))]">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="kh-jump h-auto w-[140px]" src={CHARACTERS.billi} alt="Billi the kitten" />
           <div className="flex gap-4">
@@ -273,9 +277,9 @@ export function HeartsBack({ onPlay, onClose }: { onPlay: () => void; onClose: (
             <p className="mt-1 text-base text-zinc-600">3 Plays ready.</p>
           </div>
         </div>
-        <button type="button" onClick={onPlay} className="kh-rise h-[58px] rounded-[18px] bg-violet-600 text-lg font-extrabold text-white shadow-[0_4px_0_#5B21B6]">Play</button>
-        <button type="button" onClick={onClose} className="mt-1 h-11 text-sm font-bold text-zinc-500">Not now</button>
+        <button type="button" onClick={onPlay} className="kh-rise h-[58px] shrink-0 rounded-[18px] bg-violet-600 text-lg font-extrabold text-white shadow-[0_4px_0_#5B21B6]">Play</button>
+        <button type="button" onClick={onClose} className="mt-1 h-11 shrink-0 text-sm font-bold text-zinc-500">Not now</button>
       </div>
-    </div>
+    </PractiseStage>
   );
 }

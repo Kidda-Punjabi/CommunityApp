@@ -5,6 +5,7 @@ import { getPractiseAudio } from "@/app/dashboard/home/practise-actions";
 import { useAudioManager } from "@/lib/audio/audio-manager";
 import { recordingExtensionForBlob, useAudioRecorder } from "@/lib/audio/use-audio-recorder";
 import { EndingsQuestion } from "@/components/practise/endings-question";
+import { PractiseStage } from "@/components/practise/practise-stage";
 import { usePractiseSound } from "@/lib/practise/sounds";
 import { passedSpokenAttempt, scoreSpokenAttempt } from "@/lib/games/spoken-match";
 import type { RoundAnswer, RoundQuestion } from "@/lib/practise/types";
@@ -355,9 +356,9 @@ export function RoundPlayer({
   const pct = Math.round((Math.min(index, shownTotal) / shownTotal) * 100);
 
   return (
-    <div className="kidda-edge fixed inset-0 z-40 overflow-hidden bg-zinc-50">
-    <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,var(--kidda-inset-top))] lg:max-w-[640px]">
-      <div className="flex items-center gap-2">
+    <PractiseStage className="bg-zinc-50">
+    <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,var(--kidda-inset-top))] lg:max-w-[640px]">
+      <div className="flex shrink-0 items-center gap-2">
         <button type="button" onClick={onLeave} aria-label="Leave round" className="flex h-11 w-11 items-center justify-center text-zinc-900">
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
@@ -426,7 +427,7 @@ export function RoundPlayer({
       {q.type === "tiles" && verdict === null ? (
         <button type="button" disabled={built.length !== tiles.length}
           onClick={() => judge(built.map((i) => tiles[i]).join(" ") === q.answer.romanised.trim().split(/\s+/).join(" "))}
-          className="mt-4 h-14 rounded-2xl bg-violet-600 text-lg font-extrabold text-white disabled:bg-zinc-200 disabled:text-zinc-500">Check</button>
+          className="mt-4 h-14 shrink-0 rounded-2xl bg-violet-600 text-lg font-extrabold text-white disabled:bg-zinc-200 disabled:text-zinc-500">Check</button>
       ) : null}
 
       {q.type === "endings" && verdict === null ? (
@@ -450,6 +451,6 @@ export function RoundPlayer({
         </div>
       ) : null}
     </div>
-    </div>
+    </PractiseStage>
   );
 }
