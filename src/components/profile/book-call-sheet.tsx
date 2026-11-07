@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BookCallWidget } from "@/components/booking/book-call-widget";
+import { BodyPortal } from "@/components/ui/body-portal";
 import { HubCard } from "@/components/ui/hub-primitives";
 
 export function BookCallSheet({
@@ -29,7 +30,8 @@ export function BookCallSheet({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+    <BodyPortal>
+    <div className="kidda-edge fixed inset-0 z-[60] flex items-end justify-center bg-black/40 pb-[env(safe-area-inset-bottom)] sm:items-center sm:p-4">
       <button
         type="button"
         className="absolute inset-0"
@@ -56,5 +58,6 @@ export function BookCallSheet({
         <BookCallWidget className="rounded-xl border border-zinc-200 bg-white" />
       </HubCard>
     </div>
+    </BodyPortal>
   );
 }

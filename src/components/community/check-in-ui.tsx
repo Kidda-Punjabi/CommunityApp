@@ -194,8 +194,8 @@ export function CheckInSheet({
 
   return createPortal(
     <div
-      className="fixed inset-x-0 top-0 flex h-[100dvh] items-end bg-[#1F1640]/40"
-      style={{ zIndex: 80, ...(visible ? { top: visible.top, height: visible.height } : null) }}
+      className="kidda-edge fixed inset-0 z-[60] flex items-end bg-[#1F1640]/40"
+      style={visible ? { top: visible.top, height: visible.height, bottom: "auto" } : undefined}
       role="dialog"
       aria-modal="true"
       aria-label="Check in"

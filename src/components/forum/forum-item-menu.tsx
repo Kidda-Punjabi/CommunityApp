@@ -8,6 +8,7 @@ import {
   reportForumContent,
   type ForumActionResult,
 } from "@/app/dashboard/community/forum/actions";
+import { BodyPortal } from "@/components/ui/body-portal";
 import { FORUM_REPORT_REASONS, type ForumReportReason } from "@/lib/forum/safety";
 
 const initial: ForumActionResult = {};
@@ -153,7 +154,8 @@ export function ForumItemMenu({
         </div>
       ) : null}
       {confirmBlock ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+        <BodyPortal>
+        <div className="kidda-edge fixed inset-0 z-[60] flex items-end justify-center bg-black/40 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
           <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-xl">
             <p className="text-sm text-zinc-800">
               Block {authorName}? Their posts and replies will disappear from your forum.
@@ -174,9 +176,11 @@ export function ForumItemMenu({
             </div>
           </div>
         </div>
+        </BodyPortal>
       ) : null}
       {reportOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+        <BodyPortal>
+        <div className="kidda-edge fixed inset-0 z-[60] flex items-end justify-center bg-black/40 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
           <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
             <h2 className="font-heading text-lg font-semibold text-zinc-900">Report</h2>
             <div className="mt-3 space-y-2">
@@ -218,6 +222,7 @@ export function ForumItemMenu({
             </div>
           </div>
         </div>
+        </BodyPortal>
       ) : null}
       {message ? (
         <p className="mt-2 text-xs text-emerald-700" role="status">

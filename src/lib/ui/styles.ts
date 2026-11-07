@@ -7,6 +7,10 @@ export const ui = {
   pageBg: "bg-zinc-50",
   /** Space for fixed bottom nav + home-indicator safe area */
   navClearance: "pb-[var(--kidda-nav-clearance)]",
+  /** Dashboard column: 100dvh in a browser, and the space under the notch in the app. */
+  shellMin: "min-h-[calc(100dvh-var(--kidda-safe-top))]",
+  /** One screen above the bottom nav. Safe-top is 0 in a browser. */
+  screen: "h-[var(--kidda-screen)] max-h-[var(--kidda-screen)]",
   page: "flex min-h-0 flex-1 flex-col px-5 py-7",
   section: "mb-8",
   sectionTitle: "mb-4 font-heading text-lg font-semibold text-zinc-900",

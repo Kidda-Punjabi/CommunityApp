@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { acceptForumRules } from "@/app/dashboard/community/forum/actions";
+import { BodyPortal } from "@/components/ui/body-portal";
 import { FORUM_RULES } from "@/lib/forum/safety";
 
 type ForumRulesSheetProps = {
@@ -29,7 +30,8 @@ export function ForumRulesSheet({ open, onClose, onAgreed }: ForumRulesSheetProp
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+    <BodyPortal>
+    <div className="kidda-edge fixed inset-0 z-[60] flex items-end justify-center bg-black/40 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
       <div
         role="dialog"
         aria-labelledby="forum-rules-title"
@@ -67,5 +69,6 @@ export function ForumRulesSheet({ open, onClose, onAgreed }: ForumRulesSheetProp
         </div>
       </div>
     </div>
+    </BodyPortal>
   );
 }

@@ -274,7 +274,7 @@ export function FlashcardStudyMode({
   }
 
   return (
-    <div className="relative flex min-h-[calc(100dvh-7rem)] flex-1 flex-col gap-3 font-[family-name:var(--font-community)]">
+    <div className="relative flex min-h-[calc(100dvh-7rem-var(--kidda-safe-top))] flex-1 flex-col gap-3 font-[family-name:var(--font-community)]">
       {!kidsMode && <FloatingSoundToggle />}
       <div className="flex items-center gap-3">
         <BackLink

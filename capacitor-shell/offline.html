@@ -49,10 +49,17 @@
         font-weight: 650;
         padding: 12px 22px;
       }
+      [hidden] {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
-    <main>
+    <main id="connecting">
+      <img src="peacock.png" alt="Kidda" />
+      <h1>Connecting…</h1>
+    </main>
+    <main id="offline" hidden>
       <img src="peacock.png" alt="Kidda" />
       <h1>No internet connection</h1>
       <p>Kidda will open again as soon as you're back online.</p>
@@ -60,8 +67,21 @@
     </main>
     <script>
       var target = "https://webapp.kidda.app/";
+      var started = Date.now();
       var trying = false;
+      var revealed = false;
+      var GRACE_MS = 15000;
+      function showOffline() {
+        if (revealed) return;
+        revealed = true;
+        document.getElementById("connecting").hidden = true;
+        document.getElementById("offline").hidden = false;
+      }
+      function maybeGiveUp() {
+        if (navigator.onLine === false || Date.now() - started >= GRACE_MS) showOffline();
+      }
       function retry() {
+        maybeGiveUp();
         if (trying) return;
         trying = true;
         fetch(target, { mode: "no-cors", cache: "no-store" })
@@ -70,11 +90,21 @@
           })
           .catch(function () {
             trying = false;
+            maybeGiveUp();
           });
       }
       document.getElementById("retry").addEventListener("click", retry);
       window.addEventListener("online", retry);
-      window.setInterval(retry, 4000);
+      retry();
+      var fastTimer = window.setInterval(function () {
+        if (Date.now() - started >= GRACE_MS) {
+          window.clearInterval(fastTimer);
+          showOffline();
+          window.setInterval(retry, 4000);
+          return;
+        }
+        retry();
+      }, 1500);
       // The launch splash stays up until the remote app hides it. This page is
       // what loads when that app cannot be reached, so hide the splash here.
       var splashTries = 0;

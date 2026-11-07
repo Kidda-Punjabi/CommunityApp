@@ -60,7 +60,7 @@ function StartTimelineSheet({
   }, [answered, onAnswer, onDone]);
 
   return (
-    <div className="fixed inset-0 z-50" onClick={stop}>
+    <div className="kidda-edge fixed inset-0 z-[60]" onClick={stop}>
       <button
         type="button"
         aria-label="Close"

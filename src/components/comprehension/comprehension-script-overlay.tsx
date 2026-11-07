@@ -1,6 +1,7 @@
 "use client";
 
 import { ComprehensionScriptViewer } from "@/components/comprehension/comprehension-script-viewer";
+import { BodyPortal } from "@/components/ui/body-portal";
 import type { ComprehensionMode } from "@/lib/comprehension/config";
 import type { ComprehensionSentence, ComprehensionViewerPreferences } from "@/lib/comprehension/types";
 
@@ -29,7 +30,8 @@ export function ComprehensionScriptOverlay({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+    <BodyPortal>
+    <div className="kidda-edge fixed inset-0 z-[60] flex flex-col bg-white pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
         <p className="text-sm font-semibold text-zinc-900">Script</p>
         <button
@@ -51,5 +53,6 @@ export function ComprehensionScriptOverlay({
         />
       </div>
     </div>
+    </BodyPortal>
   );
 }

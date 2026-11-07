@@ -23,7 +23,7 @@ export function LevelRefresher({ level, items }: { level: number; items: Item[] 
 
   if (done || !item) {
     return (
-      <div className="flex h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] flex-col justify-between bg-[#F7F5FC] font-[family-name:var(--font-community)] text-[#1F1640]">
+      <div className="flex h-[var(--kidda-screen)] flex-col justify-between bg-[#F7F5FC] font-[family-name:var(--font-community)] text-[#1F1640]">
         <div>
           <Link href={`/dashboard/community/level/${level}`} className="inline-flex h-11 items-center text-sm font-semibold text-[#4A3F66]">Back</Link>
           <h1 className="font-heading text-3xl font-extrabold">Refresher done</h1>
@@ -35,7 +35,7 @@ export function LevelRefresher({ level, items }: { level: number; items: Item[] 
   }
 
   return (
-    <div className="flex h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] flex-col bg-[#F7F5FC] font-[family-name:var(--font-community)] text-[#1F1640]">
+    <div className="flex h-[var(--kidda-screen)] flex-col bg-[#F7F5FC] font-[family-name:var(--font-community)] text-[#1F1640]">
       <Link href={`/dashboard/community/level/${level}`} className="inline-flex h-11 items-center text-sm font-semibold text-[#4A3F66]">Back</Link>
       <p className="text-xs font-bold text-[#6B5F8A]">Level {level} refresher · {index + 1} of {items.length}</p>
       <h1 className="mt-2 font-heading text-2xl font-extrabold">{item.prompt}</h1>

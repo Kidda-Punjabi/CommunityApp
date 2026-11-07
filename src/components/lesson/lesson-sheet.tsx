@@ -70,7 +70,7 @@ export function LessonSheet({
       </button>
       {open
         ? createPortal(
-            <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#1F1640]/55 sm:items-center sm:p-4" onClick={close}>
+            <div className="kidda-edge fixed inset-0 z-[70] flex items-end justify-center bg-[#1F1640]/55 sm:items-center sm:p-4" onClick={close}>
               <div
                 role="dialog"
                 aria-modal="true"

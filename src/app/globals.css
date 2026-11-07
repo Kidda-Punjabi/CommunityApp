@@ -45,6 +45,11 @@
   --kidda-band-advanced-ink: #3b1a8c;
   /* Same space the bottom nav reserves. 5.5rem matches the nav chrome; safe area is the home indicator. */
   --kidda-nav-clearance: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  /* Height subtraction for the native body padding. 0 in every browser, including iPhone Safari. */
+  --kidda-safe-top: 0px;
+  /* Padding inside a screen. Real inset in a browser; 0 in the app, which already clears the notch. */
+  --kidda-inset-top: env(safe-area-inset-top, 0px);
+  --kidda-screen: calc(100dvh - var(--kidda-nav-clearance) - var(--kidda-safe-top));
   color-scheme: light;
 }
 
@@ -467,7 +472,12 @@ h6 {
   gap: 0.35rem;
 }
 
-/* iOS shell only. Insets are 0 in a normal browser, and these rules are also scoped to the app class. */
+/* iOS shell only. Insets are 0 in a desktop browser. iPhone Safari still reads env() itself. */
+html.kidda-native {
+  --kidda-safe-top: env(safe-area-inset-top, 0px);
+  --kidda-inset-top: 0px;
+}
+
 html.kidda-native body {
   padding-top: env(safe-area-inset-top, 0px);
 }
@@ -477,6 +487,11 @@ html.kidda-native .fixed.inset-0 {
   bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Sheet and full-screen scrims paint to the screen edge. Their content keeps its own home-indicator padding. */
+html.kidda-native .kidda-edge.fixed.inset-0 {
+  bottom: 0;
+}
+
 html.kidda-native .fixed.top-0:not(.inset-0),
 html.kidda-native .sticky.top-0 {
   top: env(safe-area-inset-top, 0px);
@@ -484,6 +499,7 @@ html.kidda-native .sticky.top-0 {
 
 /* Android only, and only when the WebView reports a 0 inset. iOS keeps env(). */
 html.kidda-native.kidda-android-insets {
+  --kidda-safe-top: var(--kidda-sat, env(safe-area-inset-top, 0px));
   --kidda-nav-clearance: calc(5.5rem + var(--kidda-sab, env(safe-area-inset-bottom, 0px)));
 }
 
@@ -498,6 +514,10 @@ html.kidda-native.kidda-android-insets .fixed.inset-0 {
   right: var(--kidda-sar, 0px);
   bottom: var(--kidda-sab, env(safe-area-inset-bottom, 0px));
   left: var(--kidda-sal, 0px);
+}
+
+html.kidda-native.kidda-android-insets .kidda-edge.fixed.inset-0 {
+  bottom: 0;
 }
 
 html.kidda-native.kidda-android-insets .fixed.top-0:not(.inset-0),

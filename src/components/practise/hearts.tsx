@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { BodyPortal } from "@/components/ui/body-portal";
 import { useNativeApp } from "@/lib/native/native-app-context";
 import type { HeartsState } from "@/lib/practise/types";
 
@@ -121,7 +122,8 @@ export function UnlimitedHeartsPill({ onOpen }: { onOpen: () => void }) {
 /** Bottom sheet for Premium and Community members, opened from the unlimited pill. */
 export function UnlimitedHeartsSheet({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50">
+    <BodyPortal>
+    <div className="kidda-edge fixed inset-0 z-[60]">
       <button type="button" aria-label="Close" onClick={onClose} className="kh-fade absolute inset-0 h-full w-full bg-zinc-900/45" />
       <div role="dialog" aria-label="Unlimited hearts" className="kh-up absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col gap-[18px] rounded-t-[28px] bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3">
         <span className="h-[5px] w-11 self-center rounded-full bg-zinc-200" />
@@ -143,6 +145,7 @@ export function UnlimitedHeartsSheet({ onClose }: { onClose: () => void }) {
         <button type="button" onClick={onClose} className="h-14 rounded-[18px] bg-violet-600 text-lg font-extrabold text-white shadow-[0_4px_0_#5B21B6]">Keep playing</button>
       </div>
     </div>
+    </BodyPortal>
   );
 }
 
@@ -151,7 +154,8 @@ export function HeartsSheet({ state, onClose }: { state: HeartsState; onClose: (
   const now = useNow(state.hearts < 3);
   const left = msUntil(state.nextHeartAt, now);
   return (
-    <div className="fixed inset-0 z-50">
+    <BodyPortal>
+    <div className="kidda-edge fixed inset-0 z-[60]">
       <button type="button" aria-label="Close" onClick={onClose} className="kh-fade absolute inset-0 h-full w-full bg-zinc-900/45" />
       <div role="dialog" aria-label="Your hearts" className="kh-up absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col gap-[18px] rounded-t-[28px] bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3">
         <span className="h-[5px] w-11 self-center rounded-full bg-zinc-200" />
@@ -170,6 +174,7 @@ export function HeartsSheet({ state, onClose }: { state: HeartsState; onClose: (
         <button type="button" onClick={onClose} className="h-14 rounded-[18px] bg-violet-600 text-lg font-extrabold text-white shadow-[0_4px_0_#5B21B6]">Got it</button>
       </div>
     </div>
+    </BodyPortal>
   );
 }
 
@@ -177,8 +182,8 @@ export function HeartsSheet({ state, onClose }: { state: HeartsState; onClose: (
 export function HeartsAfter({ state, onPlay, onLater, busy }: { state: HeartsState; onPlay: () => void; onLater: () => void; busy: boolean }) {
   const left = state.hearts;
   return (
-    <div className="fixed inset-0 z-40 bg-white">
-      <div className="mx-auto flex h-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(4rem,env(safe-area-inset-top))]">
+    <div className="kidda-edge fixed inset-0 z-40 bg-white">
+      <div className="mx-auto flex h-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(4rem,var(--kidda-inset-top))]">
         <div className="flex flex-1 flex-col items-center justify-center gap-7 text-center">
           <p className="kh-pop text-[15px] font-extrabold uppercase tracking-wider text-violet-700">Play complete</p>
           <div className="flex items-center gap-4">
@@ -213,8 +218,8 @@ export function HeartsOut({ state, onClose }: { state: HeartsState; onClose: () 
   const now = useNow(true);
   const left = msUntil(state.nextHeartAt, now);
   return (
-    <div className="fixed inset-0 z-40 bg-violet-50">
-      <div className="mx-auto flex h-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,env(safe-area-inset-top))]">
+    <div className="kidda-edge fixed inset-0 z-40 bg-violet-50">
+      <div className="mx-auto flex h-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,var(--kidda-inset-top))]">
         <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
           <div className="relative w-[150px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -250,8 +255,8 @@ const SPARKS: [string, string, string][] = [["#FFCD40", "-34px", "-30px"], ["#E8
 /** Shown once when the learner comes back to full hearts. */
 export function HeartsBack({ onPlay, onClose }: { onPlay: () => void; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-40 bg-[#FFF7F9]">
-      <div className="mx-auto flex h-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,env(safe-area-inset-top))]">
+    <div className="kidda-edge fixed inset-0 z-40 bg-[#FFF7F9]">
+      <div className="mx-auto flex h-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,var(--kidda-inset-top))]">
         <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="kh-jump h-auto w-[140px]" src={CHARACTERS.billi} alt="Billi the kitten" />

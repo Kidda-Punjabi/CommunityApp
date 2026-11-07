@@ -46,7 +46,7 @@ export function GameTutorialOverlay({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[110] flex items-end justify-center bg-zinc-900/60 p-0 sm:items-center sm:p-4"
+      className="kidda-edge fixed inset-0 z-[110] flex items-end justify-center bg-zinc-900/60 pb-[env(safe-area-inset-bottom)] sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}

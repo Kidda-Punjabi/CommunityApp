@@ -297,7 +297,7 @@ export default async function LearnPage() {
   const communityLiveCheckIn = communityLocked ? false : Boolean(communityCard?.live);
 
   return (
-    <div className={`${ui.page} !flex !h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] !flex-col !overflow-hidden !py-3`}>
+    <div className={`${ui.page} !flex !h-[var(--kidda-screen)] !flex-col !overflow-hidden !py-3`}>
       <HomeStreakProvider
         initial={{
           streak: dashboard.stats.streak,

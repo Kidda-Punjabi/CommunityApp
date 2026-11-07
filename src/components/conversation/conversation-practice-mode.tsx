@@ -415,7 +415,7 @@ export function ConversationPracticeMode({
         : null;
 
     return (
-      <div className="flex min-h-[calc(100dvh-7rem)] flex-col">
+      <div className="flex min-h-[calc(100dvh-7rem-var(--kidda-safe-top))] flex-col">
         <ConversationPlayHeader
           exchangeIndex={exchangeIndex}
           totalExchanges={exchanges.length}

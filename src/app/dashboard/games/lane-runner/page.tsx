@@ -22,7 +22,7 @@ export default async function LaneRunnerPage() {
   ]);
 
   return (
-    <div className="flex min-h-[calc(100dvh-5rem)] flex-col px-4 py-6">
+    <div className="flex min-h-[calc(100dvh-5rem-var(--kidda-safe-top))] flex-col px-4 py-6">
       <LaneRunnerMode
         cards={cards}
         loadError={loadError}

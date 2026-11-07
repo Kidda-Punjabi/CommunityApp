@@ -15,7 +15,7 @@ function LevelScreen({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] flex-col overflow-hidden bg-[#F7F5FC] px-4 pt-[max(0.25rem,env(safe-area-inset-top))] font-[family-name:var(--font-community)] text-[#1F1640]">
+    <div className="flex h-[var(--kidda-screen)] flex-col overflow-hidden bg-[#F7F5FC] px-4 pt-[max(0.25rem,var(--kidda-inset-top))] font-[family-name:var(--font-community)] text-[#1F1640]">
       <Link href={backHref} className="inline-flex h-10 items-center text-sm font-semibold text-[#4A3F66]">Back</Link>
       <div className="flex min-h-0 flex-1 flex-col justify-between gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <div className="flex min-h-0 flex-col gap-2">{children}</div>

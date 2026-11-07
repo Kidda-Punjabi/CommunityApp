@@ -12,6 +12,7 @@ import {
   skipActivity,
   suggestRooms,
 } from "@/app/admin/community/breakout-actions";
+import { BodyPortal } from "@/components/ui/body-portal";
 import type { HostRoom } from "@/lib/community/host-session";
 import { bandFillVar, bandInkVar, bandLabel, levelFillVar, levelInkVar } from "@/lib/community/levels";
 import {
@@ -344,7 +345,8 @@ export function HostSessionRooms({
       ) : null}
 
       {picker ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/45 px-4" role="presentation">
+        <BodyPortal>
+        <div className="kidda-edge fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/45 px-4" role="presentation">
           <div
             role="dialog"
             aria-modal="true"
@@ -414,10 +416,12 @@ export function HostSessionRooms({
             })}
           </div>
         </div>
+        </BodyPortal>
       ) : null}
 
       {confirmSkip ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/45 px-4" role="presentation">
+        <BodyPortal>
+        <div className="kidda-edge fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/45 px-4" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="skip-title" className="w-full max-w-md space-y-3 rounded-[22px] bg-white p-6">
             <h2 id="skip-title" className="font-heading text-xl font-extrabold">
               Move Room {confirmSkip.roomNumber} on from {confirmSkip.activities.find((item) => item.status === "active")?.title ?? "this activity"}?
@@ -451,6 +455,7 @@ export function HostSessionRooms({
             </div>
           </div>
         </div>
+        </BodyPortal>
       ) : null}
     </div>
   );
