@@ -14,6 +14,7 @@ import { ArenaArt } from "./arena-art";
 import { LevelRoad } from "./level-road";
 import { Flame, StreakCelebration, StreakDays, StreakStyles, XpProgress } from "./streak-screens";
 import { AudioButton, RoundPlayer } from "./round-player";
+import { PractiseClose, PractiseStage } from "./practise-stage";
 
 const ICONS: Record<PractiseSkill, ReactNode> = {
   words: <><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 19V5M9 8h6M9 12h6" /></>,
@@ -214,18 +215,22 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   if (view.name === "round") return <RoundPlayer questions={view.questions} onLeave={() => setView({ name: "home" })} onFinish={(a) => void finishRound(a)} off={off} onTurnOff={(k) => saveOff({ ...off, [k]: true })} />;
 
   if (view.name === "streak") {
+    const continueStreak = () => setView({ name: "result", result: view.result, streakFrom: view.from });
     return (
-      <div className="kidda-edge fixed inset-0 z-40 overflow-hidden bg-white">
-        <StreakCelebration from={view.from} to={view.to} today={getLocalActivityDate()} playedDates={[...home.playedDates, getLocalActivityDate()]} playSound={streakSound} onContinue={() => setView({ name: "result", result: view.result, streakFrom: view.from })} />
-      </div>
+      <PractiseStage>
+        <PractiseClose label="Continue" onClick={continueStreak} />
+        <StreakCelebration from={view.from} to={view.to} today={getLocalActivityDate()} playedDates={[...home.playedDates, getLocalActivityDate()]} playSound={streakSound} onContinue={continueStreak} />
+      </PractiseStage>
     );
   }
 
   if (view.name === "result") {
     const r = view.result;
+    const done = () => setView(hearts && !hearts.unlimited ? (hearts.hearts > 0 ? { name: "heartsAfter" } : { name: "heartsOut" }) : { name: "home" });
     return (
-      <div className="kidda-edge fixed inset-0 z-40 overflow-hidden bg-zinc-50">
-      <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,var(--kidda-inset-top))] lg:max-w-[640px]">
+      <PractiseStage className="bg-zinc-50">
+      <PractiseClose label="Done" onClick={done} />
+      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,var(--kidda-inset-top))] lg:max-w-[640px]">
         {/* Everything above the buttons scrolls, so nothing is squashed or overlaps on a short screen. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
         <h1 className="text-center text-[28px] font-extrabold tracking-tight text-zinc-900">Round complete!</h1>
@@ -241,10 +246,10 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
         ) : null}
         </div>
         <div className="mt-3 shrink-0"><BigButton title={busy ? "Loading…" : "Play"} disabled={busy} onClick={() => void play()} /></div>
-        <button type="button" onClick={() => setView(hearts && !hearts.unlimited ? (hearts.hearts > 0 ? { name: "heartsAfter" } : { name: "heartsOut" }) : { name: "home" })} className="mt-2 min-h-11 w-full shrink-0 text-sm font-bold text-zinc-500">Done</button>
+        <button type="button" onClick={done} className="mt-2 min-h-11 w-full shrink-0 text-sm font-bold text-zinc-500">Done</button>
         {errorNote}
       </div>
-      </div>
+      </PractiseStage>
     );
   }
 
@@ -253,17 +258,23 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   if (view.name === "heartsBack") return <><HeartsStyles /><HeartsBack onPlay={() => void play()} onClose={() => setView({ name: "home" })} /></>;
 
   if (view.name === "levelUp") {
+    const enter = () => setView({ name: "home" });
     return (
-      <div className={shell}>
-        <div className="h-72 overflow-hidden rounded-3xl"><ArenaArt level={meta.level} /></div>
-        <div className="mt-5 text-center">
-          <p className="text-[13px] font-extrabold tracking-widest text-violet-700">YOU PASSED</p>
-          <h1 className="mt-1 text-[40px] font-extrabold leading-none tracking-tight text-zinc-900">Level {meta.level}</h1>
-          <p className="mt-1 text-2xl font-extrabold text-zinc-900">{meta.name} <span lang="pa" className="text-xl text-violet-700">{meta.gurmukhi}</span></p>
-          <p className="mt-2 text-[15px] font-semibold text-zinc-700">“{meta.can}”</p>
+      <PractiseStage>
+        <PractiseClose label="Enter level" onClick={enter} />
+        <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,var(--kidda-inset-top))]">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="h-72 overflow-hidden rounded-3xl"><ArenaArt level={meta.level} /></div>
+            <div className="mt-5 text-center">
+              <p className="text-[13px] font-extrabold tracking-widest text-violet-700">YOU PASSED</p>
+              <h1 className="mt-1 text-[40px] font-extrabold leading-none tracking-tight text-zinc-900">Level {meta.level}</h1>
+              <p className="mt-1 text-2xl font-extrabold text-zinc-900">{meta.name} <span lang="pa" className="text-xl text-violet-700">{meta.gurmukhi}</span></p>
+              <p className="mt-2 text-[15px] font-semibold text-zinc-700">“{meta.can}”</p>
+            </div>
+          </div>
+          <div className="mt-4 shrink-0"><BigButton title={`Enter ${meta.name}`} sub="Your new checklist is ready" onClick={enter} /></div>
         </div>
-        <div className="mt-6"><BigButton title={`Enter ${meta.name}`} sub="Your new checklist is ready" onClick={() => setView({ name: "home" })} /></div>
-      </div>
+      </PractiseStage>
     );
   }
 
@@ -340,14 +351,20 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
 
   if (view.name === "checkResult") {
     const r = view.result;
+    const backToCheck = () => setView({ name: "check" });
     return (
-      <div className={shell}>
-        <div className="h-44 overflow-hidden rounded-3xl"><ArenaArt level={meta.level} /></div>
-        <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-zinc-900">{r.passed ? "Passed!" : "So close"}</h1>
-        <p className="mt-1 text-2xl font-extrabold text-violet-800">{r.score} of {r.total}</p>
-        <p className="mt-2 text-[15px] font-semibold leading-snug text-zinc-700">{r.message}</p>
-        <div className="mt-6"><BigButton title="Back to Level Check" onClick={() => setView({ name: "check" })} /></div>
-      </div>
+      <PractiseStage>
+        <PractiseClose label="Back to Level Check" onClick={backToCheck} />
+        <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,var(--kidda-inset-top))]">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="h-44 overflow-hidden rounded-3xl"><ArenaArt level={meta.level} /></div>
+            <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-zinc-900">{r.passed ? "Passed!" : "So close"}</h1>
+            <p className="mt-1 text-2xl font-extrabold text-violet-800">{r.score} of {r.total}</p>
+            <p className="mt-2 text-[15px] font-semibold leading-snug text-zinc-700">{r.message}</p>
+          </div>
+          <div className="mt-4 shrink-0"><BigButton title="Back to Level Check" onClick={backToCheck} /></div>
+        </div>
+      </PractiseStage>
     );
   }
 

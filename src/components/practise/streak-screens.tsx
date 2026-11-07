@@ -86,7 +86,7 @@ export function StreakDays({ today, streak, lit, playedDates, animateToday }: { 
 const SPARKS = [[-92, -64, "#FBBF24"], [86, -78, "#A78BFA"], [-110, 12, "#A78BFA"], [108, 6, "#FBBF24"], [-62, -108, "#FDE68A"], [58, -116, "#F59E0B"], [-84, 62, "#FDE68A"], [88, 56, "#C4B5FD"]] as const;
 
 function NextButton({ title, onClick }: { title: string; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className="flex h-[60px] w-full items-center justify-center rounded-[18px] bg-violet-600 text-xl font-extrabold text-white shadow-lg shadow-violet-900/25 active:scale-[0.98]">{title}</button>;
+  return <button type="button" onClick={onClick} className="flex h-[60px] w-full shrink-0 items-center justify-center rounded-[18px] bg-violet-600 text-xl font-extrabold text-white shadow-lg shadow-violet-900/25 active:scale-[0.98]">{title}</button>;
 }
 
 /** Shown after the first round of the day. The flame lights and the number ticks over. */
@@ -97,9 +97,9 @@ export function StreakCelebration({ from, to, today, playedDates, onContinue, pl
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const moved = from !== to;
   return (
-    <div className="mx-auto flex h-full w-full max-w-md flex-col px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,var(--kidda-inset-top))]">
+    <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,var(--kidda-inset-top))]">
       <StreakStyles />
-      <div className="flex flex-1 flex-col items-center justify-center">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto">
         <div className="relative kp-anim" style={{ animation: "kp-bounce 650ms ease-out 700ms both" }}>
           {SPARKS.map(([x, y, c], i) => (
             <span key={i} aria-hidden="true" className="kp-anim absolute left-1/2 top-1/2 h-3.5 w-3.5 rounded-[3px]" style={{ background: c, "--x": `${x}px`, "--y": `${y}px`, animation: `kp-spark 900ms ease-out ${850 + i * 35}ms both` } as CSSProperties} />
