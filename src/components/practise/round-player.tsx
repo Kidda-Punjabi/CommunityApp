@@ -355,8 +355,8 @@ export function RoundPlayer({
   const pct = Math.round((Math.min(index, shownTotal) / shownTotal) * 100);
 
   return (
-    <div className="fixed inset-0 z-40 overflow-hidden bg-zinc-50">
-    <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] lg:max-w-[640px]">
+    <div className="kidda-edge fixed inset-0 z-40 overflow-hidden bg-zinc-50">
+    <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,var(--kidda-inset-top))] lg:max-w-[640px]">
       <div className="flex items-center gap-2">
         <button type="button" onClick={onLeave} aria-label="Leave round" className="flex h-11 w-11 items-center justify-center text-zinc-900">
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>

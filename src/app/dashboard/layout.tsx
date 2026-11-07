@@ -107,7 +107,7 @@ export default async function DashboardLayout({
 
   const isFirstRunPicker = isPickerScreen && !kidSession.pickedWhoThisSession;
   if (isFirstRunPicker) {
-    return <div className={`flex min-h-dvh flex-col ${ui.pageBg}`}>{children}</div>;
+    return <div className={`flex flex-col ${ui.shellMin} ${ui.pageBg}`}>{children}</div>;
   }
 
   const parentInitial = (user.email?.trim().charAt(0) ?? "P").toUpperCase();
@@ -136,7 +136,7 @@ export default async function DashboardLayout({
               <KidsShellRouteGuard />
               <PullToRefresh>
                 <div
-                  className={`flex min-h-dvh flex-1 flex-col ${
+                  className={`flex flex-1 flex-col ${ui.shellMin} ${
                     kidsShellActive
                       ? "bg-gradient-to-b from-sky-100 via-violet-50 to-amber-50"
                       : tutorShell

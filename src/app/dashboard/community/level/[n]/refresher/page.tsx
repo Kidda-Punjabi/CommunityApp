@@ -37,7 +37,7 @@ export default async function LevelRefresherPage({ params }: { params: Promise<{
     };
   }));
   return (
-    <div className="bg-[#F7F5FC] px-4 pt-[max(0.25rem,env(safe-area-inset-top))]">
+    <div className="bg-[#F7F5FC] px-4 pt-[max(0.25rem,var(--kidda-inset-top))]">
       <LevelRefresher level={level} items={items} />
     </div>
   );

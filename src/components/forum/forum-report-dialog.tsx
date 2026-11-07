@@ -5,6 +5,7 @@ import {
   reportForumContent,
   type ForumActionResult,
 } from "@/app/dashboard/community/forum/actions";
+import { BodyPortal } from "@/components/ui/body-portal";
 
 const initial: ForumActionResult = {};
 
@@ -38,7 +39,8 @@ export function ForumReportDialog({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+        <BodyPortal>
+        <div className="kidda-edge fixed inset-0 z-[60] flex items-end justify-center bg-black/40 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4">
           <div
             className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
             role="dialog"
@@ -90,6 +92,7 @@ export function ForumReportDialog({
             </form>
           </div>
         </div>
+        </BodyPortal>
       )}
     </>
   );

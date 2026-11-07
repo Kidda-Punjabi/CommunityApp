@@ -2,6 +2,7 @@
 
 import { Trophy, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BodyPortal } from "@/components/ui/body-portal";
 import type { CohortLeaderboard } from "@/lib/leaderboard/load-cohort-leaderboard";
 
 type Tab = "week" | "all";
@@ -70,8 +71,9 @@ export function CohortLeaderboardButton({
       </button>
 
       {open ? (
+        <BodyPortal>
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-[#1F1640]/55 sm:items-center sm:p-4"
+          className="kidda-edge fixed inset-0 z-[70] flex items-end justify-center bg-[#1F1640]/55 sm:items-center sm:p-4"
           onClick={() => setOpen(false)}
         >
           <div
@@ -200,6 +202,7 @@ export function CohortLeaderboardButton({
             </ol>
           </div>
         </div>
+        </BodyPortal>
       ) : null}
     </>
   );

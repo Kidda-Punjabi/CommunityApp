@@ -215,7 +215,7 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
 
   if (view.name === "streak") {
     return (
-      <div className="fixed inset-0 z-40 overflow-hidden bg-white">
+      <div className="kidda-edge fixed inset-0 z-40 overflow-hidden bg-white">
         <StreakCelebration from={view.from} to={view.to} today={getLocalActivityDate()} playedDates={[...home.playedDates, getLocalActivityDate()]} playSound={streakSound} onContinue={() => setView({ name: "result", result: view.result, streakFrom: view.from })} />
       </div>
     );
@@ -224,8 +224,8 @@ export function PractiseApp({ home }: { home: PractiseHome }) {
   if (view.name === "result") {
     const r = view.result;
     return (
-      <div className="fixed inset-0 z-40 overflow-hidden bg-zinc-50">
-      <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] lg:max-w-[640px]">
+      <div className="kidda-edge fixed inset-0 z-40 overflow-hidden bg-zinc-50">
+      <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,var(--kidda-inset-top))] lg:max-w-[640px]">
         {/* Everything above the buttons scrolls, so nothing is squashed or overlaps on a short screen. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
         <h1 className="text-center text-[28px] font-extrabold tracking-tight text-zinc-900">Round complete!</h1>

@@ -42,7 +42,7 @@ export default async function CommunityPage({
   const params = await searchParams;
 
   return (
-    <div className={`${ui.page} community-fit !flex !h-[calc(100dvh-var(--kidda-nav-clearance))] !max-h-[calc(100dvh-var(--kidda-nav-clearance))] !min-h-0 !flex-none !flex-col !overflow-hidden !px-5 !pb-0 !pt-[max(0.25rem,env(safe-area-inset-top,0px))]`}>
+    <div className={`${ui.page} community-fit !flex !h-[var(--kidda-screen)] !max-h-[var(--kidda-screen)] !min-h-0 !flex-none !flex-col !overflow-hidden !px-5 !pb-0 !pt-[max(0.25rem,var(--kidda-inset-top))]`}>
       {allowed ? null : heading}
       {allowed ? (
         <CommunityHome

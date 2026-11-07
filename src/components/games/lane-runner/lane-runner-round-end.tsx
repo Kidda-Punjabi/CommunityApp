@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { BackLink } from "@/components/navigation/back-link";
+import { BodyPortal } from "@/components/ui/body-portal";
 import { GAMES_HUB_HREF } from "@/lib/games/catalog";
 import { LANE_RUNNER_DISPLAY_NAME } from "@/lib/games/lane-runner/config";
 import type { LaneRunnerRoundSummary } from "@/lib/games/lane-runner/types";
@@ -13,7 +14,8 @@ type LaneRunnerRoundEndProps = {
 
 export function LaneRunnerRoundEnd({ summary, onPlayAgain }: LaneRunnerRoundEndProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 p-4 backdrop-blur-sm">
+    <BodyPortal>
+    <div className="kidda-edge fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/40 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
       <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-lg">
         <div className="bg-sky-100 px-5 py-4 text-center">
           <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">
@@ -59,5 +61,6 @@ export function LaneRunnerRoundEnd({ summary, onPlayAgain }: LaneRunnerRoundEndP
         </div>
       </div>
     </div>
+    </BodyPortal>
   );
 }

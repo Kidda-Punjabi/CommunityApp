@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BodyPortal } from "@/components/ui/body-portal";
 import {
   BUZZ_IN_MIN_QUESTIONS,
   type BuzzInCourseId,
@@ -257,7 +258,8 @@ export function BuzzInTopicPicker({ catalogue, onReadyChange }: BuzzInTopicPicke
       />
 
       {sheetOpen ? (
-        <div className="fixed inset-0 z-[70] flex items-end bg-zinc-900/45" onClick={() => setSheetOpen(false)}>
+        <BodyPortal>
+        <div className="kidda-edge fixed inset-0 z-[60] flex items-end bg-zinc-900/45" onClick={() => setSheetOpen(false)}>
           <div
             ref={sheetRef}
             role="dialog"
@@ -305,6 +307,7 @@ export function BuzzInTopicPicker({ catalogue, onReadyChange }: BuzzInTopicPicke
             })}
           </div>
         </div>
+        </BodyPortal>
       ) : null}
     </div>
   );

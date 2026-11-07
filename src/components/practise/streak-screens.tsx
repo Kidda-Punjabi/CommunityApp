@@ -97,7 +97,7 @@ export function StreakCelebration({ from, to, today, playedDates, onContinue, pl
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const moved = from !== to;
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md flex-col px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
+    <div className="mx-auto flex h-full w-full max-w-md flex-col px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,var(--kidda-inset-top))]">
       <StreakStyles />
       <div className="flex flex-1 flex-col items-center justify-center">
         <div className="relative kp-anim" style={{ animation: "kp-bounce 650ms ease-out 700ms both" }}>
